@@ -48,6 +48,11 @@ class XrayManager:
         """
         xray_binary = self.config.get("xray_binary")
 
+        # Check if xray_binary is configured
+        if not xray_binary:
+            logger.warning("Xray binary path not configured")
+            return None
+
         # Check if it's an absolute path
         if os.path.isabs(xray_binary):
             path = Path(xray_binary)
@@ -261,17 +266,18 @@ class XrayManager:
         xray_config = self._generate_xray_config(server)
 
         # Write configuration to temporary file
+        config_file = None
         try:
             with tempfile.NamedTemporaryFile(
                 mode="w", suffix=".json", delete=False, encoding="utf-8"
             ) as f:
                 json.dump(xray_config, f, indent=2)
-                self.xray_config_file = Path(f.name)
+                config_file = Path(f.name)
 
             # Start Xray process
-            logger.info(f"Starting Xray with config: {self.xray_config_file}")
+            logger.info(f"Starting Xray with config: {config_file}")
             self.process = subprocess.Popen(
-                [str(xray_binary), "run", "-c", str(self.xray_config_file)],
+                [str(xray_binary), "run", "-c", str(config_file)],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
@@ -283,13 +289,24 @@ class XrayManager:
                 # Process exited
                 _, stderr = self.process.communicate()
                 logger.error(f"Xray failed to start: {stderr}")
+                # Clean up config file on failure
+                if config_file and config_file.exists():
+                    config_file.unlink()
                 return False
 
+            # Only set self.xray_config_file if successful
+            self.xray_config_file = config_file
             logger.info(f"Xray started successfully (PID: {self.process.pid})")
             return True
 
         except Exception as e:
             logger.error(f"Failed to start Xray: {e}")
+            # Clean up config file on exception
+            if config_file and config_file.exists():
+                try:
+                    config_file.unlink()
+                except Exception:
+                    pass
             return False
 
     def stop(self) -> bool:

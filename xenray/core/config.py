@@ -1,11 +1,14 @@
 """Configuration management for xenray."""
 
 import json
+import logging
 import platform
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import yaml
+
+logger = logging.getLogger(__name__)
 
 
 class Config:
@@ -44,7 +47,7 @@ class Config:
                 with open(self.config_path, "r", encoding="utf-8") as f:
                     self.config_data = json.load(f)
             except (json.JSONDecodeError, IOError) as e:
-                print(f"Error loading config: {e}. Using default configuration.")
+                logger.error(f"Error loading config: {e}. Using default configuration.")
                 self.config_data = self._get_default_config()
         else:
             self.config_data = self._get_default_config()
@@ -200,7 +203,7 @@ class Config:
                 self.save()
                 return True
         except Exception as e:
-            print(f"Error importing config: {e}")
+            logger.error(f"Error importing config: {e}")
         return False
 
     def export_config(self, output_file: Path, file_format: str = "json") -> bool:
@@ -221,5 +224,5 @@ class Config:
                     json.dump(self.config_data, f, indent=2)
             return True
         except Exception as e:
-            print(f"Error exporting config: {e}")
+            logger.error(f"Error exporting config: {e}")
         return False
