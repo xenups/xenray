@@ -1,0 +1,4 @@
+requests>=2.31.0
+pyyaml>=6.0
+click>=8.1.0
+psutil>=5.9.0

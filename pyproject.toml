@@ -1,0 +1,73 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "xenray"
+version = "0.1.0"
+description = "A modern, lightweight Xray client for Windows and Linux/macOS"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "xenray contributors"}
+]
+keywords = ["xray", "vpn", "proxy", "v2ray", "vless", "vmess"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
+    "Topic :: Internet :: Proxy Servers",
+]
+dependencies = [
+    "requests>=2.31.0",
+    "pyyaml>=6.0",
+    "click>=8.1.0",
+    "psutil>=5.9.0",
+]
+
+[project.optional-dependencies]
+gui = [
+    "pyside6>=6.5.0",
+]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "black>=23.7.0",
+    "ruff>=0.0.285",
+]
+
+[project.scripts]
+xenray = "xenray.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/xenups/xenray"
+Repository = "https://github.com/xenups/xenray"
+
+[tool.setuptools]
+packages = ["xenray", "xenray.core", "xenray.gui"]
+
+[tool.black]
+line-length = 100
+target-version = ['py38', 'py39', 'py310', 'py311', 'py312']
+
+[tool.ruff]
+line-length = 100
+target-version = "py38"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "B", "A"]
+ignore = []
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]

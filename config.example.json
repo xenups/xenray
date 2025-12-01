@@ -1,0 +1,63 @@
+{
+  "xray_binary": "xray",
+  "log_level": "info",
+  "auto_reconnect": true,
+  "connection_timeout": 10,
+  "servers": [
+    {
+      "id": "example-vless",
+      "name": "Example VLESS Server",
+      "protocol": "vless",
+      "address": "example.com",
+      "port": 443,
+      "uuid": "your-uuid-here",
+      "encryption": "none",
+      "flow": "",
+      "network": "tcp",
+      "tls": "tls",
+      "sni": "example.com",
+      "allow_insecure": false
+    },
+    {
+      "id": "example-vmess-ws",
+      "name": "Example VMess WebSocket Server",
+      "protocol": "vmess",
+      "address": "example.com",
+      "port": 443,
+      "uuid": "your-uuid-here",
+      "alter_id": 0,
+      "security": "auto",
+      "network": "ws",
+      "path": "/path",
+      "tls": "tls",
+      "sni": "example.com"
+    },
+    {
+      "id": "example-trojan",
+      "name": "Example Trojan Server",
+      "protocol": "trojan",
+      "address": "example.com",
+      "port": 443,
+      "password": "your-password-here",
+      "network": "tcp",
+      "tls": "tls",
+      "sni": "example.com"
+    },
+    {
+      "id": "example-ss",
+      "name": "Example Shadowsocks Server",
+      "protocol": "shadowsocks",
+      "address": "example.com",
+      "port": 8388,
+      "password": "your-password-here",
+      "method": "aes-256-gcm",
+      "network": "tcp"
+    }
+  ],
+  "active_server": "example-vless",
+  "inbound": {
+    "listen": "127.0.0.1",
+    "port": 10808,
+    "protocol": "socks"
+  }
+}
