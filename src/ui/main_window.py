@@ -458,7 +458,9 @@ class MainWindow:
         if missing:
             self._show_install_dialog(missing_items=missing)
 
-    def _show_install_dialog(self, force: bool = False, missing_items: list = None):
+    def _show_install_dialog(
+        self, force: bool = False, missing_items: Optional[list] = None
+    ):
         items_str = ", ".join(missing_items) if missing_items else "Core Components"
         title = "Reinstall Components" if force else "Missing Components"
         content = (
@@ -514,8 +516,7 @@ class MainWindow:
             try:
                 # Hack: Delete files if force
                 if force:
-                    from src.core.constants import (TUN2PROXY_EXECUTABLE,
-                                                    XRAY_EXECUTABLE)
+                    from src.core.constants import TUN2PROXY_EXECUTABLE, XRAY_EXECUTABLE
 
                     if os.path.exists(XRAY_EXECUTABLE):
                         try:
@@ -617,8 +618,7 @@ class MainWindow:
             self._page.update()
 
         def install_task():
-            from src.services.tun2proxy_installer import \
-                Tun2ProxyInstallerService
+            from src.services.tun2proxy_installer import Tun2ProxyInstallerService
             from src.services.xray_installer import XrayInstallerService
 
             try:

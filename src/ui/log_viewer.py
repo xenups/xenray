@@ -27,8 +27,7 @@ class LogViewer:
         )
 
         self._container = ft.Container(
-            content=self._log_text,
-            expand=True  # Make container expand too
+            content=self._log_text, expand=True  # Make container expand too
         )
 
         self._log_thread: Optional[threading.Thread] = None

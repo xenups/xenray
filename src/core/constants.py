@@ -1,9 +1,10 @@
 """Application constants."""
+
 import os
 import tempfile
 
 # Temporary directory (cross-platform)
-if os.name == 'nt':
+if os.name == "nt":
     # Windows: Use system temp directory
     TMPDIR = os.path.join(tempfile.gettempdir(), "xenray")
 else:
@@ -28,20 +29,22 @@ SOCKET_PATH = os.path.join(TMPDIR, "xenray.sock")
 MAX_RECENT_FILES = 20
 
 # AppImage directory (Legacy support)
-APPDIR = os.environ.get("APPDIR", os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+APPDIR = os.environ.get(
+    "APPDIR", os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+)
 
 # Local directories
 BIN_DIR = os.path.join(os.path.dirname(APPDIR), "bin")
 ASSETS_DIR = os.path.join(os.path.dirname(APPDIR), "assets")
 
 # Xray executable path
-if os.name == 'nt':
+if os.name == "nt":
     XRAY_EXECUTABLE = os.path.join(BIN_DIR, "xray.exe")
 else:
     XRAY_EXECUTABLE = os.path.join(BIN_DIR, "xray")
 
 # Tun2Proxy executable path
-if os.name == 'nt':
+if os.name == "nt":
     TUN2PROXY_EXECUTABLE = os.path.join(BIN_DIR, "tun2proxy-bin.exe")
 else:
     TUN2PROXY_EXECUTABLE = os.path.join(BIN_DIR, "tun2proxy")

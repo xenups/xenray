@@ -6,13 +6,13 @@ from loguru import logger
 from src.core.constants import TMPDIR
 
 # Configure logger
-logger.remove() # Remove default handler
+logger.remove()  # Remove default handler
 
 # Add stderr handler
 logger.add(
     sys.stderr,
     format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
-    level="DEBUG"
+    level="DEBUG",
 )
 
 # Add file handler
@@ -22,8 +22,9 @@ logger.add(
     rotation="1 MB",
     retention="10 days",
     format="{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} - {message}",
-    level="DEBUG"
+    level="DEBUG",
 )
+
 
 def get_logger():
     return logger

@@ -1,4 +1,5 @@
 """Unified Dependency Manager."""
+
 import os
 import threading
 
@@ -8,7 +9,7 @@ from src.services.xray_installer import XrayInstallerService
 
 class DependencyManager:
     """Manages installation of external dependencies."""
-    
+
     @staticmethod
     def check_installed() -> list:
         """Return list of missing components."""
@@ -28,6 +29,6 @@ class DependencyManager:
         """
         # We no longer auto-install on startup.
         # Just return True to allow app to proceed.
-        # The UI will show missing components if they are not found, 
+        # The UI will show missing components if they are not found,
         # but we won't force install here.
         return True
