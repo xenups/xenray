@@ -98,9 +98,18 @@ class LinkParser:
             outbound["streamSettings"]["wsSettings"] = {"path": get_param("path", "/"), "headers": {"Host": get_param("host", address)}}
         elif net == "grpc":
             outbound["streamSettings"]["grpcSettings"] = {"serviceName": get_param("serviceName", "")}
-        elif net in ("http", "httpupgrade"):
+        elif net == "httpupgrade":
+            outbound["streamSettings"]["network"] = "httpupgrade"
+            outbound["streamSettings"]["httpupgradeSettings"] = {
+                "path": get_param("path", "/"),
+                "host": get_param("host", address)
+            }
+        elif net == "http":
             outbound["streamSettings"]["network"] = "http"
-            outbound["streamSettings"]["httpSettings"] = {"path": get_param("path", "/"), "host": get_param("host", address)}
+            outbound["streamSettings"]["httpSettings"] = {
+                "path": get_param("path", "/"),
+                "host": get_param("host", address)
+            }
 
         # final config: routing untouched
         config = {
