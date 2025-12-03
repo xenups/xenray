@@ -57,28 +57,44 @@ class StatusDisplay(ft.UserControl):
             self.update()
     
     def _measure_initial_ping(self):
-        """Measure ping to google.com once."""
+        """Measure ping to google.com with retries."""
         test_url = "http://www.google.com"
+        max_retries = 10
+        retry_delay = 2  # seconds
         
-        try:
-            start_time = time.time()
-            req = urllib.request.Request(test_url, headers={'User-Agent': 'Mozilla/5.0'})
-            response = urllib.request.urlopen(req, timeout=5)
-            response.read()  # Read response to ensure full connection
-            latency_ms = int((time.time() - start_time) * 1000)
-            
-            # Update UI with ping result
-            if self._status_text and self.page:
-                async def update_ping():
-                    self._status_text.value = f"Ping: {latency_ms} ms"
-                    self._status_text.color = ft.colors.GREEN_400
-                    self.update()
+        for attempt in range(max_retries):
+            # Stop if control is no longer on page
+            if not self._status_text or not self.page:
+                break
                 
-                self.page.run_task(update_ping)
+            try:
+                start_time = time.time()
+                req = urllib.request.Request(test_url, headers={'User-Agent': 'Mozilla/5.0'})
+                response = urllib.request.urlopen(req, timeout=5)
+                response.read()  # Read response to ensure full connection
+                latency_ms = int((time.time() - start_time) * 1000)
                 
-        except (urllib.error.URLError, TimeoutError) as e:
-            # Keep "Connected" if ping fails
-            pass
-        except Exception as e:
-            # Keep "Connected" if ping fails
-            pass
+                # Update UI with ping result
+                if self._status_text and self.page:
+                    async def update_ping():
+                        self._status_text.value = f"Ping: {latency_ms} ms"
+                        self._status_text.color = ft.colors.GREEN_400
+                        self.update()
+                    
+                    self.page.run_task(update_ping)
+                    return  # Success, stop retrying
+                    
+            except (urllib.error.URLError, TimeoutError) as e:
+                # Ping failed, wait and retry
+                time.sleep(retry_delay)
+            except Exception as e:
+                # Other errors
+                time.sleep(retry_delay)
+        
+        # If we reach here, all retries failed
+        if self._status_text and self.page:
+            async def update_failed():
+                self._status_text.value = "Ping: Timeout"
+                self._status_text.color = ft.colors.RED_400
+                self.update()
+            self.page.run_task(update_failed)

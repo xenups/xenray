@@ -31,8 +31,9 @@ MAX_RECENT_FILES = 20
 APPDIR = os.environ.get("APPDIR", os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 # Local directories
-BIN_DIR = os.path.join(os.path.dirname(APPDIR), "bin")
-ASSETS_DIR = os.path.join(os.path.dirname(APPDIR), "assets")
+# Local directories
+BIN_DIR = os.path.join(APPDIR, "bin")
+ASSETS_DIR = os.path.join(APPDIR, "assets")
 
 # Xray executable path
 if os.name == 'nt':

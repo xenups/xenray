@@ -192,3 +192,66 @@ class ConfigManager:
                 f.write(str(port))
         except Exception as e:
             print(f"Error saving proxy port: {e}")
+
+    # --- Routing & DNS ---
+    def get_routing_country(self) -> Optional[str]:
+        """Get selected country for direct routing (e.g., 'ir', 'cn')."""
+        path = os.path.join(self._config_dir, "routing_country.txt")
+        if not os.path.exists(path):
+            return "ir" # Default to Iran
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                val = f.read().strip()
+                return val if val else "ir"
+        except:
+            return "ir"
+
+    def set_routing_country(self, country_code: Optional[str]):
+        """Set country for direct routing."""
+        path = os.path.join(self._config_dir, "routing_country.txt")
+        try:
+            with open(path, 'w', encoding='utf-8') as f:
+                f.write(country_code if country_code else "")
+        except Exception as e:
+            print(f"Error saving routing country: {e}")
+
+    def get_custom_dns(self) -> str:
+        """Get custom DNS servers (comma separated)."""
+        path = os.path.join(self._config_dir, "custom_dns.txt")
+        if not os.path.exists(path):
+            return "8.8.8.8, 1.1.1.1"
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                val = f.read().strip()
+                return val if val else "8.8.8.8, 1.1.1.1"
+        except:
+            return "8.8.8.8, 1.1.1.1"
+
+    def set_custom_dns(self, dns_string: str):
+        """Set custom DNS servers."""
+        path = os.path.join(self._config_dir, "custom_dns.txt")
+        try:
+            with open(path, 'w', encoding='utf-8') as f:
+                f.write(dns_string)
+        except Exception as e:
+            print(f"Error saving custom DNS: {e}")
+
+    def get_connection_mode(self) -> str:
+        """Get saved connection mode ('proxy' or 'vpn')."""
+        path = os.path.join(self._config_dir, "connection_mode.txt")
+        if not os.path.exists(path):
+            return "proxy"
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                return f.read().strip()
+        except:
+            return "proxy"
+
+    def set_connection_mode(self, mode: str):
+        """Set connection mode."""
+        path = os.path.join(self._config_dir, "connection_mode.txt")
+        try:
+            with open(path, 'w', encoding='utf-8') as f:
+                f.write(mode)
+        except Exception as e:
+            print(f"Error saving connection mode: {e}")

@@ -59,6 +59,10 @@ class MainWindow:
         self._bg_color = ft.colors.BACKGROUND
         self._surface_color = ft.colors.SURFACE_VARIANT
         self._primary_color = ft.colors.PRIMARY
+        
+        # Load saved mode
+        saved_mode = self._config_manager.get_connection_mode()
+        self._current_mode = ConnectionMode.VPN if saved_mode == "vpn" else ConnectionMode.PROXY
 
         self._build_ui()
 
@@ -125,31 +129,10 @@ class MainWindow:
         )
 
         # --- Components ---
+        # --- Components ---
         self._status_display = StatusDisplay()
         self._connection_button = ConnectionButton(on_click=self._on_connect_clicked)
         self._server_card = ServerCard(on_click=self._open_server_drawer)
-
-        # --- Mode Switcher (VPN/Proxy) ---
-        self._mode_text = ft.Text(
-            "VPN Mode", color=ft.colors.BLUE_200, weight=ft.FontWeight.BOLD
-        )
-        self._mode_switch = ft.Switch(
-            value=False,  # False = VPN (Left), True = Proxy (Right)
-            active_color=ft.colors.BLUE_400,
-            on_change=self._on_mode_changed,
-        )
-
-        self._mode_container = ft.Container(
-            content=ft.Row(
-                [
-                    ft.Text("VPN", color=ft.colors.GREY_400),
-                    self._mode_switch,
-                    ft.Text("Proxy", color=ft.colors.GREY_400),
-                ],
-                alignment=ft.MainAxisAlignment.CENTER,
-            ),
-            padding=10,
-        )
 
         # --- Main Layout ---
         self._main_container = ft.Container(
@@ -161,7 +144,7 @@ class MainWindow:
                     ft.Container(height=20),
                     self._status_display,
                     ft.Container(height=30),
-                    self._mode_container,
+                    # Mode switcher moved to settings
                     ft.Container(expand=True),  # Spacer
                     self._server_card,
                     ft.Container(height=20),
@@ -201,7 +184,10 @@ class MainWindow:
 
         # Settings Drawer
         self._settings_drawer = SettingsDrawer(
-            self._config_manager, self._run_specific_installer
+            self._config_manager, 
+            self._run_specific_installer,
+            self._on_mode_changed,
+            lambda: self._current_mode
         )
         self._end_drawer = self._settings_drawer.build()
 
@@ -264,24 +250,22 @@ class MainWindow:
             # _disconnect is synchronous now, so it should be fine.
             self._connect_async()
 
-    def _on_mode_changed(self, e):
-        if not self._mode_switch.value:
-            # Value is False -> VPN (Left)
+    def _on_mode_changed(self, mode: ConnectionMode):
+        from src.utils.process_utils import ProcessUtils
+        
+        if mode == ConnectionMode.VPN:
             # Check for admin privileges for VPN mode
-            from src.utils.process_utils import ProcessUtils
-
             if not ProcessUtils.is_admin():
                 self._show_admin_dialog()
-                self._mode_switch.value = True  # Revert to Proxy (Right)
-                self._page.update()
                 return
 
             self._current_mode = ConnectionMode.VPN
             self._status_display.set_status("VPN Mode Selected")
+            self._config_manager.set_connection_mode("vpn")
         else:
-            # Value is True -> Proxy (Right)
             self._current_mode = ConnectionMode.PROXY
             self._status_display.set_status("Proxy Mode Selected")
+            self._config_manager.set_connection_mode("proxy")
         self._page.update()
 
     def _show_admin_dialog(self):
@@ -620,12 +604,15 @@ class MainWindow:
             from src.services.tun2proxy_installer import \
                 Tun2ProxyInstallerService
             from src.services.xray_installer import XrayInstallerService
+            from src.services.geo_installer import GeoInstallerService
 
             try:
                 if component == "xray":
                     XrayInstallerService.install(progress_callback=update_status)
                 elif component == "tun2proxy":
                     Tun2ProxyInstallerService.install(progress_callback=update_status)
+                elif component == "geo":
+                    GeoInstallerService.install(progress_callback=update_status)
 
                 self._show_snackbar(f"{component} Update Complete!")
             except Exception as e:

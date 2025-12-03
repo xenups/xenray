@@ -1,5 +1,8 @@
 """Server List Component."""
 import flet as ft
+import socket
+import time
+import threading
 
 from src.core.config_manager import ConfigManager
 from src.utils.link_parser import LinkParser
@@ -93,12 +96,20 @@ class ServerList(ft.UserControl):
                     port = server.get('port', 'N/A')
                     break
         
+        ping_text = ft.Text("...", size=12, color=ft.colors.GREY_500)
+        
+        # Start ping in background
+        threading.Thread(target=self._ping_server, args=(address, port, ping_text), daemon=True).start()
+
         return ft.Container(
             content=ft.Row([
                 ft.Text("🌐", size=24),
                 ft.Column([
                     ft.Text(profile["name"], weight=ft.FontWeight.BOLD, color=ft.colors.ON_SURFACE),
-                    ft.Text(f"{address}:{port}", size=12, color=ft.colors.ON_SURFACE_VARIANT),
+                    ft.Row([
+                        ft.Text(f"{address}:{port}", size=12, color=ft.colors.ON_SURFACE_VARIANT),
+                        ping_text
+                    ], spacing=10),
                 ], expand=True, spacing=2),
                 ft.IconButton(
                     ft.icons.DELETE,
@@ -113,6 +124,42 @@ class ServerList(ft.UserControl):
             on_click=lambda e: self._select_server(profile),
             ink=True,
         )
+
+    def _ping_server(self, address, port, text_control):
+        if address == "Unknown" or port == "N/A":
+            return
+            
+        max_retries = 5
+        
+        for i in range(max_retries):
+            try:
+                target_port = int(port)
+                start = time.time()
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(3)
+                result = sock.connect_ex((address, target_port))
+                sock.close()
+                
+                latency = int((time.time() - start) * 1000)
+                
+                if result == 0:
+                    text_control.value = f"{latency}ms"
+                    text_control.color = ft.colors.GREEN_400
+                    if text_control.page:
+                        text_control.update()
+                    return # Success
+                
+            except Exception:
+                pass
+            
+            # Wait before retry
+            time.sleep(1)
+            
+        # If we get here, it failed
+        text_control.value = "Timeout"
+        text_control.color = ft.colors.RED_400
+        if text_control.page:
+            text_control.update()
 
     def _show_add_dialog(self, e):
         self.page.dialog = self._add_dialog

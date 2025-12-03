@@ -2,6 +2,8 @@
 import json
 import os
 
+from loguru import logger
+
 from src.core.config_manager import ConfigManager
 from src.core.constants import OUTPUT_CONFIG_PATH, XRAY_LOCATION_ASSET
 from src.services.tun2proxy_service import Tun2ProxyService
@@ -135,7 +137,7 @@ class ConnectionManager:
                     try:
                         # Resolve to single IP
                         ip = socket.gethostbyname(domain)
-                        print(f"[ConnectionManager] Force IP: Resolved {domain} to {ip}")
+                        logger.info(f"[ConnectionManager] Force IP: Resolved {domain} to {ip}")
                         
                         # 1. Replace address with IP
                         server_obj['address'] = ip
@@ -154,14 +156,14 @@ class ConnectionManager:
                             
                             if 'serverName' not in tls_settings or not tls_settings['serverName']:
                                 tls_settings['serverName'] = domain
-                                print(f"[ConnectionManager] Set TLS SNI to {domain}")
+                                logger.info(f"[ConnectionManager] Set TLS SNI to {domain}")
                         elif security == 'reality':
                              reality_settings = stream_settings.get('realitySettings', {})
                              if 'realitySettings' not in stream_settings:
                                  stream_settings['realitySettings'] = reality_settings
                              if 'serverName' not in reality_settings or not reality_settings['serverName']:
                                  reality_settings['serverName'] = domain
-                                 print(f"[ConnectionManager] Set Reality SNI to {domain}")
+                                 logger.info(f"[ConnectionManager] Set Reality SNI to {domain}")
 
                         # WS Host
                         network = stream_settings.get('network', '')
@@ -176,10 +178,20 @@ class ConnectionManager:
                                 
                             if 'Host' not in headers or not headers['Host']:
                                 headers['Host'] = domain
-                                print(f"[ConnectionManager] Set WS Host to {domain}")
+                                logger.info(f"[ConnectionManager] Set WS Host to {domain}")
                                 
+                        # HTTPUpgrade Host
+                        if network == 'httpupgrade':
+                            httpupgrade_settings = stream_settings.get('httpupgradeSettings', {})
+                            if 'httpupgradeSettings' not in stream_settings:
+                                stream_settings['httpupgradeSettings'] = httpupgrade_settings
+                            
+                            if 'host' not in httpupgrade_settings or not httpupgrade_settings['host']:
+                                httpupgrade_settings['host'] = domain
+                                logger.info(f"[ConnectionManager] Set HTTPUpgrade Host to {domain}")
+
                     except Exception as e:
-                        print(f"[ConnectionManager] Failed to resolve/patch {domain}: {e}")
+                        logger.error(f"[ConnectionManager] Failed to resolve/patch {domain}: {e}")
 
     def _get_socks_port(self, config: dict) -> int:
         """Extract SOCKS port from config, overriding with user preference."""

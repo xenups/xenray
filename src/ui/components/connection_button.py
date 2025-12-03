@@ -7,6 +7,7 @@ class ConnectionButton(ft.UserControl):
         self.on_click = on_click
         self._icon = ft.Icon(ft.icons.POWER_SETTINGS_NEW, size=60, color=ft.colors.WHITE)
         self._container = None
+        self._is_connected = False
 
     def build(self):
         self._container = ft.Container(
@@ -35,6 +36,9 @@ class ConnectionButton(ft.UserControl):
 
     def update_theme(self, is_dark: bool):
         """Update button appearance based on theme."""
+        if self._is_connected:
+            return  # Don't change theme if connected
+
         if is_dark:
             self._icon.color = ft.colors.WHITE
             self._container.gradient.colors = ["#2b2d42", "#1a1b26"]
@@ -46,6 +50,7 @@ class ConnectionButton(ft.UserControl):
         self.update()
 
     def set_connected(self):
+        self._is_connected = True
         self._container.gradient = ft.LinearGradient(
             colors=["#6d28d9", "#4c1d95"], # Purple glow (Keep for both for now, or adapt)
         )
@@ -56,6 +61,7 @@ class ConnectionButton(ft.UserControl):
         self.update()
 
     def set_disconnected(self):
+        self._is_connected = False
         # Revert to theme-based off state
         is_dark = self.page.theme_mode == ft.ThemeMode.DARK if self.page else True
         self.update_theme(is_dark)
