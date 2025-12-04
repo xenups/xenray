@@ -255,3 +255,23 @@ class ConfigManager:
                 f.write(mode)
         except Exception as e:
             print(f"Error saving connection mode: {e}")
+
+    def get_routing_country(self) -> str:
+        """Get routing country for direct bypass."""
+        path = os.path.join(self._config_dir, "routing_country.txt")
+        if not os.path.exists(path):
+            return "none"
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                return f.read().strip()
+        except:
+            return "none"
+
+    def set_routing_country(self, country: str):
+        """Set routing country for direct bypass."""
+        path = os.path.join(self._config_dir, "routing_country.txt")
+        try:
+            with open(path, 'w', encoding='utf-8') as f:
+                f.write(country)
+        except Exception as e:
+            print(f"Error saving routing country: {e}")

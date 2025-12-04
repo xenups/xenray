@@ -1,0 +1,15 @@
+    def _get_proxy_server_ip(self, config: dict) -> str:
+        """
+        Extract proxy server IP from config.
+        The config is already processed, so the server address is an IP.
+        """
+        for outbound in config.get("outbounds", []):
+            if outbound.get("protocol") in ["vless", "vmess", "trojan", "shadowsocks"]:
+                settings = outbound.get("settings", {})
+                if "vnext" in settings:  # VLESS/VMess
+                    for server in settings["vnext"]:
+                        return server.get("address", "")
+                elif "servers" in settings:  # Trojan/Shadowsocks
+                    for server in settings["servers"]:
+                        return server.get("address", "")
+        return ""

@@ -43,7 +43,7 @@ class MainWindow:
         # Configure Page
         self._page.title = "XenRay"
         self._page.window_width = 420  # Slightly wider for better spacing
-        self._page.window_height = 750  # Taller
+        self._page.window_height = 650  # Taller
         self._page.window_resizable = False
         self._page.padding = 0
 
@@ -59,10 +59,12 @@ class MainWindow:
         self._bg_color = ft.colors.BACKGROUND
         self._surface_color = ft.colors.SURFACE_VARIANT
         self._primary_color = ft.colors.PRIMARY
-        
+
         # Load saved mode
         saved_mode = self._config_manager.get_connection_mode()
-        self._current_mode = ConnectionMode.VPN if saved_mode == "vpn" else ConnectionMode.PROXY
+        self._current_mode = (
+            ConnectionMode.VPN if saved_mode == "vpn" else ConnectionMode.PROXY
+        )
 
         self._build_ui()
 
@@ -129,30 +131,34 @@ class MainWindow:
         )
 
         # --- Components ---
-        # --- Components ---
         self._status_display = StatusDisplay()
         self._connection_button = ConnectionButton(on_click=self._on_connect_clicked)
         self._server_card = ServerCard(on_click=self._open_server_drawer)
 
         # --- Main Layout ---
         self._main_container = ft.Container(
+            expand=True,
             content=ft.Column(
-                [
+                [   
                     self._header,
-                    ft.Container(expand=True),  # Spacer
-                    self._connection_button,
-                    ft.Container(height=20),
-                    self._status_display,
-                    ft.Container(height=30),
-                    # Mode switcher moved to settings
-                    ft.Container(expand=True),  # Spacer
+                    ft.Container(height=50),
+                    ft.Container(expand=True),  # Pushes down
+                    # ---- Center Area ----
+                    ft.Column(
+                        [
+                            self._connection_button,
+                            ft.Container(height=20),
+                            self._status_display,
+                        ],
+                        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                        alignment=ft.MainAxisAlignment.CENTER,
+                    ),
+                    ft.Container(expand=True),  # Pushes up
                     self._server_card,
                     ft.Container(height=20),
                 ],
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             ),
-            expand=True,
-            # Gradient removed for cleaner theme support, using background color
         )
         self._page.add(self._main_container)
 
@@ -184,10 +190,10 @@ class MainWindow:
 
         # Settings Drawer
         self._settings_drawer = SettingsDrawer(
-            self._config_manager, 
+            self._config_manager,
             self._run_specific_installer,
             self._on_mode_changed,
-            lambda: self._current_mode
+            lambda: self._current_mode,
         )
         self._end_drawer = self._settings_drawer.build()
 
@@ -252,7 +258,7 @@ class MainWindow:
 
     def _on_mode_changed(self, mode: ConnectionMode):
         from src.utils.process_utils import ProcessUtils
-        
+
         if mode == ConnectionMode.VPN:
             # Check for admin privileges for VPN mode
             if not ProcessUtils.is_admin():
@@ -498,8 +504,7 @@ class MainWindow:
             try:
                 # Hack: Delete files if force
                 if force:
-                    from src.core.constants import (TUN2PROXY_EXECUTABLE,
-                                                    XRAY_EXECUTABLE)
+                    from src.core.constants import TUN2PROXY_EXECUTABLE, XRAY_EXECUTABLE
 
                     if os.path.exists(XRAY_EXECUTABLE):
                         try:
@@ -601,8 +606,7 @@ class MainWindow:
             self._page.update()
 
         def install_task():
-            from src.services.tun2proxy_installer import \
-                Tun2ProxyInstallerService
+            from src.services.tun2proxy_installer import Tun2ProxyInstallerService
             from src.services.xray_installer import XrayInstallerService
             from src.services.geo_installer import GeoInstallerService
 

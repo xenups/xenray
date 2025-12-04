@@ -261,9 +261,7 @@ class SettingsDrawer(ft.UserControl):
         from src.core.constants import ASSETS_DIR
         
         val = self._country_dropdown.value
-        if val == "none":
-            val = None
-        else:
+        if val != "none":
             # Check for geo files
             geoip_path = os.path.join(ASSETS_DIR, "geoip.dat")
             geosite_path = os.path.join(ASSETS_DIR, "geosite.dat")

@@ -9,11 +9,14 @@ __pycache__/
 # Distribution / packaging
 .Python
 build/
+Nabzram-master
+GorzRay-main
 develop-eggs/
 dist/
 downloads/
 eggs/
 .eggs/
+bin/
 lib/
 lib64/
 parts/

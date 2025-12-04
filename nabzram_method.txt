@@ -1,0 +1,41 @@
+def _bind_direct_outbound(self, config: dict):
+    """
+    Bind ALL outbounds to the physical network interface (Nabzram approach).
+    This prevents routing loops in VPN mode.
+    """
+    # Only bind if routing is enabled
+    routing_country = self._config_manager.get_routing_country()
+    if not routing_country or routing_country == "none":
+        logger.info("[ConnectionManager] Routing country not set, skipping interface binding")
+        return
+    
+    try:
+        interface_name = self._get_default_interface()
+        if not interface_name:
+            logger.warning("[ConnectionManager] Could not detect default interface")
+            return
+
+        logger.info(f"[ConnectionManager] Binding all outbounds to interface: {interface_name} (routing: {routing_country})")
+        
+        bound_count = 0
+        for outbound in config.get('outbounds', []):
+            # Skip if already has interface defined
+            stream_settings = outbound.get('streamSettings', {})
+            sockopt = stream_settings.get('sockopt', {})
+            
+            if 'interface' in sockopt:
+                continue
+            
+            # Add interface binding
+            if 'streamSettings' not in outbound:
+                outbound['streamSettings'] = {}
+            if 'sockopt' not in outbound['streamSettings']:
+                outbound['streamSettings']['sockopt'] = {}
+            
+            outbound['streamSettings']['sockopt']['interface'] = interface_name
+            bound_count += 1
+        
+        logger.info(f"[ConnectionManager] Bound {bound_count} outbound(s) to {interface_name}")
+        
+    except Exception as e:
+        logger.error(f"[ConnectionManager] Failed to bind outbounds: {e}")

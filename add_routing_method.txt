@@ -1,0 +1,54 @@
+
+    def _add_routing_rules(self, config: dict):
+        """
+        Add routing rules for direct traffic based on selected country.
+        Injects rules to route country-specific traffic to 'direct' outbound.
+        """
+        routing_country = self._config_manager.get_routing_country()
+        if not routing_country or routing_country == "none":
+            logger.info("[ConnectionManager] No routing country selected, skipping routing rules")
+            return
+        
+        # Ensure routing section exists
+        if 'routing' not in config:
+            config['routing'] = {
+                "domainStrategy": "IPIfNonMatch",
+                "rules": []
+            }
+        
+        if 'rules' not in config['routing']:
+            config['routing']['rules'] = []
+        
+        # Map country codes to geosite/geoip tags
+        country_map = {
+            "ir": ("category-ir", "ir"),  # (geosite tag, geoip tag)
+            "cn": ("cn", "cn"),
+            "ru": ("category-ru", "ru")
+        }
+        
+        if routing_country not in country_map:
+            logger.warning(f"[ConnectionManager] Unknown routing country: {routing_country}")
+            return
+        
+        geosite_tag, geoip_tag = country_map[routing_country]
+        
+        # Add rules at the beginning (higher priority)
+        # Rule 1: Route country domains to direct
+        domain_rule = {
+            "type": "field",
+            "outboundTag": "direct",
+            "domain": [f"geosite:{geosite_tag}"]
+        }
+        
+        # Rule 2: Route country IPs to direct
+        ip_rule = {
+            "type": "field",
+            "outboundTag": "direct",
+            "ip": [f"geoip:{geoip_tag}"]
+        }
+        
+        # Insert at beginning for higher priority
+        config['routing']['rules'].insert(0, ip_rule)
+        config['routing']['rules'].insert(0, domain_rule)
+        
+        logger.info(f"[ConnectionManager] Added routing rules for {routing_country}: geosite:{geosite_tag}, geoip:{geoip_tag}")

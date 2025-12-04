@@ -41,11 +41,21 @@ if os.name == 'nt':
 else:
     XRAY_EXECUTABLE = os.path.join(BIN_DIR, "xray")
 
-# Tun2Proxy executable path
+# Tun2Proxy executable path (Legacy - being replaced by Sing-box)
 if os.name == 'nt':
     TUN2PROXY_EXECUTABLE = os.path.join(BIN_DIR, "tun2proxy-bin.exe")
 else:
     TUN2PROXY_EXECUTABLE = os.path.join(BIN_DIR, "tun2proxy")
+
+# Sing-box executable path
+if os.name == 'nt':
+    SINGBOX_EXECUTABLE = os.path.join(BIN_DIR, "sing-box.exe")
+else:
+    SINGBOX_EXECUTABLE = os.path.join(BIN_DIR, "sing-box")
+
+# Sing-box config and log paths
+SINGBOX_CONFIG_PATH = os.path.join(TMPDIR, "singbox_config.json")
+SINGBOX_LOG_FILE = os.path.join(TMPDIR, "xenray_singbox.log")
 
 # Xray geo files directory
 XRAY_LOCATION_ASSET = ASSETS_DIR
@@ -56,3 +66,4 @@ TEMP_ROOT = TMPDIR
 # Placeholder PIDs
 PLACEHOLDER_XRAY_PID = -999999
 PLACEHOLDER_TUN2PROXY_PID = -999998
+PLACEHOLDER_SINGBOX_PID = -999997
