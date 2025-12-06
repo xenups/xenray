@@ -1,5 +1,5 @@
-"""Application constants."""
 import os
+import sys
 import tempfile
 
 # Temporary directory (cross-platform)
@@ -27,8 +27,13 @@ SOCKET_PATH = os.path.join(TMPDIR, "xenray.sock")
 # Maximum number of recent files to store
 MAX_RECENT_FILES = 20
 
-# AppImage directory (Legacy support)
-APPDIR = os.environ.get("APPDIR", os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+# AppImage directory (Legacy support) / Root directory
+if getattr(sys, 'frozen', False):
+    # If compiled, use the directory of the executable
+    APPDIR = os.path.dirname(sys.executable)
+else:
+    # If running as script, go up 3 levels from src/core/constants.py
+    APPDIR = os.environ.get("APPDIR", os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 # Local directories
 # Local directories

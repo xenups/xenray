@@ -27,18 +27,39 @@ class Settings:
         class TeeOutput:
             def __init__(self, logfile_path):
                 self.terminal = sys.__stdout__
-                self.log = open(logfile_path, "w", buffering=1)
+                self.log = None
+                try:
+                    self.log = open(logfile_path, "w", buffering=1)
+                except Exception as e:
+                    # If we can't open log file (e.g. locked by another instance), 
+                    # we proceed without file logging to avoid crash.
+                    pass
             
             def write(self, message):
-                self.terminal.write(message)
-                self.log.write(message)
+                if self.terminal:
+                    try:
+                        self.terminal.write(message)
+                    except Exception:
+                        pass
+                if self.log:
+                    try:
+                        self.log.write(message)
+                    except Exception:
+                        pass
             
             def flush(self):
-                self.terminal.flush()
-                self.log.flush()
+                if self.terminal:
+                    try:
+                        self.terminal.flush()
+                    except Exception:
+                        pass
+                if self.log:
+                    self.log.flush()
         
         sys.stdout = TeeOutput(log_file_path)
-        sys.stderr = sys.stdout
+        # Only redirect stderr if it exists (might be None in windowed mode)
+        if sys.stderr:
+            sys.stderr = sys.stdout
     
     @staticmethod
     def create_temp_directories():

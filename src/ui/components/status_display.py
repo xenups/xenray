@@ -7,23 +7,19 @@ import urllib.request
 import flet as ft
 
 
-class StatusDisplay(ft.UserControl):
+class StatusDisplay(ft.Container):
     """Displays connection status - step text during connecting, ping after connected."""
     
     def __init__(self):
-        super().__init__()
-        self._status_text = None
-        
-    def build(self):
         self._status_text = ft.Text(
             "",
             size=14,
-            color=ft.colors.ON_SURFACE_VARIANT,
+            color=ft.Colors.ON_SURFACE_VARIANT,
             text_align=ft.TextAlign.CENTER,
             weight=ft.FontWeight.W_500,
         )
         
-        return ft.Container(
+        super().__init__(
             content=self._status_text,
             padding=5,
         )
@@ -63,7 +59,7 @@ class StatusDisplay(ft.UserControl):
         """Show disconnected status."""
         if self._status_text:
             self._status_text.value = ""
-            self._status_text.color = ft.colors.ON_SURFACE_VARIANT
+            self._status_text.color = ft.Colors.ON_SURFACE_VARIANT
             self.update()
     
     def _measure_initial_ping(self):
@@ -100,6 +96,6 @@ class StatusDisplay(ft.UserControl):
         if self._status_text and self.page:
             async def update_failed():
                 self._status_text.value = "Ping: Timeout"
-                self._status_text.color = ft.colors.RED_400
+                self._status_text.color = ft.Colors.RED_400
                 self.update()
             self.page.run_task(update_failed)

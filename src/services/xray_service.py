@@ -24,8 +24,12 @@ class XrayService:
         Returns:
             Process ID or None if start failed
         """
+        from src.core.logger import logger
+        
+        logger.debug(f"[XrayService] Starting Xray with config: {config_file_path}")
+        
         if not os.path.isfile(config_file_path):
-            print(f"[xray] Config not found: {config_file_path}")
+            logger.error(f"[XrayService] Config not found: {config_file_path}")
             return None
         
         # Small delay to ensure previous instance is fully terminated
@@ -39,6 +43,9 @@ class XrayService:
             config_file_path
         ]
         
+        logger.debug(f"[XrayService] Executing command: {' '.join(cmd)}")
+        logger.debug(f"[XrayService] Log file: {XRAY_LOG_FILE}")
+        
         self._process = ProcessUtils.run_command(
             cmd,
             stdout_file=XRAY_LOG_FILE,
@@ -47,10 +54,10 @@ class XrayService:
         
         if self._process:
             self._pid = self._process.pid
-            print(f"[xray] Started with PID {self._pid}")
+            logger.info(f"[XrayService] Started with PID {self._pid}")
             return self._pid
         else:
-            print("[xray] Failed to start")
+            logger.error("[XrayService] Failed to start process")
             return None
     
     def stop(self) -> bool:
@@ -77,7 +84,8 @@ class XrayService:
                     break
                 time.sleep(0.1)
             
-            print("[xray] Stopped")
+            from src.core.logger import logger
+            logger.info("[XrayService] Stopped")
             self._pid = None
             self._process = None
         

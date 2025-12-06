@@ -275,3 +275,25 @@ class ConfigManager:
                 f.write(country)
         except Exception as e:
             print(f"Error saving routing country: {e}")
+
+    # --- Theme Management ---
+    def get_theme_mode(self) -> str:
+        """Get saved theme mode ('dark' or 'light')."""
+        path = os.path.join(self._config_dir, "theme_mode.txt")
+        if not os.path.exists(path):
+            return "dark"
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                return f.read().strip()
+        except:
+            return "dark"
+
+    def set_theme_mode(self, mode: str):
+        """Set theme mode."""
+        path = os.path.join(self._config_dir, "theme_mode.txt")
+        try:
+            with open(path, 'w', encoding='utf-8') as f:
+                f.write(mode)
+        except Exception as e:
+            print(f"Error saving theme mode: {e}")
+

@@ -4,16 +4,16 @@ import flet as ft
 from src.ui.log_viewer import LogViewer
 
 
-class LogsDrawer(ft.UserControl):
+class LogsDrawer(ft.NavigationDrawer):
     """Logs drawer component."""
     
     def __init__(self, log_viewer: LogViewer, heartbeat: ft.Container):
-        super().__init__()
         self._log_viewer = log_viewer
         self._heartbeat = heartbeat
+        # Ensure heartbeat has animation property
+        self._heartbeat.animate_opacity = 500
         
-    def build(self):
-        return ft.NavigationDrawer(
+        super().__init__(
             controls=[
                 # Header with padding
                 ft.Container(
@@ -32,5 +32,5 @@ class LogsDrawer(ft.UserControl):
                     expand=True  # This makes it fill remaining vertical space
                 )
             ],
-            bgcolor=ft.colors.SURFACE,
+            bgcolor=ft.Colors.SURFACE,
         )

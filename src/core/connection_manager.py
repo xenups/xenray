@@ -33,13 +33,16 @@ class ConnectionManager:
         
         # Load config
         report_step("Loading configuration...")
+        logger.debug(f"Loading config from {file_path}")
         config, _ = self._config_manager.load_config(file_path)
         if not config:
+            logger.error("Failed to load config")
             return False
 
         # Stop existing processes if any (don't call full disconnect to avoid race)
         if self._current_connection:
             report_step("Stopping existing connection...")
+            logger.debug("Stopping existing connection")
             if self._current_connection.get("xray_pid"):
                 self._xray_service.stop()
             if self._current_connection.get("singbox_pid"):
@@ -47,17 +50,23 @@ class ConnectionManager:
 
         # Process config for Xray
         report_step("Processing configuration...")
+        logger.debug("Processing configuration")
         processed_config = self._process_config(config)
 
         # Save processed config
+        logger.debug(f"Saving processed config to {OUTPUT_CONFIG_PATH}")
         with open(OUTPUT_CONFIG_PATH, "w", encoding="utf-8") as f:
             json.dump(processed_config, f, indent=2)
+        logger.debug("Config saved successfully")
 
         # Start Xray
         report_step("Starting Xray...")
+        logger.debug("Starting Xray service")
         xray_pid = self._xray_service.start(OUTPUT_CONFIG_PATH)
         if not xray_pid:
+            logger.error("Failed to start Xray")
             return False
+        logger.debug(f"Xray started with PID {xray_pid}")
 
         # Start Sing-box if VPN mode
         singbox_pid = None

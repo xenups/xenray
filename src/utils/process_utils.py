@@ -110,7 +110,8 @@ class ProcessUtils:
                 cmd,
                 stdout=stdout,
                 stderr=stderr,
-                shell=False
+                shell=False,
+                creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
             )
             return proc
         except Exception as e:
@@ -144,3 +145,33 @@ class ProcessUtils:
         except Exception as e:
             logger.error(f"Failed to run command {' '.join(cmd)}: {e}")
             return None
+
+    @staticmethod
+    def kill_process_tree(pid=None):
+        """Kill a process and all its children."""
+        import psutil
+        import signal
+        try:
+            if pid is None:
+                pid = os.getpid()
+            
+            parent = psutil.Process(pid)
+            children = parent.children(recursive=True)
+            
+            # Kill children first
+            for child in children:
+                try:
+                    child.kill()
+                except psutil.NoSuchProcess:
+                    pass
+            
+            # Kill parent
+            parent.kill()
+        except psutil.NoSuchProcess:
+            pass
+        except Exception as e:
+            # Fallback
+            try:
+                os.kill(pid, signal.SIGTERM)
+            except:
+                pass

@@ -22,8 +22,8 @@ class LogViewer:
             read_only=True,
             expand=True,  # Expand to fill container
             text_style=ft.TextStyle(font_family="Consolas", size=12),
-            border_color=ft.colors.TRANSPARENT,
-            focused_border_color=ft.colors.TRANSPARENT,
+            border_color=ft.Colors.TRANSPARENT,
+            focused_border_color=ft.Colors.TRANSPARENT,
         )
 
         self._container = ft.Container(
