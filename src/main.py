@@ -11,7 +11,16 @@ if __name__ == "__main__":
 from src.core.config_manager import ConfigManager
 from src.core.connection_manager import ConnectionManager
 from src.core.constants import EARLY_LOG_FILE
+from src.core.constants import EARLY_LOG_FILE
 from src.core.logger import logger
+
+# PyInstaller Hints
+try:
+    import flet_desktop
+    import flet.desktop
+except ImportError:
+    pass
+
 from src.core.settings import Settings
 from src.ui.main_window import MainWindow
 
@@ -19,22 +28,6 @@ from src.ui.main_window import MainWindow
 def main(page: ft.Page):
     """Main entry point."""
     
-    # Singleton Check
-    import ctypes
-    from ctypes import wintypes
-    
-    kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
-    mutex_name = "Global\\XenRay_Singleton_Mutex_v1"
-    
-    # Create named mutex
-    mutex = kernel32.CreateMutexW(None, False, mutex_name)
-    if kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
-        # Application is already running
-        # Optional: Bring existing window to front (requires extensive win32 calls)
-        # For now, just exit cleanly
-        logger.warning("Another instance is already running. Exiting.")
-        os._exit(0)
-
     # Window Placement (Start Hidden)
     page.window.visible = False
     page.window.center()
@@ -85,7 +78,24 @@ def main(page: ft.Page):
 
 def run():
     """Entry point for poetry script."""
+    # Singleton Check (Moved here to prevent child processes from starting app)
+    import ctypes
+    
+    kernel32 = ctypes.WinDLL('kernel32', use_last_error=True)
+    mutex_name = "Global\\XenRay_Singleton_Mutex_v1"
+    
+    # Create named mutex (Keep reference to prevent GC)
+    global _singleton_mutex
+    _singleton_mutex = kernel32.CreateMutexW(None, False, mutex_name)
+    
+    if kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
+        # Application is already running
+        logger.warning("Another instance is already running. Exiting.")
+        return # Exit run() without starting app
+
     ft.app(target=main)
 
 if __name__ == "__main__":
+    import multiprocessing
+    multiprocessing.freeze_support()
     run()

@@ -170,8 +170,78 @@ class ProcessUtils:
         except psutil.NoSuchProcess:
             pass
         except Exception as e:
-            # Fallback
+            pass
+
+    @staticmethod
+    def restart_as_admin():
+        """Restart the application with admin privileges."""
+        import sys
+        import os
+        import ctypes
+        import psutil
+        import time
+        
+        if os.name != 'nt':
+            logger.warning("restart_as_admin is only supported on Windows")
+            return
+
+        try:
+            # Get the executable path
+            if getattr(sys, 'frozen', False):
+                executable = sys.executable
+            else:
+                executable = sys.executable
+
+            logger.info(f"Restarting as admin: {executable}")
+            
+            # STEP 1: Kill all child processes FIRST (to release file locks)
+            # This prevents PyInstaller temp directory lock issues
+            current_pid = os.getpid()
             try:
-                os.kill(pid, signal.SIGTERM)
-            except:
-                pass
+                parent = psutil.Process(current_pid)
+                children = parent.children(recursive=True)
+                
+                logger.info(f"Killing {len(children)} child processes before restart...")
+                for child in children:
+                    try:
+                        child_name = child.name().lower()
+                        logger.debug(f"Killing child process: {child.pid} ({child_name})")
+                        child.kill()
+                    except psutil.NoSuchProcess:
+                        pass
+                    except Exception as e:
+                        logger.debug(f"Failed to kill child {child.pid}: {e}")
+                
+                # Brief pause to let processes fully terminate
+                time.sleep(0.3)
+            except Exception as e:
+                logger.warning(f"Error cleaning up child processes: {e}")
+            
+            # STEP 2: Launch new admin instance via ShellExecuteW
+            result = ctypes.windll.shell32.ShellExecuteW(
+                None,           # hwnd
+                "runas",        # lpOperation - triggers UAC elevation
+                executable,     # lpFile
+                "",             # lpParameters
+                None,           # lpDirectory
+                1               # nShowCmd - SW_SHOWNORMAL
+            )
+            
+            # ShellExecuteW returns > 32 on success
+            if result > 32:
+                logger.info(f"ShellExecuteW succeeded (code {result}). Terminating current process...")
+                # STEP 3: Terminate immediately using ExitProcess
+                # This bypasses PyInstaller's cleanup which can fail on locked files
+                ctypes.windll.kernel32.ExitProcess(0)
+            else:
+                logger.error(f"ShellExecuteW failed with code {result}")
+                # Error code 5 = User cancelled UAC, don't exit
+                if result == 5:
+                    logger.info("User cancelled UAC prompt")
+                    
+        except Exception as e:
+            logger.error(f"Failed to restart as admin: {e}")
+            import traceback
+            traceback.print_exc()
+
+

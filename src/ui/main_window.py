@@ -63,10 +63,10 @@ class MainWindow:
         self._setup_page()
         self._build_ui()
         self._setup_drawers()
-        
+
         # Start background tasks
         self._page.run_task(self._start_ui_tasks)
-        
+
         # Start Splash Sequence
         self._start_splash()
 
@@ -101,7 +101,7 @@ class MainWindow:
 
         saved_mode = self._config_manager.get_connection_mode()
         saved_theme = self._config_manager.get_theme_mode()
-        
+
         self._current_mode = (
             ConnectionMode.VPN if saved_mode == "vpn" else ConnectionMode.PROXY
         )
@@ -114,6 +114,7 @@ class MainWindow:
     # -----------------------------
     def _ui_call(self, fn: Callable, *args, **kwargs):
         """Wraps UI updates in an async task to be thread-safe."""
+
         async def _coro():
             try:
                 fn(*args, **kwargs)
@@ -135,7 +136,7 @@ class MainWindow:
             self._page,
             self._toggle_theme,
             self._open_logs_drawer,
-            self._open_settings_drawer
+            self._open_settings_drawer,
         )
 
         self._status_display = StatusDisplay()
@@ -164,23 +165,24 @@ class MainWindow:
 
         self._main_container = AppContainer(main_column)
         self._page.add(self._main_container)
-        
+
         # Sync Initial Theme State
         is_dark = self._page.theme_mode == ft.ThemeMode.DARK
         self._main_container.update_theme(is_dark)
-        self._connection_button.update_theme(is_dark) # Ensure button matches too
-        self._server_card.update_theme(is_dark) # Ensure card matches too
+        self._connection_button.update_theme(is_dark)  # Ensure button matches too
+        self._server_card.update_theme(is_dark)  # Ensure card matches too
 
     def _start_splash(self):
         """Initialize splash screen and show window."""
+
         def on_splash_finish(splash_instance):
-             self._page.overlay.remove(splash_instance)
-             self._page.update()
+            self._page.overlay.remove(splash_instance)
+            self._page.update()
 
         self._splash = SplashOverlay(on_splash_finish)
         self._page.overlay.append(self._splash)
         self._page.update()
-        
+
         # Center and Show Window
         self._page.window.width = 420
         self._page.window.height = 650
@@ -219,10 +221,9 @@ class MainWindow:
 
         # Initialize BottomSheet
         self._server_sheet = ft.BottomSheet(
-            ft.Container(content=self._server_list, padding=20, expand=True),
-            open=False
+            ft.Container(content=self._server_list, padding=20, expand=True), open=False
         )
-        
+
         # NOTE: Removed self._page.bottom_sheet assignment to use page.open() method
 
         # Load last used profile
@@ -245,14 +246,54 @@ class MainWindow:
         if self._connecting:
             self._show_snackbar("Connection in progress...")
             return
-        
+
+        # Admin Check for VPN Mode
         if not self._is_running:
+            if self._current_mode == ConnectionMode.VPN:
+                from src.utils.process_utils import ProcessUtils
+
+                if not ProcessUtils.is_admin():
+                    # CALL THE NEW CLASS METHOD
+                    self._show_admin_restart_dialog()
+                    return  # Stop execution if admin restart is needed
+
             self._connection_button.set_connecting()
             self._status_display.set_connecting()
             self._ui_call(lambda: None)
             self._connect_async()
         else:
             self._disconnect()
+
+    def _show_admin_restart_dialog(self):
+        """Shows an AlertDialog asking the user to restart the app as Admin."""
+        from src.utils.process_utils import ProcessUtils
+
+        page = self._page
+
+        def close_dlg(e):
+            page.close(dlg)
+
+        def confirm_restart(e):
+            page.close(dlg)
+            # Save "VPN" mode so the app starts in VPN mode after restart
+            self._config_manager.set_connection_mode(ConnectionMode.VPN.value)
+            ProcessUtils.restart_as_admin()
+
+        dlg = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("Admin Rights Required"),
+            content=ft.Text(
+                "VPN mode requires Administrator privileges.\n\nDo you want to restart the application as Admin?"
+            ),
+            actions=[
+                ft.TextButton("Cancel", on_click=close_dlg),
+                ft.TextButton("Restart", on_click=confirm_restart),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+
+        if page:
+            page.open(dlg)
 
     def _open_server_drawer_impl(self, e=None):
         """Opens the server list using the modern page.open() method."""
@@ -278,26 +319,27 @@ class MainWindow:
             self._selected_profile = profile
             self._server_card.update_server(profile)
             self._server_sheet.open = False
-            self._page.update() # Update page to close sheet
+            self._page.update()  # Update page to close sheet
 
         self._ui_call(_apply)
-        
+
         try:
             self._config_manager.set_last_selected_profile_id(profile.get("id"))
         except Exception:
             pass
-            
+
         if self._is_running:
             self._disconnect()
             self._connect_async()
 
     def _safe_update_server_list(self):
         """Waits for the sheet to be mounted before updating list."""
+
         async def _wait_and_update():
             # Wait until the server list control is mounted to the page
             while self._server_list.page is None:
                 await asyncio.sleep(0.05)
-            
+
             try:
                 self._server_list._load_profiles(update_ui=True)
             except Exception as ex:
@@ -312,7 +354,7 @@ class MainWindow:
         if self._connecting:
             return
         self._connecting = True
-        
+
         profile_config = (
             self._selected_profile.get("config") if self._selected_profile else {}
         )
@@ -331,7 +373,7 @@ class MainWindow:
                 success = self._connection_manager.connect(
                     temp_config_path, mode_str, step_callback=on_step
                 )
-                
+
                 if not success:
                     self._connecting = False
                     self._ui_call(self._reset_ui_disconnected)
@@ -340,7 +382,7 @@ class MainWindow:
 
                 self._is_running = True
                 self._connecting = False
-                
+
                 self._ui_call(self._status_display.set_connected, True)
                 self._ui_call(self._connection_button.set_connected)
 
@@ -348,7 +390,7 @@ class MainWindow:
                     self._log_viewer.start_tailing(XRAY_LOG_FILE, TUN_LOG_FILE)
                 else:
                     self._log_viewer.start_tailing(XRAY_LOG_FILE)
-            
+
             except Exception as e:
                 logger.error(f"Error in connect_task: {e}")
                 self._connecting = False
@@ -360,17 +402,17 @@ class MainWindow:
         if not self._is_running:
             return
         self._is_running = False
-        
+
         try:
             self._connection_manager.disconnect()
         except Exception:
             pass
-            
+
         try:
             self._log_viewer.stop_tailing()
         except Exception:
             pass
-            
+
         self._reset_ui_disconnected()
         self._show_snackbar("Disconnected")
 
@@ -391,10 +433,10 @@ class MainWindow:
         is_dark = self._page.theme_mode == ft.ThemeMode.DARK
         self._page.theme_mode = ft.ThemeMode.LIGHT if is_dark else ft.ThemeMode.DARK
         # Icon update handled by Header component now
-        
+
         # Save preference
         self._config_manager.set_theme_mode("light" if is_dark else "dark")
-        
+
         self._connection_button.update_theme(not is_dark)
         self._server_card.update_theme(not is_dark)
         self._main_container.update_theme(not is_dark)
@@ -404,23 +446,24 @@ class MainWindow:
     def _show_snackbar(self, message: str):
         def _set():
             self._page.open(ft.SnackBar(ft.Text(message)))
+
         self._ui_call(_set)
 
     def _run_specific_installer(self, component: str):
         progress = ft.ProgressRing()
         status = ft.Text(f"Updating {component}...")
-        
+
         # Create a modal dialog instead of using overlay
         dialog = ft.AlertDialog(
             content=ft.Column(
-                [progress, status], 
+                [progress, status],
                 alignment=ft.MainAxisAlignment.CENTER,
                 height=100,
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             ),
             modal=True,
         )
-        
+
         self._page.open(dialog)
 
         def update_status(msg: str):
@@ -431,12 +474,14 @@ class MainWindow:
             try:
                 if component == "xray":
                     from src.services.xray_installer import XrayInstallerService
+
                     XrayInstallerService.install(
                         progress_callback=update_status,
                         stop_service_callback=self._connection_manager.disconnect,
                     )
                 elif component == "geo":
                     from src.services.geo_installer import GeoInstallerService
+
                     GeoInstallerService.install(progress_callback=update_status)
 
                 self._show_snackbar(f"{component} Update Complete!")
@@ -453,7 +498,7 @@ class MainWindow:
         if mode == ConnectionMode.VPN and not ProcessUtils.is_admin():
             self._show_snackbar("Admin rights required for VPN mode")
             return
-        
+
         self._current_mode = mode
         self._config_manager.set_connection_mode(
             "vpn" if mode == ConnectionMode.VPN else "proxy"
@@ -466,27 +511,30 @@ class MainWindow:
     # -----------------------------
     async def _start_ui_tasks(self):
         """Manages background UI updates like heartbeat animation."""
+
         async def heartbeat_loop():
             while True:
                 # Optimized heartbeat logic using Flet animation
                 if self._is_running:
-                     try:
+                    try:
                         if self._heartbeat.page:
-                             # Toggle opacity
-                             self._heartbeat.opacity = 0.2 if self._heartbeat.opacity == 1.0 else 1.0
-                             self._heartbeat.update()
-                     except:
+                            # Toggle opacity
+                            self._heartbeat.opacity = (
+                                0.2 if self._heartbeat.opacity == 1.0 else 1.0
+                            )
+                            self._heartbeat.update()
+                    except:
                         pass
                 else:
                     # Reset when not running
-                     try:
+                    try:
                         if self._heartbeat.opacity != 0:
                             self._heartbeat.opacity = 0
                             self._heartbeat.update()
-                     except:
+                    except:
                         pass
-                
-                await asyncio.sleep(1.0) # Matches animation duration approx
+
+                await asyncio.sleep(1.0)  # Matches animation duration approx
 
         self._page.run_task(heartbeat_loop)
 

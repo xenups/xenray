@@ -8,13 +8,15 @@ readme = "README.md"
 packages = [{include = "src"}]
 
 [tool.poetry.dependencies]
-python = "^3.9"
+python = "^3.10"
 flet = "^0.28.0"
 requests = "^2.31.0"
 psutil = "^5.9.0"
 loguru = "^0.7.3"
 pystray = "^0.19.5"
 Pillow = "^10.0.0"
+cryptography = "^46.0.3"
+flet-desktop = "^0.28.3"
 
 
 [tool.poetry.group.dev.dependencies]

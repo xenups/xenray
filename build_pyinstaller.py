@@ -42,20 +42,25 @@ def main():
         "--name=XenRay",
         "--clean",
         
-        # Data inclusions (source;dest)
-        # We don't bundle them anymore, we copy them externally
-        # "--add-data=assets;assets",
-        # "--add-data=bin;bin",
-        
-        # Hidden imports (common issues with flet/requests)
+        # Hidden imports (حذف flet_desktop/flet_runtime و واگذاری به Hook)
+        # فقط flet را نگه می‌داریم و بقیه را به Hook می‌سپاریم
         "--hidden-import=flet",
+        # خطوط زیر حذف شدند چون در Hook مدیریت می‌شوند:
+        # "--hidden-import=flet_desktop",
+        # "--hidden-import=flet.desktop",
+        # "--hidden-import=flet_runtime",
+        
+        # Other necessary imports
         "--hidden-import=requests",
         "--hidden-import=loguru",
         "--hidden-import=pystray",
         "--hidden-import=PIL",
         
         # Main script
-        "src/main.py"
+        "src/main.py",
+        
+        # Custom hooks: مسیر مطلق
+        f"--additional-hooks-dir={os.path.join(PROJECT_ROOT, 'hooks')}"
     ] + icon_option
     
     print("\nRunning PyInstaller...")
@@ -84,7 +89,7 @@ def main():
         print("=" * 60)
     else:
         print("\n" + "=" * 60)
-        print("BUILD FAILED!")
+        print("BUILD FAILED! Check PyInstaller output for details.")
         print("=" * 60)
         sys.exit(1)
 
