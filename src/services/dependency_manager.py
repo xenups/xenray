@@ -1,8 +1,6 @@
 """Unified Dependency Manager."""
 import os
-import threading
 
-from src.services.tun2proxy_installer import Tun2ProxyInstallerService
 from src.services.xray_installer import XrayInstallerService
 
 
@@ -15,8 +13,6 @@ class DependencyManager:
         missing = []
         if not XrayInstallerService.is_installed():
             missing.append("Xray Core")
-        if not Tun2ProxyInstallerService.is_installed():
-            missing.append("Tun2Proxy")
         return missing
 
     @staticmethod
@@ -28,6 +24,4 @@ class DependencyManager:
         """
         # We no longer auto-install on startup.
         # Just return True to allow app to proceed.
-        # The UI will show missing components if they are not found, 
-        # but we won't force install here.
         return True

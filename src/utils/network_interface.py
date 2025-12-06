@@ -9,13 +9,13 @@ class NetworkInterfaceDetector:
     """Detects primary network interface on Windows."""
     
     @staticmethod
-    def get_primary_interface() -> Tuple[Optional[str], Optional[str], Optional[str]]:
+    def get_primary_interface() -> Tuple[Optional[str], Optional[str], Optional[str], Optional[str]]:
         """
         Get primary network interface details.
         
         Returns:
-            Tuple of (interface_name, interface_ip, subnet)
-            e.g., ("Wi-Fi", "192.168.1.10", "192.168.1.0/24")
+            Tuple of (interface_name, interface_ip, subnet, gateway)
+            e.g., ("Wi-Fi", "192.168.1.10", "192.168.1.0/24", "192.168.1.1")
         """
         try:
             # Get default route to find primary interface
@@ -28,7 +28,7 @@ class NetworkInterfaceDetector:
             
             if result.returncode != 0:
                 logger.error(f"Failed to get route table: {result.stderr}")
-                return None, None, None
+                return None, None, None, None
             
             # Parse route output to find default gateway
             # Looking for line like: "0.0.0.0          0.0.0.0     192.168.1.1    192.168.1.10     25"
@@ -42,18 +42,27 @@ class NetworkInterfaceDetector:
                         # Get interface name from IP
                         interface_name = NetworkInterfaceDetector._get_interface_name(interface_ip)
                         
+                        # Fix: Ignore Sing-box TUN interface to prevent loops
+                        if interface_name and (
+                            "SING" in interface_name.upper() or 
+                            "TUN" in interface_name.upper() or
+                            "TAP" in interface_name.upper()
+                        ):
+                            logger.warning(f"Ignored potential TUN interface: {interface_name}")
+                            continue
+
                         # Calculate subnet (assume /24 for simplicity)
                         subnet = NetworkInterfaceDetector._calculate_subnet(interface_ip)
                         
-                        logger.info(f"Detected primary interface: {interface_name} ({interface_ip}, {subnet})")
-                        return interface_name, interface_ip, subnet
+                        logger.info(f"Detected primary interface: {interface_name} ({interface_ip}, {subnet}, {gateway})")
+                        return interface_name, interface_ip, subnet, gateway
             
             logger.warning("Could not detect primary interface from route table")
-            return None, None, None
+            return None, None, None, None
             
         except Exception as e:
             logger.error(f"Error detecting primary interface: {e}")
-            return None, None, None
+            return None, None, None, None
     
     @staticmethod
     def _get_interface_name(ip: str) -> Optional[str]:

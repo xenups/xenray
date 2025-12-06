@@ -30,7 +30,7 @@ class ServerCard(ft.UserControl):
             border=ft.border.all(1, ft.colors.OUTLINE_VARIANT), # Subtle border
             border_radius=15,
             padding=15,
-            margin=20,
+            margin=ft.margin.only(left=20, right=20, bottom=20),
             shadow=ft.BoxShadow(
                 spread_radius=1,
                 blur_radius=10,

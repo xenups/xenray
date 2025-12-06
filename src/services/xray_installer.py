@@ -2,7 +2,7 @@
 import os
 import platform
 import shutil
-import sys
+import tempfile
 import zipfile
 
 import requests
@@ -21,17 +21,32 @@ class XrayInstallerService:
                os.path.exists(os.path.join(ASSETS_DIR, "geoip.dat"))
 
     @staticmethod
-    def install(progress_callback=None) -> bool:
-        """Install Xray and geo files."""
+    def install(progress_callback=None, stop_service_callback=None) -> bool:
+        """
+        Install Xray and geo files.
+        
+        Args:
+            progress_callback: Function to report progress
+            stop_service_callback: Function to stop xray service before file replacement
+        """
         try:
             os.makedirs(BIN_DIR, exist_ok=True)
             os.makedirs(ASSETS_DIR, exist_ok=True)
             
-            # 1. Install Xray Core
+            # 1. Download Xray Core to temp location first
             if progress_callback: progress_callback("Downloading Xray Core...")
-            XrayInstallerService._install_core()
+            zip_path = XrayInstallerService._download_core()
             
-            # 2. Install Geo Files
+            # 2. STOP xray service AFTER download, BEFORE extraction
+            if progress_callback: progress_callback("Stopping Xray service...")
+            if stop_service_callback:
+                stop_service_callback()
+            
+            # 3. Extract (replace files)
+            if progress_callback: progress_callback("Installing Xray Core...")
+            XrayInstallerService._extract_core(zip_path)
+            
+            # 4. Install Geo Files
             if progress_callback: progress_callback("Downloading Geo Files...")
             XrayInstallerService._install_geo_files()
             
@@ -41,14 +56,14 @@ class XrayInstallerService:
             return False
 
     @staticmethod
-    def _install_core():
-        """Download and extract Xray core."""
+    def _download_core() -> str:
+        """Download Xray core to temp location. Returns path to zip file."""
         # Determine architecture
         arch = platform.machine().lower()
         if arch == "amd64" or arch == "x86_64":
             arch_str = "64"
         elif "arm" in arch:
-            arch_str = "arm64-v8a" # Simplified
+            arch_str = "arm64-v8a"
         else:
             arch_str = "32"
             
@@ -56,17 +71,20 @@ class XrayInstallerService:
         filename = f"Xray-{os_name}-{arch_str}.zip"
         url = f"https://github.com/XTLS/Xray-core/releases/latest/download/{filename}"
         
-        # Download
-        zip_path = os.path.join(BIN_DIR, "xray.zip")
+        # Download to temp directory first
+        zip_path = os.path.join(tempfile.gettempdir(), "xray_update.zip")
         with requests.get(url, stream=True) as r:
             r.raise_for_status()
             with open(zip_path, 'wb') as f:
                 shutil.copyfileobj(r.raw, f)
-                
-        # Extract
+        
+        return zip_path
+    
+    @staticmethod
+    def _extract_core(zip_path: str):
+        """Extract Xray core from zip file."""
         with zipfile.ZipFile(zip_path, 'r') as zip_ref:
             zip_ref.extractall(BIN_DIR)
-            
         os.remove(zip_path)
 
     @staticmethod

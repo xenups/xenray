@@ -155,7 +155,6 @@ class MainWindow:
                     ),
                     ft.Container(expand=True),  # Pushes up
                     self._server_card,
-                    ft.Container(height=20),
                 ],
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             ),
@@ -368,8 +367,15 @@ class MainWindow:
                 json.dump(profile_config, f)
             logger.debug(f"Config written to {temp_config_path}")
 
+            # Step callback to update status display text
+            def on_step(step_msg):
+                try:
+                    self._status_display.set_step(step_msg)
+                except:
+                    pass  # Ignore UI errors in callback
+
             # Perform connection (blocking I/O)
-            success = self._connection_manager.connect(temp_config_path, mode_str)
+            success = self._connection_manager.connect(temp_config_path, mode_str, step_callback=on_step)
             logger.debug(f"Connection result: {success}")
 
             # Schedule UI update on main thread
@@ -437,8 +443,8 @@ class MainWindow:
         self._page.update()
 
     def cleanup(self):
+        """Cleanup on app close - just disconnect, logs cleared on next startup."""
         self._disconnect()
-        shutil.rmtree(TMPDIR, ignore_errors=True)
 
     # --- Installation Logic ---
     def _check_installations(self):
@@ -504,16 +510,11 @@ class MainWindow:
             try:
                 # Hack: Delete files if force
                 if force:
-                    from src.core.constants import TUN2PROXY_EXECUTABLE, XRAY_EXECUTABLE
+                    from src.core.constants import XRAY_EXECUTABLE
 
                     if os.path.exists(XRAY_EXECUTABLE):
                         try:
                             os.remove(XRAY_EXECUTABLE)
-                        except:
-                            pass
-                    if os.path.exists(TUN2PROXY_EXECUTABLE):
-                        try:
-                            os.remove(TUN2PROXY_EXECUTABLE)
                         except:
                             pass
 
@@ -606,15 +607,16 @@ class MainWindow:
             self._page.update()
 
         def install_task():
-            from src.services.tun2proxy_installer import Tun2ProxyInstallerService
             from src.services.xray_installer import XrayInstallerService
             from src.services.geo_installer import GeoInstallerService
 
             try:
                 if component == "xray":
-                    XrayInstallerService.install(progress_callback=update_status)
-                elif component == "tun2proxy":
-                    Tun2ProxyInstallerService.install(progress_callback=update_status)
+                    # Pass callback to stop xray service after download, before extraction
+                    XrayInstallerService.install(
+                        progress_callback=update_status,
+                        stop_service_callback=self._connection_manager.disconnect
+                    )
                 elif component == "geo":
                     GeoInstallerService.install(progress_callback=update_status)
 

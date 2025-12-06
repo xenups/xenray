@@ -8,7 +8,7 @@ import flet as ft
 
 
 class StatusDisplay(ft.UserControl):
-    """Displays connection status with initial ping."""
+    """Displays connection status - step text during connecting, ping after connected."""
     
     def __init__(self):
         super().__init__()
@@ -20,6 +20,7 @@ class StatusDisplay(ft.UserControl):
             size=14,
             color=ft.colors.ON_SURFACE_VARIANT,
             text_align=ft.TextAlign.CENTER,
+            weight=ft.FontWeight.W_500,
         )
         
         return ft.Container(
@@ -27,24 +28,32 @@ class StatusDisplay(ft.UserControl):
             padding=5,
         )
     
-    def set_status(self, message: str):
+    def set_status(self, message: str, color=None):
         """Set custom status message."""
         if self._status_text:
             self._status_text.value = message
+            if color:
+                self._status_text.color = color
             self.update()
     
-    def set_connecting(self):
-        """Show connecting status."""
+    def set_connecting(self, step: str = "Connecting..."):
+        """Show connecting step text."""
         if self._status_text:
-            self._status_text.value = "Connecting..."
-            self._status_text.color = ft.colors.ORANGE_400
+            self._status_text.value = step
+            self._status_text.color = "#fbbf24"  # Amber to match button glow
+            self.update()
+    
+    def set_step(self, step: str):
+        """Update the step text during connection."""
+        if self._status_text:
+            self._status_text.value = step
             self.update()
     
     def set_connected(self, mode):
         """Show connected status and measure initial ping."""
         if self._status_text:
             self._status_text.value = "Connected"
-            self._status_text.color = ft.colors.GREEN_400
+            self._status_text.color = "#8b5cf6"  # Purple to match button
             self.update()
         
         # Measure ping once in background
@@ -54,16 +63,16 @@ class StatusDisplay(ft.UserControl):
         """Show disconnected status."""
         if self._status_text:
             self._status_text.value = ""
+            self._status_text.color = ft.colors.ON_SURFACE_VARIANT
             self.update()
     
     def _measure_initial_ping(self):
         """Measure ping to google.com with retries."""
         test_url = "http://www.google.com"
         max_retries = 10
-        retry_delay = 2  # seconds
+        retry_delay = 2
         
         for attempt in range(max_retries):
-            # Stop if control is no longer on page
             if not self._status_text or not self.page:
                 break
                 
@@ -71,27 +80,23 @@ class StatusDisplay(ft.UserControl):
                 start_time = time.time()
                 req = urllib.request.Request(test_url, headers={'User-Agent': 'Mozilla/5.0'})
                 response = urllib.request.urlopen(req, timeout=5)
-                response.read()  # Read response to ensure full connection
+                response.read()
                 latency_ms = int((time.time() - start_time) * 1000)
                 
-                # Update UI with ping result
                 if self._status_text and self.page:
                     async def update_ping():
                         self._status_text.value = f"Ping: {latency_ms} ms"
-                        self._status_text.color = ft.colors.GREEN_400
+                        self._status_text.color = "#8b5cf6"  # Purple
                         self.update()
                     
                     self.page.run_task(update_ping)
-                    return  # Success, stop retrying
+                    return
                     
-            except (urllib.error.URLError, TimeoutError) as e:
-                # Ping failed, wait and retry
+            except (urllib.error.URLError, TimeoutError):
                 time.sleep(retry_delay)
-            except Exception as e:
-                # Other errors
+            except Exception:
                 time.sleep(retry_delay)
         
-        # If we reach here, all retries failed
         if self._status_text and self.page:
             async def update_failed():
                 self._status_text.value = "Ping: Timeout"

@@ -49,10 +49,18 @@ class Settings:
     
     @staticmethod
     def create_log_files():
-        """Create/overwrite log files."""
+        """Create/clear log files if they don't exist or are too large (>1MB)."""
         from src.core.constants import TUN_LOG_FILE, XRAY_LOG_FILE
         
-        with open(XRAY_LOG_FILE, "w") as f:
-            pass
-        with open(TUN_LOG_FILE, "w") as f:
-            pass
+        max_size = 1 * 1024 * 1024  # 1MB limit
+        
+        for log_file in [XRAY_LOG_FILE, TUN_LOG_FILE]:
+            should_clear = False
+            if not os.path.exists(log_file):
+                should_clear = True
+            elif os.path.getsize(log_file) > max_size:
+                should_clear = True
+            
+            if should_clear:
+                with open(log_file, "w") as f:
+                    pass

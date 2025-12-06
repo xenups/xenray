@@ -24,10 +24,10 @@ class SettingsDrawer(ft.UserControl):
         # Port configuration field
         self._port_field = ft.TextField(
             value=str(self._config_manager.get_proxy_port()),
-            width=100,
-            height=40,
+            width=80,
+            height=36,
             text_size=14,
-            content_padding=10,
+            content_padding=8,
             keyboard_type=ft.KeyboardType.NUMBER,
             text_align=ft.TextAlign.CENTER,
             border_color=ft.colors.OUTLINE_VARIANT,
@@ -47,10 +47,10 @@ class SettingsDrawer(ft.UserControl):
         # Country Dropdown
         current_country = self._config_manager.get_routing_country()
         self._country_dropdown = ft.Dropdown(
-            width=150,
-            height=40,
-            text_size=14,
-            content_padding=10,
+            width=120,
+            height=36,
+            text_size=13,
+            content_padding=8,
             value=current_country if current_country else "none",
             options=[
                 ft.dropdown.Option("none", "None"),
@@ -67,9 +67,9 @@ class SettingsDrawer(ft.UserControl):
         self._dns_field = ft.TextField(
             value=self._config_manager.get_custom_dns(),
             expand=True,
-            height=40,
+            height=36,
             text_size=14,
-            content_padding=10,
+            content_padding=8,
             hint_text="8.8.8.8, 1.1.1.1",
             border_color=ft.colors.OUTLINE_VARIANT,
             focused_border_color=ft.colors.PRIMARY,
@@ -78,135 +78,95 @@ class SettingsDrawer(ft.UserControl):
         return ft.NavigationDrawer(
             controls=[
                 ft.Container(
-                    content=ft.Column([
-                        ft.Text("Settings", size=28, weight=ft.FontWeight.BOLD),
-                        ft.Text("Configure your connection", size=14, color=ft.colors.ON_SURFACE_VARIANT),
-                    ]),
-                    padding=ft.padding.only(left=20, top=20, bottom=10)
+                    content=ft.Text("Settings", size=24, weight=ft.FontWeight.BOLD),
+                    padding=ft.padding.only(left=20, top=20, bottom=15)
                 ),
                 
                 ft.Divider(height=1, color=ft.colors.OUTLINE_VARIANT),
                 
-                # Connection Mode Section
-                self._build_section_header("Connection Mode", ft.icons.VPN_LOCK),
+                # Connection Mode
                 ft.Container(
                     content=ft.Row([
-                        ft.Column([
-                            ft.Text("Proxy / VPN", size=16, weight=ft.FontWeight.W_500),
-                            ft.Text("Choose connection method", size=12, color=ft.colors.ON_SURFACE_VARIANT),
-                        ], expand=True),
+                        ft.Text("Mode", size=14, weight=ft.FontWeight.W_500),
                         ft.Row([
-                            ft.Text("VPN", size=12, weight=ft.FontWeight.BOLD, color=ft.colors.ON_SURFACE_VARIANT),
+                            ft.Text("VPN", size=12, color=ft.colors.ON_SURFACE_VARIANT),
                             self._mode_switch,
-                            ft.Text("Proxy", size=12, weight=ft.FontWeight.BOLD, color=ft.colors.ON_SURFACE_VARIANT),
-                        ], alignment=ft.MainAxisAlignment.CENTER),
+                            ft.Text("Proxy", size=12, color=ft.colors.ON_SURFACE_VARIANT),
+                        ]),
                     ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-                    padding=ft.padding.symmetric(horizontal=20, vertical=10),
+                    padding=ft.padding.symmetric(horizontal=20, vertical=12),
                 ),
                 
-                ft.Divider(height=1, color=ft.colors.OUTLINE_VARIANT, opacity=0.5),
-
-                # Routing Section
-                self._build_section_header("Routing Bypass", ft.icons.ROUTE),
+                # Direct Country
                 ft.Container(
                     content=ft.Row([
-                        ft.Column([
-                            ft.Text("Direct Country", size=16, weight=ft.FontWeight.W_500),
-                            ft.Text("Traffic to this country will bypass proxy", size=12, color=ft.colors.ON_SURFACE_VARIANT),
-                        ], expand=True),
+                        ft.Text("Direct Country", size=14, weight=ft.FontWeight.W_500),
                         self._country_dropdown
                     ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-                    padding=ft.padding.symmetric(horizontal=20, vertical=10),
+                    padding=ft.padding.symmetric(horizontal=20, vertical=12),
                 ),
 
-                ft.Divider(height=1, color=ft.colors.OUTLINE_VARIANT, opacity=0.5),
-
-                # DNS Section
-                self._build_section_header("DNS Configuration", ft.icons.DNS),
+                # DNS
                 ft.Container(
-                    content=ft.Column([
-                        ft.Text("Custom DNS Servers", size=16, weight=ft.FontWeight.W_500),
-                        ft.Container(height=5),
+                    content=ft.Row([
+                        ft.Text("DNS", size=14, weight=ft.FontWeight.W_500),
                         ft.Row([
                             self._dns_field,
                             ft.IconButton(
                                 icon=ft.icons.SAVE_OUTLINED,
+                                icon_size=18,
                                 icon_color=ft.colors.PRIMARY,
-                                tooltip="Save DNS",
                                 on_click=self._save_dns
                             )
-                        ])
-                    ]),
-                    padding=ft.padding.symmetric(horizontal=20, vertical=10),
+                        ], expand=True)
+                    ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                    padding=ft.padding.symmetric(horizontal=20, vertical=12),
                 ),
 
-                ft.Divider(height=1, color=ft.colors.OUTLINE_VARIANT, opacity=0.5),
-
-                # Proxy Settings Section
-                self._build_section_header("Proxy Configuration", ft.icons.SETTINGS_ETHERNET),
+                # SOCKS Port
                 ft.Container(
                     content=ft.Row([
-                        ft.Column([
-                            ft.Text("SOCKS Port", size=16, weight=ft.FontWeight.W_500),
-                            ft.Text("Local listening port for proxy mode", size=12, color=ft.colors.ON_SURFACE_VARIANT),
-                        ], expand=True),
+                        ft.Text("SOCKS Port", size=14, weight=ft.FontWeight.W_500),
                         ft.Row([
                             self._port_field,
                             ft.IconButton(
                                 icon=ft.icons.SAVE_OUTLINED,
+                                icon_size=18,
                                 icon_color=ft.colors.PRIMARY,
-                                tooltip="Save Port",
                                 on_click=self._save_port
                             )
                         ])
                     ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-                    padding=ft.padding.symmetric(horizontal=20, vertical=10),
+                    padding=ft.padding.symmetric(horizontal=20, vertical=12),
                 ),
 
                 ft.Divider(height=1, color=ft.colors.OUTLINE_VARIANT, opacity=0.5),
                 
-                # Updates Section
-                self._build_section_header("Updates", ft.icons.SYSTEM_UPDATE),
+                # Updates
                 ft.Container(
                     content=ft.Column([
-                        ft.Row([
-                            self._build_update_button("Xray Core", "xray"),
-                            ft.Container(width=10),
-                            self._build_update_button("Tun2Proxy", "tun2proxy"),
-                        ]),
-                        ft.Container(height=10),
-                        self._build_update_button("Geo Files (Iran Rules)", "geo"),
+                        ft.Text("Updates", size=14, weight=ft.FontWeight.BOLD, color=ft.colors.PRIMARY),
+                        ft.Container(height=8),
+                        self._build_update_button("Xray Core", "xray"),
+                        ft.Container(height=8),
+                        self._build_update_button("Geo Files", "geo"),
                     ]),
-                    padding=ft.padding.symmetric(horizontal=20, vertical=10),
+                    padding=ft.padding.symmetric(horizontal=20, vertical=12),
                 ),
                 
                 ft.Divider(height=1, color=ft.colors.OUTLINE_VARIANT, opacity=0.5),
 
-                # About Section
-                self._build_section_header("About", ft.icons.INFO_OUTLINE),
+                # About
                 ft.Container(
                     content=ft.Column([
-                        ft.Text("XenRay Client", size=16, weight=ft.FontWeight.BOLD),
-                        ft.Text("v1.0.0", size=12, color=ft.colors.ON_SURFACE_VARIANT),
-                        ft.Container(height=5),
-                        ft.Text("A modern, lightweight Xray client designed for performance and ease of use.", size=12, color=ft.colors.ON_SURFACE_VARIANT),
-                        ft.Container(height=10),
-                        ft.Text("Developed by Xenups", size=12, color=ft.colors.PRIMARY, weight=ft.FontWeight.BOLD),
+                        ft.Text("XenRay v1.0.0", size=14, weight=ft.FontWeight.BOLD),
+                        ft.Text("by Xenups", size=12, color=ft.colors.PRIMARY),
                     ]),
-                    padding=ft.padding.symmetric(horizontal=20, vertical=10),
+                    padding=ft.padding.symmetric(horizontal=20, vertical=12),
                 ),
             ],
             bgcolor=ft.colors.SURFACE,
             surface_tint_color=ft.colors.SURFACE_TINT,
-        )
-    
-    def _build_section_header(self, title, icon):
-        return ft.Container(
-            content=ft.Row([
-                ft.Icon(icon, size=18, color=ft.colors.PRIMARY),
-                ft.Text(title, size=14, weight=ft.FontWeight.BOLD, color=ft.colors.PRIMARY),
-            ], spacing=10),
-            padding=ft.padding.only(left=20, top=15, bottom=5),
         )
 
     def _build_update_button(self, label, component):
@@ -226,13 +186,10 @@ class SettingsDrawer(ft.UserControl):
     def _handle_mode_change(self, e):
         is_proxy = self._mode_switch.value
         
-        # If switching to VPN (value=False), check admin
         if not is_proxy:
             if not ProcessUtils.is_admin():
-                # Revert switch visually
                 self._mode_switch.value = True
                 self._mode_switch.update()
-                # Trigger admin request in main window
                 self._on_mode_changed(ConnectionMode.VPN) 
                 return
 
@@ -247,7 +204,7 @@ class SettingsDrawer(ft.UserControl):
                 self._port_field.error_text = ""
                 if self._port_field.page:
                     self._port_field.page.show_snack_bar(
-                        ft.SnackBar(content=ft.Text(f"Port set to {port}"))
+                        ft.SnackBar(content=ft.Text(f"Port: {port}"))
                     )
             else:
                 self._port_field.error_text = "1024-65535"
@@ -262,7 +219,6 @@ class SettingsDrawer(ft.UserControl):
         
         val = self._country_dropdown.value
         if val != "none":
-            # Check for geo files
             geoip_path = os.path.join(ASSETS_DIR, "geoip.dat")
             geosite_path = os.path.join(ASSETS_DIR, "geosite.dat")
             
@@ -270,7 +226,7 @@ class SettingsDrawer(ft.UserControl):
                 if self._country_dropdown.page:
                     self._country_dropdown.page.show_snack_bar(
                         ft.SnackBar(
-                            content=ft.Text("Geo files missing! Please update via 'Updates' section."),
+                            content=ft.Text("Geo files missing!"),
                             action="Update",
                             on_action=lambda e: self._on_installer_run("geo")
                         )
@@ -278,10 +234,10 @@ class SettingsDrawer(ft.UserControl):
         
         self._config_manager.set_routing_country(val)
         if self._country_dropdown.page:
-            self._country_dropdown.page.show_snack_bar(ft.SnackBar(content=ft.Text("Routing updated")))
+            self._country_dropdown.page.show_snack_bar(ft.SnackBar(content=ft.Text("Saved")))
 
     def _save_dns(self, e):
         val = self._dns_field.value
         self._config_manager.set_custom_dns(val)
         if self._dns_field.page:
-            self._dns_field.page.show_snack_bar(ft.SnackBar(content=ft.Text("DNS updated")))
+            self._dns_field.page.show_snack_bar(ft.SnackBar(content=ft.Text("Saved")))

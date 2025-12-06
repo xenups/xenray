@@ -21,24 +21,32 @@ class ConnectionManager:
         self._singbox_service = SingboxService()
         self._current_connection = None
 
-    def connect(self, file_path: str, mode: str) -> bool:
+    def connect(self, file_path: str, mode: str, step_callback=None) -> bool:
         """
         Establish connection.
         mode: 'proxy' or 'vpn'
+        step_callback: Optional callback for reporting connection steps
         """
+        def report_step(msg):
+            if step_callback:
+                step_callback(msg)
+        
         # Load config
+        report_step("Loading configuration...")
         config, _ = self._config_manager.load_config(file_path)
         if not config:
             return False
 
         # Stop existing processes if any (don't call full disconnect to avoid race)
         if self._current_connection:
+            report_step("Stopping existing connection...")
             if self._current_connection.get("xray_pid"):
                 self._xray_service.stop()
             if self._current_connection.get("singbox_pid"):
                 self._singbox_service.stop()
 
         # Process config for Xray
+        report_step("Processing configuration...")
         processed_config = self._process_config(config)
 
         # Save processed config
@@ -46,6 +54,7 @@ class ConnectionManager:
             json.dump(processed_config, f, indent=2)
 
         # Start Xray
+        report_step("Starting Xray...")
         xray_pid = self._xray_service.start(OUTPUT_CONFIG_PATH)
         if not xray_pid:
             return False
@@ -54,6 +63,7 @@ class ConnectionManager:
         singbox_pid = None
 
         if mode == "vpn":
+            report_step("Initializing VPN tunnel...")
             socks_port = self._get_socks_port(processed_config)
             routing_country = self._config_manager.get_routing_country()
             proxy_server_ip = self._get_proxy_server_ip(processed_config)
@@ -65,6 +75,7 @@ class ConnectionManager:
                 self._xray_service.stop()
                 return False
 
+        report_step("Finalizing connection...")
         self._current_connection = {
             "mode": mode,
             "xray_pid": xray_pid,
