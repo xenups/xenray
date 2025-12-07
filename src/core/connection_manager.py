@@ -79,8 +79,13 @@ class ConnectionManager:
             proxy_server_ip = self._get_proxy_server_ip(processed_config)
             gateway_ip = self._get_default_gateway()
 
-            singbox_pid = self._singbox_service.start(socks_port, routing_country, proxy_server_ip, gateway_ip)
-
+            # singbox_pid = self._singbox_service.start(socks_port, routing_country, proxy_server_ip, gateway_ip)
+            singbox_pid = self._singbox_service.start(
+                socks_port,
+                proxy_server_ip,
+                gateway_ip,
+                routing_country,
+            )
             if not singbox_pid:
                 self._xray_service.stop()
                 return False

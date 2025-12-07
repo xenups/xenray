@@ -364,7 +364,7 @@ class SingboxService:
                 {
                     "type": "direct", 
                     "tag": "direct",
-                    **({"bind_interface": interface_name} if interface_name else {}),
+                    # **({"bind_interface": interface_name} if interface_name else {}),
                 },
                 {"type": "block", "tag": "block"},
             ],
@@ -392,6 +392,8 @@ class SingboxService:
         }
 
         rules = cfg["route"]["rules"]
+        udp_quic_rule = {"network": "udp", "port": 443, "outbound": "proxy"}
+        rules.insert(0, udp_quic_rule)
         dns_rules = cfg["dns"]["rules"]
 
         # Bypass proxy server (IP + Domain)
@@ -419,19 +421,19 @@ class SingboxService:
             rules.insert(i, rule)
 
         # Country routing
-        if routing_country and routing_country.lower() != "none":
-            mapping = {
-                "ir": ("category-ir", "ir"),
-                "cn": ("cn", "cn"),
-                "ru": ("category-ru", "ru"),
-            }
-            if routing_country.lower() in mapping:
-                site, ip = mapping[routing_country.lower()]
-                rules.extend(
-                    [
-                        {"domain": [f"geosite:{site}"], "outbound": "direct"},
-                        {"ip_cidr": [f"geoip:{ip}"], "outbound": "direct"},
-                    ]
-                )
+        # if routing_country and routing_country.lower() != "none":
+        #     mapping = {
+        #         "ir": ("category-ir", "ir"),
+        #         "cn": ("cn", "cn"),
+        #         "ru": ("category-ru", "ru"),
+        #     }
+        #     if routing_country.lower() in mapping:
+        #         site, ip = mapping[routing_country.lower()]
+        #         rules.extend(
+        #             [
+        #                 {"domain": [f"geosite:{site}"], "outbound": "direct"},
+        #                 {"ip_cidr": [f"geoip:{ip}"], "outbound": "direct"},
+        #             ]
+        #         )
 
         return cfg
