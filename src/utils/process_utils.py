@@ -40,7 +40,11 @@ class ProcessUtils:
                 return ctypes.windll.shell32.IsUserAnAdmin() != 0
             else:
                 return os.geteuid() == 0
-        except Exception:
+        except (OSError, AttributeError) as e:
+            logger.debug(f"Error checking admin status: {e}")
+            return False
+        except Exception as e:
+            logger.warning(f"Unexpected error checking admin status: {e}")
             return False
     
     @staticmethod
@@ -97,14 +101,29 @@ class ProcessUtils:
             cmd: Command and arguments
             stdout_file: File to redirect stdout to
             stderr_file: File to redirect stderr to
-            timeout: Timeout in seconds
+            timeout: Timeout in seconds (not used for Popen, kept for compatibility)
             
         Returns:
             Popen object or None if failed
         """
+        if not cmd or not isinstance(cmd, list):
+            logger.error("Invalid command: must be a non-empty list")
+            return None
+        
+        stdout_handle = None
+        stderr_handle = None
         try:
-            stdout = open(stdout_file, "a") if stdout_file else subprocess.PIPE
-            stderr = open(stderr_file, "a") if stderr_file else subprocess.PIPE
+            if stdout_file:
+                stdout_handle = open(stdout_file, "a", encoding="utf-8")
+                stdout = stdout_handle
+            else:
+                stdout = subprocess.PIPE
+            
+            if stderr_file:
+                stderr_handle = open(stderr_file, "a", encoding="utf-8")
+                stderr = stderr_handle
+            else:
+                stderr = subprocess.PIPE
             
             proc = subprocess.Popen(
                 cmd,
@@ -114,8 +133,25 @@ class ProcessUtils:
                 creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
             )
             return proc
-        except Exception as e:
+        except (OSError, IOError) as e:
+            logger.error(f"Failed to open file or run command {' '.join(cmd)}: {e}")
+            # Close handles if opened
+            if stdout_handle:
+                try:
+                    stdout_handle.close()
+                except Exception:
+                    pass
+            if stderr_handle:
+                try:
+                    stderr_handle.close()
+                except Exception:
+                    pass
+            return None
+        except (subprocess.SubprocessError, ValueError) as e:
             logger.error(f"Failed to run command {' '.join(cmd)}: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error running command {' '.join(cmd)}: {e}")
             return None
     
     @staticmethod
@@ -133,24 +169,41 @@ class ProcessUtils:
         Returns:
             Tuple of (stdout, stderr) or None if failed
         """
+        if not cmd or not isinstance(cmd, list):
+            logger.error("Invalid command: must be a non-empty list")
+            return None
+        
         try:
             proc = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                text=True
+                text=True,
+                encoding="utf-8",
+                errors="replace"
             )
             stdout, stderr = proc.communicate(timeout=timeout)
             return stdout, stderr
-        except Exception as e:
+        except subprocess.TimeoutExpired:
+            logger.error(f"Command timed out: {' '.join(cmd)}")
+            proc.kill()
+            proc.communicate()  # Clean up
+            return None
+        except (OSError, subprocess.SubprocessError) as e:
             logger.error(f"Failed to run command {' '.join(cmd)}: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error running command {' '.join(cmd)}: {e}")
             return None
 
     @staticmethod
-    def kill_process_tree(pid=None):
-        """Kill a process and all its children."""
-        import psutil
-        import signal
+    def kill_process_tree(pid: Optional[int] = None) -> None:
+        """
+        Kill a process and all its children.
+        
+        Args:
+            pid: Process ID to kill, or None for current process
+        """
         try:
             if pid is None:
                 pid = os.getpid()
@@ -163,14 +216,25 @@ class ProcessUtils:
                 try:
                     child.kill()
                 except psutil.NoSuchProcess:
-                    pass
+                    pass  # Already dead
+                except psutil.AccessDenied:
+                    logger.warning(f"Access denied killing child process {child.pid}")
+                except Exception as e:
+                    logger.debug(f"Error killing child {child.pid}: {e}")
             
             # Kill parent
-            parent.kill()
+            try:
+                parent.kill()
+            except psutil.NoSuchProcess:
+                pass  # Already dead
+            except psutil.AccessDenied:
+                logger.warning(f"Access denied killing process {pid}")
         except psutil.NoSuchProcess:
-            pass
+            pass  # Process already dead
+        except (psutil.AccessDenied, OSError) as e:
+            logger.warning(f"Error killing process tree {pid}: {e}")
         except Exception as e:
-            pass
+            logger.error(f"Unexpected error killing process tree {pid}: {e}")
 
     @staticmethod
     def restart_as_admin():

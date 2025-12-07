@@ -11,7 +11,6 @@ if __name__ == "__main__":
 from src.core.config_manager import ConfigManager
 from src.core.connection_manager import ConnectionManager
 from src.core.constants import EARLY_LOG_FILE
-from src.core.constants import EARLY_LOG_FILE
 from src.core.logger import logger
 
 # PyInstaller Hints

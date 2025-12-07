@@ -1,5 +1,7 @@
 """Country flag utilities for server locations."""
 import re
+from typing import Optional
+from loguru import logger
 
 # Emoji flags for countries (Unicode)
 COUNTRY_FLAGS = {
@@ -38,6 +40,13 @@ COUNTRY_FLAGS = {
     "ro": "🇷🇴", "romania": "🇷🇴",
 }
 
+# Constants
+DEFAULT_FLAG = "🌐"
+FLAG_EMOJI_PATTERN = re.compile(r'[\U0001F1E6-\U0001F1FF]{2}')
+IP_API_TIMEOUT = 3.0  # seconds
+REGIONAL_INDICATOR_BASE = 0x1F1E6  # Regional Indicator Symbol Letter A
+
+
 def get_country_flag(name: str) -> str:
     """
     Extract country flag from server name.
@@ -46,18 +55,15 @@ def get_country_flag(name: str) -> str:
         name: Server name (e.g., "US Server 1", "Germany-Fast", "🇯🇵 Tokyo", "FL-HU")
         
     Returns:
-        Country flag emoji or empty string
+        Country flag emoji or default globe icon
     """
-    print(f"[CountryFlags] get_country_flag called with: '{name}'")
-    
-    if not name:
-        return ""
+    if not name or not isinstance(name, str):
+        return DEFAULT_FLAG
     
     # Check if name already contains a flag emoji
-    flag_pattern = re.compile(r'[\U0001F1E6-\U0001F1FF]{2}')
-    match = flag_pattern.search(name)
+    match = FLAG_EMOJI_PATTERN.search(name)
     if match:
-        print(f"[CountryFlags] Found existing flag emoji: {match.group(0)}")
+        logger.debug(f"Found existing flag emoji: {match.group(0)}")
         return match.group(0)
     
     # Remove all emojis and special characters, keep only letters, numbers, spaces, and dashes
@@ -66,7 +72,7 @@ def get_country_flag(name: str) -> str:
     cleaned_name = re.sub(r'[\U0001F000-\U0001FFFF]', '', cleaned_name)  # Remove emojis
     name_lower = cleaned_name.lower().strip()
     
-    print(f"[CountryFlags] Cleaned name: '{cleaned_name}' -> lowercase: '{name_lower}'")
+    logger.debug(f"Cleaned name: '{cleaned_name}' -> lowercase: '{name_lower}'")
     
     # Try to match 2-letter codes (most common case)
     # Look for patterns like "FL-", "FL ", "FL" at start, "-FL-", "-FL ", etc.
@@ -74,35 +80,36 @@ def get_country_flag(name: str) -> str:
         if len(key) == 2:
             # Check if the 2-letter code appears in the name
             # Match at start, after dash/space, or before dash/space
-            if name_lower.startswith(key + '-') or \
-               name_lower.startswith(key + ' ') or \
-               (name_lower.startswith(key) and len(name_lower) == 2):
-                print(f"[CountryFlags] Matched '{key}' at start -> flag value: '{flag}' (repr: {repr(flag)})")
+            if (name_lower.startswith(key + '-') or
+                name_lower.startswith(key + ' ') or
+                (name_lower.startswith(key) and len(name_lower) == 2)):
+                logger.debug(f"Matched '{key}' at start -> flag: '{flag}'")
                 # Verify we're returning the emoji, not the key
-                if len(flag) >= 2 and ord(flag[0]) >= 0x1F1E6:
+                if len(flag) >= 2 and ord(flag[0]) >= REGIONAL_INDICATOR_BASE:
                     return flag
                 else:
-                    print(f"[CountryFlags] WARNING: Flag value seems wrong, returning default")
-                    return "🌐"
+                    logger.warning(f"Flag value seems wrong for '{key}', using default")
+                    return DEFAULT_FLAG
     
     # Try matching after dash or space (but not at end to avoid matching last code)
     for key, flag in COUNTRY_FLAGS.items():
         if len(key) == 2:
-            if ('-' + key + '-') in name_lower or \
-               ('-' + key + ' ') in name_lower or \
-               (' ' + key + '-') in name_lower or \
-               (' ' + key + ' ') in name_lower:
-                print(f"[CountryFlags] Matched '{key}' in middle -> flag value: '{flag}'")
+            if (('-' + key + '-') in name_lower or
+                ('-' + key + ' ') in name_lower or
+                (' ' + key + '-') in name_lower or
+                (' ' + key + ' ') in name_lower):
+                logger.debug(f"Matched '{key}' in middle -> flag: '{flag}'")
                 return flag
     
     # Try longer country names (full names)
     for key, flag in COUNTRY_FLAGS.items():
         if len(key) > 2 and key in name_lower:
-            print(f"[CountryFlags] Matched '{key}' -> flag value: '{flag}'")
+            logger.debug(f"Matched '{key}' -> flag: '{flag}'")
             return flag
     
-    print(f"[CountryFlags] No match for '{name}', using default")
-    return "🌐"  # Default globe icon
+    logger.debug(f"No match for '{name}', using default")
+    return DEFAULT_FLAG
+
 
 def get_country_from_ip(ip: str) -> str:
     """
@@ -112,11 +119,17 @@ def get_country_from_ip(ip: str) -> str:
         ip: IP address to lookup
         
     Returns:
-        Country flag emoji or globe icon
+        Country flag emoji or default globe icon
     """
+    if not ip or not isinstance(ip, str):
+        return DEFAULT_FLAG
+    
     try:
         import requests
-        response = requests.get(f"http://ip-api.com/json/{ip}?fields=countryCode", timeout=3)
+        response = requests.get(
+            f"http://ip-api.com/json/{ip}?fields=countryCode",
+            timeout=IP_API_TIMEOUT
+        )
         if response.status_code == 200:
             data = response.json()
             country_code = data.get('countryCode', '')
@@ -127,13 +140,18 @@ def get_country_from_ip(ip: str) -> str:
                 country_code = country_code.upper()
                 # Regional Indicator Symbol Letter A is U+1F1E6
                 # For 'CA': C=0x1F1E8, A=0x1F1E6
-                flag = chr(0x1F1E6 + ord(country_code[0]) - ord('A')) + \
-                       chr(0x1F1E6 + ord(country_code[1]) - ord('A'))
-                print(f"[CountryFlags] IP {ip} -> {country_code} {flag}")
-                return flag
+                try:
+                    flag = (chr(REGIONAL_INDICATOR_BASE + ord(country_code[0]) - ord('A')) +
+                           chr(REGIONAL_INDICATOR_BASE + ord(country_code[1]) - ord('A')))
+                    logger.debug(f"IP {ip} -> {country_code} {flag}")
+                    return flag
+                except (ValueError, IndexError) as e:
+                    logger.warning(f"Failed to convert country code {country_code} to flag: {e}")
             else:
-                print(f"[CountryFlags] Invalid country code for IP {ip}: {country_code}")
+                logger.warning(f"Invalid country code for IP {ip}: {country_code}")
+    except (requests.RequestException, requests.Timeout) as e:
+        logger.debug(f"Failed to get country for IP {ip}: {e}")
     except Exception as e:
-        print(f"[CountryFlags] Failed to get country for IP {ip}: {e}")
+        logger.error(f"Unexpected error getting country for IP {ip}: {e}")
     
-    return "🌐"  # Default globe icon
+    return DEFAULT_FLAG

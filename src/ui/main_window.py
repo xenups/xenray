@@ -180,6 +180,7 @@ class MainWindow:
             self._page.update()
 
         self._splash = SplashOverlay(on_splash_finish)
+        self._splash.set_page(self._page)  # Set page reference for animations
         self._page.overlay.append(self._splash)
         self._page.update()
 
@@ -329,8 +330,13 @@ class MainWindow:
             pass
 
         if self._is_running:
+            # If already connected, disconnect first, then reconnect with animation
             self._disconnect()
-            self._connect_async()
+            # Use async delay to ensure disconnect UI updates before showing connecting animation
+            async def reconnect_with_animation():
+                await asyncio.sleep(0.2)  # Brief delay for disconnect UI to update
+                self._connect_async()
+            self._page.run_task(reconnect_with_animation)
 
     def _safe_update_server_list(self):
         """Waits for the sheet to be mounted before updating list."""
@@ -354,6 +360,10 @@ class MainWindow:
         if self._connecting:
             return
         self._connecting = True
+
+        # Show connecting animation immediately
+        self._ui_call(self._connection_button.set_connecting)
+        self._ui_call(self._status_display.set_connecting)
 
         profile_config = (
             self._selected_profile.get("config") if self._selected_profile else {}

@@ -17,6 +17,14 @@ from src.core.constants import (
 )
 from src.utils.network_interface import NetworkInterfaceDetector
 
+# Constants
+XRAY_READY_RETRY_COUNT = 20
+XRAY_READY_RETRY_DELAY = 0.5  # seconds
+XRAY_READY_TIMEOUT = XRAY_READY_RETRY_COUNT * XRAY_READY_RETRY_DELAY  # 10 seconds
+SINGBOX_START_DELAY = 2.0  # seconds
+PROCESS_TERMINATE_TIMEOUT = 8.0  # seconds
+DNS_RESOLUTION_TIMEOUT = 5.0  # seconds
+
 
 class SingboxService:
     """Manages Sing-box TUN process with safe loop prevention."""
@@ -28,6 +36,7 @@ class SingboxService:
         self._added_routes: List[str] = []
 
     def _normalize_list(self, value: Union[str, List[str], None]) -> List[str]:
+        """Normalize input to list of strings."""
         if not value:
             return []
         if isinstance(value, str):
@@ -44,16 +53,18 @@ class SingboxService:
         ]
 
     def _filter_real_ips(self, lst: List[str]) -> List[str]:
+        """Filter list to only include valid IP addresses."""
         result = []
         for item in lst:
             try:
                 ipaddress.ip_address(item)
                 result.append(item)
-            except:
+            except (ValueError, ipaddress.AddressValueError):
                 continue
         return result
 
     def _filter_domains(self, lst: List[str]) -> List[str]:
+        """Filter list to only include domain names (not IPs)."""
         return [
             item
             for item in lst
@@ -64,26 +75,33 @@ class SingboxService:
         ]
 
     def _resolve_ips(self, endpoints: List[str]) -> List[str]:
+        """Resolve domain names to IP addresses with timeout."""
         resolved_ips = []
         for ep in endpoints:
+            # Check if already an IP
             try:
                 ipaddress.ip_address(ep)
                 resolved_ips.append(ep)
                 continue
-            except:
-                pass
+            except (ValueError, ipaddress.AddressValueError):
+                pass  # It's a domain, need to resolve
 
             try:
                 logger.info(f"[SingboxService] Resolving {ep} for route bypass...")
+                # Set timeout for DNS resolution
+                socket.setdefaulttimeout(DNS_RESOLUTION_TIMEOUT)
                 addrs = socket.getaddrinfo(ep, None, socket.AF_INET)
                 ips = list({info[4][0] for info in addrs})
                 logger.info(f"[SingboxService] Resolved {ep} → {ips}")
                 resolved_ips.extend(ips)
-            except Exception as e:
+            except (socket.gaierror, socket.timeout, OSError) as e:
                 logger.warning(f"[SingboxService] Failed to resolve {ep}: {e}")
+            finally:
+                socket.setdefaulttimeout(None)  # Reset timeout
         return list(set(resolved_ips))
 
-    def _add_static_route(self, ip: str, gateway: str):
+    def _add_static_route(self, ip: str, gateway: str) -> None:
+        """Add static route for IP via gateway."""
         if ip in self._added_routes:
             return
         try:
@@ -104,10 +122,11 @@ class SingboxService:
                 creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
             )
             self._added_routes.append(ip)
-        except Exception as e:
+        except (OSError, subprocess.SubprocessError) as e:
             logger.error(f"[SingboxService] Failed to add route for {ip}: {e}")
 
-    def _cleanup_routes(self):
+    def _cleanup_routes(self) -> None:
+        """Remove all added static routes."""
         for ip in self._added_routes[:]:
             try:
                 logger.info(f"[SingboxService] Removing static route: {ip}")
@@ -116,7 +135,7 @@ class SingboxService:
                     check=False,
                     creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
                 )
-            except Exception as e:
+            except (OSError, subprocess.SubprocessError) as e:
                 logger.error(f"[SingboxService] Failed to remove route for {ip}: {e}")
         self._added_routes.clear()
 
@@ -127,7 +146,7 @@ class SingboxService:
         gateway_ip: Union[str, List[str]] = "",
         routing_country: str = "",
     ) -> Optional[int]:
-
+        """Start Sing-box TUN service."""
         try:
             # 1. Detect interface & gateway
             iface_name, iface_ip, _, gateway = (
@@ -164,49 +183,12 @@ class SingboxService:
             )
 
             # 5. Wait for Xray to be ready (with retry)
-            for attempt in range(20):
-                try:
-                    sock = socket.create_connection(
-                        ("127.0.0.1", xray_socks_port), timeout=1
-                    )
-                    sock.close()
-                    logger.info(
-                        f"[SingboxService] Xray SOCKS ready on port {xray_socks_port}"
-                    )
-                    break
-                except:
-                    time.sleep(0.5)
-            else:
-                logger.error("[SingboxService] Xray SOCKS port not ready after 10s")
+            if not self._wait_for_xray_ready(xray_socks_port):
                 self._cleanup_routes()
                 return None
 
             # 6. Write config & start sing-box
-            os.makedirs(os.path.dirname(SINGBOX_CONFIG_PATH), exist_ok=True)
-            with open(SINGBOX_CONFIG_PATH, "w", encoding="utf-8") as f:
-                json.dump(config, f, indent=2, ensure_ascii=False)
-
-            logger.info(f"[SingboxService] Starting sing-box → {SINGBOX_CONFIG_PATH}")
-            os.makedirs(os.path.dirname(SINGBOX_LOG_FILE), exist_ok=True)
-            self._log_handle = open(SINGBOX_LOG_FILE, "w", encoding="utf-8")
-
-            cmd = [SINGBOX_EXECUTABLE, "run", "-c", SINGBOX_CONFIG_PATH]
-            self._process = subprocess.Popen(
-                cmd,
-                stdout=self._log_handle,
-                stderr=subprocess.STDOUT,
-                creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
-                text=True,
-            )
-
-            time.sleep(2)
-
-            if self._process.poll() is not None:
-                log_tail = "".join(open(SINGBOX_LOG_FILE).readlines()[-20:])
-                logger.error(
-                    f"[SingboxService] sing-box crashed! Last logs:\n{log_tail}"
-                )
-                self._close_log()
+            if not self._write_config_and_start(config):
                 self._cleanup_routes()
                 return None
 
@@ -222,7 +204,79 @@ class SingboxService:
             self._cleanup_routes()
             return None
 
+    def _wait_for_xray_ready(self, xray_socks_port: int) -> bool:
+        """Wait for Xray SOCKS port to be ready."""
+        for attempt in range(XRAY_READY_RETRY_COUNT):
+            try:
+                sock = socket.create_connection(
+                    ("127.0.0.1", xray_socks_port), timeout=1
+                )
+                sock.close()
+                logger.info(
+                    f"[SingboxService] Xray SOCKS ready on port {xray_socks_port}"
+                )
+                return True
+            except (socket.error, OSError, ConnectionRefusedError):
+                if attempt < XRAY_READY_RETRY_COUNT - 1:
+                    time.sleep(XRAY_READY_RETRY_DELAY)
+                else:
+                    logger.error(
+                        f"[SingboxService] Xray SOCKS port not ready after {XRAY_READY_TIMEOUT}s"
+                    )
+                    return False
+        return False
+
+    def _write_config_and_start(self, config: dict) -> bool:
+        """Write config file and start sing-box process."""
+        try:
+            os.makedirs(os.path.dirname(SINGBOX_CONFIG_PATH), exist_ok=True)
+            # Use atomic write
+            temp_path = SINGBOX_CONFIG_PATH + ".tmp"
+            with open(temp_path, "w", encoding="utf-8") as f:
+                json.dump(config, f, indent=2, ensure_ascii=False)
+            # Atomic rename
+            if os.name == "nt":
+                os.replace(temp_path, SINGBOX_CONFIG_PATH)
+            else:
+                os.rename(temp_path, SINGBOX_CONFIG_PATH)
+
+            logger.info(f"[SingboxService] Starting sing-box → {SINGBOX_CONFIG_PATH}")
+            os.makedirs(os.path.dirname(SINGBOX_LOG_FILE), exist_ok=True)
+            self._log_handle = open(SINGBOX_LOG_FILE, "w", encoding="utf-8")
+
+            cmd = [SINGBOX_EXECUTABLE, "run", "-c", SINGBOX_CONFIG_PATH]
+            self._process = subprocess.Popen(
+                cmd,
+                stdout=self._log_handle,
+                stderr=subprocess.STDOUT,
+                creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+                text=True,
+            )
+
+            time.sleep(SINGBOX_START_DELAY)
+
+            if self._process.poll() is not None:
+                # Process crashed, read last logs
+                try:
+                    with open(SINGBOX_LOG_FILE, "r", encoding="utf-8") as f:
+                        lines = f.readlines()
+                        log_tail = "".join(lines[-20:])
+                    logger.error(
+                        f"[SingboxService] sing-box crashed! Last logs:\n{log_tail}"
+                    )
+                except (OSError, IOError) as e:
+                    logger.error(f"[SingboxService] sing-box crashed! Could not read logs: {e}")
+                self._close_log()
+                return False
+
+            return True
+        except (OSError, IOError, subprocess.SubprocessError) as e:
+            logger.error(f"[SingboxService] Failed to write config or start process: {e}")
+            self._close_log()
+            return False
+
     def stop(self) -> bool:
+        """Stop Sing-box process and cleanup routes."""
         self._cleanup_routes()
         if not self._process:
             return True
@@ -230,7 +284,7 @@ class SingboxService:
         logger.info(f"[SingboxService] Stopping sing-box (PID {self._pid})")
         self._process.terminate()
         try:
-            self._process.wait(timeout=8)
+            self._process.wait(timeout=PROCESS_TERMINATE_TIMEOUT)
         except subprocess.TimeoutExpired:
             logger.warning("[SingboxService] Force killing sing-box...")
             self._process.kill()
@@ -242,14 +296,16 @@ class SingboxService:
         logger.info("[SingboxService] sing-box stopped")
         return True
 
-    def _close_log(self):
+    def _close_log(self) -> None:
+        """Close log file handle safely."""
         if self._log_handle:
             try:
                 self._log_handle.flush()
                 self._log_handle.close()
-            except:
-                pass
-            self._log_handle = None
+            except (OSError, IOError) as e:
+                logger.warning(f"[SingboxService] Error closing log file: {e}")
+            finally:
+                self._log_handle = None
 
     # ────────────────────────────────────────────────────────────────
     # CONFIG GENERATOR — 100% WORKING & LOOP-PROOF
@@ -262,7 +318,7 @@ class SingboxService:
         routing_country: str = "",
         interface_name: Optional[str] = None,
     ) -> dict:
-
+        """Generate Sing-box configuration."""
         proxy_list = self._normalize_list(proxy_server_ip)
         proxy_ips = self._filter_real_ips(proxy_list)
         proxy_domains = self._filter_domains(proxy_list)
@@ -275,15 +331,11 @@ class SingboxService:
                     {"tag": "remote", "type": "udp", "server": "1.1.1.1"},
                 ],
                 "rules": [
-                    # این خط باید اول باشه و مهم‌ترین خط کل زندگیته!
                     {"inbound": ["tun-in"], "server": "bootstrap"},
-                    # بوت‌استرپ اولیه
                     {"query_type": ["A", "AAAA"], "server": "bootstrap"},
-                    # همه چیز دیگه بره به remote (از تونل)
                     {"server": "remote"},
                 ],
-                # این خط رو حذف کن یا بذار "bootstrap" — final: "remote" باعث لوپ می‌شه!
-                "final": "bootstrap",  # <--- این تغییر نهایی و حیاتیه!
+                "final": "bootstrap",
                 "strategy": "ipv4_only",
                 "independent_cache": True,
             },
@@ -309,7 +361,6 @@ class SingboxService:
                     "server": "127.0.0.1",
                     "server_port": socks_port,
                 },
-                # Bind direct outbound to physical interface to ensure it exits correctly
                 {
                     "type": "direct", 
                     "tag": "direct",
@@ -319,9 +370,9 @@ class SingboxService:
             ],
             "route": {
                 "rules": [
-                    # Hijack DNS - Sing-box will resolve DNS using its configured servers
                     {"protocol": "dns", "action": "hijack-dns"},
-                    {"protocol": "udp", "port": 443, "outbound": "block"},
+                    # Note: Removed UDP port 443 block to allow QUIC/H3 connections
+                    # QUIC uses UDP on port 443, so blocking it prevents H3 from working
                     {"ip_cidr": ["224.0.0.0/3", "ff00::/8"], "outbound": "block"},
                     {
                         "ip_cidr": [

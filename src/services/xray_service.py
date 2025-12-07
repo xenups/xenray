@@ -1,9 +1,17 @@
 """Xray service for managing Xray process."""
 import os
+import subprocess
+import time
 from typing import Optional
 
-from src.core.constants import APPDIR, XRAY_EXECUTABLE, XRAY_LOG_FILE
+from src.core.constants import XRAY_EXECUTABLE, XRAY_LOG_FILE
+from src.core.logger import logger
 from src.utils.process_utils import ProcessUtils
+
+# Constants
+PROCESS_START_DELAY = 0.2  # seconds - delay to ensure previous instance is terminated
+STOP_CHECK_RETRIES = 3
+STOP_CHECK_DELAY = 0.1  # seconds
 
 
 class XrayService:
@@ -24,8 +32,6 @@ class XrayService:
         Returns:
             Process ID or None if start failed
         """
-        from src.core.logger import logger
-        
         logger.debug(f"[XrayService] Starting Xray with config: {config_file_path}")
         
         if not os.path.isfile(config_file_path):
@@ -33,8 +39,7 @@ class XrayService:
             return None
         
         # Small delay to ensure previous instance is fully terminated
-        import time
-        time.sleep(0.2)
+        time.sleep(PROCESS_START_DELAY)
         
         cmd = [
             XRAY_EXECUTABLE,
@@ -46,18 +51,22 @@ class XrayService:
         logger.debug(f"[XrayService] Executing command: {' '.join(cmd)}")
         logger.debug(f"[XrayService] Log file: {XRAY_LOG_FILE}")
         
-        self._process = ProcessUtils.run_command(
-            cmd,
-            stdout_file=XRAY_LOG_FILE,
-            stderr_file=XRAY_LOG_FILE
-        )
-        
-        if self._process:
-            self._pid = self._process.pid
-            logger.info(f"[XrayService] Started with PID {self._pid}")
-            return self._pid
-        else:
-            logger.error("[XrayService] Failed to start process")
+        try:
+            self._process = ProcessUtils.run_command(
+                cmd,
+                stdout_file=XRAY_LOG_FILE,
+                stderr_file=XRAY_LOG_FILE
+            )
+            
+            if self._process:
+                self._pid = self._process.pid
+                logger.info(f"[XrayService] Started with PID {self._pid}")
+                return self._pid
+            else:
+                logger.error("[XrayService] Failed to start process")
+                return None
+        except (OSError, subprocess.SubprocessError) as e:
+            logger.error(f"[XrayService] Failed to start Xray: {e}")
             return None
     
     def stop(self) -> bool:
@@ -78,13 +87,11 @@ class XrayService:
         
         if success:
             # Wait briefly for process to terminate (non-blocking)
-            import time
-            for _ in range(3):  # 300ms max wait
+            for _ in range(STOP_CHECK_RETRIES):
                 if not ProcessUtils.is_running(self._pid):
                     break
-                time.sleep(0.1)
+                time.sleep(STOP_CHECK_DELAY)
             
-            from src.core.logger import logger
             logger.info("[XrayService] Stopped")
             self._pid = None
             self._process = None

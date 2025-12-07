@@ -3,6 +3,7 @@
 import json
 import os
 import subprocess
+from typing import Optional
 
 from loguru import logger
 
@@ -128,120 +129,130 @@ class ConnectionManager:
 
         return new_config
 
+    def _resolve_domain_to_ip(self, domain: str, timeout: float = 5.0) -> Optional[str]:
+        """
+        Resolve domain to IP address with timeout.
+        
+        Args:
+            domain: Domain name to resolve
+            timeout: Timeout in seconds (default: 5.0)
+            
+        Returns:
+            IP address as string, or None if resolution fails
+        """
+        import socket
+        
+        # Check if it's already an IP
+        try:
+            socket.inet_aton(domain)
+            return domain  # Already an IP
+        except (socket.error, OSError):
+            pass  # It's a domain, need to resolve
+        
+        try:
+            # Set socket timeout
+            socket.setdefaulttimeout(timeout)
+            ip = socket.gethostbyname(domain)
+            logger.info(f"[ConnectionManager] Resolved {domain} to {ip}")
+            return ip
+        except (socket.gaierror, socket.timeout, OSError) as e:
+            logger.error(f"[ConnectionManager] Failed to resolve {domain}: {e}")
+            return None
+        finally:
+            # Reset timeout
+            socket.setdefaulttimeout(None)
+    
+    def _patch_tls_settings(self, stream_settings: dict, domain: str):
+        """Patch TLS settings with SNI."""
+        tls_settings = stream_settings.setdefault("tlsSettings", {})
+        if not tls_settings.get("serverName"):
+            tls_settings["serverName"] = domain
+            logger.info(f"[ConnectionManager] Set TLS SNI to {domain}")
+    
+    def _patch_reality_settings(self, stream_settings: dict, domain: str):
+        """Patch Reality settings with SNI."""
+        reality_settings = stream_settings.setdefault("realitySettings", {})
+        if not reality_settings.get("serverName"):
+            reality_settings["serverName"] = domain
+            logger.info(f"[ConnectionManager] Set Reality SNI to {domain}")
+    
+    def _patch_ws_settings(self, stream_settings: dict, domain: str):
+        """Patch WebSocket settings with Host header."""
+        ws_settings = stream_settings.setdefault("wsSettings", {})
+        headers = ws_settings.setdefault("headers", {})
+        if not headers.get("Host"):
+            headers["Host"] = domain
+            logger.info(f"[ConnectionManager] Set WS Host to {domain}")
+    
+    def _patch_httpupgrade_settings(self, stream_settings: dict, domain: str):
+        """Patch HTTPUpgrade settings with host."""
+        httpupgrade_settings = stream_settings.setdefault("httpupgradeSettings", {})
+        if not httpupgrade_settings.get("host"):
+            httpupgrade_settings["host"] = domain
+            logger.info(f"[ConnectionManager] Set HTTPUpgrade Host to {domain}")
+    
+    def _patch_stream_settings(self, outbound: dict, domain: str):
+        """Patch stream settings (TLS, Reality, WS, HTTPUpgrade) with domain."""
+        stream_settings = outbound.setdefault("streamSettings", {})
+        security = stream_settings.get("security", "none")
+        network = stream_settings.get("network", "")
+        
+        # Patch security settings
+        if security == "tls":
+            self._patch_tls_settings(stream_settings, domain)
+        elif security == "reality":
+            self._patch_reality_settings(stream_settings, domain)
+        
+        # Patch network settings
+        if network == "ws":
+            self._patch_ws_settings(stream_settings, domain)
+        elif network == "httpupgrade":
+            self._patch_httpupgrade_settings(stream_settings, domain)
+    
+    def _get_server_object(self, settings: dict) -> Optional[dict]:
+        """Extract server object from settings based on protocol."""
+        if "vnext" in settings and settings["vnext"]:
+            return settings["vnext"][0]
+        elif "servers" in settings and settings["servers"]:
+            return settings["servers"][0]
+        return None
+    
     def _resolve_and_patch_config(self, config: dict):
         """
         Finds the proxy server address, resolves it to an IP,
         replaces the address with the IP, and sets SNI/Host to the original domain.
+        
+        This method processes all outbounds and patches their configurations.
         """
-        import socket
+        SUPPORTED_PROTOCOLS = ["vless", "vmess", "trojan", "shadowsocks"]
+        DNS_TIMEOUT = 5.0  # seconds
 
         for outbound in config.get("outbounds", []):
             protocol = outbound.get("protocol")
-            if protocol in ["vless", "vmess", "trojan", "shadowsocks"]:
-                settings = outbound.get("settings", {})
-
-                # Locate the server object
-                server_obj = None
-                if "vnext" in settings and settings["vnext"]:
-                    server_obj = settings["vnext"][0]
-                elif "servers" in settings and settings["servers"]:
-                    server_obj = settings["servers"][0]
-
-                if server_obj and "address" in server_obj:
-                    domain = server_obj["address"]
-
-                    # Check if it's already an IP
-                    try:
-                        socket.inet_aton(domain)
-                        continue  # Already an IP
-                    except socket.error:
-                        pass  # It's a domain
-
-                    try:
-                        # Resolve to single IP
-                        ip = socket.gethostbyname(domain)
-                        logger.info(
-                            f"[ConnectionManager] Force IP: Resolved {domain} to {ip}"
-                        )
-
-                        # 1. Replace address with IP
-                        server_obj["address"] = ip
-
-                        # 2. Ensure SNI/Host is set to original domain
-                        stream_settings = outbound.get("streamSettings", {})
-                        if "streamSettings" not in outbound:
-                            outbound["streamSettings"] = stream_settings
-
-                        # TLS SNI
-                        security = stream_settings.get("security", "none")
-                        if security == "tls":
-                            tls_settings = stream_settings.get("tlsSettings", {})
-                            if "tlsSettings" not in stream_settings:
-                                stream_settings["tlsSettings"] = tls_settings
-
-                            if (
-                                "serverName" not in tls_settings
-                                or not tls_settings["serverName"]
-                            ):
-                                tls_settings["serverName"] = domain
-                                logger.info(
-                                    f"[ConnectionManager] Set TLS SNI to {domain}"
-                                )
-                        elif security == "reality":
-                            reality_settings = stream_settings.get(
-                                "realitySettings", {}
-                            )
-                            if "realitySettings" not in stream_settings:
-                                stream_settings["realitySettings"] = reality_settings
-                            if (
-                                "serverName" not in reality_settings
-                                or not reality_settings["serverName"]
-                            ):
-                                reality_settings["serverName"] = domain
-                                logger.info(
-                                    f"[ConnectionManager] Set Reality SNI to {domain}"
-                                )
-
-                        # WS Host
-                        network = stream_settings.get("network", "")
-                        if network == "ws":
-                            ws_settings = stream_settings.get("wsSettings", {})
-                            if "wsSettings" not in stream_settings:
-                                stream_settings["wsSettings"] = ws_settings
-
-                            headers = ws_settings.get("headers", {})
-                            if "headers" not in ws_settings:
-                                ws_settings["headers"] = headers
-
-                            if "Host" not in headers or not headers["Host"]:
-                                headers["Host"] = domain
-                                logger.info(
-                                    f"[ConnectionManager] Set WS Host to {domain}"
-                                )
-
-                        # HTTPUpgrade Host
-                        if network == "httpupgrade":
-                            httpupgrade_settings = stream_settings.get(
-                                "httpupgradeSettings", {}
-                            )
-                            if "httpupgradeSettings" not in stream_settings:
-                                stream_settings["httpupgradeSettings"] = (
-                                    httpupgrade_settings
-                                )
-
-                            if (
-                                "host" not in httpupgrade_settings
-                                or not httpupgrade_settings["host"]
-                            ):
-                                httpupgrade_settings["host"] = domain
-                                logger.info(
-                                    f"[ConnectionManager] Set HTTPUpgrade Host to {domain}"
-                                )
-
-                    except Exception as e:
-                        logger.error(
-                            f"[ConnectionManager] Failed to resolve/patch {domain}: {e}"
-                        )
+            if protocol not in SUPPORTED_PROTOCOLS:
+                continue
+                
+            settings = outbound.get("settings", {})
+            server_obj = self._get_server_object(settings)
+            
+            if not server_obj or "address" not in server_obj:
+                continue
+            
+            domain = server_obj["address"]
+            
+            # Resolve domain to IP
+            ip = self._resolve_domain_to_ip(domain, timeout=DNS_TIMEOUT)
+            if not ip:
+                continue  # Skip if resolution failed
+            
+            # Replace address with IP
+            server_obj["address"] = ip
+            
+            # Patch stream settings with original domain
+            try:
+                self._patch_stream_settings(outbound, domain)
+            except Exception as e:
+                logger.error(f"[ConnectionManager] Failed to patch stream settings for {domain}: {e}")
 
     def _get_socks_port(self, config: dict) -> int:
         """Extract SOCKS port from config, overriding with user preference."""
