@@ -14,6 +14,8 @@ from src.core.constants import (
     SINGBOX_CONFIG_PATH,
     SINGBOX_LOG_FILE,
     XRAY_EXECUTABLE,
+    DNS_PROVIDERS,
+    SINGBOX_RULE_SETS,
 )
 from src.utils.network_interface import NetworkInterfaceDetector
 
@@ -159,16 +161,7 @@ class SingboxService:
 
             # 2. Bypass list: Proxy server + Common DNS servers
             bypass_list = self._normalize_list(proxy_server_ip)
-            bypass_list.extend(
-                [
-                    "8.8.8.8",
-                    "8.8.4.4",
-                    "1.1.1.1",
-                    "1.0.0.1",
-                    "dns.google",
-                    "cloudflare-dns.com",
-                ]
-            )
+            bypass_list.extend(DNS_PROVIDERS["bypass_list"])
 
             resolved_ips = self._resolve_ips(bypass_list)
 
@@ -360,7 +353,7 @@ class SingboxService:
                     {"query_type": ["A", "AAAA"], "server": "remote_proxy"},
                 ],
                 "final": "remote_proxy",
-                "strategy": "ipv4_only",
+                "strategy": "prefer_ipv4",
                 "independent_cache": True,
             },
             "inbounds": [
@@ -455,18 +448,7 @@ class SingboxService:
         # 3. Country routing (moved to end of rules, before final)
         if routing_country and routing_country.lower() != "none":
             # ... (Country rule_sets and rules addition logic - kept as is)
-            rule_sets_mapping = {
-                "ir": [
-                    "https://raw.githubusercontent.com/Chocolate4U/Iran-sing-box-rules/rule-set/geoip-ir.srs",
-                    "https://raw.githubusercontent.com/Chocolate4U/Iran-sing-box-rules/rule-set/geosite-ir.srs",
-                ],
-                "cn": [
-                    "https://github.com/SagerNet/sing-geosite/releases/download/20251206075552/geosite-cn.srs"
-                ],
-                "ru": [
-                    "https://github.com/legiz-ru/sb-rule-sets/raw/main/ru-bundle.srs"
-                ],
-            }
+            rule_sets_mapping = SINGBOX_RULE_SETS
             country = routing_country.lower()
             if country in rule_sets_mapping:
                 if "rule_set" not in cfg["route"]:

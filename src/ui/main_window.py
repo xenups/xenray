@@ -11,7 +11,7 @@ import flet as ft
 # Local modules
 from src.core.config_manager import ConfigManager
 from src.core.connection_manager import ConnectionManager
-from src.core.constants import TMPDIR, TUN_LOG_FILE, XRAY_LOG_FILE, APPDIR
+from src.core.constants import TMPDIR, TUN_LOG_FILE, XRAY_LOG_FILE, APPDIR, FONT_URLS
 from src.core.logger import logger
 from src.core.types import ConnectionMode
 from src.ui.components.connection_button import ConnectionButton
@@ -21,7 +21,6 @@ from src.ui.components.settings_drawer import SettingsDrawer
 from src.ui.components.status_display import StatusDisplay
 from src.ui.components.header import Header
 from src.ui.components.app_container import AppContainer
-from src.ui.components.splash_overlay import SplashOverlay
 from src.ui.log_viewer import LogViewer
 
 
@@ -56,7 +55,6 @@ class MainWindow:
         self._theme_icon = None
         self._header = None
         self._main_container = None
-        # self._splash = None
 
         # --- Initialization ---
         self._define_callbacks()
@@ -66,9 +64,6 @@ class MainWindow:
 
         # Start background tasks
         self._page.run_task(self._start_ui_tasks)
-
-        # Start Splash Sequence
-        # self._start_splash()
 
     # -----------------------------
     # Define callbacks
@@ -90,10 +85,8 @@ class MainWindow:
         self._page.padding = 0
         self._page.theme_mode = ft.ThemeMode.DARK
         self._page.theme = ft.Theme(font_family="Roboto")
-        self._page.fonts = {
-            "Roboto": "https://github.com/google/fonts/raw/main/apache/roboto/Roboto-Regular.ttf",
-            "RobotoBold": "https://github.com/google/fonts/raw/main/apache/roboto/Roboto-Bold.ttf",
-        }
+        self._page.fonts = FONT_URLS
+
 
         icon_path = os.path.join(APPDIR, "assets", "icon.ico")
         if os.path.exists(icon_path):
@@ -172,18 +165,6 @@ class MainWindow:
         self._connection_button.update_theme(is_dark)  # Ensure button matches too
         self._server_card.update_theme(is_dark)  # Ensure card matches too
 
-    # def _start_splash(self):
-    #     """Initialize splash screen and show window."""
-
-    #     def on_splash_finish(splash_instance):
-    #         self._page.overlay.remove(splash_instance)
-    #         self._page.update()
-
-    #     self._splash = SplashOverlay(on_splash_finish)
-    #     self._splash.set_page(self._page)  # Set page reference for animations
-    #     self._page.overlay.append(self._splash)
-    #     self._page.update()
-
         # Center and Show Window
         self._page.window.width = 420
         self._page.window.height = 650
@@ -191,8 +172,6 @@ class MainWindow:
         self._page.window.visible = True
         self._page.update()
 
-        # Start animation
-        # self._page.run_task(self._splash.fade_out)
 
     # -----------------------------
     # Setup Drawers & BottomSheet
@@ -332,10 +311,12 @@ class MainWindow:
         if self._is_running:
             # If already connected, disconnect first, then reconnect with animation
             self._disconnect()
+
             # Use async delay to ensure disconnect UI updates before showing connecting animation
             async def reconnect_with_animation():
                 await asyncio.sleep(0.2)  # Brief delay for disconnect UI to update
                 self._connect_async()
+
             self._page.run_task(reconnect_with_animation)
 
     def _safe_update_server_list(self):
@@ -489,7 +470,6 @@ class MainWindow:
                         progress_callback=update_status,
                         stop_service_callback=self._connection_manager.disconnect,
                     )
-
 
                 self._show_snackbar(f"{component} Update Complete!")
             except Exception as e:

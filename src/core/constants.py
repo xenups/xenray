@@ -15,6 +15,8 @@ EARLY_LOG_FILE = os.path.join(TMPDIR, "xenray_app.log")
 XRAY_LOG_FILE = os.path.join(TMPDIR, "xenray_xray.log")
 TUN_LOG_FILE = os.path.join(TMPDIR, "xenray_tun2proxy.log")
 OUTPUT_CONFIG_PATH = os.path.join(TMPDIR, "xenray_config.json")
+XRAY_PID_FILE = os.path.join(TMPDIR, "xray.pid")
+SINGBOX_PID_FILE = os.path.join(TMPDIR, "singbox.pid")
 
 # Configuration directory
 CONFIG_DIR = os.path.expanduser("~/.config/xenray")
@@ -72,3 +74,50 @@ TEMP_ROOT = TMPDIR
 PLACEHOLDER_XRAY_PID = -999999
 PLACEHOLDER_TUN2PROXY_PID = -999998
 PLACEHOLDER_SINGBOX_PID = -999997
+
+# Fonts
+FONT_URLS = {
+    "Roboto": "https://github.com/google/fonts/raw/main/apache/roboto/Roboto-Regular.ttf",
+    "RobotoBold": "https://github.com/google/fonts/raw/main/apache/roboto/Roboto-Bold.ttf",
+}
+
+# DNS Providers
+DNS_PROVIDERS = {
+    "local_resolver": {
+        "tag": "bootstrap",
+        "type": "udp",
+        "server": "8.8.8.8",
+        "detour": "direct",
+    },
+    "proxy_resolver": {
+        "tag": "remote_proxy",
+        "type": "udp",
+        "server": "1.1.1.1",
+        "detour": "proxy",
+    },
+    "bypass_list": [
+        "8.8.8.8",
+        "8.8.4.4",
+        "1.1.1.1",
+        "1.0.0.1",
+        "dns.google",
+        "cloudflare-dns.com",
+    ]
+}
+
+# Sing-box Rule Sets
+SINGBOX_RULE_SETS = {
+    "ir": [
+        "https://raw.githubusercontent.com/Chocolate4U/Iran-sing-box-rules/rule-set/geoip-ir.srs",
+        "https://raw.githubusercontent.com/Chocolate4U/Iran-sing-box-rules/rule-set/geosite-ir.srs",
+    ],
+    "cn": [
+        "https://github.com/SagerNet/sing-geosite/releases/download/20251206075552/geosite-cn.srs"
+        # Note: Ideally this should optionally dynamic or we pin a version like you did.
+        # Keeping user's URL for now, but moving to constants makes updates easier.
+    ],
+    "ru": [
+        "https://github.com/legiz-ru/sb-rule-sets/raw/main/ru-bundle.srs"
+    ],
+}
+

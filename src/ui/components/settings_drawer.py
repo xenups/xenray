@@ -308,10 +308,6 @@ class SettingsDrawer(ft.NavigationDrawer):
             return
 
         val = self._country_dropdown.value
-
-
-
-
         self._config_manager.set_routing_country(val)
 
         # --- FIX: Using page.open() ---

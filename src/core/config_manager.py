@@ -108,8 +108,17 @@ class ConfigManager:
             
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
-                # Remove comments
-                content = re.sub(r'//.*', '', f.read())
+                content = f.read()
+                # Remove comments safely using string-aware regex
+                # Pattern matches: "string" OR //comment OR /* comment */
+                pattern = r'("[^"\\]*(?:\\.[^"\\]*)*")|//[^\n]*|/\*[\s\S]*?\*/'
+                
+                def replacer(match):
+                    if match.group(1):
+                        return match.group(1) # Keep strings
+                    return "" # Remove comments
+
+                content = re.sub(pattern, replacer, content)
                 config = json.loads(content)
                 return config, False
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
@@ -258,6 +267,71 @@ class ConfigManager:
         profiles_path = os.path.join(self._config_dir, "profiles.json")
         if not _atomic_write_json(profiles_path, profiles):
             logger.error("Failed to delete profile")
+
+    # --- Subscription Management ---
+    def load_subscriptions(self) -> List[dict]:
+        """Load saved subscriptions."""
+        subs = self._load_json_list("subscriptions.json")
+        dirty = False
+        for sub in subs:
+            # Ensure "profiles" key exists
+            if "profiles" not in sub:
+                sub["profiles"] = []
+                # Not necessarily dirty, but good to normalize
+            
+            if isinstance(sub["profiles"], list):
+                for profile in sub["profiles"]:
+                    if not profile.get("id"):
+                        profile["id"] = str(uuid.uuid4())
+                        dirty = True
+        
+        if dirty:
+            self._save_json_list("subscriptions.json", subs)
+            
+        return subs
+
+    def save_subscription(self, name: str, url: str) -> None:
+        """Save a new subscription."""
+        subs = self.load_subscriptions()
+        subs.append({
+            "id": str(uuid.uuid4()),
+            "name": name,
+            "url": url,
+            "profiles": [],
+            "created_at": str(datetime.now())
+        })
+        self._save_json_list("subscriptions.json", subs)
+
+    def save_subscription_data(self, subscription: dict) -> None:
+        """Update an existing subscription."""
+        subs = self.load_subscriptions()
+        for i, sub in enumerate(subs):
+            if sub["id"] == subscription["id"]:
+                subs[i] = subscription
+                break
+        self._save_json_list("subscriptions.json", subs)
+
+    def delete_subscription(self, sub_id: str) -> None:
+        """Delete a subscription."""
+        subs = self.load_subscriptions()
+        subs = [s for s in subs if s.get("id") != sub_id]
+        self._save_json_list("subscriptions.json", subs)
+
+    def _load_json_list(self, filename: str) -> List[dict]:
+        path = os.path.join(self._config_dir, filename)
+        if not os.path.exists(path):
+            return []
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                return data if isinstance(data, list) else []
+        except Exception as e:
+            logger.error(f"Error loading {filename}: {e}")
+            return []
+
+    def _save_json_list(self, filename: str, data: List[dict]) -> bool:
+        path = os.path.join(self._config_dir, filename)
+        return _atomic_write_json(path, data)
 
     def get_profile_config(self, profile_id: str) -> Optional[dict]:
         """Get config for a specific profile."""
@@ -417,3 +491,29 @@ class ConfigManager:
         path = os.path.join(self._config_dir, "theme_mode.txt")
         if not _atomic_write(path, mode):
             logger.error("Failed to save theme mode")
+
+    # --- Sort Management ---
+    def get_sort_mode(self) -> str:
+        """Get saved sort mode ('name_asc', 'ping_asc', 'ping_desc')."""
+        path = os.path.join(self._config_dir, "sort_mode.txt")
+        if not os.path.exists(path):
+            return "name_asc"
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                mode = f.read().strip()
+                if mode in ["name_asc", "ping_asc", "ping_desc"]:
+                    return mode
+                return "name_asc"
+        except (OSError, IOError, UnicodeDecodeError) as e:
+            logger.error(f"Error reading sort mode: {e}")
+            return "name_asc"
+
+    def set_sort_mode(self, mode: str) -> None:
+        """Set sort mode."""
+        valid_modes = {"name_asc", "ping_asc", "ping_desc"}
+        if mode not in valid_modes:
+            return
+            
+        path = os.path.join(self._config_dir, "sort_mode.txt")
+        if not _atomic_write(path, mode):
+            logger.error("Failed to save sort mode")
