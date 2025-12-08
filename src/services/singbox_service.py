@@ -179,7 +179,11 @@ class SingboxService:
 
             # 4. Generate config - pass interface name for default_interface
             config = self._generate_config(
-                xray_socks_port, proxy_server_ip, gateway_ip, routing_country, iface_name
+                xray_socks_port,
+                proxy_server_ip,
+                gateway_ip,
+                routing_country,
+                iface_name,
             )
 
             # 5. Wait for Xray to be ready (with retry)
@@ -265,13 +269,17 @@ class SingboxService:
                         f"[SingboxService] sing-box crashed! Last logs:\n{log_tail}"
                     )
                 except (OSError, IOError) as e:
-                    logger.error(f"[SingboxService] sing-box crashed! Could not read logs: {e}")
+                    logger.error(
+                        f"[SingboxService] sing-box crashed! Could not read logs: {e}"
+                    )
                 self._close_log()
                 return False
 
             return True
         except (OSError, IOError, subprocess.SubprocessError) as e:
-            logger.error(f"[SingboxService] Failed to write config or start process: {e}")
+            logger.error(
+                f"[SingboxService] Failed to write config or start process: {e}"
+            )
             self._close_log()
             return False
 
@@ -333,9 +341,8 @@ class SingboxService:
                 "rules": [
                     {"inbound": ["tun-in"], "server": "bootstrap"},
                     {"query_type": ["A", "AAAA"], "server": "bootstrap"},
-                    {"server": "remote"},
                 ],
-                "final": "bootstrap",
+                "final": "remote",
                 "strategy": "ipv4_only",
                 "independent_cache": True,
             },
@@ -362,7 +369,7 @@ class SingboxService:
                     "server_port": socks_port,
                 },
                 {
-                    "type": "direct", 
+                    "type": "direct",
                     "tag": "direct",
                     # **({"bind_interface": interface_name} if interface_name else {}),
                 },
@@ -396,11 +403,14 @@ class SingboxService:
         rules.insert(0, udp_quic_rule)
         dns_rules = cfg["dns"]["rules"]
 
-        # Bypass proxy server (IP + Domain)
+        # Bypass proxy server (IP + Domain) and Core DNS Servers
+        bypass_rules_to_insert = []
         for ip in proxy_ips + ["1.1.1.1", "8.8.8.8"]:
-            rules.append({"ip_cidr": f"{ip}/32", "outbound": "direct"})
+            bypass_rules_to_insert.append({"ip_cidr": f"{ip}/32", "outbound": "direct"})
         for domain in proxy_domains:
-            rules.append({"domain_suffix": domain, "outbound": "direct"})
+            bypass_rules_to_insert.append(
+                {"domain_suffix": domain, "outbound": "direct"}
+            )
             dns_rules.append({"domain_suffix": domain, "server": "bootstrap"})
 
         # Process bypass - MUST BE FIRST to prevent xray.exe traffic from matching DNS rules
@@ -416,10 +426,9 @@ class SingboxService:
             },
             {"process_path": [XRAY_EXECUTABLE], "outbound": "direct"},
         ]
-        # Insert at beginning so process bypass takes priority over DNS routing
-        for i, rule in enumerate(process_bypass_rules):
-            rules.insert(i, rule)
-
+        insert_index = len(process_bypass_rules) + 2
+        for rule in reversed(bypass_rules_to_insert):
+            rules.insert(insert_index, rule)
         # Country routing
         if routing_country and routing_country.lower() != "none":
             rule_sets_mapping = {
@@ -443,18 +452,17 @@ class SingboxService:
                 for idx, url in enumerate(rule_sets_mapping[country]):
                     tag_name = f"{country}-rules-{idx}"
 
-                    cfg["route"]["rule_set"].append({
-                        "tag": tag_name,
-                        "type": "remote",
-                        "format": "binary",
-                        "url": url,
-                        "download_detour": "direct",
-                        "update_interval": "24h"
-                    })
+                    cfg["route"]["rule_set"].append(
+                        {
+                            "tag": tag_name,
+                            "type": "remote",
+                            "format": "binary",
+                            "url": url,
+                            "download_detour": "direct",
+                            "update_interval": "24h",
+                        }
+                    )
 
-                    rules.append({
-                        "rule_set": tag_name,
-                        "outbound": "direct"
-                    })
+                    rules.append({"rule_set": tag_name, "outbound": "direct"})
 
         return cfg
