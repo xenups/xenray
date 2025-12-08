@@ -335,14 +335,31 @@ class SingboxService:
             "log": {"level": "info", "timestamp": True},
             "dns": {
                 "servers": [
-                    {"tag": "bootstrap", "type": "udp", "server": "8.8.8.8"},
-                    {"tag": "remote", "type": "udp", "server": "1.1.1.1"},
+                    # 1. Resolver for local/bypass domains (uses direct connection, but must resolve)
+                    {
+                        "tag": "bootstrap",
+                        "type": "udp",
+                        "server": "8.8.8.8",
+                        "detour": "direct",
+                    },
+                    # 2. Resolver for blocked domains (uses proxy tunnel)
+                    {
+                        "tag": "remote_proxy",
+                        "type": "udp",
+                        "server": "1.1.1.1",
+                        "detour": "proxy",
+                    },
                 ],
                 "rules": [
-                    {"inbound": ["tun-in"], "server": "bootstrap"},
-                    {"query_type": ["A", "AAAA"], "server": "bootstrap"},
+                    {
+                        "inbound": ["tun-in"],
+                        "server": "remote_proxy",
+                    },  # 🔑 DNS requests from TUN always go through proxy resolver (1.1.1.1 via proxy)
+                    # DNS queries for proxy domains must use direct bootstrap to prevent loop
+                    # These rules are added below
+                    {"query_type": ["A", "AAAA"], "server": "remote_proxy"},
                 ],
-                "final": "remote",
+                "final": "remote_proxy",
                 "strategy": "ipv4_only",
                 "independent_cache": True,
             },
@@ -367,19 +384,38 @@ class SingboxService:
                     "tag": "proxy",
                     "server": "127.0.0.1",
                     "server_port": socks_port,
+                    "domain_resolver": "remote_proxy",  # 💡 اضافه کردن domain_resolver
                 },
                 {
                     "type": "direct",
                     "tag": "direct",
-                    # **({"bind_interface": interface_name} if interface_name else {}),
+                    "domain_resolver": "bootstrap",  # 💡 اضافه کردن domain_resolver
+                    **({"bind_interface": interface_name} if interface_name else {}),
                 },
                 {"type": "block", "tag": "block"},
             ],
             "route": {
                 "rules": [
-                    {"protocol": "dns", "action": "hijack-dns"},
-                    # Note: Removed UDP port 443 block to allow QUIC/H3 connections
-                    # QUIC uses UDP on port 443, so blocking it prevents H3 from working
+                    # 🔑 Process Bypass (MUST BE FIRST)
+                    {
+                        "process_name": [
+                            "xray.exe",
+                            "v2ray.exe",
+                            "sing-box.exe",
+                            "python.exe",
+                        ],
+                        "outbound": "direct",
+                    },
+                    {"process_path": [XRAY_EXECUTABLE], "outbound": "direct"},
+                    # 🔑 Direct IP Bypass (Proxy, DNS servers) - These IPs should also have static routes added by _add_static_route
+                    # Rules added dynamically below
+                    {
+                        "protocol": "dns",
+                        "action": "hijack-dns",
+                    },  # 💡 Hijack DNS traffic to DNS section
+                    # QUIC/H3 UDP 443 should go through proxy
+                    {"network": "udp", "port": 443, "outbound": "proxy"},
+                    # Block Multicast/Broadcast/Localhost/Private IP ranges (Direct is fine, but Block is safer for unknown private ranges)
                     {"ip_cidr": ["224.0.0.0/3", "ff00::/8"], "outbound": "block"},
                     {
                         "ip_cidr": [
@@ -392,45 +428,33 @@ class SingboxService:
                         "outbound": "direct",
                     },
                 ],
-                "final": "proxy",
+                "final": "proxy",  # 🎯 Everything else goes to proxy
                 "auto_detect_interface": True,
                 **({"default_interface": interface_name} if interface_name else {}),
             },
         }
 
         rules = cfg["route"]["rules"]
-        udp_quic_rule = {"network": "udp", "port": 443, "outbound": "proxy"}
-        rules.insert(0, udp_quic_rule)
         dns_rules = cfg["dns"]["rules"]
 
-        # Bypass proxy server (IP + Domain) and Core DNS Servers
-        bypass_rules_to_insert = []
+        # 2. Add Proxy Server IP/Domain Bypass Rules (after Process and before Hijack/Local Rules)
+        # 🔑 For IP: ensures communication with Xray server outside TUN is NOT intercepted
+        # 🔑 For Domain: ensures rule-set downloads/updates use direct connection if needed
+        insert_index = len([r for r in rules if "process" in r])  # After process rules
+
         for ip in proxy_ips + ["1.1.1.1", "8.8.8.8"]:
-            bypass_rules_to_insert.append({"ip_cidr": f"{ip}/32", "outbound": "direct"})
+            rules.insert(insert_index, {"ip_cidr": f"{ip}/32", "outbound": "direct"})
+            insert_index += 1
+
         for domain in proxy_domains:
-            bypass_rules_to_insert.append(
-                {"domain_suffix": domain, "outbound": "direct"}
-            )
+            rules.insert(insert_index, {"domain_suffix": domain, "outbound": "direct"})
+            insert_index += 1
+            # DNS for proxy domain MUST use bootstrap (direct) to resolve
             dns_rules.append({"domain_suffix": domain, "server": "bootstrap"})
 
-        # Process bypass - MUST BE FIRST to prevent xray.exe traffic from matching DNS rules
-        process_bypass_rules = [
-            {
-                "process_name": [
-                    "xray.exe",
-                    "v2ray.exe",
-                    "sing-box.exe",
-                    "python.exe",
-                ],
-                "outbound": "direct",
-            },
-            {"process_path": [XRAY_EXECUTABLE], "outbound": "direct"},
-        ]
-        insert_index = len(process_bypass_rules) + 2
-        for rule in reversed(bypass_rules_to_insert):
-            rules.insert(insert_index, rule)
-        # Country routing
+        # 3. Country routing (moved to end of rules, before final)
         if routing_country and routing_country.lower() != "none":
+            # ... (Country rule_sets and rules addition logic - kept as is)
             rule_sets_mapping = {
                 "ir": [
                     "https://raw.githubusercontent.com/Chocolate4U/Iran-sing-box-rules/rule-set/geoip-ir.srs",
@@ -443,7 +467,6 @@ class SingboxService:
                     "https://github.com/legiz-ru/sb-rule-sets/raw/main/ru-bundle.srs"
                 ],
             }
-
             country = routing_country.lower()
             if country in rule_sets_mapping:
                 if "rule_set" not in cfg["route"]:
@@ -462,7 +485,9 @@ class SingboxService:
                             "update_interval": "24h",
                         }
                     )
-
+                    # For country rules, traffic goes DIRECT
                     rules.append({"rule_set": tag_name, "outbound": "direct"})
+                    # DNS rules for these domains should use bootstrap for efficiency
+                    dns_rules.append({"rule_set": tag_name, "server": "bootstrap"})
 
         return cfg
