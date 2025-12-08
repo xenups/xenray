@@ -56,7 +56,7 @@ class MainWindow:
         self._theme_icon = None
         self._header = None
         self._main_container = None
-        self._splash = None
+        # self._splash = None
 
         # --- Initialization ---
         self._define_callbacks()
@@ -68,7 +68,7 @@ class MainWindow:
         self._page.run_task(self._start_ui_tasks)
 
         # Start Splash Sequence
-        self._start_splash()
+        # self._start_splash()
 
     # -----------------------------
     # Define callbacks
@@ -172,17 +172,17 @@ class MainWindow:
         self._connection_button.update_theme(is_dark)  # Ensure button matches too
         self._server_card.update_theme(is_dark)  # Ensure card matches too
 
-    def _start_splash(self):
-        """Initialize splash screen and show window."""
+    # def _start_splash(self):
+    #     """Initialize splash screen and show window."""
 
-        def on_splash_finish(splash_instance):
-            self._page.overlay.remove(splash_instance)
-            self._page.update()
+    #     def on_splash_finish(splash_instance):
+    #         self._page.overlay.remove(splash_instance)
+    #         self._page.update()
 
-        self._splash = SplashOverlay(on_splash_finish)
-        self._splash.set_page(self._page)  # Set page reference for animations
-        self._page.overlay.append(self._splash)
-        self._page.update()
+    #     self._splash = SplashOverlay(on_splash_finish)
+    #     self._splash.set_page(self._page)  # Set page reference for animations
+    #     self._page.overlay.append(self._splash)
+    #     self._page.update()
 
         # Center and Show Window
         self._page.window.width = 420
@@ -192,7 +192,7 @@ class MainWindow:
         self._page.update()
 
         # Start animation
-        self._page.run_task(self._splash.fade_out)
+        # self._page.run_task(self._splash.fade_out)
 
     # -----------------------------
     # Setup Drawers & BottomSheet
@@ -489,10 +489,7 @@ class MainWindow:
                         progress_callback=update_status,
                         stop_service_callback=self._connection_manager.disconnect,
                     )
-                elif component == "geo":
-                    from src.services.geo_installer import GeoInstallerService
 
-                    GeoInstallerService.install(progress_callback=update_status)
 
                 self._show_snackbar(f"{component} Update Complete!")
             except Exception as e:

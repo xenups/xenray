@@ -22,9 +22,7 @@ class XrayInstallerService:
     @staticmethod
     def is_installed() -> bool:
         """Check if Xray is installed."""
-        return os.path.exists(XRAY_EXECUTABLE) and \
-               os.path.exists(os.path.join(ASSETS_DIR, "geosite.dat")) and \
-               os.path.exists(os.path.join(ASSETS_DIR, "geoip.dat"))
+        return os.path.exists(XRAY_EXECUTABLE)
 
     @staticmethod
     def install(
@@ -43,7 +41,11 @@ class XrayInstallerService:
         """
         try:
             os.makedirs(BIN_DIR, exist_ok=True)
-            os.makedirs(ASSETS_DIR, exist_ok=True)
+            os.makedirs(BIN_DIR, exist_ok=True)
+            # os.makedirs(ASSETS_DIR, exist_ok=True) # Assets dir might still be needed for other things, but ensuring it here isn't strictly necessary for only Xray bin if we aren't downloading geo files. But keeping it safe doesn't hurt, or we can just remove it if empty. Let's remove it to clean up if ASSETS_DIR is only for geo files. Actually ConfigManager might use it. Let's safe keep it or remove if I am sure. 
+            # Reviewing: Xray binary goes to BIN_DIR. ASSETS_DIR was for geo files. If we don't download geo files, we might not need to create ASSETS_DIR here.
+            # However, to be safe and clean, I will just remove the line creating ASSETS_DIR if it's not used.
+            
             
             # 1. Download Xray Core to temp location first
             if progress_callback:
@@ -67,11 +69,7 @@ class XrayInstallerService:
             if not XrayInstallerService._extract_core(zip_path):
                 return False
             
-            # 4. Install Geo Files
-            if progress_callback:
-                progress_callback("Downloading Geo Files...")
-            if not XrayInstallerService._install_geo_files(progress_callback):
-                return False
+
             
             if progress_callback:
                 progress_callback("Installation complete!")
@@ -158,49 +156,4 @@ class XrayInstallerService:
             logger.error(f"Failed to extract Xray core: {e}")
             return False
 
-    @staticmethod
-    def _install_geo_files(progress_callback: Optional[Callable[[str], None]] = None) -> bool:
-        """
-        Download geoip and geosite files.
-        
-        Returns:
-            True if successful, False otherwise
-        """
-        base_url = "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download"
-        
-        for file in ["geoip.dat", "geosite.dat"]:
-            url = f"{base_url}/{file}"
-            path = os.path.join(ASSETS_DIR, file)
-            
-            if progress_callback:
-                progress_callback(f"Downloading {file}...")
-            
-            try:
-                response = requests.get(url, stream=True, timeout=DOWNLOAD_TIMEOUT)
-                response.raise_for_status()
-                
-                # Use atomic write
-                temp_path = path + ".tmp"
-                with open(temp_path, 'wb') as f:
-                    shutil.copyfileobj(response.raw, f)
-                
-                # Validate file size
-                if os.path.getsize(temp_path) < MIN_FILE_SIZE:
-                    logger.error(f"Downloaded {file} too small")
-                    try:
-                        os.remove(temp_path)
-                    except OSError:
-                        pass
-                    return False
-                
-                # Atomic rename
-                if os.name == "nt":
-                    os.replace(temp_path, path)
-                else:
-                    os.rename(temp_path, path)
-                    
-            except (requests.RequestException, OSError, IOError) as e:
-                logger.error(f"Failed to download {file}: {e}")
-                return False
-        
-        return True
+

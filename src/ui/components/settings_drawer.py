@@ -8,9 +8,7 @@ from src.core.config_manager import ConfigManager
 from src.core.types import ConnectionMode
 from src.utils.process_utils import ProcessUtils
 
-# ASSETS_DIR is needed for checking Geo files, so it's included here.
-# Assuming 'src.core.constants' is where ASSETS_DIR is defined.
-from src.core.constants import ASSETS_DIR
+
 
 
 class SettingsDrawer(ft.NavigationDrawer):
@@ -182,8 +180,6 @@ class SettingsDrawer(ft.NavigationDrawer):
                             ),
                             ft.Container(height=8),
                             self._build_update_button("Xray Core", "xray"),
-                            ft.Container(height=8),
-                            self._build_update_button("Geo Files", "geo"),
                         ]
                     ),
                     padding=ft.padding.symmetric(horizontal=20, vertical=12),
@@ -313,20 +309,8 @@ class SettingsDrawer(ft.NavigationDrawer):
 
         val = self._country_dropdown.value
 
-        if val != "none":
-            geoip_path = os.path.join(ASSETS_DIR, "geoip.dat")
-            geosite_path = os.path.join(ASSETS_DIR, "geosite.dat")
 
-            if not os.path.exists(geoip_path) or not os.path.exists(geosite_path):
-                # --- FIX: Using page.open() ---
-                page.open(
-                    ft.SnackBar(
-                        content=ft.Text("Geo files missing!"),
-                        action="Update",
-                        on_action=lambda e: self._on_installer_run("geo"),
-                    )
-                )
-                # Note: Continue saving the configuration even if files are missing
+
 
         self._config_manager.set_routing_country(val)
 
