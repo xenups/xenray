@@ -3,12 +3,17 @@
 import json
 import os
 import subprocess
-from typing import Optional
+import socket
+from typing import Optional, Union, List
 
 from loguru import logger
-
 from src.core.config_manager import ConfigManager
-from src.core.constants import OUTPUT_CONFIG_PATH, XRAY_LOCATION_ASSET, ASSETS_DIR
+from src.core.constants import (
+    OUTPUT_CONFIG_PATH,
+    XRAY_LOCATION_ASSET,
+    ASSETS_DIR,
+    XRAY_EXECUTABLE,
+)
 from src.services.singbox_service import SingboxService
 from src.services.xray_service import XrayService
 
@@ -21,6 +26,8 @@ class ConnectionManager:
         self._xray_service = XrayService()
         self._singbox_service = SingboxService()
         self._current_connection = None
+        self._primary_interface_ip: Optional[str] = None
+        self._primary_interface_subnet: Optional[str] = None
 
     def connect(self, file_path: str, mode: str, step_callback=None) -> bool:
         """
@@ -28,10 +35,11 @@ class ConnectionManager:
         mode: 'proxy' or 'vpn'
         step_callback: Optional callback for reporting connection steps
         """
+
         def report_step(msg):
             if step_callback:
                 step_callback(msg)
-        
+
         # Load config
         report_step("Loading configuration...")
         logger.debug(f"Loading config from {file_path}")
@@ -49,16 +57,24 @@ class ConnectionManager:
             if self._current_connection.get("singbox_pid"):
                 self._singbox_service.stop()
 
-        # Process config for Xray
+        # Process config for Xray (Resolve to IP, Patch SNI, Ensure Sniffing)
         report_step("Processing configuration...")
         logger.debug("Processing configuration")
+        # 1. Resolve Outbound and Patch SNI
         processed_config = self._process_config(config)
+
+        # 2. Inject Sniffing and Port for Xray Inbound (CRITICAL FIX)
+        socks_port = self._get_socks_port(processed_config)
 
         # Save processed config
         logger.debug(f"Saving processed config to {OUTPUT_CONFIG_PATH}")
-        with open(OUTPUT_CONFIG_PATH, "w", encoding="utf-8") as f:
-            json.dump(processed_config, f, indent=2)
-        logger.debug("Config saved successfully")
+        try:
+            with open(OUTPUT_CONFIG_PATH, "w", encoding="utf-8") as f:
+                json.dump(processed_config, f, indent=2)
+            logger.debug("Config saved successfully")
+        except Exception as e:
+            logger.error(f"Failed to save Xray config: {e}")
+            return False
 
         # Start Xray
         report_step("Starting Xray...")
@@ -74,19 +90,21 @@ class ConnectionManager:
 
         if mode == "vpn":
             report_step("Initializing VPN tunnel...")
-            socks_port = self._get_socks_port(processed_config)
+
+            # Since _get_socks_port updated the config, socks_port is valid
             routing_country = self._config_manager.get_routing_country()
             proxy_server_ip = self._get_proxy_server_ip(processed_config)
             gateway_ip = self._get_default_gateway()
 
-            # singbox_pid = self._singbox_service.start(socks_port, routing_country, proxy_server_ip, gateway_ip)
+            # Pass required parameters to Sing-box service
             singbox_pid = self._singbox_service.start(
-                socks_port,
-                proxy_server_ip,
-                gateway_ip,
-                routing_country,
+                xray_socks_port=socks_port,
+                proxy_server_ip=proxy_server_ip,
+                gateway_ip=gateway_ip,
+                routing_country=routing_country,
             )
             if not singbox_pid:
+                logger.error("Failed to start Sing-box. Stopping Xray.")
                 self._xray_service.stop()
                 return False
 
@@ -118,7 +136,8 @@ class ConnectionManager:
     def _process_config(self, config: dict) -> dict:
         """
         Process config for Xray usage.
-        Note: Routing is now handled by Sing-box, so we only do basic processing.
+        1. Ensure log settings.
+        2. Resolve domain to IP and patch SNI/Host.
         """
         # Deep copy to avoid modifying original
         new_config = json.loads(json.dumps(config))
@@ -137,23 +156,15 @@ class ConnectionManager:
     def _resolve_domain_to_ip(self, domain: str, timeout: float = 5.0) -> Optional[str]:
         """
         Resolve domain to IP address with timeout.
-        
-        Args:
-            domain: Domain name to resolve
-            timeout: Timeout in seconds (default: 5.0)
-            
-        Returns:
-            IP address as string, or None if resolution fails
         """
-        import socket
-        
+
         # Check if it's already an IP
         try:
             socket.inet_aton(domain)
             return domain  # Already an IP
         except (socket.error, OSError):
             pass  # It's a domain, need to resolve
-        
+
         try:
             # Set socket timeout
             socket.setdefaulttimeout(timeout)
@@ -166,21 +177,21 @@ class ConnectionManager:
         finally:
             # Reset timeout
             socket.setdefaulttimeout(None)
-    
+
     def _patch_tls_settings(self, stream_settings: dict, domain: str):
         """Patch TLS settings with SNI."""
         tls_settings = stream_settings.setdefault("tlsSettings", {})
         if not tls_settings.get("serverName"):
             tls_settings["serverName"] = domain
             logger.info(f"[ConnectionManager] Set TLS SNI to {domain}")
-    
+
     def _patch_reality_settings(self, stream_settings: dict, domain: str):
         """Patch Reality settings with SNI."""
         reality_settings = stream_settings.setdefault("realitySettings", {})
         if not reality_settings.get("serverName"):
             reality_settings["serverName"] = domain
             logger.info(f"[ConnectionManager] Set Reality SNI to {domain}")
-    
+
     def _patch_ws_settings(self, stream_settings: dict, domain: str):
         """Patch WebSocket settings with Host header."""
         ws_settings = stream_settings.setdefault("wsSettings", {})
@@ -188,32 +199,33 @@ class ConnectionManager:
         if not headers.get("Host"):
             headers["Host"] = domain
             logger.info(f"[ConnectionManager] Set WS Host to {domain}")
-    
+
     def _patch_httpupgrade_settings(self, stream_settings: dict, domain: str):
         """Patch HTTPUpgrade settings with host."""
         httpupgrade_settings = stream_settings.setdefault("httpupgradeSettings", {})
         if not httpupgrade_settings.get("host"):
             httpupgrade_settings["host"] = domain
             logger.info(f"[ConnectionManager] Set HTTPUpgrade Host to {domain}")
-    
+
     def _patch_stream_settings(self, outbound: dict, domain: str):
         """Patch stream settings (TLS, Reality, WS, HTTPUpgrade) with domain."""
         stream_settings = outbound.setdefault("streamSettings", {})
         security = stream_settings.get("security", "none")
         network = stream_settings.get("network", "")
-        
+
         # Patch security settings
         if security == "tls":
             self._patch_tls_settings(stream_settings, domain)
         elif security == "reality":
             self._patch_reality_settings(stream_settings, domain)
-        
+
         # Patch network settings
         if network == "ws":
             self._patch_ws_settings(stream_settings, domain)
         elif network == "httpupgrade":
             self._patch_httpupgrade_settings(stream_settings, domain)
-    
+        # Note: You might want to add similar patching for Splithttp/Xhttp settings
+
     def _get_server_object(self, settings: dict) -> Optional[dict]:
         """Extract server object from settings based on protocol."""
         if "vnext" in settings and settings["vnext"]:
@@ -221,13 +233,13 @@ class ConnectionManager:
         elif "servers" in settings and settings["servers"]:
             return settings["servers"][0]
         return None
-    
+
     def _resolve_and_patch_config(self, config: dict):
         """
-        Finds the proxy server address, resolves it to an IP,
-        replaces the address with the IP, and sets SNI/Host to the original domain.
-        
-        This method processes all outbounds and patches their configurations.
+        Finds the proxy server address, attempts to resolve it to an IP,
+        replaces the address with the IP (on success), and sets SNI/Host to the original domain.
+
+        CRITICAL FIX: Implements robust fallback if DNS resolution fails.
         """
         SUPPORTED_PROTOCOLS = ["vless", "vmess", "trojan", "shadowsocks"]
         DNS_TIMEOUT = 5.0  # seconds
@@ -236,43 +248,68 @@ class ConnectionManager:
             protocol = outbound.get("protocol")
             if protocol not in SUPPORTED_PROTOCOLS:
                 continue
-                
+
             settings = outbound.get("settings", {})
             server_obj = self._get_server_object(settings)
-            
+
             if not server_obj or "address" not in server_obj:
                 continue
-            
+
             domain = server_obj["address"]
-            
-            # Resolve domain to IP
+
+            # Attempt to resolve domain to IP
             ip = self._resolve_domain_to_ip(domain, timeout=DNS_TIMEOUT)
-            if not ip:
-                continue  # Skip if resolution failed
-            
-            # Replace address with IP
-            server_obj["address"] = ip
-            
-            # Patch stream settings with original domain
+
+            if ip:
+                # SUCCESS: Replace address with IP and patch SNI/Host
+                server_obj["address"] = ip
+                logger.info(
+                    f"[ConnectionManager] Replaced address {domain} with resolved IP {ip}"
+                )
+            else:
+                # FALLBACK: Resolution failed. Keep the original domain and rely on Xray's internal DNS/routing.
+                # CRUCIAL: Must still patch stream settings to ensure SNI/Host is correctly set.
+                logger.warning(
+                    f"[ConnectionManager] DNS resolution failed for {domain}. Keeping domain address and relying on Xray's internal DNS/routing."
+                )
+                # Ensure address remains the domain (in case it was somehow altered)
+                server_obj["address"] = domain
+
+            # Patch stream settings with original domain (This is done regardless of IP resolution success,
+            # ensuring SNI/Host is correct even if Xray needs to resolve the domain itself).
             try:
                 self._patch_stream_settings(outbound, domain)
             except Exception as e:
-                logger.error(f"[ConnectionManager] Failed to patch stream settings for {domain}: {e}")
+                logger.error(
+                    f"[ConnectionManager] Failed to patch stream settings for {domain}: {e}"
+                )
 
     def _get_socks_port(self, config: dict) -> int:
-        """Extract SOCKS port from config, overriding with user preference."""
+        """
+        Extract SOCKS port from config, overriding with user preference,
+        and injects CRITICAL Sniffing settings into Xray's SOCKS inbound.
+        """
         # Get user configured port
         user_port = self._config_manager.get_proxy_port()
 
-        # We also need to update the config to listen on this port
-        # This is a bit tricky because we need to find the inbound and update it
+        # Update the config to listen on this port and inject Sniffing
         for inbound in config.get("inbounds", []):
             if inbound.get("protocol") == "socks":
                 inbound["port"] = user_port
-            elif inbound.get("protocol") == "http":
-                # Usually we want http port to be different, or maybe same if sniffing?
-                # For now let's just update socks port as that's what tun2proxy uses
-                pass
+
+                # 👇 CRITICAL FIX: Inject Sniffing to capture the domain name
+                # if the traffic comes in as an IP (e.g., if Sing-box resolves it)
+                inbound["sniffing"] = {
+                    "enabled": True,
+                    "destOverride": ["http", "tls", "quic"],
+                    "metadataOnly": False,
+                }
+                logger.debug(
+                    f"[ConnectionManager] Injected Sniffing settings into Xray SOCKS inbound."
+                )
+            # We don't modify http inbound for simplicity unless required
+            # elif inbound.get("protocol") == "http":
+            #     pass
 
         return user_port
 
@@ -280,6 +317,7 @@ class ConnectionManager:
         """
         Extract proxy server IPs/domains from config.
         Returns a list of all server addresses found.
+        (Uses the patched addresses, which are now IPs or original domains).
         """
         addresses = []
         for outbound in config.get("outbounds", []):
@@ -298,16 +336,34 @@ class ConnectionManager:
         return list(set(addresses))  # Unique addresses
 
     def _get_default_gateway(self) -> str:
+        """Get the default gateway IP address (Windows PowerShell)."""
+        try:
+            # Use PowerShell to get default gateway
+            cmd = 'Get-NetRoute -DestinationPrefix "0.0.0.0/0" | Select-Object -ExpandProperty NextHop'
+            result = subprocess.check_output(
+                ["powershell", "-Command", cmd], text=True
+            ).strip()
+            # Handle multiple gateways if present (take the first one)
+            if "\n" in result:
+                result = result.split("\n")[0].strip()
+            return result
+        except Exception as e:
+            logger.error(f"[ConnectionManager] Failed to get default gateway: {e}")
+            return ""
+
+    def _get_default_gateway(self) -> str:
         """
         Get the default gateway IP address.
         """
         try:
             # Use PowerShell to get default gateway
             cmd = 'Get-NetRoute -DestinationPrefix "0.0.0.0/0" | Select-Object -ExpandProperty NextHop'
-            result = subprocess.check_output(["powershell", "-Command", cmd], text=True).strip()
+            result = subprocess.check_output(
+                ["powershell", "-Command", cmd], text=True
+            ).strip()
             # Handle multiple gateways if present (take the first one)
-            if '\n' in result:
-                result = result.split('\n')[0].strip()
+            if "\n" in result:
+                result = result.split("\n")[0].strip()
             return result
         except Exception as e:
             logger.error(f"[ConnectionManager] Failed to get default gateway: {e}")
@@ -342,7 +398,10 @@ class ConnectionManager:
         # 2. Bypass primary interface IP/subnet (for local network)
         if hasattr(self, "_primary_interface_ip") and self._primary_interface_ip:
             bypass_list.append(self._primary_interface_ip)
-        if hasattr(self, "_primary_interface_subnet") and self._primary_interface_subnet:
+        if (
+            hasattr(self, "_primary_interface_subnet")
+            and self._primary_interface_subnet
+        ):
             bypass_list.append(self._primary_interface_subnet)
 
         # 3. Add custom DNS servers
@@ -368,7 +427,6 @@ class ConnectionManager:
 
         return bypass_list
 
-
     def _bind_direct_outbound(self, config: dict):
         """
         Detect primary interface for TUN bypass purposes.
@@ -378,13 +436,19 @@ class ConnectionManager:
             from src.utils.network_interface import NetworkInterfaceDetector
 
             # Detect primary network interface
-            interface_name, interface_ip, subnet = NetworkInterfaceDetector.get_primary_interface()
+            interface_name, interface_ip, subnet = (
+                NetworkInterfaceDetector.get_primary_interface()
+            )
 
             if not interface_ip:
-                logger.warning("[ConnectionManager] Could not detect primary interface for TUN bypass.")
+                logger.warning(
+                    "[ConnectionManager] Could not detect primary interface for TUN bypass."
+                )
                 return
 
-            logger.info(f"[ConnectionManager] Detected primary interface: {interface_name} ({interface_ip}, {subnet})")
+            logger.info(
+                f"[ConnectionManager] Detected primary interface: {interface_name} ({interface_ip}, {subnet})"
+            )
 
             # Store for TUN bypass
             self._primary_interface_ip = interface_ip

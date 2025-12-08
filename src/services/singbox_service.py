@@ -421,19 +421,40 @@ class SingboxService:
             rules.insert(i, rule)
 
         # Country routing
-        # if routing_country and routing_country.lower() != "none":
-        #     mapping = {
-        #         "ir": ("category-ir", "ir"),
-        #         "cn": ("cn", "cn"),
-        #         "ru": ("category-ru", "ru"),
-        #     }
-        #     if routing_country.lower() in mapping:
-        #         site, ip = mapping[routing_country.lower()]
-        #         rules.extend(
-        #             [
-        #                 {"domain": [f"geosite:{site}"], "outbound": "direct"},
-        #                 {"ip_cidr": [f"geoip:{ip}"], "outbound": "direct"},
-        #             ]
-        #         )
+        if routing_country and routing_country.lower() != "none":
+            rule_sets_mapping = {
+                "ir": [
+                    "https://raw.githubusercontent.com/Chocolate4U/Iran-sing-box-rules/rule-set/geoip-ir.srs",
+                    "https://raw.githubusercontent.com/Chocolate4U/Iran-sing-box-rules/rule-set/geosite-ir.srs",
+                ],
+                "cn": [
+                    "https://github.com/SagerNet/sing-geosite/releases/download/20251206075552/geosite-cn.srs"
+                ],
+                "ru": [
+                    "https://github.com/legiz-ru/sb-rule-sets/raw/main/ru-bundle.srs"
+                ],
+            }
+
+            country = routing_country.lower()
+            if country in rule_sets_mapping:
+                if "rule_set" not in cfg["route"]:
+                    cfg["route"]["rule_set"] = []
+
+                for idx, url in enumerate(rule_sets_mapping[country]):
+                    tag_name = f"{country}-rules-{idx}"
+
+                    cfg["route"]["rule_set"].append({
+                        "tag": tag_name,
+                        "type": "remote",
+                        "format": "binary",
+                        "url": url,
+                        "download_detour": "direct",
+                        "update_interval": "24h"
+                    })
+
+                    rules.append({
+                        "rule_set": tag_name,
+                        "outbound": "direct"
+                    })
 
         return cfg
