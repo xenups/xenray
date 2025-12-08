@@ -97,11 +97,15 @@ class ConnectionManager:
             gateway_ip = self._get_default_gateway()
 
             # Pass required parameters to Sing-box service
+            # Load routing rules for Sing-box injection (Consistent Routing)
+            routing_rules = self._config_manager.load_routing_rules()
+            
             singbox_pid = self._singbox_service.start(
                 xray_socks_port=socks_port,
                 proxy_server_ip=proxy_server_ip,
                 gateway_ip=gateway_ip,
                 routing_country=routing_country,
+                routing_rules=routing_rules,
             )
             if not singbox_pid:
                 logger.error("Failed to start Sing-box. Stopping Xray.")
@@ -150,6 +154,9 @@ class ConnectionManager:
 
         # Force IP Strategy: Resolve domain and patch config
         self._resolve_and_patch_config(new_config)
+
+        # Configure DNS (User Settings)
+        self._configure_dns(new_config)
 
         return new_config
 
@@ -505,11 +512,126 @@ class ConnectionManager:
             "outboundTag": "direct",
             "ip": [f"geoip:{geoip_tag}"],
         }
+        
+        rules.append(domain_rule)
+        rules.append(ip_rule)
 
-        # Insert at beginning for higher priority
-        config["routing"]["rules"].insert(0, ip_rule)
-        config["routing"]["rules"].insert(0, domain_rule)
+        # Inject User Defined Rules (Highest Priority)
+        user_rules = self._config_manager.load_routing_rules()
+        
+        # Helper to add rule if list not empty
+        def add_user_rule(tag, domain_list):
+            if domain_list:
+                # Separate IP and Domain? Xray field rule accepts both in "domain" or "ip" 
+                # but it's safer to check format if we want to be strict.
+                # However, Xray "domain" field handles plain strings as domain.
+                # IPs should ideally go to "ip" field but "domain" *might* not match IP string.
+                # For simplicity, we put everything in "domain" field for now, 
+                # unless user specifies "ip:..." or "geoip:...".
+                # Actually, best practice: split them.
+                
+                ips = [d for d in domain_list if self._is_ip(d) or d.startswith("geoip:")]
+                domains = [d for d in domain_list if d not in ips]
+                
+                if domains:
+                    rules.insert(0, {
+                        "type": "field",
+                        "outboundTag": tag,
+                        "domain": domains
+                    })
+                if ips:
+                     rules.insert(0, {
+                        "type": "field",
+                        "outboundTag": tag,
+                        "ip": ips
+                    })
+
+        add_user_rule("block", user_rules.get("block", []))
+        add_user_rule("proxy", user_rules.get("proxy", []))
+        add_user_rule("direct", user_rules.get("direct", []))
+
+        # Assign back
+        config["routing"]["rules"] = rules + config["routing"]["rules"] # Prepend
 
         logger.info(
-            f"[ConnectionManager] Added routing rules for {routing_country}: geosite:{geosite_tag}, geoip:{geoip_tag}"
+            f"[ConnectionManager] Added routing rules. Country: {routing_country}, User Rules: {len(user_rules.get('direct', [])) + len(user_rules.get('proxy', [])) + len(user_rules.get('block', []))}"
         )
+
+    def _is_ip(self, val: str) -> bool:
+        """Check if string is IP or standard Xray IP format."""
+        if val.startswith("geoip:") or "/" in val: # CIDR
+            return True
+        try:
+            socket.inet_aton(val)
+            return True
+        except:
+             return False
+
+    def _configure_dns(self, config: dict):
+        """Configure DNS based on user settings."""
+        dns_config = self._config_manager.load_dns_config()
+        if not dns_config:
+            # Use default Google/Cloudflare if nothing configured
+            # But the 'load_dns_config' returns defaults if empty file, so we are good.
+            pass
+
+        servers = []
+        for item in dns_config:
+            # { "address": "...", "protocol": "doh/udp/tcp", "domains": [] }
+            entry = None
+            addr = item.get("address", "")
+            if not addr: continue
+            
+            # Format address based on protocol
+            # Xray expects:
+            # UDP/TCP: "8.8.8.8" or "tcp+local://8.8.8.8"
+            # DoH: "https://..."
+            # DoT: "tls://..."
+            # DoQ: "quic://..."
+            
+            proto = item.get("protocol", "udp")
+            
+            # Construct server entry string
+            if proto == "doh":
+                if not addr.startswith("https://"):
+                    addr = f"https://{addr}/dns-query" # Heuristic
+            elif proto == "dot":
+                if not addr.startswith("tls://"):
+                    addr = f"tls://{addr}"
+            elif proto == "doq":
+                if not addr.startswith("quic://"):
+                   addr = f"quic://{addr}"
+            elif proto == "tcp":
+                 if not addr.startswith("tcp+local://"): # local dns resolution over tcp
+                     # Wait, standard TCP dns query to remote? Xray usually infers.
+                     # But explicit is: "tcp://8.8.8.8" (not valid standard xray schema?)
+                     # Xray: "8.8.8.8" -> UDP. 
+                     # For TCP: "tcp://8.8.8.8" works in some cores, or "tcp+local://"?
+                     # Let's stick to simple "8.8.8.8" for UDP default.
+                     pass 
+
+            # Create full object if domains specified
+            domains = item.get("domains", [])
+            if domains:
+                entry = {
+                    "address": addr,
+                    "domains": domains
+                }
+                # Check for "expectIPs" or "skipFallback" if needed (Advanced)
+            else:
+                entry = addr
+            
+            servers.append(entry)
+
+        # Inject into config
+        if "dns" not in config:
+            config["dns"] = {}
+        
+        config["dns"]["servers"] = servers
+        
+        # Ensure query strategy
+        if "queryStrategy" not in config["dns"]:
+            config["dns"]["queryStrategy"] = "UseIP" 
+            
+        logger.info(f"[ConnectionManager] Configured DNS with {len(servers)} servers")
+

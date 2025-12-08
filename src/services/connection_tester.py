@@ -53,10 +53,25 @@ class ConnectionTester:
                 outbound_config,
                 {
                     "protocol": "freedom",
-                    "tag": "direct"
+                    "tag": "direct",
+                    "streamSettings": {
+                        "sockopt": {
+                            "mark": 255
+                        }
+                    }
                 }
             ]
         }
+        
+        # Inject Mark 255 into the User's Outbound Config as well
+        # This ensures the connection to the proxy server itself bypasses the Tun
+        if "streamSettings" not in config["outbounds"][0]:
+            config["outbounds"][0]["streamSettings"] = {}
+        
+        if "sockopt" not in config["outbounds"][0]["streamSettings"]:
+            config["outbounds"][0]["streamSettings"]["sockopt"] = {}
+            
+        config["outbounds"][0]["streamSettings"]["sockopt"]["mark"] = 255
         
         filename = f"test_{uuid.uuid4()}.json"
         path = os.path.join(TMPDIR, filename)

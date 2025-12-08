@@ -147,6 +147,7 @@ class SingboxService:
         proxy_server_ip: Union[str, List[str]] = "",
         gateway_ip: Union[str, List[str]] = "",
         routing_country: str = "",
+        routing_rules: dict = None,
     ) -> Optional[int]:
         """Start Sing-box TUN service."""
         try:
@@ -163,6 +164,14 @@ class SingboxService:
             bypass_list = self._normalize_list(proxy_server_ip)
             bypass_list.extend(DNS_PROVIDERS["bypass_list"])
 
+            # Add User "Direct" IPs to bypass list so they get static routes
+            if routing_rules and "direct" in routing_rules:
+                direct_ips = self._filter_real_ips(routing_rules["direct"])
+                # We should technically resolve direct domains too if we want static routes...
+                # But resolving generic user domains might be slow/complex.
+                # For now, only explicit IPs in direct list get static routes.
+                bypass_list.extend(direct_ips)
+
             resolved_ips = self._resolve_ips(bypass_list)
 
             # 3. Add static routes for all resolved IPs
@@ -177,6 +186,7 @@ class SingboxService:
                 gateway_ip,
                 routing_country,
                 iface_name,
+                routing_rules,
             )
 
             # 5. Wait for Xray to be ready (with retry)
@@ -190,6 +200,34 @@ class SingboxService:
                 return None
 
             self._pid = self._process.pid
+
+            # 7. Check if process is still running after 3 seconds
+            # This catches immediate failures like config errors or download 404s
+            try:
+                self._process.wait(timeout=3.0)
+                # If we get here, process exited immediately
+                logger.error(
+                    f"[SingboxService] Process exited immediately with code {self._process.returncode}"
+                )
+                
+                # Close log handle to ensure flush
+                self._close_log()
+                
+                # Read and log the error details
+                try:
+                    if os.path.exists(SINGBOX_LOG_FILE):
+                        with open(SINGBOX_LOG_FILE, "r", encoding="utf-8", errors="ignore") as f:
+                            log_content = f.read().strip()
+                            if log_content:
+                                logger.error(f"[SingboxService] Fatal Error Log:\n{log_content}")
+                except Exception as e:
+                    logger.error(f"[SingboxService] Failed to read log file: {e}")
+                    
+                return None
+            except subprocess.TimeoutExpired:
+                # Process is still running, good!
+                pass
+
             logger.info(
                 f"[SingboxService] sing-box started successfully | PID: {self._pid}"
             )
@@ -201,112 +239,91 @@ class SingboxService:
             self._cleanup_routes()
             return None
 
-    def _wait_for_xray_ready(self, xray_socks_port: int) -> bool:
+    def _wait_for_xray_ready(self, port: int) -> bool:
         """Wait for Xray SOCKS port to be ready."""
-        for attempt in range(XRAY_READY_RETRY_COUNT):
+        logger.info(f"[SingboxService] Waiting for Xray on port {port}...")
+        for i in range(XRAY_READY_RETRY_COUNT):
             try:
-                sock = socket.create_connection(
-                    ("127.0.0.1", xray_socks_port), timeout=1
-                )
-                sock.close()
-                logger.info(
-                    f"[SingboxService] Xray SOCKS ready on port {xray_socks_port}"
-                )
-                return True
-            except (socket.error, OSError, ConnectionRefusedError):
-                if attempt < XRAY_READY_RETRY_COUNT - 1:
-                    time.sleep(XRAY_READY_RETRY_DELAY)
-                else:
-                    logger.error(
-                        f"[SingboxService] Xray SOCKS port not ready after {XRAY_READY_TIMEOUT}s"
-                    )
-                    return False
+                with socket.create_connection(("127.0.0.1", port), timeout=0.1):
+                    logger.info("[SingboxService] Xray is ready.")
+                    return True
+            except (socket.timeout, ConnectionRefusedError, OSError):
+                time.sleep(XRAY_READY_RETRY_DELAY)
+
+        logger.error("[SingboxService] Timed out waiting for Xray.")
         return False
 
     def _write_config_and_start(self, config: dict) -> bool:
-        """Write config file and start sing-box process."""
+        """Write config to file and start process."""
         try:
-            os.makedirs(os.path.dirname(SINGBOX_CONFIG_PATH), exist_ok=True)
-            # Use atomic write
-            temp_path = SINGBOX_CONFIG_PATH + ".tmp"
-            with open(temp_path, "w", encoding="utf-8") as f:
-                json.dump(config, f, indent=2, ensure_ascii=False)
-            # Atomic rename
-            if os.name == "nt":
-                os.replace(temp_path, SINGBOX_CONFIG_PATH)
-            else:
-                os.rename(temp_path, SINGBOX_CONFIG_PATH)
+            # Write config
+            with open(SINGBOX_CONFIG_PATH, "w", encoding="utf-8") as f:
+                json.dump(config, f, indent=2)
 
-            logger.info(f"[SingboxService] Starting sing-box → {SINGBOX_CONFIG_PATH}")
-            os.makedirs(os.path.dirname(SINGBOX_LOG_FILE), exist_ok=True)
+            # Open Log File
             self._log_handle = open(SINGBOX_LOG_FILE, "w", encoding="utf-8")
 
-            cmd = [SINGBOX_EXECUTABLE, "run", "-c", SINGBOX_CONFIG_PATH]
+            # Start Process
+            creationflags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
             self._process = subprocess.Popen(
-                cmd,
+                [SINGBOX_EXECUTABLE, "run", "-c", SINGBOX_CONFIG_PATH],
                 stdout=self._log_handle,
-                stderr=subprocess.STDOUT,
-                creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
-                text=True,
+                stderr=self._log_handle,
+                creationflags=creationflags,
             )
-
-            time.sleep(SINGBOX_START_DELAY)
-
-            if self._process.poll() is not None:
-                # Process crashed, read last logs
-                try:
-                    with open(SINGBOX_LOG_FILE, "r", encoding="utf-8") as f:
-                        lines = f.readlines()
-                        log_tail = "".join(lines[-20:])
-                    logger.error(
-                        f"[SingboxService] sing-box crashed! Last logs:\n{log_tail}"
-                    )
-                except (OSError, IOError) as e:
-                    logger.error(
-                        f"[SingboxService] sing-box crashed! Could not read logs: {e}"
-                    )
-                self._close_log()
-                return False
-
             return True
-        except (OSError, IOError, subprocess.SubprocessError) as e:
-            logger.error(
-                f"[SingboxService] Failed to write config or start process: {e}"
-            )
+        except Exception as e:
+            logger.error(f"[SingboxService] Failed to start process: {e}")
             self._close_log()
             return False
 
-    def stop(self) -> bool:
-        """Stop Sing-box process and cleanup routes."""
-        self._cleanup_routes()
-        if not self._process:
-            return True
-
-        logger.info(f"[SingboxService] Stopping sing-box (PID {self._pid})")
-        self._process.terminate()
-        try:
-            self._process.wait(timeout=PROCESS_TERMINATE_TIMEOUT)
-        except subprocess.TimeoutExpired:
-            logger.warning("[SingboxService] Force killing sing-box...")
-            self._process.kill()
-            self._process.wait()
-
-        self._process = None
-        self._pid = None
-        self._close_log()
-        logger.info("[SingboxService] sing-box stopped")
-        return True
-
-    def _close_log(self) -> None:
-        """Close log file handle safely."""
+    def _close_log(self):
+        """Close log file handle."""
         if self._log_handle:
             try:
-                self._log_handle.flush()
                 self._log_handle.close()
-            except (OSError, IOError) as e:
-                logger.warning(f"[SingboxService] Error closing log file: {e}")
-            finally:
-                self._log_handle = None
+            except Exception:
+                pass
+            self._log_handle = None
+
+    def stop(self):
+        """Stop the Sing-box service."""
+        if self._process:
+            try:
+                self._process.terminate()
+                try:
+                    self._process.wait(timeout=PROCESS_TERMINATE_TIMEOUT)
+                except subprocess.TimeoutExpired:
+                    self._process.kill()
+            except Exception as e:
+                logger.error(f"[SingboxService] Error stopping process: {e}")
+            self._process = None
+            self._pid = None
+
+        self._cleanup_routes()
+        self._close_log()
+        logger.info("[SingboxService] Stopped.")
+
+    def get_version(self) -> Optional[str]:
+        """Get installed Sing-box version."""
+        if not os.path.exists(SINGBOX_EXECUTABLE):
+            return None
+        try:
+            # Output: "sing-box version 1.8.0 ..."
+            result = subprocess.run(
+                [SINGBOX_EXECUTABLE, "version"],
+                capture_output=True,
+                text=True,
+                creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+            )
+            if result.returncode == 0:
+                first_line = result.stdout.split("\n")[0]
+                parts = first_line.split()
+                if len(parts) >= 3:
+                    return parts[2]  # "1.8.0"
+            return None
+        except Exception:
+            return None
 
     # ────────────────────────────────────────────────────────────────
     # CONFIG GENERATOR — 100% WORKING & LOOP-PROOF
@@ -318,6 +335,7 @@ class SingboxService:
         gateway_ip: Union[str, List[str]],
         routing_country: str = "",
         interface_name: Optional[str] = None,
+        routing_rules: dict = None,
     ) -> dict:
         """Generate Sing-box configuration."""
         proxy_list = self._normalize_list(proxy_server_ip)
@@ -328,14 +346,12 @@ class SingboxService:
             "log": {"level": "info", "timestamp": True},
             "dns": {
                 "servers": [
-                    # 1. Resolver for local/bypass domains (uses direct connection, but must resolve)
                     {
                         "tag": "bootstrap",
                         "type": "udp",
                         "server": "8.8.8.8",
                         "detour": "direct",
                     },
-                    # 2. Resolver for blocked domains (uses proxy tunnel)
                     {
                         "tag": "remote_proxy",
                         "type": "udp",
@@ -347,9 +363,7 @@ class SingboxService:
                     {
                         "inbound": ["tun-in"],
                         "server": "remote_proxy",
-                    },  # 🔑 DNS requests from TUN always go through proxy resolver (1.1.1.1 via proxy)
-                    # DNS queries for proxy domains must use direct bootstrap to prevent loop
-                    # These rules are added below
+                    },
                     {"query_type": ["A", "AAAA"], "server": "remote_proxy"},
                 ],
                 "final": "remote_proxy",
@@ -377,19 +391,18 @@ class SingboxService:
                     "tag": "proxy",
                     "server": "127.0.0.1",
                     "server_port": socks_port,
-                    "domain_resolver": "remote_proxy",  # 💡 اضافه کردن domain_resolver
+                    "domain_resolver": "remote_proxy",
                 },
                 {
                     "type": "direct",
                     "tag": "direct",
-                    "domain_resolver": "bootstrap",  # 💡 اضافه کردن domain_resolver
+                    "domain_resolver": "bootstrap",
                     **({"bind_interface": interface_name} if interface_name else {}),
                 },
                 {"type": "block", "tag": "block"},
             ],
             "route": {
                 "rules": [
-                    # 🔑 Process Bypass (MUST BE FIRST)
                     {
                         "process_name": [
                             "xray.exe",
@@ -400,15 +413,11 @@ class SingboxService:
                         "outbound": "direct",
                     },
                     {"process_path": [XRAY_EXECUTABLE], "outbound": "direct"},
-                    # 🔑 Direct IP Bypass (Proxy, DNS servers) - These IPs should also have static routes added by _add_static_route
-                    # Rules added dynamically below
                     {
                         "protocol": "dns",
                         "action": "hijack-dns",
-                    },  # 💡 Hijack DNS traffic to DNS section
-                    # QUIC/H3 UDP 443 should go through proxy
+                    },
                     {"network": "udp", "port": 443, "outbound": "proxy"},
-                    # Block Multicast/Broadcast/Localhost/Private IP ranges (Direct is fine, but Block is safer for unknown private ranges)
                     {"ip_cidr": ["224.0.0.0/3", "ff00::/8"], "outbound": "block"},
                     {
                         "ip_cidr": [
@@ -421,7 +430,7 @@ class SingboxService:
                         "outbound": "direct",
                     },
                 ],
-                "final": "proxy",  # 🎯 Everything else goes to proxy
+                "final": "proxy",
                 "auto_detect_interface": True,
                 **({"default_interface": interface_name} if interface_name else {}),
             },
@@ -430,10 +439,8 @@ class SingboxService:
         rules = cfg["route"]["rules"]
         dns_rules = cfg["dns"]["rules"]
 
-        # 2. Add Proxy Server IP/Domain Bypass Rules (after Process and before Hijack/Local Rules)
-        # 🔑 For IP: ensures communication with Xray server outside TUN is NOT intercepted
-        # 🔑 For Domain: ensures rule-set downloads/updates use direct connection if needed
-        insert_index = len([r for r in rules if "process" in r])  # After process rules
+        # 2. Add Proxy Server IP/Domain Bypass Rules
+        insert_index = len([r for r in rules if "process" in r])
 
         for ip in proxy_ips + ["1.1.1.1", "8.8.8.8"]:
             rules.insert(insert_index, {"ip_cidr": f"{ip}/32", "outbound": "direct"})
@@ -442,12 +449,77 @@ class SingboxService:
         for domain in proxy_domains:
             rules.insert(insert_index, {"domain_suffix": domain, "outbound": "direct"})
             insert_index += 1
-            # DNS for proxy domain MUST use bootstrap (direct) to resolve
             dns_rules.append({"domain_suffix": domain, "server": "bootstrap"})
 
-        # 3. Country routing (moved to end of rules, before final)
+        # --- USER ROUTING RULES (Direct / Proxy / Block) ---
+        if routing_rules:
+            # Helper: Validate IP/CIDR
+            def is_valid_ip_cidr(val):
+                try:
+                    ipaddress.ip_network(val, strict=False)
+                    return True
+                except ValueError:
+                    return False
+
+            for action in ["direct", "proxy", "block"]:
+                if action not in routing_rules:
+                    continue
+
+                targets = routing_rules[action]
+                outbound_tag = action
+
+                s_ips = []
+                s_domains = []
+                s_domain_suffixes = []
+
+                for t in targets:
+                    t = t.strip()
+                    if not t:
+                        continue
+
+                    # 1. Handle IP/CIDR
+                    if is_valid_ip_cidr(t):
+                        s_ips.append(t)
+                        continue
+
+                    # 2. Handle Tags
+                    lower_t = t.lower()
+                    if lower_t.startswith("geosite:") or lower_t.startswith("geoip:"):
+                        # Incompatible with Singbox loose config (needs .db or rule_set)
+                        # We skip to prevent crash, but maybe log it?
+                        # logger.debug(f"Skipping Xray tag for Singbox: {t}")
+                        continue
+
+                    if lower_t.startswith("domain:"):
+                        s_domain_suffixes.append(
+                            t[7:]
+                        )  # treat 'domain:' as suffix in xray usually means substring/suffix
+                    elif lower_t.startswith("full:"):
+                        s_domains.append(t[5:])  # exact match
+                    else:
+                        # Default assumption: It's a domain suffix (e.g. "google.com")
+                        s_domain_suffixes.append(t)
+
+                # Add Rules
+                if s_ips:
+                    rules.append({"ip_cidr": s_ips, "outbound": outbound_tag})
+
+                if s_domains:
+                    rules.append({"domain": s_domains, "outbound": outbound_tag})
+                    if outbound_tag == "direct":
+                        dns_rules.append({"domain": s_domains, "server": "bootstrap"})
+
+                if s_domain_suffixes:
+                    rules.append(
+                        {"domain_suffix": s_domain_suffixes, "outbound": outbound_tag}
+                    )
+                    if outbound_tag == "direct":
+                        dns_rules.append(
+                            {"domain_suffix": s_domain_suffixes, "server": "bootstrap"}
+                        )
+
+        # 3. Country routing
         if routing_country and routing_country.lower() != "none":
-            # ... (Country rule_sets and rules addition logic - kept as is)
             rule_sets_mapping = SINGBOX_RULE_SETS
             country = routing_country.lower()
             if country in rule_sets_mapping:
@@ -467,9 +539,7 @@ class SingboxService:
                             "update_interval": "24h",
                         }
                     )
-                    # For country rules, traffic goes DIRECT
                     rules.append({"rule_set": tag_name, "outbound": "direct"})
-                    # DNS rules for these domains should use bootstrap for efficiency
                     dns_rules.append({"rule_set": tag_name, "server": "bootstrap"})
 
         return cfg

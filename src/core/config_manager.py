@@ -517,3 +517,62 @@ class ConfigManager:
         path = os.path.join(self._config_dir, "sort_mode.txt")
         if not _atomic_write(path, mode):
             logger.error("Failed to save sort mode")
+
+    # --- Routing Rules Persistence ---
+    def load_routing_rules(self) -> dict:
+        """
+        Load routing rules. 
+        Returns dict with keys: 'direct', 'proxy', 'block'.
+        Each value is a list of strings (domains/IPs).
+        """
+        defaults = {"direct": [], "proxy": [], "block": []}
+        return self._load_json_list("routing_rules.json", default_type=dict, default_val=defaults)
+
+    def save_routing_rules(self, rules: dict):
+        """Save routing rules."""
+        self._save_json_list("routing_rules.json", rules)
+
+    # --- DNS Config Persistence ---
+    def load_dns_config(self) -> list:
+        """
+        Load DNS configuration.
+        Returns list of dicts: 
+        [{ "address": "...", "protocol": "doh/udp/tcp", "domains": [...] }]
+        """
+        defaults = [
+             {"address": "1.1.1.1", "protocol": "udp", "domains": []},
+             {"address": "8.8.8.8", "protocol": "udp", "domains": []}
+        ]
+        return self._load_json_list("dns_config.json", default_type=list, default_val=defaults)
+
+    def save_dns_config(self, dns_list: list):
+        """Save DNS configuration."""
+        self._save_json_list("dns_config.json", dns_list)
+
+    # --- Internal Helpers ---
+    def _load_json_list(self, filename: str, default_type=list, default_val=None):
+        if default_val is None:
+            default_val = [] if default_type is list else {}
+            
+        path = os.path.join(self._config_dir, filename)
+        if not os.path.exists(path):
+            return default_val
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                # Validation: ensure loaded data matches expected type (list vs dict)
+                if isinstance(data, default_type):
+                    return data
+                return default_val
+        except Exception as e:
+            logger.error(f"Failed to load {filename}: {e}")
+            return default_val
+
+    def _save_json_list(self, filename: str, data):
+        # We use atomic write via _atomic_write_json but we need to pass full path?
+        # No, _atomic_write_json takes full path. Use helper logic here.
+        path = os.path.join(self._config_dir, filename)
+        try:
+            _atomic_write_json(path, data)
+        except Exception as e:
+            logger.error(f"Failed to save {filename}: {e}")

@@ -112,9 +112,8 @@ SINGBOX_RULE_SETS = {
         "https://raw.githubusercontent.com/Chocolate4U/Iran-sing-box-rules/rule-set/geosite-ir.srs",
     ],
     "cn": [
-        "https://github.com/SagerNet/sing-geosite/releases/download/20251206075552/geosite-cn.srs"
-        # Note: Ideally this should optionally dynamic or we pin a version like you did.
-        # Keeping user's URL for now, but moving to constants makes updates easier.
+        "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.srs",
+        "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs"
     ],
     "ru": [
         "https://github.com/legiz-ru/sb-rule-sets/raw/main/ru-bundle.srs"

@@ -4,6 +4,7 @@ import platform
 import shutil
 import tempfile
 import zipfile
+import subprocess
 from typing import Optional, Callable
 
 import requests
@@ -157,3 +158,63 @@ class XrayInstallerService:
             return False
 
 
+    @staticmethod
+    def get_local_version() -> Optional[str]:
+        """
+        Get installed Xray version.
+        Returns version string (e.g., "1.8.4") or None.
+        """
+        if not os.path.exists(XRAY_EXECUTABLE):
+            return None
+        
+        try:
+            # Run xray -version
+            # Output format: Xray 1.8.4 (Xray, Penetrator through the void.) ...
+            result = subprocess.run(
+                [XRAY_EXECUTABLE, "-version"],
+                capture_output=True,
+                text=True,
+                creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+            )
+            
+            if result.returncode == 0:
+                first_line = result.stdout.split('\n')[0]
+                parts = first_line.split()
+                if len(parts) >= 2:
+                    return parts[1] # "1.8.4"
+            return None
+        except Exception as e:
+            logger.warning(f"Failed to check Xray version: {e}")
+            return None
+
+    @staticmethod
+    def check_for_updates() -> tuple[bool, Optional[str], Optional[str]]:
+        """
+        Check for updates via GitHub API.
+        Returns: (update_available, current_version, latest_version)
+        """
+        current_version = XrayInstallerService.get_local_version()
+        
+        try:
+            url = "https://api.github.com/repos/XTLS/Xray-core/releases/latest"
+            response = requests.get(url, timeout=10) # Short timeout for API check
+            response.raise_for_status()
+            
+            data = response.json()
+            tag_name = data.get("tag_name", "") # e.g., "v1.8.4" or "1.8.4"
+            
+            # Normalize version strings (remove 'v' prefix)
+            latest_version = tag_name.lstrip('v')
+            
+            if not current_version:
+                return True, None, latest_version
+            
+            if current_version != latest_version:
+                logger.info(f"Update available: {current_version} -> {latest_version}")
+                return True, current_version, latest_version
+            
+            return False, current_version, latest_version
+            
+        except Exception as e:
+            logger.error(f"Failed to check for updates: {e}")
+            return False, current_version, None

@@ -11,7 +11,7 @@ import flet as ft
 # Local modules
 from src.core.config_manager import ConfigManager
 from src.core.connection_manager import ConnectionManager
-from src.core.constants import TMPDIR, TUN_LOG_FILE, XRAY_LOG_FILE, APPDIR, FONT_URLS
+from src.core.constants import TMPDIR, TUN_LOG_FILE, XRAY_LOG_FILE, SINGBOX_LOG_FILE, APPDIR, FONT_URLS
 from src.core.logger import logger
 from src.core.types import ConnectionMode
 from src.ui.components.connection_button import ConnectionButton
@@ -123,20 +123,21 @@ class MainWindow:
     # -----------------------------
     # Build UI Structure
     # -----------------------------
-    def _build_ui(self):
-        # Header
-        self._header = Header(
-            self._page,
-            self._toggle_theme,
-            self._open_logs_drawer,
-            self._open_settings_drawer,
-        )
+    # -----------------------------
+    # Navigation & UI Building
+    # -----------------------------
+    def navigate_to(self, control: ft.Control):
+        """Navigate to a new view (replaces dashboard)."""
+        self._view_switcher.content = control
+        self._view_switcher.update()
 
-        self._status_display = StatusDisplay()
-        self._connection_button = ConnectionButton(on_click=self._on_connect_clicked)
-        self._server_card = ServerCard(on_click=self._open_server_drawer)
+    def navigate_back(self, e=None):
+        """Return to dashboard view."""
+        self._view_switcher.content = self._dashboard_view
+        self._view_switcher.update()
 
-        main_column = ft.Column(
+    def _create_dashboard_view(self):
+        return ft.Column(
             [
                 self._header,
                 ft.Container(height=50),
@@ -154,16 +155,45 @@ class MainWindow:
                 self._server_card,
             ],
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            expand=True,
         )
 
-        self._main_container = AppContainer(main_column)
+    def _build_ui(self):
+        # Components
+        self._header = Header(
+            self._page,
+            self._toggle_theme,
+            self._open_logs_drawer,
+            self._open_settings_drawer,
+        )
+
+        self._status_display = StatusDisplay()
+        self._connection_button = ConnectionButton(on_click=self._on_connect_clicked)
+        self._server_card = ServerCard(on_click=self._open_server_drawer)
+
+        # Dashboard View (Home)
+        self._dashboard_view = self._create_dashboard_view()
+
+        # View Switcher (Main Content Area)
+        self._view_switcher = ft.AnimatedSwitcher(
+            content=self._dashboard_view,
+            transition=ft.AnimatedSwitcherTransition.FADE,
+            duration=200,
+            reverse_duration=200,
+            switch_in_curve=ft.AnimationCurve.EASE_IN,
+            switch_out_curve=ft.AnimationCurve.EASE_OUT,
+            expand=True,
+        )
+
+        # Wrap in AppContainer for Theme/Styling consistency
+        self._main_container = AppContainer(self._view_switcher)
         self._page.add(self._main_container)
 
         # Sync Initial Theme State
         is_dark = self._page.theme_mode == ft.ThemeMode.DARK
         self._main_container.update_theme(is_dark)
-        self._connection_button.update_theme(is_dark)  # Ensure button matches too
-        self._server_card.update_theme(is_dark)  # Ensure card matches too
+        self._connection_button.update_theme(is_dark)
+        self._server_card.update_theme(is_dark)
 
         # Center and Show Window
         self._page.window.width = 420
@@ -195,6 +225,8 @@ class MainWindow:
             self._run_specific_installer,
             self._on_mode_changed,
             lambda: self._current_mode,
+            navigate_to=self.navigate_to,
+            navigate_back=self.navigate_back,
         )
 
         self._logs_drawer_component = LogsDrawer(self._log_viewer, self._heartbeat)
@@ -307,6 +339,17 @@ class MainWindow:
             self._config_manager.set_last_selected_profile_id(profile.get("id"))
         except Exception:
             pass
+            
+        # Trigger immediate latency check if not running
+        if not self._is_running and not self._connecting:
+            self._ui_call(self._status_display.set_pre_connection_ping, "...", False)
+            
+            def on_result(success, result_str):
+                 if not self._is_running and not self._connecting:
+                     self._ui_call(self._status_display.set_pre_connection_ping, result_str, success)
+
+            from src.services.connection_tester import ConnectionTester
+            ConnectionTester.test_connection(profile.get("config", {}), on_result)
 
         if self._is_running:
             # If already connected, disconnect first, then reconnect with animation
@@ -344,7 +387,7 @@ class MainWindow:
 
         # Show connecting animation immediately
         self._ui_call(self._connection_button.set_connecting)
-        self._ui_call(self._status_display.set_connecting)
+        self._ui_call(self._status_display.set_initializing)
 
         profile_config = (
             self._selected_profile.get("config") if self._selected_profile else {}
@@ -354,6 +397,14 @@ class MainWindow:
         def connect_task():
             try:
                 os.makedirs(TMPDIR, exist_ok=True)
+                
+                # Start logging immediately to capture startup errors
+                app_log = os.path.join(TMPDIR, "xenray.log")
+                if self._current_mode == ConnectionMode.VPN:
+                    self._log_viewer.start_tailing(app_log, XRAY_LOG_FILE, SINGBOX_LOG_FILE)
+                else:
+                    self._log_viewer.start_tailing(app_log, XRAY_LOG_FILE)
+                
                 temp_config_path = os.path.join(TMPDIR, "current_config.json")
                 with open(temp_config_path, "w", encoding="utf-8") as f:
                     json.dump(profile_config, f)
@@ -369,6 +420,7 @@ class MainWindow:
                     self._connecting = False
                     self._ui_call(self._reset_ui_disconnected)
                     self._show_snackbar("Connection Failed")
+                    # Do NOT stop tailing here, so user can see why it failed
                     return
 
                 self._is_running = True
@@ -376,11 +428,6 @@ class MainWindow:
 
                 self._ui_call(self._status_display.set_connected, True)
                 self._ui_call(self._connection_button.set_connected)
-
-                if self._current_mode == ConnectionMode.VPN:
-                    self._log_viewer.start_tailing(XRAY_LOG_FILE, TUN_LOG_FILE)
-                else:
-                    self._log_viewer.start_tailing(XRAY_LOG_FILE)
 
             except Exception as e:
                 logger.error(f"Error in connect_task: {e}")
@@ -413,6 +460,17 @@ class MainWindow:
         try:
             self._connection_button.set_disconnected()
             self._status_display.set_disconnected(self._current_mode)
+            
+            # Trigger immediate latency check
+            if self._selected_profile:
+                 self._ui_call(self._status_display.set_pre_connection_ping, "...", False)
+                 def on_result(success, result_str):
+                     if not self._is_running and not self._connecting:
+                         self._ui_call(self._status_display.set_pre_connection_ping, result_str, success)
+
+                 from src.services.connection_tester import ConnectionTester
+                 ConnectionTester.test_connection(self._selected_profile.get("config", {}), on_result)
+
         except Exception:
             pass
         self._ui_call(lambda: None)
@@ -493,6 +551,19 @@ class MainWindow:
         self._status_display.set_status(f"{mode.name} Mode Selected")
         self._ui_call(lambda: None)
 
+        if self._is_running:
+            # If already connected, disconnect first, then reconnect with animation
+            self._disconnect()
+
+            # Use async delay to ensure disconnect UI updates before showing connecting animation
+            async def reconnect_with_animation():
+                # Wait for disconnect to process
+                import asyncio
+                await asyncio.sleep(0.5)  
+                self._connect_async()
+
+            self._page.run_task(reconnect_with_animation)
+
     # -----------------------------
     # Background Tasks
     # -----------------------------
@@ -523,6 +594,27 @@ class MainWindow:
 
                 await asyncio.sleep(1.0)  # Matches animation duration approx
 
+        async def monitor_latency_loop():
+            """Continuously tests connectivity for selected profile when disconnected."""
+            while True:
+                if not self._is_running and not self._connecting and self._selected_profile:
+                    
+                    config = self._selected_profile.get("config", {})
+                    
+                    def on_result(success, result_str):
+                         if not self._is_running and not self._connecting:
+                             self._ui_call(self._status_display.set_pre_connection_ping, result_str, success)
+
+                    from src.services.connection_tester import ConnectionTester
+                    ConnectionTester.test_connection(config, on_result)
+                
+                # Check every 60s
+                # We check every 1s to be responsive to state changes, but execute test every 60s
+                for _ in range(60): 
+                    await asyncio.sleep(1)
+                    if self._is_running or self._connecting: break
+
+        self._page.run_task(monitor_latency_loop)
         self._page.run_task(heartbeat_loop)
 
     # -----------------------------
