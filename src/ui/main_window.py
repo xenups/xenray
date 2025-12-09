@@ -1,27 +1,31 @@
-"""Flet-based main window - Modern UI Redesign."""
+from __future__ import annotations
 
+import asyncio
+import json
 import os
-import shutil
 import threading
-from typing import Optional
+from typing import Optional, Callable
 
 import flet as ft
 
+# Local modules
 from src.core.config_manager import ConfigManager
 from src.core.connection_manager import ConnectionManager
-from src.core.constants import TMPDIR, TUN_LOG_FILE, XRAY_LOG_FILE
+from src.core.constants import TMPDIR, TUN_LOG_FILE, XRAY_LOG_FILE, SINGBOX_LOG_FILE, APPDIR, FONT_URLS
+from src.core.logger import logger
 from src.core.types import ConnectionMode
 from src.ui.components.connection_button import ConnectionButton
 from src.ui.components.logs_drawer import LogsDrawer
 from src.ui.components.server_card import ServerCard
 from src.ui.components.settings_drawer import SettingsDrawer
 from src.ui.components.status_display import StatusDisplay
+from src.ui.components.header import Header
+from src.ui.components.app_container import AppContainer
 from src.ui.log_viewer import LogViewer
-from src.core.logger import logger
 
 
 class MainWindow:
-    """Main Flet window - Modern UI."""
+    """Main Flet window for XenRay application."""
 
     def __init__(
         self,
@@ -33,592 +37,699 @@ class MainWindow:
         self._config_manager = config_manager
         self._connection_manager = connection_manager
 
-        # State
+        # --- State Variables ---
         self._current_mode = ConnectionMode.VPN
         self._is_running = False
-        self._selected_file_path: Optional[str] = None
-        self._connecting = False  # Lock to prevent concurrent connections
-        self._selected_profile = None  # Selected server profile
+        self._connecting = False
+        self._selected_profile: Optional[dict] = None
 
-        # Configure Page
-        self._page.title = "XenRay"
-        self._page.window_width = 420  # Slightly wider for better spacing
-        self._page.window_height = 750  # Taller
-        self._page.window_resizable = False
-        self._page.padding = 0
+        # --- UI Components Placeholders ---
+        self._heartbeat: Optional[ft.Container] = None
+        self._server_list = None
+        self._server_sheet: Optional[ft.BottomSheet] = None
+        self._settings_drawer = None
+        self._logs_drawer_component = None
+        self._server_card = None
+        self._connection_button = None
+        self._status_display = None
+        self._theme_icon = None
+        self._header = None
+        self._main_container = None
 
-        # Theme & Fonts
-        self._page.theme_mode = ft.ThemeMode.DARK
-        self._page.theme = ft.Theme(font_family="Roboto")  # Modern Font
-        self._page.fonts = {
-            "Roboto": "https://github.com/google/fonts/raw/main/apache/roboto/Roboto-Regular.ttf",
-            "RobotoBold": "https://github.com/google/fonts/raw/main/apache/roboto/Roboto-Bold.ttf",
-        }
-
-        # Colors (Dynamic based on theme, but setting defaults for Dark)
-        self._bg_color = ft.colors.BACKGROUND
-        self._surface_color = ft.colors.SURFACE_VARIANT
-        self._primary_color = ft.colors.PRIMARY
-        
-        # Load saved mode
-        saved_mode = self._config_manager.get_connection_mode()
-        self._current_mode = ConnectionMode.VPN if saved_mode == "vpn" else ConnectionMode.PROXY
-
+        # --- Initialization ---
+        self._define_callbacks()
+        self._setup_page()
         self._build_ui()
+        self._setup_drawers()
 
-        # Check installations (Disabled auto-check)
-        # self._check_installations()
+        # Start background tasks
+        self._page.run_task(self._start_ui_tasks)
+
+    # -----------------------------
+    # Define callbacks
+    # -----------------------------
+    def _define_callbacks(self):
+        self._on_connect_clicked = self._on_connect_clicked_impl
+        self._open_server_drawer = self._open_server_drawer_impl
+        self._open_logs_drawer = self._open_logs_drawer_impl
+        self._open_settings_drawer = self._open_settings_drawer_impl
+
+    # -----------------------------
+    # Page setup
+    # -----------------------------
+    def _setup_page(self):
+        self._page.title = "XenRay"
+        self._page.window.width = 420
+        self._page.window.height = 650
+        self._page.window.resizable = False
+        self._page.padding = 0
+        self._page.theme_mode = ft.ThemeMode.DARK
+        self._page.theme = ft.Theme(font_family="Roboto")
+        self._page.fonts = FONT_URLS
+
+
+
+        icon_path = os.path.join(APPDIR, "assets", "icon.ico")
+        if os.path.exists(icon_path):
+            self._page.window.icon = icon_path
+
+        saved_mode = self._config_manager.get_connection_mode()
+        saved_theme = self._config_manager.get_theme_mode()
+
+        self._current_mode = (
+            ConnectionMode.VPN if saved_mode == "vpn" else ConnectionMode.PROXY
+        )
+        self._page.theme_mode = (
+            ft.ThemeMode.DARK if saved_theme == "dark" else ft.ThemeMode.LIGHT
+        )
+
+    # -----------------------------
+    # Helper: Thread-safe UI call
+    # -----------------------------
+    def _ui_call(self, fn: Callable, *args, **kwargs):
+        """Wraps UI updates in an async task to be thread-safe."""
+
+        async def _coro():
+            try:
+                fn(*args, **kwargs)
+                try:
+                    self._page.update()
+                except Exception:
+                    pass
+            except Exception as e:
+                logger.debug(f"UI call error: {e}")
+
+        self._page.run_task(_coro)
+
+    # -----------------------------
+    # Build UI Structure
+    # -----------------------------
+    # -----------------------------
+    # Navigation & UI Building
+    # -----------------------------
+    def navigate_to(self, control: ft.Control):
+        """Navigate to a new view (replaces dashboard)."""
+        self._view_switcher.content = control
+        self._view_switcher.update()
+
+    def navigate_back(self, e=None):
+        """Return to dashboard view."""
+        self._view_switcher.content = self._dashboard_view
+        self._view_switcher.update()
+
+    def _create_dashboard_view(self):
+        return ft.Column(
+            [
+                self._header,
+                ft.Container(height=50),
+                ft.Container(expand=True),
+                ft.Column(
+                    [
+                        self._connection_button,
+                        ft.Container(height=20),
+                        self._status_display,
+                    ],
+                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                    alignment=ft.MainAxisAlignment.CENTER,
+                ),
+                ft.Container(expand=True),
+                self._server_card,
+            ],
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            expand=True,
+        )
 
     def _build_ui(self):
-        """Build the modern user interface."""
-
-        # --- Header ---
-        # --- Header ---
-        self._theme_icon = ft.IconButton(
-            icon=(
-                ft.icons.WB_SUNNY_OUTLINED
-                if self._page.theme_mode == ft.ThemeMode.DARK
-                else ft.icons.NIGHTLIGHT_ROUND
-            ),
-            icon_color=ft.colors.ON_SURFACE,
-            tooltip="Toggle Theme",
-            on_click=self._toggle_theme,
+        # Components
+        self._header = Header(
+            self._page,
+            self._toggle_theme,
+            self._open_logs_drawer,
+            self._open_settings_drawer,
         )
 
-        self._header = ft.Container(
-            content=ft.Row(
-                [
-                    ft.Row(
-                        [
-                            ft.Icon(
-                                ft.icons.SHIELD_MOON, color=ft.colors.PRIMARY, size=28
-                            ),
-                            ft.Text(
-                                "XenRay",
-                                size=24,
-                                weight=ft.FontWeight.BOLD,
-                                color=ft.colors.ON_SURFACE,
-                            ),
-                        ]
-                    ),
-                    ft.Row(
-                        [
-                            self._theme_icon,
-                            ft.IconButton(
-                                icon=ft.icons.ARTICLE_OUTLINED,
-                                icon_color=ft.colors.ON_SURFACE,
-                                tooltip="Logs",
-                                on_click=self._open_logs_drawer,
-                            ),
-                            ft.IconButton(
-                                icon=ft.icons.SETTINGS_OUTLINED,
-                                icon_color=ft.colors.ON_SURFACE,
-                                tooltip="Settings",
-                                on_click=self._open_settings_drawer,
-                            ),
-                        ]
-                    ),
-                ],
-                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-            ),
-            padding=ft.padding.symmetric(horizontal=20, vertical=20),
-            bgcolor=ft.colors.SURFACE,  # Header background
-            border=ft.border.only(
-                bottom=ft.border.BorderSide(1, ft.colors.OUTLINE_VARIANT)
-            ),
-        )
-
-        # --- Components ---
-        # --- Components ---
         self._status_display = StatusDisplay()
         self._connection_button = ConnectionButton(on_click=self._on_connect_clicked)
         self._server_card = ServerCard(on_click=self._open_server_drawer)
 
-        # --- Main Layout ---
-        self._main_container = ft.Container(
-            content=ft.Column(
-                [
-                    self._header,
-                    ft.Container(expand=True),  # Spacer
-                    self._connection_button,
-                    ft.Container(height=20),
-                    self._status_display,
-                    ft.Container(height=30),
-                    # Mode switcher moved to settings
-                    ft.Container(expand=True),  # Spacer
-                    self._server_card,
-                    ft.Container(height=20),
-                ],
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            ),
+        # Dashboard View (Home)
+        self._dashboard_view = self._create_dashboard_view()
+
+        # View Switcher (Main Content Area)
+        self._view_switcher = ft.AnimatedSwitcher(
+            content=self._dashboard_view,
+            transition=ft.AnimatedSwitcherTransition.FADE,
+            duration=200,
+            reverse_duration=200,
+            switch_in_curve=ft.AnimationCurve.EASE_IN,
+            switch_out_curve=ft.AnimationCurve.EASE_OUT,
             expand=True,
-            # Gradient removed for cleaner theme support, using background color
         )
+
+        # Wrap in AppContainer for Theme/Styling consistency
+        self._main_container = AppContainer(self._view_switcher)
         self._page.add(self._main_container)
 
-        # --- Drawers ---
-        self._setup_drawers()
+        # Sync Initial Theme State
+        is_dark = self._page.theme_mode == ft.ThemeMode.DARK
+        self._main_container.update_theme(is_dark)
+        self._connection_button.update_theme(is_dark)
+        self._server_card.update_theme(is_dark)
 
+        # Center and Show Window
+        self._page.window.width = 420
+        self._page.window.height = 650
+        self._page.window.center()
+        self._page.window.visible = True
+        self._page.update()
+
+
+    # -----------------------------
+    # Setup Drawers & BottomSheet
+    # -----------------------------
     def _setup_drawers(self):
-        """Setup side drawers."""
-        # Log Viewer
         self._log_viewer = LogViewer("Connection Logs")
         self._log_viewer.set_page(self._page)
 
-        # Server List
+        # Local import to avoid circular dependency
         from src.ui.server_list import ServerList
 
-        self._server_list = ServerList(self._config_manager, self._on_server_selected)
-
-        # Heartbeat
-        self._heartbeat = ft.Container(
-            width=8,
-            height=8,
-            bgcolor=ft.colors.GREEN_400,
-            border_radius=4,
-            opacity=0,  # Start hidden
-            animate_opacity=ft.animation.Animation(500, ft.AnimationCurve.EASE_IN_OUT),
-        )
-        # Start heartbeat thread
-        threading.Thread(target=self._animate_heartbeat, daemon=True).start()
-
-        # Settings Drawer
-        self._settings_drawer = SettingsDrawer(
+        self._server_list = ServerList(
             self._config_manager, 
+            self._on_server_selected,
+            on_profile_updated=self._on_profile_updated
+        )
+        self._server_list.set_page(self._page)
+
+        self._heartbeat = ft.Container(
+            width=8, height=8, bgcolor=ft.Colors.GREEN_400, border_radius=4, opacity=0
+        )
+
+        self._settings_drawer = SettingsDrawer(
+            self._config_manager,
             self._run_specific_installer,
             self._on_mode_changed,
-            lambda: self._current_mode
+            lambda: self._current_mode,
+            navigate_to=self.navigate_to,
+            navigate_back=self.navigate_back,
         )
-        self._end_drawer = self._settings_drawer.build()
 
-        # Logs Drawer
         self._logs_drawer_component = LogsDrawer(self._log_viewer, self._heartbeat)
-        self._logs_drawer = self._logs_drawer_component.build()
 
-        # Bottom Sheet (Server List)
+        # Initialize BottomSheet
         self._server_sheet = ft.BottomSheet(
-            ft.Container(
-                self._server_list,
-                padding=20,
-                height=400,
-            ),
-            open=False,
+            ft.Container(content=self._server_list, padding=20, expand=True), open=False
         )
-        self._page.bottom_sheet = self._server_sheet
 
-        # Auto-select last selected profile
+        # NOTE: Removed self._page.bottom_sheet assignment to use page.open() method
+
+        # Load last used profile
         last_profile_id = self._config_manager.get_last_selected_profile_id()
         if last_profile_id:
             profiles = self._config_manager.load_profiles()
             for profile in profiles:
-                if profile["id"] == last_profile_id:
+                if profile.get("id") == last_profile_id:
                     self._selected_profile = profile
                     self._server_card.update_server(profile)
+                    self._status_display.update_country(profile)
                     break
 
-    def _open_settings_drawer(self, e):
-        self._page.end_drawer = self._end_drawer
-        self._page.show_end_drawer(self._end_drawer)
-
-    def _open_logs_drawer(self, e):
-        self._page.end_drawer = self._logs_drawer
-        self._page.show_end_drawer(self._logs_drawer)
-
-    def _open_server_drawer(self, e):
-        self._server_sheet.open = True
-        self._server_list._load_profiles(update_ui=False)
-        self._page.update()
-
-    def _on_server_selected(self, profile):
-        # Update UI first
-        self._selected_profile = profile
-        self._server_card.update_server(profile)
-        self._server_sheet.open = False
-        self._page.update()
-
-        # Save last selected profile
-        self._config_manager.set_last_selected_profile_id(profile["id"])
-
-        # Seamless Switching
-        if self._is_running:
-            logger.debug("Switching server while connected...")
-            # 1. Disconnect current (synchronous/fast)
-            self._disconnect()
-
-            # 2. Connect to new (async)
-            # We need to wait a tiny bit for disconnect to fully clear?
-            # _disconnect is synchronous now, so it should be fine.
-            self._connect_async()
-
-    def _on_mode_changed(self, mode: ConnectionMode):
-        from src.utils.process_utils import ProcessUtils
-        
-        if mode == ConnectionMode.VPN:
-            # Check for admin privileges for VPN mode
-            if not ProcessUtils.is_admin():
-                self._show_admin_dialog()
-                return
-
-            self._current_mode = ConnectionMode.VPN
-            self._status_display.set_status("VPN Mode Selected")
-            self._config_manager.set_connection_mode("vpn")
-        else:
-            self._current_mode = ConnectionMode.PROXY
-            self._status_display.set_status("Proxy Mode Selected")
-            self._config_manager.set_connection_mode("proxy")
-        self._page.update()
-
-    def _show_admin_dialog(self):
-        """Show dialog requesting admin privileges."""
-
-        def restart_admin(e):
-            self._admin_dialog.open = False
-            self._page.update()
-            self._restart_as_admin()
-
-        self._admin_dialog = ft.AlertDialog(
-            title=ft.Text("Administrator Privileges Required"),
-            content=ft.Text(
-                "VPN mode requires Administrator privileges to modify system routing.\n\nWould you like to restart the application as Administrator?"
-            ),
-            actions=[
-                ft.TextButton("Restart as Admin", on_click=restart_admin),
-                ft.TextButton("Cancel", on_click=lambda e: self._close_admin_dialog()),
-            ],
-        )
-        self._page.dialog = self._admin_dialog
-        self._admin_dialog.open = True
-        self._page.update()
-
-    def _close_admin_dialog(self):
-        self._admin_dialog.open = False
-        self._page.update()
-
-    def _restart_as_admin(self):
-        """Restart the application with admin privileges."""
-        import ctypes
-        import sys
-
-        if os.name == "nt":
-            # Re-run the current script with admin rights
-            # We need to use the python executable and the script path
-            params = " ".join([f'"{arg}"' for arg in sys.argv])
-            try:
-                ctypes.windll.shell32.ShellExecuteW(
-                    None, "runas", sys.executable, params, None, 1
-                )
-                # Exit current instance
-                self.cleanup()
-                self._page.window.destroy()
-                os._exit(0)
-            except Exception as e:
-                logger.error(f"Failed to restart as admin: {e}")
-                self._show_snackbar("Failed to restart as admin")
-
-    # --- Connection Logic ---
-
-    def _on_connect_clicked(self, e):
+    # -----------------------------
+    # Logic: Button Clicks & Drawer Opens
+    # -----------------------------
+    def _on_connect_clicked_impl(self, e=None):
         if not self._selected_profile:
             self._show_snackbar("Please select a server first")
             return
-
         if self._connecting:
             self._show_snackbar("Connection in progress...")
             return
 
+        # Admin Check for VPN Mode
         if not self._is_running:
-            # Connect Animation
+            if self._current_mode == ConnectionMode.VPN:
+                from src.utils.process_utils import ProcessUtils
+
+                if not ProcessUtils.is_admin():
+                    # CALL THE NEW CLASS METHOD
+                    self._show_admin_restart_dialog()
+                    return  # Stop execution if admin restart is needed
+
             self._connection_button.set_connecting()
             self._status_display.set_connecting()
-            self._page.update()
-
-            # Run asynchronously to prevent UI freeze
+            self._ui_call(lambda: None)
             self._connect_async()
         else:
-            # Disconnect
             self._disconnect()
 
-    def _connect_async(self):
-        """Connect asynchronously with safe UI updates."""
-        logger.debug("_connect_async started")
-        if self._connecting:
-            logger.debug("Already connecting, returning")
-            return
+    def _show_admin_restart_dialog(self):
+        """Shows an AlertDialog asking the user to restart the app as Admin."""
+        from src.utils.process_utils import ProcessUtils
 
+        page = self._page
+
+        def close_dlg(e):
+            page.close(dlg)
+
+        def confirm_restart(e):
+            page.close(dlg)
+            # Save "VPN" mode so the app starts in VPN mode after restart
+            self._config_manager.set_connection_mode(ConnectionMode.VPN.value)
+            ProcessUtils.restart_as_admin()
+
+        dlg = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("Admin Rights Required"),
+            content=ft.Text(
+                "VPN mode requires Administrator privileges.\n\nDo you want to restart the application as Admin?"
+            ),
+            actions=[
+                ft.TextButton("Cancel", on_click=close_dlg),
+                ft.TextButton("Restart", on_click=confirm_restart),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+
+        if page:
+            page.open(dlg)
+
+    def _open_server_drawer_impl(self, e=None):
+        """Opens the server list using the modern page.open() method."""
+        if self._server_sheet:
+            self._page.open(self._server_sheet)
+            self._safe_update_server_list()
+
+    def _open_logs_drawer_impl(self, e=None):
+        self._page.end_drawer = self._logs_drawer_component
+        self._logs_drawer_component.open = True
+        self._ui_call(lambda: None)
+
+    def _open_settings_drawer_impl(self, e=None):
+        self._page.end_drawer = self._settings_drawer
+        self._settings_drawer.open = True
+        self._ui_call(lambda: None)
+
+    # -----------------------------
+    # Logic: Server Selection
+    # -----------------------------
+    def _on_server_selected(self, profile: dict):
+        def _apply():
+            self._selected_profile = profile
+            self._server_card.update_server(profile)
+            self._server_sheet.open = False
+            # Immediately update status display with country info (persistent)
+            self._status_display.update_country(profile)
+            self._page.update()  # Update page to close sheet
+
+        self._ui_call(_apply)
+
+        try:
+            self._config_manager.set_last_selected_profile_id(profile.get("id"))
+        except Exception:
+            pass
+            
+        # Trigger immediate latency check if not running
+        if not self._is_running and not self._connecting:
+            self._ui_call(self._status_display.set_pre_connection_ping, "...", False)
+            
+            def on_result(success, result_str, country_data=None):
+                 if not self._is_running and not self._connecting:
+                     self._ui_call(self._status_display.set_pre_connection_ping, result_str, success)
+                     # Update country if found
+                     if country_data and profile:
+                         profile.update(country_data)
+                         self._config_manager.update_profile(profile.get("id"), country_data)
+                         # Update display
+                         self._ui_call(lambda: self._status_display.update_country(country_data))
+                         self._ui_call(lambda: self._server_card.update_server(profile))
+                         
+                         if country_data.get("country_code"):
+                              self._ui_call(
+                                  self._server_list.update_item_icon, 
+                                  profile.get("id"), 
+                                  country_data.get("country_code")
+                              )
+
+            from src.services.connection_tester import ConnectionTester
+            fetch_flag = not profile.get("country_code")
+            ConnectionTester.test_connection(profile.get("config", {}), on_result, fetch_country=fetch_flag)
+
+        if self._is_running:
+            # If already connected, disconnect first, then reconnect with animation
+            self._disconnect()
+
+            # Use async delay to ensure disconnect UI updates before showing connecting animation
+            async def reconnect_with_animation():
+                await asyncio.sleep(0.2)  # Brief delay for disconnect UI to update
+                self._connect_async()
+
+            self._page.run_task(reconnect_with_animation)
+
+    def _safe_update_server_list(self):
+        """Waits for the sheet to be mounted before updating list."""
+
+        async def _wait_and_update():
+            # Wait until the server list control is mounted to the page
+            while self._server_list.page is None:
+                await asyncio.sleep(0.05)
+
+            try:
+                self._server_list._load_profiles(update_ui=True)
+            except Exception as ex:
+                logger.debug(f"Error loading profiles: {ex}")
+
+        self._page.run_task(_wait_and_update)
+
+    # -----------------------------
+    # Logic: Connection Management
+    # -----------------------------
+    def _connect_async(self):
+        if self._connecting:
+            return
         self._connecting = True
-        logger.debug(f"Set _connecting=True, _is_running={self._is_running}")
+
+        # Show connecting animation immediately
+        self._ui_call(self._connection_button.set_connecting)
+        self._ui_call(self._status_display.set_initializing)
+
+        profile_config = (
+            self._selected_profile.get("config") if self._selected_profile else {}
+        )
         mode_str = "vpn" if self._current_mode == ConnectionMode.VPN else "proxy"
 
-        # Capture necessary data for the thread
-        profile_config = self._selected_profile["config"]
-
         def connect_task():
-            # Write temporary config file from profile
-            import json
+            try:
+                os.makedirs(TMPDIR, exist_ok=True)
+                
+                # Start logging immediately to capture startup errors
+                app_log = os.path.join(TMPDIR, "xenray.log")
+                if self._current_mode == ConnectionMode.VPN:
+                    self._log_viewer.start_tailing(app_log, XRAY_LOG_FILE, SINGBOX_LOG_FILE)
+                else:
+                    self._log_viewer.start_tailing(app_log, XRAY_LOG_FILE)
+                
+                temp_config_path = os.path.join(TMPDIR, "current_config.json")
+                with open(temp_config_path, "w", encoding="utf-8") as f:
+                    json.dump(profile_config, f)
 
-            temp_config_path = os.path.join(TMPDIR, "current_config.json")
-            os.makedirs(TMPDIR, exist_ok=True)
-            with open(temp_config_path, "w") as f:
-                json.dump(profile_config, f)
-            logger.debug(f"Config written to {temp_config_path}")
+                def on_step(step_msg: str):
+                    self._ui_call(self._status_display.set_step, step_msg)
 
-            # Perform connection (blocking I/O)
-            success = self._connection_manager.connect(temp_config_path, mode_str)
-            logger.debug(f"Connection result: {success}")
+                success = self._connection_manager.connect(
+                    temp_config_path, mode_str, step_callback=on_step
+                )
 
-            # Schedule UI update on main thread
-            async def update_ui():
                 if not success:
                     self._connecting = False
-                    logger.debug("Connection failed, resetting UI")
-                    self._reset_ui_disconnected()
+                    self._ui_call(self._reset_ui_disconnected)
                     self._show_snackbar("Connection Failed")
+                    # Do NOT stop tailing here, so user can see why it failed
                     return
 
-                # Success UI Update
-                logger.debug("Connection successful, updating UI")
                 self._is_running = True
                 self._connecting = False
 
-                # Start combined logs
-                if self._current_mode == ConnectionMode.VPN:
-                    self._log_viewer.start_tailing(XRAY_LOG_FILE, TUN_LOG_FILE)
-                else:
-                    self._log_viewer.start_tailing(XRAY_LOG_FILE)
+                self._ui_call(self._status_display.set_connected, True, country_data=self._selected_profile)
+                self._ui_call(self._connection_button.set_connected)
 
-                # Animate Button to Connected State
-                logger.debug("Updating button UI")
-                self._connection_button.set_connected()
-                self._status_display.set_connected(self._current_mode)
-                logger.debug("Calling page.update()")
-                self._page.update()
-                logger.debug("page.update() completed")
+                # Start Periodic Monitoring (Latency + GeoIP Check)
+                self._start_monitoring_loop()
 
-            # Run UI update safely
-            self._page.run_task(update_ui)
+            except Exception as e:
+                logger.error(f"Error in connect_task: {e}")
+                self._connecting = False
+                self._ui_call(self._reset_ui_disconnected)
 
-        # Start background thread
         threading.Thread(target=connect_task, daemon=True).start()
 
+    def _start_monitoring_loop(self):
+        """Runs periodic checks every 60s."""
+        def _loop():
+            # Initial wait for connection stabilize
+            import time
+            time.sleep(5) 
+            
+            while self._is_running:
+                # 1. Check Latency & Fetch Country if missing
+                profile = self._selected_profile
+                if not profile:
+                    break
+                    
+                # Fetch if city/country missing
+                need_fetch = not profile.get("city") or not profile.get("country_code")
+                
+                # We use the ConnectionTester to do a ping + optionally fetch geoip
+                from src.services.connection_tester import ConnectionTester
+                success, result, country_data = ConnectionTester.test_connection_sync(
+                    profile.get("config", {}), 
+                    fetch_country=need_fetch
+                )
+                
+                if success:
+                     # FORCE UPDATE UI
+                     logger.debug(f"Monitoring loop success. Country: {country_data}")
+                     if country_data:
+                         profile.update(country_data)
+                         self._config_manager.update_profile(profile.get("id"), country_data)
+                     
+                     # Visual Updates (Pass current profile state)
+                     # We use lambda to capture specific values or allow delayed execution,
+                     # but here we want to ensure self._selected_profile is read at call time.
+                     self._ui_call(lambda: self._status_display.update_country(profile))
+                     self._ui_call(lambda: self._server_card.update_server(profile))
+                     
+                     if country_data and country_data.get("country_code"):
+                         self._ui_call(
+                             self._server_list.update_item_icon, 
+                             profile.get("id"), 
+                             country_data.get("country_code")
+                         )
+
+                # Wait 60s
+                for _ in range(60):
+                    if not self._is_running: return
+                    time.sleep(1)
+        
+        threading.Thread(target=_loop, daemon=True).start()
+
     def _disconnect(self):
-        """Disconnect synchronously (optimized to be fast)."""
-        logger.debug(f"_disconnect called, _is_running={self._is_running}")
-
         if not self._is_running:
-            logger.debug("Not running, returning")
             return
-
         self._is_running = False
-        logger.debug("Calling connection_manager.disconnect()")
-        self._connection_manager.disconnect()
-        logger.debug("Stopping log tailing")
-        self._log_viewer.stop_tailing()
-        logger.debug("Resetting UI")
+
+        try:
+            self._connection_manager.disconnect()
+        except Exception:
+            pass
+
+        try:
+            self._log_viewer.stop_tailing()
+        except Exception:
+            pass
+
         self._reset_ui_disconnected()
-        logger.debug("Showing snackbar")
         self._show_snackbar("Disconnected")
-        logger.debug("_disconnect completed")
 
     def _reset_ui_disconnected(self):
         self._is_running = False
-        self._connection_button.set_disconnected()
-        self._status_display.set_disconnected(self._current_mode)
-        self._page.update()
+        self._connecting = False
+        try:
+            self._connection_button.set_disconnected()
+            self._status_display.set_disconnected(self._current_mode)
+            
+            # Ensure country info is visible/refreshed
+            if self._selected_profile:
+                self._status_display.update_country(self._selected_profile)
+            else:
+                self._status_display.update_country(None)
+            
+            # Trigger immediate latency check
+            if self._selected_profile:
+                 self._ui_call(self._status_display.set_pre_connection_ping, "...", False)
+                 
+                 def on_result(success, result_str, country_data=None):
+                     if not self._is_running and not self._connecting:
+                         self._ui_call(self._status_display.set_pre_connection_ping, result_str, success)
+                         # Update country if found
+                         if country_data and self._selected_profile:
+                             self._selected_profile.update(country_data)
+                             self._config_manager.update_profile(self._selected_profile.get("id"), country_data)
+                             self._ui_call(self._status_display.update_country, country_data)
+
+                 from src.services.connection_tester import ConnectionTester
+                 fetch_flag = not self._selected_profile.get("country_code")
+                 ConnectionTester.test_connection(self._selected_profile.get("config", {}), on_result, fetch_country=fetch_flag)
+
+        except Exception:
+            pass
+        self._ui_call(lambda: None)
+
+    # -----------------------------
+    # Logic: Utilities
+    # -----------------------------
+    def _toggle_theme(self, e=None):
+        is_dark = self._page.theme_mode == ft.ThemeMode.DARK
+        self._page.theme_mode = ft.ThemeMode.LIGHT if is_dark else ft.ThemeMode.DARK
+        # Icon update handled by Header component now
+
+        # Save preference
+        self._config_manager.set_theme_mode("light" if is_dark else "dark")
+
+        self._connection_button.update_theme(not is_dark)
+        self._server_card.update_theme(not is_dark)
+        self._main_container.update_theme(not is_dark)
+        self._header.update_theme(not is_dark)
+        self._ui_call(lambda: None)
 
     def _show_snackbar(self, message: str):
-        self._page.snack_bar = ft.SnackBar(ft.Text(message))
-        self._page.snack_bar.open = True
-        self._page.update()
+        def _set():
+            self._page.open(ft.SnackBar(ft.Text(message)))
 
-    def cleanup(self):
-        self._disconnect()
-        shutil.rmtree(TMPDIR, ignore_errors=True)
-
-    # --- Installation Logic ---
-    def _check_installations(self):
-        from src.services.dependency_manager import DependencyManager
-
-        missing = DependencyManager.check_installed()
-        if missing:
-            self._show_install_dialog(missing_items=missing)
-
-    def _show_install_dialog(self, force: bool = False, missing_items: list = None):
-        items_str = ", ".join(missing_items) if missing_items else "Core Components"
-        title = "Reinstall Components" if force else "Missing Components"
-        content = (
-            f"Reinstalling {items_str}..."
-            if force
-            else f"Required components ({items_str}) are missing. Install now?"
-        )
-
-        def start_install(e):
-            self._install_dialog.open = False
-            self._page.update()
-            self._run_installer(force)
-
-        self._install_dialog = ft.AlertDialog(
-            title=ft.Text(title),
-            content=ft.Text(content),
-            actions=[
-                ft.TextButton("Install", on_click=start_install),
-                ft.TextButton("Cancel", on_click=lambda e: self._close_dialog()),
-            ],
-        )
-        self._page.dialog = self._install_dialog
-        self._install_dialog.open = True
-        self._page.update()
-
-    def _close_dialog(self):
-        self._install_dialog.open = False
-        self._page.update()
-
-    def _run_installer(self, force: bool):
-        # Overlay UI
-        progress = ft.ProgressRing()
-        status = ft.Text("Initializing...")
-        overlay = ft.Container(
-            content=ft.Column(
-                [progress, status],
-                alignment=ft.MainAxisAlignment.CENTER,
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            ),
-            bgcolor=ft.colors.BLACK87,
-            alignment=ft.alignment.center,
-        )
-        self._page.overlay.append(overlay)
-        self._page.update()
-
-        def update_status(msg):
-            status.value = msg
-            self._page.update()
-
-        def install_task():
-            from src.services.dependency_manager import DependencyManager
-
-            try:
-                # Hack: Delete files if force
-                if force:
-                    from src.core.constants import (TUN2PROXY_EXECUTABLE,
-                                                    XRAY_EXECUTABLE)
-
-                    if os.path.exists(XRAY_EXECUTABLE):
-                        try:
-                            os.remove(XRAY_EXECUTABLE)
-                        except:
-                            pass
-                    if os.path.exists(TUN2PROXY_EXECUTABLE):
-                        try:
-                            os.remove(TUN2PROXY_EXECUTABLE)
-                        except:
-                            pass
-
-                DependencyManager.install_all(progress_callback=update_status)
-
-                self._show_snackbar("Installation Complete!")
-            except Exception as e:
-                self._show_snackbar(f"Error: {e}")
-            finally:
-                self._page.overlay.remove(overlay)
-                self._page.update()
-
-        threading.Thread(target=install_task, daemon=True).start()
-
-    def _toggle_theme(self, e):
-        """Toggle between Light and Dark mode."""
-        if self._page.theme_mode == ft.ThemeMode.DARK:
-            self._page.theme_mode = ft.ThemeMode.LIGHT
-            self._page.bgcolor = ft.colors.BACKGROUND  # Light background
-            self._theme_icon.icon = ft.icons.NIGHTLIGHT_ROUND
-            self._connection_button.update_theme(False)
-            self._server_card.update_theme(False)
-        else:
-            self._page.theme_mode = ft.ThemeMode.DARK
-            self._page.bgcolor = ft.colors.BACKGROUND  # Dark background
-            self._theme_icon.icon = ft.icons.WB_SUNNY_OUTLINED
-            self._connection_button.update_theme(True)
-            self._server_card.update_theme(True)
-        self._page.update()
-
-    def _animate_heartbeat(self):
-        """Animate the heartbeat circle."""
-        import time
-
-        while True:
-            # Wait until attached to page
-            if not self._heartbeat.page:
-                time.sleep(1)
-                continue
-
-            # Only animate if running
-            if not self._is_running:
-                if self._heartbeat.opacity != 0:
-                    self._heartbeat.opacity = 0
-                    self._heartbeat.update()
-                time.sleep(1)
-                continue
-
-            try:
-                # Pulse Fade
-                self._heartbeat.opacity = 1.0
-                self._heartbeat.update()
-                time.sleep(0.8)
-                self._heartbeat.opacity = 0.2
-                self._heartbeat.update()
-                time.sleep(0.8)
-            except Exception:
-                # Handle cases where update fails (e.g. page closed)
-                break
-
-    def _on_port_changed(self, e):
-        try:
-            port = int(self._port_field.value)
-            if 1024 <= port <= 65535:
-                self._config_manager.set_proxy_port(port)
-            else:
-                # Invalid port range, maybe show error or ignore
-                pass
-        except ValueError:
-            pass
+        self._ui_call(_set)
 
     def _run_specific_installer(self, component: str):
-        # Overlay UI
         progress = ft.ProgressRing()
         status = ft.Text(f"Updating {component}...")
-        overlay = ft.Container(
+
+        # Create a modal dialog instead of using overlay
+        dialog = ft.AlertDialog(
             content=ft.Column(
                 [progress, status],
                 alignment=ft.MainAxisAlignment.CENTER,
+                height=100,
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             ),
-            bgcolor=ft.colors.BLACK87,
-            alignment=ft.alignment.center,
+            modal=True,
         )
-        self._page.overlay.append(overlay)
-        self._page.update()
 
-        def update_status(msg):
+        self._page.open(dialog)
+
+        def update_status(msg: str):
             status.value = msg
-            self._page.update()
+            status.update()
 
         def install_task():
-            from src.services.tun2proxy_installer import \
-                Tun2ProxyInstallerService
-            from src.services.xray_installer import XrayInstallerService
-            from src.services.geo_installer import GeoInstallerService
-
             try:
                 if component == "xray":
-                    XrayInstallerService.install(progress_callback=update_status)
-                elif component == "tun2proxy":
-                    Tun2ProxyInstallerService.install(progress_callback=update_status)
-                elif component == "geo":
-                    GeoInstallerService.install(progress_callback=update_status)
+                    from src.services.xray_installer import XrayInstallerService
+
+                    XrayInstallerService.install(
+                        progress_callback=update_status,
+                        stop_service_callback=self._connection_manager.disconnect,
+                    )
 
                 self._show_snackbar(f"{component} Update Complete!")
             except Exception as e:
                 self._show_snackbar(f"Error: {e}")
             finally:
-                self._page.overlay.remove(overlay)
-                self._page.update()
+                self._ui_call(lambda: self._page.close(dialog))
 
         threading.Thread(target=install_task, daemon=True).start()
+        
+    def _on_profile_updated(self, updated_profile: dict):
+        """Called when ServerList updates a profile (e.g. latency test results)."""
+        if not self._selected_profile:
+            return
+            
+        # If the updated profile is the currently selected one, refresh the UI
+        if updated_profile.get("id") == self._selected_profile.get("id"):
+            # Update local reference
+            self._selected_profile.update(updated_profile)
+            # Update Status Display
+            self._ui_call(lambda: self._status_display.update_country(updated_profile))
+            # Update Server Card
+            self._ui_call(lambda: self._server_card.update_server(self._selected_profile))
+
+    def _on_mode_changed(self, mode: ConnectionMode):
+        from src.utils.process_utils import ProcessUtils
+
+        if mode == ConnectionMode.VPN and not ProcessUtils.is_admin():
+            self._show_snackbar("Admin rights required for VPN mode")
+            return
+
+        self._current_mode = mode
+        self._config_manager.set_connection_mode(
+            "vpn" if mode == ConnectionMode.VPN else "proxy"
+        )
+        self._status_display.set_status(f"{mode.name} Mode Selected")
+        self._ui_call(lambda: None)
+
+        if self._is_running:
+            # If already connected, disconnect first, then reconnect with animation
+            self._disconnect()
+
+            # Use async delay to ensure disconnect UI updates before showing connecting animation
+            async def reconnect_with_animation():
+                # Wait for disconnect to process
+                import asyncio
+                await asyncio.sleep(0.5)  
+                self._connect_async()
+
+            self._page.run_task(reconnect_with_animation)
+
+    # -----------------------------
+    # Background Tasks
+    # -----------------------------
+    async def _start_ui_tasks(self):
+        """Manages background UI updates like heartbeat animation."""
+
+        async def heartbeat_loop():
+            while True:
+                # Optimized heartbeat logic using Flet animation
+                if self._is_running:
+                    try:
+                        if self._heartbeat.page:
+                            # Toggle opacity
+                            self._heartbeat.opacity = (
+                                0.2 if self._heartbeat.opacity == 1.0 else 1.0
+                            )
+                            self._heartbeat.update()
+                    except:
+                        pass
+                else:
+                    # Reset when not running
+                    try:
+                        if self._heartbeat.opacity != 0:
+                            self._heartbeat.opacity = 0
+                            self._heartbeat.update()
+                    except:
+                        pass
+
+                await asyncio.sleep(1.0)  # Matches animation duration approx
+
+        async def monitor_latency_loop():
+            """Continuously tests connectivity for selected profile when disconnected."""
+            while True:
+                if not self._is_running and not self._connecting and self._selected_profile:
+                    
+                    config = self._selected_profile.get("config", {})
+                    
+                    def on_result(success, result_str, country_data=None):
+                         if not self._is_running and not self._connecting:
+                             self._ui_call(self._status_display.set_pre_connection_ping, result_str, success)
+                             # Update country if found
+                             if country_data and self._selected_profile:
+                                 self._selected_profile.update(country_data)
+                                 self._config_manager.update_profile(self._selected_profile.get("id"), country_data)
+                                 self._ui_call(self._status_display.update_country, country_data)
+
+                    from src.services.connection_tester import ConnectionTester
+                    fetch_flag = not self._selected_profile.get("country_code")
+                    ConnectionTester.test_connection(config, on_result, fetch_country=fetch_flag)
+                
+                # Check every 60s
+                # We check every 1s to be responsive to state changes, but execute test every 60s
+                for _ in range(60): 
+                    await asyncio.sleep(1)
+
+        self._page.run_task(monitor_latency_loop)
+        self._page.run_task(heartbeat_loop)
+
+    # -----------------------------
+    # Cleanup
+    # -----------------------------
+    def cleanup(self):
+        try:
+            self._disconnect()
+        except Exception:
+            pass

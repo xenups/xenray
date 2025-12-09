@@ -9,11 +9,14 @@ __pycache__/
 # Distribution / packaging
 .Python
 build/
+Nabzram-master
+GorzRay-main
 develop-eggs/
 dist/
 downloads/
 eggs/
 .eggs/
+bin/
 lib/
 lib64/
 parts/
@@ -219,3 +222,9 @@ bin/wintun.dll
 bin/xray_no_window.ps1
 bin/xray_no_window.vbs
 bin/xray.exe
+bin/sing-box.exe
+
+# Temporary build/download directories
+temp_downloads/
+temp_geonames/
+package/

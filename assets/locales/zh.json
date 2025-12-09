@@ -1,0 +1,153 @@
+{
+  "app": {
+    "name": "XenRay",
+    "connecting": "连接中",
+    "connected": "已连接",
+    "disconnected": "已断开",
+    "verifying": "验证中...",
+    "initializing": "初始化中",
+    "checking": "检查中..."
+  },
+  "server_list": {
+    "title": "服务器",
+    "test_latency": "测试延迟",
+    "add_server": "添加服务器/订阅",
+    "sort": "排序",
+    "sort_name": "名称 (A-Z)",
+    "sort_latency": "延迟 (低-高)",
+    "testing": "测试中...",
+    "no_server": "未选择服务器",
+    "current_server": "当前服务器",
+    "update_subscription": "更新订阅",
+    "delete_subscription": "删除订阅",
+    "subscription_deleted": "订阅已删除",
+    "server_deleted": "服务器已成功删除 🗑️",
+    "test_in_progress": "测试正在进行中...",
+    "test_started": "延迟测试已开始... 🚀",
+    "updating_subscription": "正在更新订阅...",
+    "update_failed": "更新失败: {msg}"
+  },
+  "add_dialog": {
+    "title": "添加服务器或订阅",
+    "name_label": "名称（配置可选）",
+    "name_hint": "订阅必填",
+    "link_label": "链接 / URL",
+    "link_hint": "vless://... 或 https://example.com/sub",
+    "add": "添加",
+    "cancel": "取消",
+    "required": "必填",
+    "name_required": "订阅需要名称",
+    "invalid_link": "无效的服务器链接",
+    "server_added": "服务器 '{name}' 已添加! 🚀",
+    "subscription_added": "订阅 '{name}' 已添加! 📂"
+  },
+  "settings": {
+    "title": "设置",
+    "subtitle": "配置您的连接",
+    "general": "常规",
+    "network": "网络",
+    "advanced": "高级",
+    "system": "系统",
+    "connection_mode": "连接模式",
+    "mode_description": "VPN或代理特定行为",
+    "vpn": "VPN",
+    "proxy": "代理",
+    "direct_country": "直连国家",
+    "socks_port": "SOCKS端口",
+    "save": "保存",
+    "port_saved": "SOCKS端口已保存: {port} 💾",
+    "port_invalid_range": "无效端口范围 (1024-65535)",
+    "port_must_be_number": "端口必须是数字",
+    "country_saved": "直连国家已保存: {val} 🌐",
+    "routing_rules": "路由规则",
+    "routing_description": "管理直连、代理和阻止列表",
+    "dns_settings": "DNS设置",
+    "dns_description": "配置上游DNS服务器",
+    "check_updates": "检查更新",
+    "update_xray": "更新Xray核心",
+    "about": "关于XenRay",
+    "version": "v1.0.0 by Xenups",
+    "language": "语言",
+    "language_description": "选择应用语言"
+  },
+  "admin": {
+    "title": "需要管理员权限",
+    "message": "VPN模式需要管理员权限。\n\n是否以管理员身份重启应用程序？",
+    "restart": "重启",
+    "cancel": "取消"
+  },
+  "update": {
+    "checking": "正在检查更新... 📡",
+    "up_to_date": "已是最新版本! (v{version}) ✅",
+    "available": "有可用更新: v{current} -> v{latest}",
+    "install": "安装Xray核心 v{version}?",
+    "title": "更新Xray核心",
+    "updating": "正在更新Xray...",
+    "starting": "启动中...",
+    "success": "Xray更新成功! 🎉",
+    "failed": "更新失败! ❌"
+  },
+  "countries": {
+    "none": "无",
+    "ir": "伊朗",
+    "cn": "中国",
+    "ru": "俄罗斯"
+  },
+  "status": {
+    "select_server": "请先选择服务器",
+    "connection_in_progress": "连接进行中...",
+    "connection_failed": "连接失败",
+    "mode_selected": "已选择{mode}模式",
+    "ping": "延迟: {latency}"
+  },
+  "connection": {
+    "loading_config": "正在加载配置...",
+    "stopping_existing": "正在停止现有连接...",
+    "processing_config": "正在处理配置...",
+    "starting_xray": "正在启动 Xray...",
+    "initializing_vpn": "正在初始化 VPN 隧道...",
+    "finalizing": "正在完成连接...",
+    "ping_prefix": "延迟:",
+    "latency_ms": "{value}毫秒",
+    "timeout": "超时",
+    "conn_error": "连接错误",
+    "core_failed": "核心失败",
+    "invalid_config": "配置无效",
+    "error": "错误"
+  },
+  "routing": {
+    "title": "路由规则",
+    "subtitle": "按域名或IP控制流量",
+    "direct": "直连",
+    "proxy": "代理",
+    "block": "阻止",
+    "domain_or_ip": "域名或IP",
+    "hint": "例如: google.com, 1.1.1.1, geoip:ir",
+    "add": "添加",
+    "remove": "删除",
+    "no_rules": "无{type}规则"
+  },
+  "dns": {
+    "title": "DNS管理",
+    "subtitle": "上游DNS服务器",
+    "address": "地址",
+    "hint": "8.8.8.8 或 quic://...",
+    "add": "添加",
+    "remove": "删除",
+    "move_up": "上移",
+    "proto": "协议",
+    "address_header": "地址",
+    "actions": "操作",
+    "no_dns": "使用系统/默认DNS"
+  },
+  "logs": {
+    "title": "连接日志",
+    "pause": "暂停日志更新",
+    "resume": "恢复日志更新"
+  },
+  "header": {
+    "toggle_theme": "切换主题",
+    "logs": "日志",
+    "settings": "设置"
+  }
+}

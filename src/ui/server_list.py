@@ -1,197 +1,404 @@
-"""Server List Component."""
+"""Thread-safe Server List component for XenRay."""
+from __future__ import annotations
 import flet as ft
-import socket
-import time
 import threading
+import time
+from typing import Callable, Optional
 
 from src.core.config_manager import ConfigManager
-from src.utils.link_parser import LinkParser
+from src.core.subscription_manager import SubscriptionManager
+from src.core.logger import logger
+from src.core.i18n import t
+from src.ui.components.server_list_header import ServerListHeader
+from src.ui.components.server_list_item import ServerListItem
+from src.ui.components.subscription_list_item import SubscriptionListItem
+from src.ui.components.add_server_dialog import AddServerDialog
+from src.services.latency_tester import LatencyTester
 
 
-class ServerList(ft.UserControl):
-    """Component to manage and select servers."""
-    
-    def __init__(self, config_manager: ConfigManager, on_server_selected):
-        super().__init__()
+class ServerList(ft.Container):
+    """Thread-safe Server List component for XenRay."""
+
+    def __init__(
+        self,
+        config_manager: ConfigManager,
+        on_server_selected: Callable,
+        on_profile_updated: Callable = None,
+    ):
         self._config_manager = config_manager
+        self._subscription_manager = SubscriptionManager(config_manager)
         self._on_server_selected = on_server_selected
-        self._profiles = []
+        self._on_profile_updated = on_profile_updated
+
+        # Data
+        self._profiles: list[dict] = []
+        self._subscriptions: list[dict] = []
+
+        # State
+        self._page: Optional[ft.Page] = None
+        self._current_list_view = None
+        self._selected_profile_id = None
+        self._active_subscription = None
         
-    def build(self):
-        # Header
-        self._header = ft.Row([
-            ft.Text("Servers", size=20, weight=ft.FontWeight.BOLD),
-            ft.IconButton(ft.icons.ADD, on_click=self._show_add_dialog)
-        ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
-        
-        # List View
-        self._list_view = ft.ListView(
-            expand=True,
-            spacing=10,
-            padding=10,
+        # Item tracking for updates
+        self._item_map: dict[str, ServerListItem] = {}
+
+        # Latency Tester
+        self._latency_tester = LatencyTester(
+            on_test_start=self._on_latency_test_start,
+            on_test_complete=self._on_latency_test_complete,
+            on_all_complete=self._on_all_latency_tests_complete,
         )
-        
+
+        # Header Component
+        self._header = ServerListHeader(
+            get_sort_mode=self._config_manager.get_sort_mode,
+            set_sort_mode=self._on_sort_changed,
+            on_test_latency=self._test_all_latencies,
+            on_add_click=self._show_add_dialog,
+            on_back_click=self._exit_subscription_view,
+            on_update_subscription=self._update_subscription,
+            on_delete_subscription=self._delete_and_exit_subscription,
+        )
+
         # Add Dialog
-        self._link_input = ft.TextField(
-            label="VLESS Link",
-            multiline=True,
-            min_lines=3,
-            text_size=12
-        )
-        self._add_dialog = ft.AlertDialog(
-            title=ft.Text("Add Server"),
-            content=self._link_input,
-            actions=[
-                ft.TextButton("Add", on_click=self._add_server),
-                ft.TextButton("Cancel", on_click=self._close_dialog)
-            ]
-        )
-        
-        self._load_profiles()
-        
-        return ft.Container(
-            content=ft.Column([
-                self._header,
-                ft.Divider(),
-                self._list_view
-            ]),
-            padding=10,
-            expand=True
-        )
-        
-    def _load_profiles(self, update_ui=False):
-        self._profiles = self._config_manager.load_profiles()
-        
-        if not hasattr(self, '_list_view'):
-            return
-
-        self._list_view.controls.clear()
-        
-        for profile in self._profiles:
-            self._list_view.controls.append(self._create_server_item(profile))
-            
-        if update_ui:
-            self.update()
-
-    def _create_server_item(self, profile):
-        # Extract address and port from config structure
-        config = profile.get("config", {})
-        outbounds = config.get("outbounds", [])
-        address = "Unknown"
-        port = "N/A"
-        
-        # Find the main server in outbounds
-        for outbound in outbounds:
-            protocol = outbound.get("protocol")
-            if protocol in ['vless', 'vmess', 'trojan', 'shadowsocks']:
-                settings = outbound.get("settings", {})
-                if 'vnext' in settings and settings['vnext']:
-                    server = settings['vnext'][0]
-                    address = server.get('address', 'Unknown')
-                    port = server.get('port', 'N/A')
-                    break
-                elif 'servers' in settings and settings['servers']:
-                    server = settings['servers'][0]
-                    address = server.get('address', 'Unknown')
-                    port = server.get('port', 'N/A')
-                    break
-        
-        ping_text = ft.Text("...", size=12, color=ft.colors.GREY_500)
-        
-        # Start ping in background
-        threading.Thread(target=self._ping_server, args=(address, port, ping_text), daemon=True).start()
-
-        return ft.Container(
-            content=ft.Row([
-                ft.Text("🌐", size=24),
-                ft.Column([
-                    ft.Text(profile["name"], weight=ft.FontWeight.BOLD, color=ft.colors.ON_SURFACE),
-                    ft.Row([
-                        ft.Text(f"{address}:{port}", size=12, color=ft.colors.ON_SURFACE_VARIANT),
-                        ping_text
-                    ], spacing=10),
-                ], expand=True, spacing=2),
-                ft.IconButton(
-                    ft.icons.DELETE,
-                    icon_color=ft.colors.RED_400,
-                    on_click=lambda e: self._delete_server(profile["id"])
-                )
-            ]),
-            padding=15,
-            border_radius=10,
-            bgcolor=ft.colors.SURFACE, # Will adapt to theme
-            border=ft.border.all(1, ft.colors.OUTLINE_VARIANT),
-            on_click=lambda e: self._select_server(profile),
-            ink=True,
+        self._add_dialog = AddServerDialog(
+            on_server_added=self._handle_server_added,
+            on_subscription_added=self._handle_subscription_added,
+            on_close=self._close_add_dialog,
         )
 
-    def _ping_server(self, address, port, text_control):
-        if address == "Unknown" or port == "N/A":
-            return
-            
-        max_retries = 5
-        
-        for i in range(max_retries):
-            try:
-                target_port = int(port)
-                start = time.time()
-                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                sock.settimeout(3)
-                result = sock.connect_ex((address, target_port))
-                sock.close()
-                
-                latency = int((time.time() - start) * 1000)
-                
-                if result == 0:
-                    text_control.value = f"{latency}ms"
-                    text_control.color = ft.colors.GREEN_400
-                    if text_control.page:
-                        text_control.update()
-                    return # Success
-                
-            except Exception:
-                pass
-            
-            # Wait before retry
-            time.sleep(1)
-            
-        # If we get here, it failed
-        text_control.value = "Timeout"
-        text_control.color = ft.colors.RED_400
-        if text_control.page:
-            text_control.update()
+        # Animated Body Switcher
+        self._body_switcher = ft.AnimatedSwitcher(
+            content=ft.Container(),
+            transition=ft.AnimatedSwitcherTransition.FADE,
+            duration=150,
+            reverse_duration=150,
+            switch_in_curve=ft.AnimationCurve.EASE_IN,
+            switch_out_curve=ft.AnimationCurve.EASE_OUT,
+        )
 
-    def _show_add_dialog(self, e):
-        self.page.dialog = self._add_dialog
-        self._add_dialog.open = True
-        self.page.update()
-        
-    def _close_dialog(self, e):
-        self._add_dialog.open = False
-        self.page.update()
-        
-    def _add_server(self, e):
-        link = self._link_input.value.strip()
-        if not link:
-            return
-            
-        try:
-            parsed = LinkParser.parse_vless(link)
-            self._config_manager.save_profile(parsed["name"], parsed["config"])
-            self._link_input.value = ""
-            self._close_dialog(None)
-            self._load_profiles(update_ui=True)
-            
-            # Auto select
-            # self._select_server(parsed) 
-        except Exception as ex:
-            self._link_input.error_text = str(ex)
-            self.update()
-            
-    def _delete_server(self, profile_id):
-        self._config_manager.delete_profile(profile_id)
+        super().__init__(
+            content=ft.Column(
+                [
+                    self._header,
+                    ft.Container(height=5),
+                    ft.Container(content=self._body_switcher, expand=True),
+                ],
+                spacing=0,
+            ),
+            padding=5,
+            bgcolor=ft.Colors.TRANSPARENT,
+            expand=True,
+        )
+
+    # --- Page Management ---
+    def set_page(self, page: ft.Page):
+        self._page = page
+        threading.Thread(target=self._wait_until_added_and_load, daemon=True).start()
+
+    def _wait_until_added_and_load(self):
+        while not self._page or not self.page:
+            time.sleep(0.05)
         self._load_profiles(update_ui=True)
+
+    def _ui(self, fn: Callable):
+        """Execute a function on the UI thread."""
+        if not self._page:
+            return
+
+        async def _coro():
+            try:
+                fn()
+            except Exception as e:
+                logger.debug(f"UI update error: {e}")
+
+        self._page.run_task(_coro)
+
+    # --- Sort Handling ---
+    def _on_sort_changed(self, mode: str):
+        """Handle sort mode change."""
+        self._config_manager.set_sort_mode(mode)
+        if self._active_subscription:
+            self._enter_subscription_view(self._active_subscription, preserve_tests=True)
+        else:
+            self._load_profiles(update_ui=True)
+
+    def _apply_sort(self, items: list) -> list:
+        """Apply current sort mode to items."""
+        mode = self._config_manager.get_sort_mode()
+
+        def get_latency(item):
+            pid = item.get("id")
+            cached = self._latency_tester.get_cached_result(pid)
+            if cached:
+                return cached[2]  # latency_val
+            return 999999
+
+        if mode == "name_asc":
+            return sorted(items, key=lambda x: x.get("name", "").lower())
+        if mode == "ping_asc":
+            return sorted(items, key=get_latency)
+        return items
+
+    # --- Profile Loading ---
+    def _load_profiles(self, update_ui=False):
+        """Load and display profiles."""
+
+        def _task():
+            self._profiles = self._config_manager.load_profiles()
+            self._subscriptions = self._config_manager.load_subscriptions()
+            self._subscriptions.sort(key=lambda x: x.get("name", "").lower())
+
+            # If in subscription view, refresh that instead
+            if self._active_subscription:
+                fresh_sub = next(
+                    (s for s in self._subscriptions if s["id"] == self._active_subscription["id"]),
+                    None,
+                )
+                if fresh_sub:
+                    if update_ui:
+                        self._ui(lambda: self._enter_subscription_view(fresh_sub))
+                    else:
+                        self._enter_subscription_view(fresh_sub)
+                    return
+
+            # Sort profiles
+            self._profiles = self._apply_sort(self._profiles)
+
+            # Build list view
+            new_list_view = ft.ListView(expand=True, spacing=5, padding=5)
+            self._item_map.clear()
+
+            # Add subscriptions
+            for sub in self._subscriptions:
+                new_list_view.controls.append(
+                    SubscriptionListItem(sub, self._enter_subscription_view)
+                )
+
+            # Add profiles
+            for profile in self._profiles:
+                cached = self._latency_tester.get_cached_result(profile.get("id"))
+                item = ServerListItem(
+                    profile=profile,
+                    on_select=self._select_server,
+                    on_delete=self._delete_server,
+                    is_selected=(self._selected_profile_id == profile.get("id")),
+                    cached_ping=cached,
+                )
+                new_list_view.controls.append(item)
+                self._item_map[profile.get("id")] = item
+
+            # Update view
+            def _update():
+                self._current_list_view = new_list_view
+                self._body_switcher.content = new_list_view
+                self._body_switcher.update()
+
+            if update_ui:
+                self._ui(_update)
+            else:
+                self._current_list_view = new_list_view
+                self._body_switcher.content = new_list_view
+
+        if update_ui:
+            threading.Thread(target=_task, daemon=True).start()
+        else:
+            _task()
+
+    # --- Subscription Navigation ---
+    def _enter_subscription_view(self, sub: dict, preserve_tests: bool = False):
+        """Enter a subscription folder view."""
+        if not preserve_tests:
+            self._latency_tester.cancel()
+
+        self._active_subscription = sub
+        self._header.show_subscription_header(sub)
+
+        profiles = self._apply_sort(sub.get("profiles", []))
+
+        sub_list_view = ft.ListView(expand=True, spacing=5, padding=5)
+        self._item_map.clear()
+
+        for profile in profiles:
+            cached = self._latency_tester.get_cached_result(profile.get("id"))
+            item = ServerListItem(
+                profile=profile,
+                on_select=self._select_server,
+                is_selected=(self._selected_profile_id == profile.get("id")),
+                read_only=True,
+                cached_ping=cached,
+            )
+            sub_list_view.controls.append(item)
+            self._item_map[profile.get("id")] = item
+
+        self._current_list_view = sub_list_view
+        self._body_switcher.content = sub_list_view
+        try:
+            self._body_switcher.update()
+        except Exception:
+            pass
+
+    def _exit_subscription_view(self):
+        """Exit subscription view and return to main list."""
+        self._latency_tester.cancel()
+        self._active_subscription = None
+        self._header.show_main_header()
+        self._load_profiles(update_ui=True)
+
+    # --- Latency Testing ---
+    def _test_all_latencies(self):
+        """Start latency test for all visible items."""
+        if self._latency_tester.is_testing:
+            if self._page:
+                self._page.open(ft.SnackBar(content=ft.Text(t("server_list.test_in_progress"))))
+                self._page.update()
+            return
+
+        profiles = []
+        for profile_id, item in self._item_map.items():
+            profiles.append(item._profile)
+
+        if not profiles:
+            return
+
+        if self._page:
+            self._page.open(ft.SnackBar(content=ft.Text(t("server_list.test_started"))))
+            self._page.update()
+
+        self._latency_tester.test_profiles(profiles)
+
+    def _on_latency_test_start(self, profile: dict):
+        """Called when a latency test starts for a profile."""
+        item = self._item_map.get(profile.get("id"))
+        if item:
+            self._ui(lambda: item.update_ping(t("server_list.testing"), ft.Colors.BLUE_400))
+
+    def _on_latency_test_complete(self, profile: dict, success: bool, result: str, country_data: Optional[dict]):
+        """Called when a latency test completes for a profile."""
+        pid = profile.get("id")
+        item = self._item_map.get(pid)
         
-    def _select_server(self, profile):
+        # Update country data if received
+        if success and country_data:
+            profile.update(country_data)
+            if self._active_subscription:
+                self._config_manager.save_subscription_data(self._active_subscription)
+            else:
+                self._config_manager.update_profile(pid, country_data)
+            
+            # Notify parent
+            if self._on_profile_updated:
+                self._ui(lambda: self._on_profile_updated(profile))
+
+        # Update item UI
+        if item:
+            cached = self._latency_tester.get_cached_result(pid)
+            if cached:
+                self._ui(lambda: item.update_ping(cached[0], cached[1]))
+            
+            # Update flag if we got country data
+            if success and profile.get("country_code"):
+                cc = profile["country_code"]
+                cn = profile.get("country_name", cc)
+                self._ui(lambda: item.update_icon(cc, cn))
+
+        # Persist latency
+        if pid:
+            latency_data = {
+                "last_latency": result if success else None,
+                "last_latency_val": self._latency_tester.get_cached_result(pid)[2] if success else None,
+            }
+            if self._active_subscription:
+                self._config_manager.save_subscription_data(self._active_subscription)
+            else:
+                self._config_manager.update_profile(pid, latency_data)
+
+    def _on_all_latency_tests_complete(self):
+        """Called when all latency tests are done."""
+        if self._page:
+            self._ui(lambda: self._page.update())
+
+    def update_item_icon(self, profile_id: str, country_code: str):
+        """Update the icon for a specific profile (called from MainWindow)."""
+        item = self._item_map.get(profile_id)
+        if item:
+            item.update_icon(country_code)
+
+    # --- Server Actions ---
+    def _select_server(self, profile: dict):
+        """Handle server selection."""
+        self._selected_profile_id = profile["id"]
         if self._on_server_selected:
             self._on_server_selected(profile)
+        self._load_profiles(update_ui=True)
+
+    def _delete_server(self, profile_id: str):
+        """Delete a server profile."""
+        self._config_manager.delete_profile(profile_id)
+        self._load_profiles(update_ui=True)
+        if self._page:
+            self._page.open(ft.SnackBar(content=ft.Text(t("server_list.server_deleted"))))
+            self._page.update()
+
+    # --- Subscription Actions ---
+    def _update_subscription(self, sub_id: str):
+        """Update a subscription."""
+        if not self._page:
+            return
+        self._page.open(ft.SnackBar(content=ft.Text(t("server_list.updating_subscription"))))
+        self._page.update()
+
+        def callback(success, msg):
+            def _ui_update():
+                if success:
+                    self._page.open(ft.SnackBar(content=ft.Text(msg, color=ft.Colors.GREEN_400)))
+                    self._load_profiles(update_ui=True)
+                else:
+                    self._page.open(ft.SnackBar(content=ft.Text(t("server_list.update_failed", msg=msg), color=ft.Colors.RED_400)))
+                self._page.update()
+
+            self._ui(_ui_update)
+
+        self._subscription_manager.update_subscription(sub_id, callback)
+
+    def _delete_subscription(self, sub_id: str):
+        """Delete a subscription."""
+        self._config_manager.delete_subscription(sub_id)
+        self._load_profiles(update_ui=True)
+        if self._page:
+            self._page.open(ft.SnackBar(content=ft.Text(t("server_list.subscription_deleted"))))
+            self._page.update()
+
+    def _delete_and_exit_subscription(self, sub_id: str):
+        """Delete subscription and exit to main view."""
+        self._delete_subscription(sub_id)
+        self._active_subscription = None
+        self._header.show_main_header()
+
+    # --- Add Dialog ---
+    def _show_add_dialog(self, e=None):
+        """Show the add server/subscription dialog."""
+        if self._page:
+            self._page.open(self._add_dialog)
+            self._page.update()
+
+    def _close_add_dialog(self):
+        """Close the add dialog."""
+        if self._page:
+            self._page.close(self._add_dialog)
+            self._page.update()
+
+    def _handle_server_added(self, name: str, config: dict):
+        """Handle a new server being added."""
+        self._config_manager.save_profile(name, config)
+        if self._page:
+            self._page.open(ft.SnackBar(content=ft.Text(t("add_dialog.server_added", name=name), color=ft.Colors.GREEN_400)))
+        self._load_profiles(update_ui=True)
+
+    def _handle_subscription_added(self, name: str, url: str):
+        """Handle a new subscription being added."""
+        self._config_manager.save_subscription(name, url)
+        if self._page:
+            self._page.open(ft.SnackBar(content=ft.Text(t("add_dialog.subscription_added", name=name), color=ft.Colors.GREEN_400)))
+        self._load_profiles(update_ui=True)
