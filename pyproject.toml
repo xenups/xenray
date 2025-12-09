@@ -1,0 +1,36 @@
+[tool.poetry]
+name = "xenray"
+version = "1.0.0"
+description = "An Xray GUI for Linux/Windows, focusing on simplicity and enhancing VPN experience"
+authors = ["tarus1990"]
+license = "AGPL-3.0-or-later"
+readme = "README.md"
+packages = [{include = "src"}]
+
+[tool.poetry.dependencies]
+python = ">=3.10,<3.14"
+requests = "^2.31.0"
+psutil = "^5.9.0"
+loguru = "^0.7.3"
+pystray = "^0.19.5"
+Pillow = "^10.0.0"
+cryptography = "^46.0.3"
+flet-desktop = "^0.28.3"
+pycountry = "^24.6.1"
+msgpack = "^1.1.2"
+zstandard = "^0.25.0"
+python-dotenv = "^1.2.1"
+
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.0"
+black = "^23.7.0"
+mypy = "^1.5.0"
+pyinstaller = "^6.17.0"
+
+[tool.poetry.scripts]
+xenray = "src.main:run"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

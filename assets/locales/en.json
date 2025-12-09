@@ -1,0 +1,153 @@
+{
+  "app": {
+    "name": "XenRay",
+    "connecting": "Connecting",
+    "connected": "Connected",
+    "disconnected": "Disconnected",
+    "verifying": "Verifying...",
+    "initializing": "Initializing",
+    "checking": "Checking..."
+  },
+  "server_list": {
+    "title": "Servers",
+    "test_latency": "Test Latency",
+    "add_server": "Add Server/Subscription",
+    "sort": "Sort",
+    "sort_name": "Name (A-Z)",
+    "sort_latency": "Latency (Low-High)",
+    "testing": "Testing...",
+    "no_server": "No Server Selected",
+    "current_server": "Current Server",
+    "update_subscription": "Update Subscription",
+    "delete_subscription": "Delete Subscription",
+    "subscription_deleted": "Subscription deleted",
+    "server_deleted": "Server deleted successfully. 🗑️",
+    "test_in_progress": "Test already in progress...",
+    "test_started": "Started latency test... 🚀",
+    "updating_subscription": "Updating subscription...",
+    "update_failed": "Update failed: {msg}"
+  },
+  "add_dialog": {
+    "title": "Add Server or Subscription",
+    "name_label": "Name (Optional for Config)",
+    "name_hint": "Required for Subscriptions",
+    "link_label": "Link / URL",
+    "link_hint": "vless://... or https://example.com/sub",
+    "add": "Add",
+    "cancel": "Cancel",
+    "required": "Required",
+    "name_required": "Name required for Subscription",
+    "invalid_link": "Invalid Server Link",
+    "server_added": "Server '{name}' added! 🚀",
+    "subscription_added": "Subscription '{name}' added! 📂"
+  },
+  "settings": {
+    "title": "Settings",
+    "subtitle": "Configure your connection",
+    "general": "General",
+    "network": "Network",
+    "advanced": "Advanced",
+    "system": "System",
+    "connection_mode": "Connection Mode",
+    "mode_description": "VPN or Proxy specific behavior",
+    "vpn": "VPN",
+    "proxy": "Proxy",
+    "direct_country": "Direct Country",
+    "socks_port": "SOCKS Port",
+    "save": "Save",
+    "port_saved": "SOCKS Port saved: {port} 💾",
+    "port_invalid_range": "Invalid Port Range (1024-65535)",
+    "port_must_be_number": "Port must be a number",
+    "country_saved": "Direct Country saved: {val} 🌐",
+    "routing_rules": "Routing Rules",
+    "routing_description": "Manage direct, proxy, and block lists",
+    "dns_settings": "DNS Settings",
+    "dns_description": "Configure upstream DNS servers",
+    "check_updates": "Check for Updates",
+    "update_xray": "Update Xray Core",
+    "about": "About XenRay",
+    "version": "v1.0.0 by tarus1990",
+    "language": "Language",
+    "language_description": "Select application language"
+  },
+  "admin": {
+    "title": "Admin Rights Required",
+    "message": "VPN mode requires Administrator privileges.\n\nDo you want to restart the application as Admin?",
+    "restart": "Restart",
+    "cancel": "Cancel"
+  },
+  "update": {
+    "checking": "Checking for updates... 📡",
+    "up_to_date": "You are up to date! (v{version}) ✅",
+    "available": "Update available: v{current} -> v{latest}",
+    "install": "Install Xray Core v{version}?",
+    "title": "Update Xray Core",
+    "updating": "Updating Xray...",
+    "starting": "Starting...",
+    "success": "Xray Updated Successfully! 🎉",
+    "failed": "Update Failed! ❌"
+  },
+  "countries": {
+    "none": "None",
+    "ir": "Iran",
+    "cn": "China",
+    "ru": "Russia"
+  },
+  "status": {
+    "select_server": "Please select a server first",
+    "connection_in_progress": "Connection in progress...",
+    "connection_failed": "Connection Failed",
+    "mode_selected": "{mode} Mode Selected",
+    "ping": "Ping: {latency}"
+  },
+  "connection": {
+    "loading_config": "Loading configuration...",
+    "stopping_existing": "Stopping existing connection...",
+    "processing_config": "Processing configuration...",
+    "starting_xray": "Starting Xray...",
+    "initializing_vpn": "Initializing VPN tunnel...",
+    "finalizing": "Finalizing connection...",
+    "ping_prefix": "Ping:",
+    "latency_ms": "{value}ms",
+    "timeout": "Timeout",
+    "conn_error": "Conn Error",
+    "core_failed": "Core Failed",
+    "invalid_config": "Invalid Config",
+    "error": "Error"
+  },
+  "routing": {
+    "title": "Routing Rules",
+    "subtitle": "Control traffic flow by domain or IP",
+    "direct": "Direct",
+    "proxy": "Proxy",
+    "block": "Block",
+    "domain_or_ip": "Domain or IP",
+    "hint": "e.g. google.com, 1.1.1.1, geoip:ir",
+    "add": "Add",
+    "remove": "Remove",
+    "no_rules": "No {type} rules"
+  },
+  "dns": {
+    "title": "DNS Management",
+    "subtitle": "Upstream DNS servers",
+    "address": "Address",
+    "hint": "8.8.8.8 or quic://...",
+    "add": "Add",
+    "remove": "Remove",
+    "move_up": "Move Up",
+    "proto": "PROTO",
+    "address_header": "ADDRESS",
+    "actions": "ACTIONS",
+    "no_dns": "Use System/Default DNS"
+  },
+  "logs": {
+    "title": "Connection Logs",
+    "pause": "Pause log update",
+    "resume": "Resume log update"
+  },
+  "header": {
+    "toggle_theme": "Toggle Theme",
+    "logs": "Logs",
+    "settings": "Settings"
+  }
+}
