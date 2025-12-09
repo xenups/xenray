@@ -241,13 +241,27 @@ class ProcessUtils:
         """Restart the application with admin privileges."""
         import sys
         import os
+        import psutil
+        import time
+        from src.utils.platform_utils import PlatformUtils
+        
+        platform = PlatformUtils.get_platform()
+        
+        if platform == "windows":
+            ProcessUtils._restart_as_admin_windows()
+        elif platform == "macos":
+            ProcessUtils._restart_as_admin_macos()
+        else:
+            logger.warning("restart_as_admin is not supported on Linux")
+    
+    @staticmethod
+    def _restart_as_admin_windows():
+        """Restart as admin on Windows using ShellExecuteW."""
+        import sys
+        import os
         import ctypes
         import psutil
         import time
-        
-        if os.name != 'nt':
-            logger.warning("restart_as_admin is only supported on Windows")
-            return
 
         try:
             # Get the executable path
@@ -307,5 +321,57 @@ class ProcessUtils:
             logger.error(f"Failed to restart as admin: {e}")
             import traceback
             traceback.print_exc()
+    
+    @staticmethod
+    def _restart_as_admin_macos():
+        """Restart as admin on macOS using osascript."""
+        import sys
+        import subprocess
+        
+        try:
+            # Get the executable path
+            if getattr(sys, 'frozen', False):
+                # Running as compiled app
+                # If it's an .app bundle, we need to use the .app path
+                executable = sys.executable
+                
+                # Check if we're inside a .app bundle
+                if '.app/Contents/MacOS' in executable:
+                    # Get the .app path
+                    app_path = executable.split('.app/Contents/MacOS')[0] + '.app'
+                    # Use 'open' command to launch the app
+                    script = f'do shell script "open -a \\"{app_path}\\"" with administrator privileges'
+                else:
+                    # Direct executable
+                    script = f'do shell script "\\"{executable}\\"" with administrator privileges'
+            else:
+                # Running as Python script
+                executable = sys.executable
+                script_path = sys.argv[0]
+                script = f'do shell script "\\"{executable}\\" \\"{script_path}\\"" with administrator privileges'
+            
+            logger.info(f"Requesting admin privileges via osascript...")
+            
+            # Execute AppleScript to request admin privileges
+            result = subprocess.run(
+                ['osascript', '-e', script],
+                capture_output=True,
+                text=True
+            )
+            
+            if result.returncode == 0:
+                logger.info("Successfully launched new instance with admin privileges")
+                # Exit current instance
+                sys.exit(0)
+            else:
+                logger.error(f"osascript failed: {result.stderr}")
+                if "User canceled" in result.stderr or "(-128)" in result.stderr:
+                    logger.info("User cancelled admin prompt")
+                    
+        except Exception as e:
+            logger.error(f"Failed to restart as admin on macOS: {e}")
+            import traceback
+            traceback.print_exc()
+
 
 

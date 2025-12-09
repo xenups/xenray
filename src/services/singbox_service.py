@@ -18,6 +18,7 @@ from src.core.constants import (
     SINGBOX_RULE_SETS,
 )
 from src.utils.network_interface import NetworkInterfaceDetector
+from src.utils.platform_utils import PlatformUtils
 
 # Constants
 XRAY_READY_RETRY_COUNT = 20
@@ -108,20 +109,44 @@ class SingboxService:
             return
         try:
             logger.info(f"[SingboxService] Adding static route: {ip} → {gateway}")
-            cmd = [
-                "route",
-                "add",
-                ip,
-                "mask",
-                "255.255.255.255",
-                gateway,
-                "metric",
-                "1",
-            ]
+            
+            # Platform-specific route commands
+            platform = PlatformUtils.get_platform()
+            
+            if platform == "windows":
+                cmd = [
+                    "route",
+                    "add",
+                    ip,
+                    "mask",
+                    "255.255.255.255",
+                    gateway,
+                    "metric",
+                    "1",
+                ]
+            elif platform == "macos":
+                cmd = [
+                    "route",
+                    "-n",
+                    "add",
+                    "-host",
+                    ip,
+                    gateway,
+                ]
+            else:  # Linux
+                cmd = [
+                    "ip",
+                    "route",
+                    "add",
+                    ip,
+                    "via",
+                    gateway,
+                ]
+            
             subprocess.run(
                 cmd,
                 check=False,
-                creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+                creationflags=PlatformUtils.get_subprocess_flags(),
             )
             self._added_routes.append(ip)
         except (OSError, subprocess.SubprocessError) as e:
@@ -129,13 +154,24 @@ class SingboxService:
 
     def _cleanup_routes(self) -> None:
         """Remove all added static routes."""
+        platform = PlatformUtils.get_platform()
+        
         for ip in self._added_routes[:]:
             try:
                 logger.info(f"[SingboxService] Removing static route: {ip}")
+                
+                # Platform-specific route delete commands
+                if platform == "windows":
+                    cmd = ["route", "delete", ip]
+                elif platform == "macos":
+                    cmd = ["route", "-n", "delete", "-host", ip]
+                else:  # Linux
+                    cmd = ["ip", "route", "del", ip]
+                
                 subprocess.run(
-                    ["route", "delete", ip],
+                    cmd,
                     check=False,
-                    creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+                    creationflags=PlatformUtils.get_subprocess_flags(),
                 )
             except (OSError, subprocess.SubprocessError) as e:
                 logger.error(f"[SingboxService] Failed to remove route for {ip}: {e}")
@@ -374,7 +410,7 @@ class SingboxService:
                 {
                     "type": "tun",
                     "tag": "tun-in",
-                    "interface_name": "SINGTUN",
+                    "interface_name": PlatformUtils.get_tun_interface_name(),
                     "address": ["172.20.0.1/30"],
                     "mtu": 1280,
                     "auto_route": True,

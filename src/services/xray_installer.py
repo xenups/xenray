@@ -11,6 +11,7 @@ import requests
 from loguru import logger
 
 from src.core.constants import ASSETS_DIR, BIN_DIR, XRAY_EXECUTABLE
+from src.utils.platform_utils import PlatformUtils
 
 # Constants
 DOWNLOAD_TIMEOUT = 30.0  # seconds
@@ -91,15 +92,23 @@ class XrayInstallerService:
         """
         try:
             # Determine architecture
-            arch = platform.machine().lower()
-            if arch == "amd64" or arch == "x86_64":
+            arch = PlatformUtils.get_architecture()
+            if arch == "x86_64":
                 arch_str = "64"
-            elif "arm" in arch:
+            elif arch == "arm64":
                 arch_str = "arm64-v8a"
             else:
                 arch_str = "32"
+        
+            # Determine OS name
+            platform = PlatformUtils.get_platform()
+            if platform == "windows":
+                os_name = "windows"
+            elif platform == "macos":
+                os_name = "macos"
+            else:
+                os_name = "linux"
                 
-            os_name = "windows" if os.name == 'nt' else "linux"
             filename = f"Xray-{os_name}-{arch_str}.zip"
             url = f"https://github.com/XTLS/Xray-core/releases/latest/download/{filename}"
             
@@ -174,7 +183,7 @@ class XrayInstallerService:
                 [XRAY_EXECUTABLE, "-version"],
                 capture_output=True,
                 text=True,
-                creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+                creationflags=PlatformUtils.get_subprocess_flags()
             )
             
             if result.returncode == 0:

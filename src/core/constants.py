@@ -3,6 +3,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+from src.utils.platform_utils import PlatformUtils
+
 # Load environment variables from .env file
 from dotenv import load_dotenv
 
@@ -17,9 +19,12 @@ SINGBOX_VERSION = os.getenv("SINGBOX_VERSION", "1.10.6")
 ARCH = os.getenv("ARCH", "64")
 
 # Temporary directory (cross-platform)
-if os.name == 'nt':
+if PlatformUtils.get_platform() == "windows":
     # Windows: Use system temp directory
     TMPDIR = os.path.join(tempfile.gettempdir(), "xenray")
+elif PlatformUtils.get_platform() == "macos":
+    # macOS: Use system temp or user cache directory
+    TMPDIR = os.path.join(os.path.expanduser("~/Library/Caches"), "xenray")
 else:
     # Linux: Use /tmp or TMPDIR env var
     TMPDIR = os.environ.get("TMPDIR", "/tmp/xenray")
@@ -44,35 +49,27 @@ SOCKET_PATH = os.path.join(TMPDIR, "xenray.sock")
 MAX_RECENT_FILES = 20
 
 # AppImage directory (Legacy support) / Root directory
-if getattr(sys, 'frozen', False):
-    # If compiled, use the directory of the executable
-    APPDIR = os.path.dirname(sys.executable)
-else:
-    # If running as script, go up 3 levels from src/core/constants.py
-    APPDIR = os.environ.get("APPDIR", os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+APPDIR = PlatformUtils.get_app_dir()
 
 # Local directories
-# Local directories
-BIN_DIR = os.path.join(APPDIR, "bin")
 ASSETS_DIR = os.path.join(APPDIR, "assets")
 
-# Xray executable path
-if os.name == 'nt':
-    XRAY_EXECUTABLE = os.path.join(BIN_DIR, "xray.exe")
-else:
-    XRAY_EXECUTABLE = os.path.join(BIN_DIR, "xray")
+# Binary directory - platform specific
+# For development: bin/darwin-arm64/, bin/windows-x86_64/, etc.
+# For releases: bin/ (flat structure with platform-specific builds)
+BIN_DIR_PLATFORM = PlatformUtils.get_platform_bin_dir(os.path.join(APPDIR, "bin"))
+BIN_DIR_FLAT = os.path.join(APPDIR, "bin")
 
-# Tun2Proxy executable path (Legacy - being replaced by Sing-box)
-if os.name == 'nt':
-    TUN2PROXY_EXECUTABLE = os.path.join(BIN_DIR, "tun2proxy-bin.exe")
+# Use platform-specific directory if it exists, otherwise use flat structure
+if os.path.exists(BIN_DIR_PLATFORM):
+    BIN_DIR = BIN_DIR_PLATFORM
 else:
-    TUN2PROXY_EXECUTABLE = os.path.join(BIN_DIR, "tun2proxy")
+    BIN_DIR = BIN_DIR_FLAT
 
-# Sing-box executable path
-if os.name == 'nt':
-    SINGBOX_EXECUTABLE = os.path.join(BIN_DIR, "sing-box.exe")
-else:
-    SINGBOX_EXECUTABLE = os.path.join(BIN_DIR, "sing-box")
+# Executable paths with platform-specific extensions
+XRAY_EXECUTABLE = os.path.join(BIN_DIR, f"xray{PlatformUtils.get_binary_suffix()}")
+TUN2PROXY_EXECUTABLE = os.path.join(BIN_DIR, f"tun2proxy-bin{PlatformUtils.get_binary_suffix()}")
+SINGBOX_EXECUTABLE = os.path.join(BIN_DIR, f"sing-box{PlatformUtils.get_binary_suffix()}")
 
 # Sing-box config and log paths
 SINGBOX_CONFIG_PATH = os.path.join(TMPDIR, "singbox_config.json")
