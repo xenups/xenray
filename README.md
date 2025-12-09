@@ -1,142 +1,98 @@
 # XenRay
 
-A modern, lightweight Xray client for Windows and Linux/macOS, focusing on simplicity and enhancing VPN experience.
+A modern, lightweight Xray GUI client for Windows and Linux, focusing on simplicity and enhancing VPN experience.
+
+![License](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)
+![Python](https://img.shields.io/badge/python-3.10+-green.svg)
+![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)
 
 ## Features
 
-### Core Functionality
-- ✅ Clean DDD Architecture
-- ✅ Cross-platform (Windows, Linux, macOS) with Flet
-- ✅ Proxy and VPN modes
-- ✅ Real-time log viewing
-- ✅ Recent files management
-- ✅ Server profile management
-- ✅ Connection status monitoring
-
-### UI/UX Features
-- ✅ **Animated Splash Screen** - Beautiful purple pulsing circle animation with:
-  - Rotating outer ring with dynamic opacity
-  - Three-layer concentric circles with phase-offset breathing animation
-  - Dynamic radial gradients and shadow blur effects (50-80px)
-  - Icon pulsing animation (size and opacity)
-  - Text fade animations
-  - Smooth 25 FPS animations using sine wave calculations
-- ✅ Modern, responsive UI with dark/light theme support
-- ✅ Pulsing connection button with amber glow during connection
-- ✅ Real-time status display with ping measurement
-- ✅ Server card with country flags
-- ✅ Drawer-based navigation for logs and settings
+- 🔐 **Dual Mode** - VPN (system-wide tun) and Proxy (SOCKS5) modes
+- 🌍 **Server Management** - Import servers via VLESS links or subscription URLs
+- 📊 **Latency Testing** - Batch test all servers with visual feedback
+- 🎌 **Country Flags** - Auto-detect server location with GeoIP
+- 🎨 **Modern UI** - Dark/light themes with smooth animations
+- 📝 **Real-time Logs** - Monitor connection status and debug issues
+- ⚡ **Auto Updates** - One-click Xray core updates
 
 ## Installation
 
 ### Using Poetry (Recommended)
 
 ```bash
-# Install Poetry if you haven't
+# Install Poetry
 curl -sSL https://install.python-poetry.org | python3 -
 
-# Install dependencies
+# Clone and install
+git clone https://github.com/xenups/xenray.git
+cd xenray
 poetry install
 
-# Run the application
-poetry run gorzray
+# Run
+poetry run xenray
 ```
 
 ### Using pip
 
 ```bash
-# Install dependencies
-pip install flet requests psutil
-
-# Run the application
+pip install flet-desktop requests psutil loguru pystray Pillow
 python src/main.py
 ```
 
 ## Usage
 
-### Basic Usage
-
 ```bash
-# Run with Poetry
-poetry run gorzray
+# Standard run
+poetry run xenray
 
-# Or directly
-python src/main.py
+# Linux: Install polkit for passwordless VPN mode
+poetry run xenray --install-policy
 ```
 
-### Install Polkit Files (Linux only, for passwordless VPN)
-
-```bash
-poetry run gorzray --install-policy
-```
+### Quick Start
+1. Open XenRay
+2. Click the server list icon (bottom card)
+3. Click **+** to add a server (paste VLESS link) or subscription URL
+4. Select a server and click the power button to connect
 
 ## Architecture
 
-The application follows a clean, modular architecture:
-
 ```
 src/
-├── core/                # Core business logic
-│   ├── config_manager.py    # Profile and configuration management
-│   ├── connection_manager.py # Connection state and lifecycle
-│   ├── constants.py         # Application constants
-│   ├── logger.py            # Logging utilities
-│   ├── settings.py          # Settings management
-│   └── types.py             # Type definitions
-├── services/            # External service integrations
-│   ├── dependency_manager.py # Dependency installation
-│   ├── geo_installer.py     # GeoIP/GeoSite data management
-│   ├── singbox_service.py   # Sing-box integration
-│   ├── xray_installer.py    # Xray installation
-│   └── xray_service.py      # Xray process management
-├── ui/                  # Flet UI layer
-│   ├── components/      # Reusable UI components
-│   │   ├── app_container.py      # Main app container
-│   │   ├── connection_button.py  # Animated connection button
-│   │   ├── header.py             # App header with theme toggle
-│   │   ├── logs_drawer.py        # Logs navigation drawer
-│   │   ├── server_card.py        # Server profile card
-│   │   ├── settings_drawer.py    # Settings navigation drawer
-│   │   ├── splash_overlay.py     # Animated splash screen ⭐
-│   │   └── status_display.py     # Connection status display
-│   ├── log_viewer.py    # Log viewing component
-│   ├── main_window.py   # Main window orchestration
-│   └── server_list.py   # Server list component
-├── utils/               # Utility functions
-│   ├── country_flags.py # Country flag emoji mapping
-│   ├── file_utils.py    # File operations
-│   ├── link_parser.py   # V2Ray link parsing
-│   ├── network_interface.py # Network interface management
-│   └── process_utils.py # Process management
-└── main.py              # Application entry point
+├── core/                    # Configuration & connection management
+│   ├── config_manager.py    # Profile/settings persistence
+│   ├── connection_manager.py
+│   └── subscription_manager.py
+│
+├── services/                # External integrations
+│   ├── xray_service.py      # Xray process management
+│   ├── singbox_service.py   # Sing-box (tun) integration
+│   ├── latency_tester.py    # Batch latency testing
+│   ├── geoip_service.py     # Country detection
+│   └── connection_tester.py
+│
+├── ui/
+│   ├── components/          # Reusable UI components
+│   │   ├── server_list_header.py
+│   │   ├── server_list_item.py
+│   │   ├── subscription_list_item.py
+│   │   ├── add_server_dialog.py
+│   │   ├── connection_button.py
+│   │   ├── status_display.py
+│   │   ├── server_card.py
+│   │   ├── settings_drawer.py
+│   │   └── settings_sections.py
+│   ├── server_list.py       # Server list orchestration
+│   └── main_window.py       # Main window
+│
+├── utils/                   # Helpers
+│   ├── link_parser.py       # VLESS/VMess link parsing
+│   ├── process_utils.py
+│   └── network_interface.py
+│
+└── main.py                  # Entry point
 ```
-
-### Splash Screen Implementation
-
-The splash screen (`src/ui/components/splash_overlay.py`) features a sophisticated multi-threaded animation system:
-
-- **Rotating Ring**: Continuous 360° rotation with pulsing border opacity
-- **Breathing Circles**: Three concentric circles (outer: 200-240px, middle: 150-180px, inner: 110-130px) with phase-offset sine wave animations
-- **Dynamic Effects**: Real-time gradient opacity and shadow blur adjustments (50-80px blur radius)
-- **Icon Animation**: Size pulsing (55-60px) with opacity fade
-- **Text Effects**: Subtle fade animations for title and subtitle
-- **Performance**: Optimized 25 FPS animations using separate threads for each animation layer
-- **Color Scheme**: Purple palette (#8b5cf6, #6d28d9, #4c1d95, #a78bfa, #c4b5fd)
-
-## Technical Details
-
-### Animation System
-- **Multi-threaded**: Each animation layer runs in its own daemon thread
-- **Sine Wave Based**: Natural breathing effect using `sin()` calculations
-- **Phase Offset**: Different animation phases create layered visual depth
-- **Real-time Updates**: Direct page updates for smooth 25 FPS rendering
-- **Resource Management**: Automatic cleanup when splash fades out
-
-### UI Components
-- **Connection Button**: State-aware with pulsing amber glow during connection
-- **Status Display**: Real-time connection status with ping measurement
-- **Server Card**: Displays selected server with country flag and details
-- **Theme Support**: Full dark/light mode with smooth transitions
 
 ## Development
 
@@ -144,26 +100,36 @@ The splash screen (`src/ui/components/splash_overlay.py`) features a sophisticat
 # Install dev dependencies
 poetry install --with dev
 
-# Run tests
-poetry run pytest
-
 # Format code
 poetry run black src/
 
 # Type checking
 poetry run mypy src/
+
+# Run tests
+poetry run pytest
 ```
 
 ### Building
 
 ```bash
-# Build with PyInstaller
+# Build standalone executable
 python build_pyinstaller.py
 
-# Or use the spec file directly
+# Or directly with PyInstaller
 pyinstaller XenRay.spec
 ```
 
+## Requirements
+
+- Python 3.10+
+- Windows 10+ or Linux
+- Admin/root for VPN mode (uses tun interface)
+
 ## License
 
-AGPL-3.0-or-later
+[AGPL-3.0-or-later](LICENSE)
+
+---
+
+Made with ❤️ by [Xenups](https://github.com/xenups)
