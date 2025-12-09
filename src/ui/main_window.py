@@ -486,7 +486,7 @@ class MainWindow:
                 
                 if success:
                      # FORCE UPDATE UI
-                     print(f"DEBUG: Monitoring loop success. Country: {country_data}")
+                     logger.debug(f"Monitoring loop success. Country: {country_data}")
                      if country_data:
                          profile.update(country_data)
                          self._config_manager.update_profile(profile.get("id"), country_data)
@@ -498,11 +498,6 @@ class MainWindow:
                      self._ui_call(lambda: self._server_card.update_server(profile))
                      
                      if country_data and country_data.get("country_code"):
-                         self._ui_call(
-                             self._server_list.update_item_icon, 
-                             profile.get("id"), 
-                             country_data.get("country_code")
-                         )
                          self._ui_call(
                              self._server_list.update_item_icon, 
                              profile.get("id"), 

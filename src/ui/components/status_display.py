@@ -94,6 +94,14 @@ class StatusDisplay(ft.Container):
         self._msg_text.color = ft.Colors.BLUE_400
         self.update()
 
+    def set_status(self, msg: str):
+        """Updates status message (used for mode changes etc)."""
+        self._stop_dots_animation()
+        self._dots_text.visible = False
+        self._msg_text.value = msg
+        self._msg_text.color = ft.Colors.GREY_500
+        self.update()
+
     def set_initializing(self):
         self._stop_dots_animation()
         self._msg_text.value = "Initializing"
