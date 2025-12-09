@@ -1,0 +1,120 @@
+name: Release Build
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'  # Trigger on version tags like v1.0.0
+
+permissions:
+  contents: write  # Required to create releases
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      
+      - name: Install Poetry
+        run: |
+          (Invoke-WebRequest -Uri https://install.python-poetry.org -UseBasicParsing).Content | python -
+          echo "$env:APPDATA\Python\Scripts" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      
+      - name: Configure Poetry
+        run: poetry config virtualenvs.in-project true
+      
+      - name: Install dependencies
+        run: poetry install --no-interaction
+      
+      - name: Create .env file
+        run: |
+          Copy-Item .env.example .env
+          # Extract version from tag (v1.0.0 -> 1.0.0)
+          $version = "${{ github.ref_name }}".TrimStart('v')
+          (Get-Content .env) -replace 'APP_VERSION=.*', "APP_VERSION=$version" | Set-Content .env
+      
+      - name: Download Xray and Singbox binaries
+        run: poetry run python scripts/download_binaries.py --arch 64
+      
+      - name: Build city database
+        run: poetry run python scripts/build_city_database.py
+      
+      - name: Build executable with PyInstaller
+        run: poetry run python build_pyinstaller.py
+      
+      - name: Verify build outputs
+        run: |
+          if (!(Test-Path "dist/XenRay.exe")) {
+            Write-Error "XenRay.exe not found!"
+            exit 1
+          }
+          Write-Host "Build verification passed!"
+      
+      - name: Create distributable package
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart('v')
+          $zipName = "XenRay-v$version-windows-x64.zip"
+          
+          # Create package directory
+          New-Item -ItemType Directory -Force -Path "package"
+          
+          # Copy exe
+          Copy-Item "dist/XenRay.exe" "package/"
+          
+          # Copy assets
+          Copy-Item -Recurse "dist/assets" "package/"
+          
+          # Copy bin
+          Copy-Item -Recurse "dist/bin" "package/"
+          
+          # Copy .env.example for users
+          Copy-Item ".env.example" "package/"
+          
+          # Create zip
+          Compress-Archive -Path "package/*" -DestinationPath $zipName
+          
+          Write-Host "Created package: $zipName"
+          echo "ZIP_NAME=$zipName" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ${{ env.ZIP_NAME }}
+          body: |
+            ## XenRay ${{ github.ref_name }}
+            
+            ### What's New
+            - See CHANGELOG.md for details
+            
+            ### Installation
+            1. Download `${{ env.ZIP_NAME }}`
+            2. Extract to a folder
+            3. Copy `.env.example` to `.env` (if needed)
+            4. Run `XenRay.exe`
+            
+            ### Requirements
+            - Windows 7 or higher
+            - 64-bit architecture
+            
+            ### Included
+            - XenRay GUI Application
+            - Xray Core ${{ env.XRAY_VERSION }}
+            - Singbox ${{ env.SINGBOX_VERSION }}
+            - Multilingual support (EN, FA, RU, ZH)
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: xenray-build
+          path: package/
+          retention-days: 7

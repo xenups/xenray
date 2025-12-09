@@ -222,3 +222,9 @@ bin/wintun.dll
 bin/xray_no_window.ps1
 bin/xray_no_window.vbs
 bin/xray.exe
+bin/sing-box.exe
+
+# Temporary build/download directories
+temp_downloads/
+temp_geonames/
+package/

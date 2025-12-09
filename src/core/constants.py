@@ -1,6 +1,20 @@
 import os
 import sys
 import tempfile
+from pathlib import Path
+
+# Load environment variables from .env file
+from dotenv import load_dotenv
+
+# Load .env from project root
+_project_root = Path(__file__).parent.parent.parent
+load_dotenv(_project_root / ".env")
+
+# Application version from environment
+APP_VERSION = os.getenv("APP_VERSION", "0.0.1")
+XRAY_VERSION = os.getenv("XRAY_VERSION", "1.8.24")
+SINGBOX_VERSION = os.getenv("SINGBOX_VERSION", "1.10.6")
+ARCH = os.getenv("ARCH", "64")
 
 # Temporary directory (cross-platform)
 if os.name == 'nt':

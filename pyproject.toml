@@ -20,6 +20,7 @@ nuitka = "^2.8.9"
 pycountry = "^24.6.1"
 msgpack = "^1.1.2"
 zstandard = "^0.25.0"
+python-dotenv = "^1.2.1"
 
 
 [tool.poetry.group.dev.dependencies]
