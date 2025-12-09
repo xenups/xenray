@@ -256,6 +256,28 @@ class ConfigManager:
         if not _atomic_write_json(profiles_path, profiles):
             logger.error("Failed to save profile")
 
+    def update_profile(self, profile_id: str, updates: dict) -> bool:
+        """Update an existing profile with new data."""
+        if not profile_id:
+            return False
+            
+        profiles = self.load_profiles()
+        updated = False
+        
+        for p in profiles:
+            if p.get("id") == profile_id:
+                p.update(updates)
+                updated = True
+                break
+        
+        if updated:
+            profiles_path = os.path.join(self._config_dir, "profiles.json")
+            if not _atomic_write_json(profiles_path, profiles):
+                logger.error("Failed to save updated profile")
+                return False
+            return True
+        return False
+
     def delete_profile(self, profile_id: str) -> None:
         """Delete a profile by ID."""
         if not profile_id or not isinstance(profile_id, str):

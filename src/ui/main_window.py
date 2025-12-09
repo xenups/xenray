@@ -213,7 +213,11 @@ class MainWindow:
         # Local import to avoid circular dependency
         from src.ui.server_list import ServerList
 
-        self._server_list = ServerList(self._config_manager, self._on_server_selected)
+        self._server_list = ServerList(
+            self._config_manager, 
+            self._on_server_selected,
+            on_profile_updated=self._on_profile_updated
+        )
         self._server_list.set_page(self._page)
 
         self._heartbeat = ft.Container(
@@ -246,6 +250,7 @@ class MainWindow:
                 if profile.get("id") == last_profile_id:
                     self._selected_profile = profile
                     self._server_card.update_server(profile)
+                    self._status_display.update_country(profile)
                     break
 
     # -----------------------------
@@ -331,6 +336,8 @@ class MainWindow:
             self._selected_profile = profile
             self._server_card.update_server(profile)
             self._server_sheet.open = False
+            # Immediately update status display with country info (persistent)
+            self._status_display.update_country(profile)
             self._page.update()  # Update page to close sheet
 
         self._ui_call(_apply)
@@ -344,12 +351,27 @@ class MainWindow:
         if not self._is_running and not self._connecting:
             self._ui_call(self._status_display.set_pre_connection_ping, "...", False)
             
-            def on_result(success, result_str):
+            def on_result(success, result_str, country_data=None):
                  if not self._is_running and not self._connecting:
                      self._ui_call(self._status_display.set_pre_connection_ping, result_str, success)
+                     # Update country if found
+                     if country_data and profile:
+                         profile.update(country_data)
+                         self._config_manager.update_profile(profile.get("id"), country_data)
+                         # Update display
+                         self._ui_call(lambda: self._status_display.update_country(country_data))
+                         self._ui_call(lambda: self._server_card.update_server(profile))
+                         
+                         if country_data.get("country_code"):
+                              self._ui_call(
+                                  self._server_list.update_item_icon, 
+                                  profile.get("id"), 
+                                  country_data.get("country_code")
+                              )
 
             from src.services.connection_tester import ConnectionTester
-            ConnectionTester.test_connection(profile.get("config", {}), on_result)
+            fetch_flag = not profile.get("country_code")
+            ConnectionTester.test_connection(profile.get("config", {}), on_result, fetch_country=fetch_flag)
 
         if self._is_running:
             # If already connected, disconnect first, then reconnect with animation
@@ -426,8 +448,11 @@ class MainWindow:
                 self._is_running = True
                 self._connecting = False
 
-                self._ui_call(self._status_display.set_connected, True)
+                self._ui_call(self._status_display.set_connected, True, country_data=self._selected_profile)
                 self._ui_call(self._connection_button.set_connected)
+
+                # Start Periodic Monitoring (Latency + GeoIP Check)
+                self._start_monitoring_loop()
 
             except Exception as e:
                 logger.error(f"Error in connect_task: {e}")
@@ -435,6 +460,61 @@ class MainWindow:
                 self._ui_call(self._reset_ui_disconnected)
 
         threading.Thread(target=connect_task, daemon=True).start()
+
+    def _start_monitoring_loop(self):
+        """Runs periodic checks every 60s."""
+        def _loop():
+            # Initial wait for connection stabilize
+            import time
+            time.sleep(5) 
+            
+            while self._is_running:
+                # 1. Check Latency & Fetch Country if missing
+                profile = self._selected_profile
+                if not profile:
+                    break
+                    
+                # Fetch if city/country missing
+                need_fetch = not profile.get("city") or not profile.get("country_code")
+                
+                # We use the ConnectionTester to do a ping + optionally fetch geoip
+                from src.services.connection_tester import ConnectionTester
+                success, result, country_data = ConnectionTester.test_connection_sync(
+                    profile.get("config", {}), 
+                    fetch_country=need_fetch
+                )
+                
+                if success:
+                     # FORCE UPDATE UI
+                     print(f"DEBUG: Monitoring loop success. Country: {country_data}")
+                     if country_data:
+                         profile.update(country_data)
+                         self._config_manager.update_profile(profile.get("id"), country_data)
+                     
+                     # Visual Updates (Pass current profile state)
+                     # We use lambda to capture specific values or allow delayed execution,
+                     # but here we want to ensure self._selected_profile is read at call time.
+                     self._ui_call(lambda: self._status_display.update_country(profile))
+                     self._ui_call(lambda: self._server_card.update_server(profile))
+                     
+                     if country_data and country_data.get("country_code"):
+                         self._ui_call(
+                             self._server_list.update_item_icon, 
+                             profile.get("id"), 
+                             country_data.get("country_code")
+                         )
+                         self._ui_call(
+                             self._server_list.update_item_icon, 
+                             profile.get("id"), 
+                             country_data.get("country_code")
+                         )
+
+                # Wait 60s
+                for _ in range(60):
+                    if not self._is_running: return
+                    time.sleep(1)
+        
+        threading.Thread(target=_loop, daemon=True).start()
 
     def _disconnect(self):
         if not self._is_running:
@@ -461,15 +541,28 @@ class MainWindow:
             self._connection_button.set_disconnected()
             self._status_display.set_disconnected(self._current_mode)
             
+            # Ensure country info is visible/refreshed
+            if self._selected_profile:
+                self._status_display.update_country(self._selected_profile)
+            else:
+                self._status_display.update_country(None)
+            
             # Trigger immediate latency check
             if self._selected_profile:
                  self._ui_call(self._status_display.set_pre_connection_ping, "...", False)
-                 def on_result(success, result_str):
+                 
+                 def on_result(success, result_str, country_data=None):
                      if not self._is_running and not self._connecting:
                          self._ui_call(self._status_display.set_pre_connection_ping, result_str, success)
+                         # Update country if found
+                         if country_data and self._selected_profile:
+                             self._selected_profile.update(country_data)
+                             self._config_manager.update_profile(self._selected_profile.get("id"), country_data)
+                             self._ui_call(self._status_display.update_country, country_data)
 
                  from src.services.connection_tester import ConnectionTester
-                 ConnectionTester.test_connection(self._selected_profile.get("config", {}), on_result)
+                 fetch_flag = not self._selected_profile.get("country_code")
+                 ConnectionTester.test_connection(self._selected_profile.get("config", {}), on_result, fetch_country=fetch_flag)
 
         except Exception:
             pass
@@ -536,6 +629,20 @@ class MainWindow:
                 self._ui_call(lambda: self._page.close(dialog))
 
         threading.Thread(target=install_task, daemon=True).start()
+        
+    def _on_profile_updated(self, updated_profile: dict):
+        """Called when ServerList updates a profile (e.g. latency test results)."""
+        if not self._selected_profile:
+            return
+            
+        # If the updated profile is the currently selected one, refresh the UI
+        if updated_profile.get("id") == self._selected_profile.get("id"):
+            # Update local reference
+            self._selected_profile.update(updated_profile)
+            # Update Status Display
+            self._ui_call(lambda: self._status_display.update_country(updated_profile))
+            # Update Server Card
+            self._ui_call(lambda: self._server_card.update_server(self._selected_profile))
 
     def _on_mode_changed(self, mode: ConnectionMode):
         from src.utils.process_utils import ProcessUtils
@@ -601,18 +708,23 @@ class MainWindow:
                     
                     config = self._selected_profile.get("config", {})
                     
-                    def on_result(success, result_str):
+                    def on_result(success, result_str, country_data=None):
                          if not self._is_running and not self._connecting:
                              self._ui_call(self._status_display.set_pre_connection_ping, result_str, success)
+                             # Update country if found
+                             if country_data and self._selected_profile:
+                                 self._selected_profile.update(country_data)
+                                 self._config_manager.update_profile(self._selected_profile.get("id"), country_data)
+                                 self._ui_call(self._status_display.update_country, country_data)
 
                     from src.services.connection_tester import ConnectionTester
-                    ConnectionTester.test_connection(config, on_result)
+                    fetch_flag = not self._selected_profile.get("country_code")
+                    ConnectionTester.test_connection(config, on_result, fetch_country=fetch_flag)
                 
                 # Check every 60s
                 # We check every 1s to be responsive to state changes, but execute test every 60s
                 for _ in range(60): 
                     await asyncio.sleep(1)
-                    if self._is_running or self._connecting: break
 
         self._page.run_task(monitor_latency_loop)
         self._page.run_task(heartbeat_loop)

@@ -13,10 +13,11 @@ from src.services.connection_tester import ConnectionTester
 class ServerList(ft.Container):
     """Thread-safe Server List component for XenRay."""
 
-    def __init__(self, config_manager: ConfigManager, on_server_selected: Callable):
+    def __init__(self, config_manager: ConfigManager, on_server_selected: Callable, on_profile_updated: Callable = None):
         self._config_manager = config_manager
         self._subscription_manager = SubscriptionManager(config_manager)
         self._on_server_selected = on_server_selected
+        self._on_profile_updated = on_profile_updated
         
         # Data
         self._profiles: list[dict] = []
@@ -111,8 +112,13 @@ class ServerList(ft.Container):
             self._config_manager.set_sort_mode(mode)
             # Update Header IMMEDIATELY to reflect checkmark change
             self._update_header()
-            # Reload list to reflect sort
-            self._load_profiles(update_ui=True)
+            
+            # Reload list to reflect sort - handle subscription view differently
+            if self._active_subscription:
+                # Re-enter subscription view with new sort (preserves tests)
+                self._enter_subscription_view(self._active_subscription, preserve_tests=True)
+            else:
+                self._load_profiles(update_ui=True)
 
         return ft.PopupMenuButton(
             icon=ft.Icons.SORT,
@@ -292,9 +298,9 @@ class ServerList(ft.Container):
 
             # Profiles
             for profile in self._profiles:
-                control, ping_label = self._create_server_item(profile)
+                control, ping_label, icon_con = self._create_server_item(profile)
                 new_list_view.controls.append(control)
-                self._available_ping_targets.append((profile, ping_label))
+                self._available_ping_targets.append((profile, ping_label, icon_con))
 
             # Switch view
             def _update():
@@ -324,15 +330,25 @@ class ServerList(ft.Container):
         config = profile.get("config", {})
         address, port = self._extract_address_port(config)
 
-        # Restore from cache if available
+        # Restore from cache if available, otherwise check profile for persisted latency
         pid = profile.get("id")
         last_ping = "..."
         last_ping_color = ft.Colors.GREY_500
         
-        # DEBUG: Ping Persistence Check
-        # If we have a cached value, use it.
+        # First check in-memory cache
         if pid in self._ping_state_cache:
             last_ping, last_ping_color, _ = self._ping_state_cache[pid]
+        # Fallback to persisted latency from profile (for app restart persistence)
+        elif profile.get("last_latency"):
+            last_ping = profile["last_latency"]
+            # Determine color based on stored value
+            latency_val = profile.get("last_latency_val", 999999)
+            if latency_val < 1000:
+                last_ping_color = ft.Colors.GREEN_400
+            elif latency_val < 2000:
+                last_ping_color = ft.Colors.ORANGE_400
+            else:
+                last_ping_color = ft.Colors.RED_400
         
         # Check selection state
         is_selected = (self._selected_profile_id == pid)
@@ -353,9 +369,45 @@ class ServerList(ft.Container):
         # Elements
         
         # Left Side: Icon + Info
+        # ALWAYS use Container so we can update content dynamically
+        # Use Icon instead of emoji for consistent sizing
+        icon_content = ft.Icon(
+            ft.Icons.PUBLIC,
+            size=14,
+            color=ft.Colors.ON_SURFACE_VARIANT
+        )
+        if profile.get("country_code"):
+            icon_content = ft.Image(
+                src=f"/flags/{profile['country_code'].lower()}.svg",
+                width=28,
+                height=28,
+                fit=ft.ImageFit.COVER,
+                gapless_playback=True,
+                filter_quality=ft.FilterQuality.HIGH,
+                border_radius=ft.border_radius.all(14),
+                anti_alias=True
+            )
+        
+        left_icon = ft.Container(
+            content=icon_content,
+            width=28, 
+            height=28, 
+            border_radius=14, 
+            clip_behavior=ft.ClipBehavior.HARD_EDGE,
+            bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE),
+            alignment=ft.alignment.center,
+            tooltip=profile.get("country_name") or profile.get("country_code") or "",
+            shadow=ft.BoxShadow(
+                spread_radius=0,
+                blur_radius=3,
+                color=ft.Colors.with_opacity(0.15, ft.Colors.BLACK),
+                offset=ft.Offset(0, 1),
+            ),
+        )
+
         left_content = ft.Row(
             [
-                ft.Text("🌐", size=24),
+                left_icon, # Renamed to icon_container below if needed, but easier to just use left_icon
                 ft.Column(
                     [
                         ft.Text(
@@ -406,7 +458,7 @@ class ServerList(ft.Container):
             on_click=lambda e, p=profile: self._select_server(p),
             ink=True,
         )
-        return container, ping_label
+        return container, ping_label, left_icon
 
     def _extract_address_port(self, config: dict):
         outbounds = config.get("outbounds", [])
@@ -444,41 +496,145 @@ class ServerList(ft.Container):
             self._page.open(ft.SnackBar(content=ft.Text("Started latency test... 🚀")))
             self._page.update()
 
-        def _run_tests():
-            for profile, label in targets:
-                if self._cancel_testing:
-                    break # Abort if canceled
-                
-                # Update label to "Testing..."
-                self._ui(lambda: self._update_label(label, "Testing...", ft.Colors.BLUE_400))
-                
-                # Run Connection Test (Synchronous inside this thread)
-                success, result = ConnectionTester.test_connection_sync(profile["config"])
-                
-                # Update UI result
-                color = ft.Colors.GREEN_400 if success else ft.Colors.RED_400
-                self._ui(lambda: self._update_label(label, result, color))
-                
-                # Cache result
-                latency_val = 999999
-                if success and "ms" in result:
-                     try:
-                        latency_val = int(result.replace("ms", ""))
-                     except:
-                        pass
-                
-                # Update Cache
-                pid = profile.get("id")
-                if pid:
-                    self._ping_state_cache[pid] = (result, color, latency_val)
-                
-                # Small delay to prevent CPU spike
-                time.sleep(0.1)
+            def _run_tests():
+                for profile, label, icon_container in targets:
+                    if self._cancel_testing:
+                        break # Abort if canceled
+                    
+                    # Update label to "Testing..."
+                    self._ui(lambda: self._update_label(label, "Testing...", ft.Colors.BLUE_400))
+                    
+                    # Run Connection Test (Synchronous inside this thread)
+                    # fetch_flag = not profile.get("country_code") 
+                    # Always fetch if not present, but maybe force fetch? 
+                    # User says: "while the country flags found and cached it should imediatly update"
+                    # So we should fetch if missing.
+                    fetch_flag = True # Let's be aggressive or checking logic?
+                    if profile.get("country_code"):
+                         fetch_flag = False
+                    
+                    success, result, country_data = ConnectionTester.test_connection_sync(profile["config"], fetch_country=fetch_flag)
+
+                    # Save cached country data (if we got new data)
+                    if success and country_data and profile.get("id"):
+                        profile.update(country_data)
+                        
+                        # Persist to disk - handle both main profiles and subscription profiles
+                        if self._active_subscription:
+                            # We're in subscription view - save the subscription
+                            self._config_manager.save_subscription_data(self._active_subscription)
+                        else:
+                            # Main profile list
+                            self._config_manager.update_profile(profile["id"], country_data)
+
+                        # Notify parent (MainWindow) of update
+                        if self._on_profile_updated:
+                            # Fix closure: capture profile by value
+                            _p = dict(profile)  # copy
+                            self._ui(lambda p=_p: self._on_profile_updated(p))
+                    
+                    # IMMEDIATE UI UPDATE FOR FLAG - do this on ANY success if we have country_code
+                    # (either from new fetch OR from already cached data)
+                    cc = profile.get("country_code")
+                    if success and cc and icon_container:
+                        print(f"DEBUG: Updating flag for {profile.get('name')} to {cc}")
+                        # Capture values NOW to avoid closure bug
+                        _icon = icon_container
+                        _code = cc
+                        _name = profile.get("country_name", cc)
+                        
+                        def _update_icon(ctrl, code, name):
+                            # Skip if control is no longer attached to page
+                            if not ctrl.page:
+                                return
+                            ctrl.content = ft.Image(
+                                src=f"/flags/{code.lower()}.svg",
+                                width=28,
+                                height=28,
+                                fit=ft.ImageFit.COVER,
+                                gapless_playback=True,
+                                filter_quality=ft.FilterQuality.HIGH,
+                                border_radius=ft.border_radius.all(14),
+                                anti_alias=True
+                            )
+                            ctrl.tooltip = name
+                            ctrl.update()
+                            # Force page refresh
+                            if self._page:
+                                self._page.update()
+                        
+                        # Use default args to capture current values
+                        self._ui(lambda ic=_icon, cc=_code, cn=_name: _update_icon(ic, cc, cn))
+                    
+                    # Update UI result - fix closure bug
+                    _lbl = label
+                    _res = result
+                    
+                    # Cache result and determine color based on latency
+                    latency_val = 999999
+                    if success and "ms" in result:
+                         try:
+                            latency_val = int(result.replace("ms", ""))
+                         except:
+                            pass
+                    
+                    # Color based on latency value
+                    if not success:
+                        _col = ft.Colors.RED_400
+                    elif latency_val < 1000:
+                        _col = ft.Colors.GREEN_400
+                    elif latency_val < 2000:
+                        _col = ft.Colors.ORANGE_400
+                    else:
+                        _col = ft.Colors.RED_400
+                    
+                    self._ui(lambda l=_lbl, r=_res, c=_col: self._update_label(l, r, c))
+                    
+                    # Update Cache
+                    pid = profile.get("id")
+                    if pid:
+                        self._ping_state_cache[pid] = (result, _col, latency_val)
+                        
+                        # Persist latency to profile for next app launch
+                        profile["last_latency"] = result if success else None
+                        profile["last_latency_val"] = latency_val if success else None
+                        
+                        # Save to disk
+                        if self._active_subscription:
+                            self._config_manager.save_subscription_data(self._active_subscription)
+                        else:
+                            self._config_manager.update_profile(pid, {
+                                "last_latency": profile.get("last_latency"),
+                                "last_latency_val": profile.get("last_latency_val")
+                            })
+                    
+                    # Small delay to prevent CPU spike
+                    time.sleep(0.1)
             
             self._is_testing = False
             self._ui(lambda: self._page.update() if self._page else None)
 
         threading.Thread(target=_run_tests, daemon=True).start()
+
+    def update_item_icon(self, profile_id: str, country_code: str):
+        """Updates the icon for a specific profile in the list (called from MainWindow)."""
+        if not hasattr(self, "_available_ping_targets"):
+            return
+
+        for profile, label, icon_container in self._available_ping_targets:
+            if profile.get("id") == profile_id and icon_container:
+                # Update Icon
+                icon_container.content = ft.Image(
+                    src=f"/flags/{country_code.lower()}.svg", 
+                    fit=ft.ImageFit.COVER,
+                    gapless_playback=True,
+                    filter_quality=ft.FilterQuality.HIGH
+                )
+                icon_container.tooltip = profile.get("country_name", country_code)
+                icon_container.update()
+                # Update profile ref as well
+                profile["country_code"] = country_code
+                break
 
     def _update_label(self, label: ft.Text, text: str, color):
         label.value = text
@@ -510,9 +666,11 @@ class ServerList(ft.Container):
             margin=ft.margin.only(bottom=2),
         )
 
-    def _enter_subscription_view(self, sub: dict):
+    def _enter_subscription_view(self, sub: dict, preserve_tests: bool = False):
         # Cancel any previous tests to prevent cross-view pollution
-        self._cancel_testing = True
+        # But not when just re-sorting (preserve_tests=True)
+        if not preserve_tests:
+            self._cancel_testing = True
         
         # State Tracking
         self._active_subscription = sub
@@ -528,9 +686,9 @@ class ServerList(ft.Container):
         self._available_ping_targets = []
         
         for profile in profiles:
-            control, ping_label = self._create_server_item(profile, read_only=True)
+            control, ping_label, icon_con = self._create_server_item(profile, read_only=True)
             sub_list_view.controls.append(control)
-            self._available_ping_targets.append((profile, ping_label))
+            self._available_ping_targets.append((profile, ping_label, icon_con))
 
         self._current_list_view = sub_list_view
         self._body_switcher.content = sub_list_view

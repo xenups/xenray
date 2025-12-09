@@ -85,10 +85,11 @@ class ConnectionTester:
             return ""
 
     @staticmethod
-    def test_connection_sync(profile_config: dict) -> Tuple[bool, str]:
+    def test_connection_sync(profile_config: dict, fetch_country: bool = False) -> Tuple[bool, str, Optional[dict]]:
         """
         Test connection for a profile synchronously.
-        Returns (success, latency_ms_str).
+        Returns (success, latency_ms_str, country_data).
+        country_data is {'code': 'XX', 'name': 'Country'} or None.
         This must be run in a thread.
         """
         # Find the first valid outbound (vmess/vless/etc)
@@ -106,14 +107,14 @@ class ConnectionTester:
             if "protocol" in profile_config:
                 target_outbound = profile_config
             else:
-                return False, "Invalid Config"
+                return False, "Invalid Config", None
 
         # 1. Prepare environment
         port = ConnectionTester._find_free_port()
         config_path = ConnectionTester._create_temp_config(port, target_outbound)
         
         if not config_path:
-            return False, "Config Error"
+            return False, "Config Error", None
 
         process = None
         try:
@@ -138,7 +139,7 @@ class ConnectionTester:
             time.sleep(0.5)
             
             if process.poll() is not None:
-                return False, "Core Failed"
+                return False, "Core Failed", None
 
             # 3. Test Connection
             proxies = {
@@ -146,7 +147,7 @@ class ConnectionTester:
                 "https": f"http://127.0.0.1:{port}",
             }
             
-            # Target URL: Use something reliable and fast (Cloudflare trace or Google 204)
+            # Target URL: Use something reliable and fast
             target_url = "http://cp.cloudflare.com/"
             
             start_time = time.time()
@@ -158,19 +159,37 @@ class ConnectionTester:
             
             latency = int((time.time() - start_time) * 1000)
             
-            if response.status_code == 204 or (200 <= response.status_code < 300):
-                 # "Real Delay" often adds ~100ms overhead for process startup/proxying
-                 # but it's accurate for "is it working".
-                return True, f"{latency}ms"
-            else:
-                return False, f"HTTP {response.status_code}"
+            country_data = None
+            # ANY response means connection works! Even 5xx errors mean proxy is functional.
+            # The key is that we got a response through the proxy tunnel.
+            if response.status_code:  # Any response code = success
+                 if fetch_country:
+                     try:
+                         # Use ip-api via the same proxy
+                         geo_resp = requests.get(
+                             "http://ip-api.com/json", 
+                             proxies=proxies, 
+                             timeout=3
+                         )
+                         if geo_resp.status_code == 200:
+                             gdata = geo_resp.json()
+                             if gdata.get("status") == "success":
+                                 country_data = {
+                                     "country_code": gdata.get("countryCode"),
+                                     "country_name": gdata.get("country"),
+                                     "city": gdata.get("city")
+                                 }
+                     except:
+                         pass # Fail silently for geoip
+
+                 return True, f"{latency}ms", country_data 
 
         except requests.exceptions.Timeout:
-            return False, "Timeout"
+            return False, "Timeout", None
         except requests.exceptions.RequestException:
-            return False, "Conn Error"
+            return False, "Conn Error", None
         except Exception as e:
-            return False, "Error"
+            return False, "Error", None
         finally:
             # 4. Cleanup
             if process:
@@ -187,11 +206,11 @@ class ConnectionTester:
                     pass
 
     @staticmethod
-    def test_connection(profile_config: dict, callback):
-        """Run test in a dedicated thread and invoke callback(success, result_str)."""
+    def test_connection(profile_config: dict, callback, fetch_country: bool = False):
+        """Run test in a dedicated thread and invoke callback(success, result_str, country_data)."""
         def _wrapper():
-            success, result = ConnectionTester.test_connection_sync(profile_config)
+            success, result, country_data = ConnectionTester.test_connection_sync(profile_config, fetch_country)
             if callback:
-                callback(success, result)
+                callback(success, result, country_data)
         
         threading.Thread(target=_wrapper, daemon=True).start()

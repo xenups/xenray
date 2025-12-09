@@ -9,131 +9,177 @@ import flet as ft
 
 
 class StatusDisplay(ft.Container):
-    """Displays connection status - step text during connecting, ping after connected."""
+    """
+    Displays the current connection status and country information.
+    Layout: Stack( Center(TextColumn), Left(Flag) )
+    """
 
     def __init__(self):
+        super().__init__()
+        
+        # --- Controls ---
+        
+        # 1. Country/City Name
+        self._country_text = ft.Text(
+            "N/A",
+            size=16,
+            weight=ft.FontWeight.BOLD,
+            color=ft.Colors.ON_SURFACE,
+            text_align=ft.TextAlign.CENTER
+        )
+
+        # 2. Status Text
         self._msg_text = ft.Text(
-            "",
-            size=14,
-            color=ft.Colors.ON_SURFACE_VARIANT,
-            text_align=ft.TextAlign.RIGHT,
-            weight=ft.FontWeight.W_500,
+            "Disconnected",
+            size=12,
+            color=ft.Colors.GREY_500,
+            text_align=ft.TextAlign.CENTER
         )
         self._dots_text = ft.Text(
-            "",
-            size=14,
-            color=ft.Colors.ON_SURFACE_VARIANT,
-            text_align=ft.TextAlign.LEFT,
-            weight=ft.FontWeight.W_500,
-            width=20, # Fixed width for dots area
+            ".",
+            size=12,
+            color=ft.Colors.GREY_500,
             visible=False,
+            width=20 
         )
         
-        # Use Row to keep message static while dots animate
-        self._content_row = ft.Row(
+        # Status Row (Msg + Dots)
+        self._status_row = ft.Row(
             [self._msg_text, self._dots_text],
             alignment=ft.MainAxisAlignment.CENTER,
             spacing=0,
-            tight=True,
+            tight=True
         )
 
-        super().__init__(
-            content=self._content_row,
-            padding=5,
+        # --- Main Layout (Centered Column) ---
+        self._text_column = ft.Column(
+            [
+                self._country_text,
+                self._status_row
+            ],
+            alignment=ft.MainAxisAlignment.CENTER,
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            spacing=2
+        )
+        
+        self.content = ft.Container(
+            content=self._text_column,
+            padding=ft.padding.symmetric(horizontal=10),
+            alignment=ft.alignment.center,
+            width=320 
         )
 
-    def set_status(self, message: str, color=None):
-        """Set custom status message."""
-        self._msg_text.value = message
-        self._dots_text.value = "" # Clear dots
-        if color:
-            self._msg_text.color = color
+        self._dots_timer = None
+        self._dots_count = 0
+
+    def update_country(self, country_data: dict = None):
+        """
+        Updates the country/city information.
+        Persistent: Does NOT reset on disconnect.
+        """
+        c_name = "N/A"
+        
+        if country_data:
+            c_name = country_data.get("country_name") or country_data.get("name") or "Unknown"
+            city = country_data.get("city")
+            if city:
+                c_name = f"{c_name}, {city}"
+
+        self._country_text.value = c_name
         self.update()
 
-    def set_connecting(self, step: str = "Connecting..."):
-        """Show connecting step text."""
-        self._msg_text.value = step
-        self._dots_text.value = ""
-        self._msg_text.color = "#fbbf24"
-        self.update()
-
-    def set_step(self, step: str):
-        """Update the step text during connection."""
-        self._msg_text.value = step
+    def set_step(self, msg: str):
+        """Updates just the status message text."""
+        self._msg_text.value = msg
+        self._msg_text.color = ft.Colors.BLUE_400
         self.update()
 
     def set_initializing(self):
-        """Show initializing status with animation."""
-        self._msg_text.color = "#fbbf24" # Amber
-        self._dots_text.color = "#fbbf24"
-        self._current_msg_base = "Initializing VPN"
-        
+        self._stop_dots_animation()
+        self._msg_text.value = "Initializing"
+        self._msg_text.color = ft.Colors.BLUE_400
         self._dots_text.visible = True
+        self._start_dots_animation()
+        self.update()
+
+    def set_connecting(self):
+        self._stop_dots_animation()
+        self._msg_text.value = "Connecting"
+        self._msg_text.color = ft.Colors.BLUE_400
+        self._dots_text.visible = True
+        self._start_dots_animation()
+        self.update()
+
+    def set_connected(self, is_vpn: bool=True, country_data: dict = None):
+        """Sets status to Connected."""
+        self._stop_dots_animation()
+        self._msg_text.value = "Verifying..."
+        self._msg_text.color = ft.Colors.GREEN_400
+        self._dots_text.visible = True
+        self._start_dots_animation()
         
-        # Start animation if not running
-        if not hasattr(self, "_animation_running") or not self._animation_running:
-             self._animation_running = True
-             threading.Thread(target=self._animate_dots, daemon=True).start()
-        self.update()
-
-    def set_connected(self, mode):
-        """Show connected status only."""
-        self._animation_running = False # Stop dots
-        self._msg_text.value = "Connected"
-        self._dots_text.value = ""
-        self._dots_text.visible = False
-        self._msg_text.color = "#8b5cf6" # Purple
-        self.update()
-
-    def set_disconnected(self, mode):
-        """Show disconnected status (placeholder for ping)."""
-        self._animation_running = False
-        self._msg_text.value = "..."
-        self._dots_text.value = ""
-        self._dots_text.visible = False
-        self._msg_text.color = ft.Colors.ON_SURFACE_VARIANT
-        self.update()
-
-    def set_pre_connection_ping(self, latency_str: str, success: bool):
-        """Show ping result when disconnected."""
-        if self._msg_text.value == "Initializing VPN" or self._msg_text.value == "Connected":
-            return
-            
-        self._animation_running = False
-        self._dots_text.value = ""
-        self._dots_text.visible = False
-        
-        self._msg_text.value = f"Ping: {latency_str}"
-        if success:
-             # Green if < 1000ms (User request: "good ping means green is under 1000")
-             self._msg_text.color = ft.Colors.GREEN_400 if "ms" in latency_str and int(latency_str.replace("ms","")) < 1000 else ft.Colors.AMBER_400
+        if country_data:
+            self.update_country(country_data)
         else:
-             self._msg_text.color = ft.Colors.RED_400
+            self.update() 
+
+        threading.Thread(target=self._animate_verifying, daemon=True).start()
+
+    def _animate_verifying(self):
+        import time
+        time.sleep(1.5) 
+        self._stop_dots_animation()
+        self._dots_text.visible = False
+        self._msg_text.value = "Connected"
+        self._msg_text.color = ft.Colors.GREEN_400
+        self.update()
+        
+    def set_disconnected(self, mode_name: str=""):
+        self._stop_dots_animation()
+        self._dots_text.visible = False
+        self._msg_text.value = "Disconnected"
+        self._msg_text.color = ft.Colors.GREY_500
         self.update()
 
-    def _animate_dots(self):
-        """Animates dots for the current message base."""
-        dots = 1
+    def set_pre_connection_ping(self, latency_text: str, is_success: bool):
+        """Updates the status text with latency (e.g. 'Ping: 45ms')."""
+        self._stop_dots_animation()
+        self._dots_text.visible = False
         
-        while self._animation_running:
-            if not self.page:
-                break
-                
-            # Update base message if it changed
-            if self._current_msg_base:
-                self._msg_text.value = self._current_msg_base
-                
-            current_dots = "." * dots
-            
-            async def update_ui():
-                if self._animation_running: 
-                    self._dots_text.value = current_dots
-                    self.update()
-            
-            try:
-                self.page.run_task(update_ui)
-            except:
-                pass
-                
-            dots = (dots % 3) + 1
-            time.sleep(0.4)
+        if latency_text == "...":
+             self._msg_text.value = "Checking..."
+             self._msg_text.color = ft.Colors.GREY_500
+        else:
+             prefix = "Ping: " if "ms" in latency_text else ""
+             self._msg_text.value = f"{prefix}{latency_text}"
+             
+             if is_success:
+                  # Simple Green logic
+                  self._msg_text.color = ft.Colors.GREEN_400
+             else:
+                  self._msg_text.color = ft.Colors.RED_400
+                  
+        self.update()
+
+    # --- Animation Helpers ---
+    def _start_dots_animation(self):
+        self._dots_count = 0
+        def _anim():
+            while self._dots_text.visible:
+                self._dots_count = (self._dots_count + 1) % 4
+                self._dots_text.value = "." * self._dots_count
+                try:
+                    self._dots_text.update()
+                except:
+                    break
+                import time
+                time.sleep(0.5)
+        self._dots_timer = threading.Thread(target=_anim, daemon=True)
+        self._dots_timer.start()
+
+    def _stop_dots_animation(self):
+        self._dots_text.visible = False
+        try:
+            self._dots_text.update()
+        except:
+            pass

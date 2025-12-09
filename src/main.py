@@ -83,7 +83,11 @@ def run():
         logger.warning("Another instance is already running. Exiting.")
         return  # Exit run() without starting app
 
-    ft.app(target=main)
+    # Calculate absolute path to assets directory
+    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    assets_path = os.path.join(root_dir, "assets")
+    
+    ft.app(target=main, assets_dir=assets_path)
 
 
 if __name__ == "__main__":

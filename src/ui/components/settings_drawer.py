@@ -33,7 +33,7 @@ class SettingsDrawer(ft.NavigationDrawer):
         # Port configuration field
         self._port_field = ft.TextField(
             value=str(self._config_manager.get_proxy_port()),
-            width=125, 
+            width=100, 
             height=36,
             text_size=14,
             content_padding=8,
@@ -56,7 +56,7 @@ class SettingsDrawer(ft.NavigationDrawer):
         # Country Dropdown
         current_country = self._config_manager.get_routing_country()
         self._country_dropdown = ft.Dropdown(
-            width=125,
+            width=100,
             text_size=12, # Slightly smaller text for better fit
             content_padding=8,
             value=current_country if current_country else "none",
@@ -128,7 +128,7 @@ class SettingsDrawer(ft.NavigationDrawer):
                              ft.Container(
                                 content=ft.Row([
                                     ft.Icon(ft.Icons.PUBLIC, size=20, color=ft.Colors.ON_SURFACE_VARIANT),
-                                    ft.Text("Direct Country", size=12, weight=ft.FontWeight.W_500, width=90),
+                                    ft.Text("Direct Country", size=12, weight=ft.FontWeight.W_500, width=80),
                                     self._country_dropdown
                                 ], spacing=5),
                                 padding=ft.padding.symmetric(horizontal=5, vertical=5),
@@ -138,20 +138,19 @@ class SettingsDrawer(ft.NavigationDrawer):
                              ft.Container(
                                 content=ft.Row([
                                     ft.Icon(ft.Icons.INPUT, size=20, color=ft.Colors.ON_SURFACE_VARIANT),
-                                    ft.Text("SOCKS Port", size=12, weight=ft.FontWeight.W_500, width=90),
+                                    ft.Text("SOCKS Port", size=12, weight=ft.FontWeight.W_500, width=80),
                                     self._port_field,
-                                    ft.IconButton(
-                                        icon=ft.Icons.CHECK,
-                                        icon_size=18,
-                                        width=36, # Better hit area
-                                        height=36,
-                                        icon_color=ft.Colors.GREEN_400,
-                                        tooltip="Save Port",
+                                    ft.ElevatedButton(
+                                        text="Save",
+                                        height=30,
+                                        style=ft.ButtonStyle(
+                                            padding=ft.padding.symmetric(horizontal=10),
+                                            shape=ft.RoundedRectangleBorder(radius=4),
+                                        ),
                                         on_click=self._save_port,
-                                        style=ft.ButtonStyle(padding=0),
                                     ),
                                 ], spacing=5),
-                                padding=ft.padding.from_ltrb(5, 5, 20, 5),
+                                padding=ft.padding.only(left=5, top=5, right=20, bottom=5),
                             ),
                             
                             ft.Divider(height=1, color=ft.Colors.OUTLINE_VARIANT, opacity=0.2),

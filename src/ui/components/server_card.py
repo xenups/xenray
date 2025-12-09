@@ -3,7 +3,28 @@ import flet as ft
 
 class ServerCard(ft.Container):
     def __init__(self, on_click):
-        self._flag_text = ft.Text("🌐", size=28)
+        # Icon Container (Holds Flag or Globe)
+        # Use Icon instead of emoji for consistent sizing
+        self._globe_icon = ft.Icon(
+            ft.Icons.PUBLIC,
+            size=18,
+            color=ft.Colors.ON_SURFACE_VARIANT
+        )
+        self._icon_container = ft.Container(
+            content=self._globe_icon,
+            width=32, height=32,
+            alignment=ft.alignment.center,
+            border_radius=16,
+            clip_behavior=ft.ClipBehavior.HARD_EDGE,
+            bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE),
+            shadow=ft.BoxShadow(
+                spread_radius=0,
+                blur_radius=4,
+                color=ft.Colors.with_opacity(0.2, ft.Colors.BLACK),
+                offset=ft.Offset(0, 1),
+            ),
+        )
+
         self._name_text = ft.Text(
             "No Server Selected",
             color=ft.Colors.GREY_400,
@@ -15,7 +36,7 @@ class ServerCard(ft.Container):
         super().__init__(
             content=ft.Row(
                 [
-                    ft.Text("🌐", size=28),
+                    self._icon_container,
                     ft.Column(
                         [
                             ft.Text(
@@ -52,15 +73,38 @@ class ServerCard(ft.Container):
 
     def update_server(self, profile):
         if not profile:
-            self._flag_text.value = "🌐"
+            self._icon_container.content = self._globe_icon
+            self._icon_container.update()
+            
             self._name_text.value = "No Server Selected"
             self._name_text.color = ft.Colors.ON_SURFACE_VARIANT
             self._address_text.value = ""
         else:
-            self._flag_text.value = "🌐"
+            # Check for flag
+            cc = profile.get("country_code")
+            if cc:
+                # Create fresh image with anti-aliasing and border radius for smooth rendering
+                new_image = ft.Image(
+                    src=f"/flags/{cc.lower()}.svg",
+                    width=32,
+                    height=32,
+                    fit=ft.ImageFit.COVER,
+                    gapless_playback=True,
+                    filter_quality=ft.FilterQuality.HIGH,
+                    border_radius=ft.border_radius.all(16),
+                    anti_alias=True
+                )
+                self._icon_container.content = new_image
+                self._icon_container.tooltip = profile.get("country_name", cc)
+                self._icon_container.update()
+            else:
+                self._icon_container.content = self._globe_icon
+                self._icon_container.update()
+
             self._name_text.value = profile["name"]
             self._name_text.color = ft.Colors.PRIMARY
-
+            
+            # ... Address logic ...
             try:
                 vnext = profile["config"]["outbounds"][0]["settings"]["vnext"][0]
                 address = vnext["address"]
@@ -75,7 +119,7 @@ class ServerCard(ft.Container):
         if is_dark:
             self.bgcolor = ft.Colors.SURFACE
             self.border.color = ft.Colors.OUTLINE_VARIANT
-            self._flag_text.color = ft.Colors.WHITE
+            self._globe_icon.color = ft.Colors.ON_SURFACE_VARIANT
             # Fix: Ensure name text color is reset for dark mode
             self._name_text.color = ft.Colors.PRIMARY
             self.shadow.color = ft.Colors.SHADOW
@@ -85,7 +129,7 @@ class ServerCard(ft.Container):
             self.bgcolor = "#ffffff"  # Explicit white for light mode
             self.border.color = "#e0e0e0"
             self._name_text.color = ft.Colors.BLACK
-            self._flag_text.color = ft.Colors.BLACK
+            self._globe_icon.color = ft.Colors.ON_SURFACE_VARIANT
             # Reduced shadow for light mode
             self.shadow.color = ft.Colors.with_opacity(0.1, ft.Colors.BLACK)
             self.shadow.blur_radius = 5
