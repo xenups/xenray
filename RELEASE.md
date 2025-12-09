@@ -52,15 +52,16 @@ This will trigger the GitHub Actions workflow automatically.
 The GitHub Actions workflow will:
 
 1. ✅ Checkout code
-2. ✅ Setup Python 3.13
+2. ✅ Setup Python 3.12
 3. ✅ Install Poetry and dependencies
 4. ✅ Download Xray v{XRAY_VERSION} (64-bit, Windows 7+)
 5. ✅ Download Singbox v{SINGBOX_VERSION} (64-bit, Windows 7+)
-6. ✅ Build city database with translations
-7. ✅ Build executable with PyInstaller
-8. ✅ Package everything into zip file
-9. ✅ Create GitHub release
-10. ✅ Upload zip as release asset
+6. ✅ Download Xray geo files (geoip.dat, geosite.dat)
+7. ✅ Build city database with translations
+8. ✅ Build executable with PyInstaller
+9. ✅ Package everything into zip file
+10. ✅ Create GitHub release
+11. ✅ Upload zip as release asset
 
 ## Release Package Contents
 
