@@ -34,6 +34,11 @@ def main(page: ft.Page):
     # Initialize Core Services
     config_manager = ConfigManager()
     connection_manager = ConnectionManager(config_manager)
+    
+    # Initialize i18n with saved language
+    from src.core.i18n import set_language
+    saved_lang = config_manager.get_language()
+    set_language(saved_lang)
 
     # Initialize UI
     window = MainWindow(page, config_manager, connection_manager)
@@ -84,8 +89,17 @@ def run():
         return  # Exit run() without starting app
 
     # Calculate absolute path to assets directory
-    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    # For PyInstaller frozen exe, use the exe's directory
+    # For normal Python run, use the source directory
+    if getattr(sys, 'frozen', False):
+        # Running as compiled exe - assets are next to the exe
+        root_dir = os.path.dirname(sys.executable)
+    else:
+        # Running as script - assets are in project root
+        root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    
     assets_path = os.path.join(root_dir, "assets")
+    logger.debug(f"Assets path: {assets_path}")
     
     ft.app(target=main, assets_dir=assets_path)
 

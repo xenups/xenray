@@ -16,6 +16,7 @@ from src.core.constants import (
 )
 from src.services.singbox_service import SingboxService
 from src.services.xray_service import XrayService
+from src.core.i18n import t
 
 
 class ConnectionManager:
@@ -41,7 +42,7 @@ class ConnectionManager:
                 step_callback(msg)
 
         # Load config
-        report_step("Loading configuration...")
+        report_step(t("connection.loading_config"))
         logger.debug(f"Loading config from {file_path}")
         config, _ = self._config_manager.load_config(file_path)
         if not config:
@@ -50,7 +51,7 @@ class ConnectionManager:
 
         # Stop existing processes if any (don't call full disconnect to avoid race)
         if self._current_connection:
-            report_step("Stopping existing connection...")
+            report_step(t("connection.stopping_existing"))
             logger.debug("Stopping existing connection")
             if self._current_connection.get("xray_pid"):
                 self._xray_service.stop()
@@ -58,7 +59,7 @@ class ConnectionManager:
                 self._singbox_service.stop()
 
         # Process config for Xray (Resolve to IP, Patch SNI, Ensure Sniffing)
-        report_step("Processing configuration...")
+        report_step(t("connection.processing_config"))
         logger.debug("Processing configuration")
         # 1. Resolve Outbound and Patch SNI
         processed_config = self._process_config(config)
@@ -77,7 +78,7 @@ class ConnectionManager:
             return False
 
         # Start Xray
-        report_step("Starting Xray...")
+        report_step(t("connection.starting_xray"))
         logger.debug("Starting Xray service")
         xray_pid = self._xray_service.start(OUTPUT_CONFIG_PATH)
         if not xray_pid:
@@ -89,7 +90,7 @@ class ConnectionManager:
         singbox_pid = None
 
         if mode == "vpn":
-            report_step("Initializing VPN tunnel...")
+            report_step(t("connection.initializing_vpn"))
 
             # Since _get_socks_port updated the config, socks_port is valid
             routing_country = self._config_manager.get_routing_country()
@@ -112,7 +113,7 @@ class ConnectionManager:
                 self._xray_service.stop()
                 return False
 
-        report_step("Finalizing connection...")
+        report_step(t("connection.finalizing"))
         self._current_connection = {
             "mode": mode,
             "xray_pid": xray_pid,

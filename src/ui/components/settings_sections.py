@@ -1,7 +1,9 @@
-"""Reusable settings section components."""
+"""Reusable settings section components with i18n support."""
 from __future__ import annotations
 from typing import Callable, Optional
 import flet as ft
+
+from src.core.i18n import t
 
 
 class SettingsSection(ft.Container):
@@ -81,22 +83,23 @@ class ModeSwitchRow(ft.Container):
             active_color=ft.Colors.PRIMARY,
             on_change=on_change,
         )
+        self._is_proxy = is_proxy
 
         super().__init__(
             content=ft.Row([
                 ft.Icon(ft.Icons.VPN_LOCK, color=ft.Colors.ON_SURFACE_VARIANT),
                 ft.Column([
-                    ft.Text("Connection Mode", weight=ft.FontWeight.W_500),
-                    ft.Text("VPN or Proxy specific behavior", size=11, color=ft.Colors.ON_SURFACE_VARIANT),
+                    ft.Text(t("settings.connection_mode"), weight=ft.FontWeight.W_500),
+                    ft.Text(t("settings.mode_description"), size=11, color=ft.Colors.ON_SURFACE_VARIANT),
                 ], spacing=2, expand=True),
                 ft.Row([
                     ft.Text(
-                        "VPN", size=11, color=ft.Colors.ON_SURFACE_VARIANT,
+                        t("settings.vpn"), size=11, color=ft.Colors.ON_SURFACE_VARIANT,
                         weight=ft.FontWeight.BOLD if not is_proxy else ft.FontWeight.NORMAL,
                     ),
                     self._switch,
                     ft.Text(
-                        "Proxy", size=11, color=ft.Colors.ON_SURFACE_VARIANT,
+                        t("settings.proxy"), size=11, color=ft.Colors.ON_SURFACE_VARIANT,
                         weight=ft.FontWeight.BOLD if is_proxy else ft.FontWeight.NORMAL,
                     ),
                 ], spacing=5),
@@ -134,10 +137,10 @@ class PortInputRow(ft.Container):
         super().__init__(
             content=ft.Row([
                 ft.Icon(ft.Icons.INPUT, size=20, color=ft.Colors.ON_SURFACE_VARIANT),
-                ft.Text("SOCKS Port", size=12, weight=ft.FontWeight.W_500, width=80),
+                ft.Text(t("settings.socks_port"), size=12, weight=ft.FontWeight.W_500, width=80),
                 self._field,
                 ft.ElevatedButton(
-                    text="Save",
+                    text=t("settings.save"),
                     height=30,
                     style=ft.ButtonStyle(
                         padding=ft.padding.symmetric(horizontal=10),
@@ -168,10 +171,10 @@ class CountryDropdownRow(ft.Container):
             content_padding=8,
             value=current_value if current_value else "none",
             options=[
-                ft.dropdown.Option("none", "None"),
-                ft.dropdown.Option("ir", "🇮🇷 Iran"),
-                ft.dropdown.Option("cn", "🇨🇳 China"),
-                ft.dropdown.Option("ru", "🇷🇺 Russia"),
+                ft.dropdown.Option("none", t("countries.none")),
+                ft.dropdown.Option("ir", "🇮🇷 " + t("countries.ir")),
+                ft.dropdown.Option("cn", "🇨🇳 " + t("countries.cn")),
+                ft.dropdown.Option("ru", "🇷🇺 " + t("countries.ru")),
             ],
             border_color=ft.Colors.OUTLINE_VARIANT,
             focused_border_color=ft.Colors.PRIMARY,
@@ -181,9 +184,79 @@ class CountryDropdownRow(ft.Container):
         super().__init__(
             content=ft.Row([
                 ft.Icon(ft.Icons.PUBLIC, size=20, color=ft.Colors.ON_SURFACE_VARIANT),
-                ft.Text("Direct Country", size=12, weight=ft.FontWeight.W_500, width=80),
+                ft.Text(t("settings.direct_country"), size=12, weight=ft.FontWeight.W_500, width=80),
                 self._dropdown,
             ], spacing=5),
+            padding=ft.padding.symmetric(horizontal=5, vertical=5),
+        )
+
+    @property
+    def value(self) -> str:
+        return self._dropdown.value
+
+
+class LanguageDropdownRow(ft.Container):
+    """Language dropdown row with flag images."""
+
+    def __init__(self, current_value: str, on_change: Callable):
+        # Language options with flag codes
+        self._languages = [
+            ("en", "gb", "English"),
+            ("fa", "ir", "فارسی"),
+            ("zh", "cn", "中文"),
+            ("ru", "ru", "Русский"),
+        ]
+        
+        self._dropdown = ft.Dropdown(
+            width=160,
+            text_size=12,
+            content_padding=8,
+            value=current_value if current_value else "en",
+            options=[
+                ft.dropdown.Option(lang_code, f"{name}")
+                for lang_code, flag_code, name in self._languages
+            ],
+            border_color=ft.Colors.OUTLINE_VARIANT,
+            focused_border_color=ft.Colors.PRIMARY,
+            on_change=on_change,
+        )
+        
+        # Get current flag code
+        current_flag = "gb"
+        for lang_code, flag_code, name in self._languages:
+            if lang_code == (current_value or "en"):
+                current_flag = flag_code
+                break
+        
+        self._flag_image = ft.Image(
+            src=f"/flags/{current_flag}.svg",
+            width=24,
+            height=18,
+            fit=ft.ImageFit.COVER,
+            border_radius=3,
+            filter_quality=ft.FilterQuality.HIGH,
+            anti_alias=True,
+        )
+        
+        # Update flag when language changes
+        original_on_change = on_change
+        def wrapped_on_change(e):
+            selected = self._dropdown.value
+            for lang_code, flag_code, name in self._languages:
+                if lang_code == selected:
+                    self._flag_image.src = f"/flags/{flag_code}.svg"
+                    self._flag_image.update()
+                    break
+            original_on_change(e)
+        
+        self._dropdown.on_change = wrapped_on_change
+
+        super().__init__(
+            content=ft.Row([
+                self._flag_image,
+                ft.Text(t("settings.language"), size=12, weight=ft.FontWeight.W_500, width=60),
+                self._dropdown,
+            ], spacing=8),
             padding=ft.padding.symmetric(horizontal=5, vertical=5),
         )
 

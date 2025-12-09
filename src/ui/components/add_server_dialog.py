@@ -1,9 +1,10 @@
-"""Add server/subscription dialog component."""
+"""Add server/subscription dialog component with i18n support."""
 from __future__ import annotations
 from typing import Callable, Optional
 import flet as ft
 
 from src.utils.link_parser import LinkParser
+from src.core.i18n import t
 
 
 class AddServerDialog(ft.AlertDialog):
@@ -11,8 +12,8 @@ class AddServerDialog(ft.AlertDialog):
 
     def __init__(
         self,
-        on_server_added: Callable[[str, dict], None],  # (name, config) -> None
-        on_subscription_added: Callable[[str, str], None],  # (name, url) -> None
+        on_server_added: Callable[[str, dict], None],
+        on_subscription_added: Callable[[str, str], None],
         on_close: Callable,
     ):
         self._on_server_added = on_server_added
@@ -20,13 +21,13 @@ class AddServerDialog(ft.AlertDialog):
         self._on_close = on_close
         
         self._name_input = ft.TextField(
-            label="Name (Optional for Config)",
-            hint_text="Required for Subscriptions",
+            label=t("add_dialog.name_label"),
+            hint_text=t("add_dialog.name_hint"),
             text_size=12,
         )
         self._content_input = ft.TextField(
-            label="Link / URL",
-            hint_text="vless://... or https://example.com/sub",
+            label=t("add_dialog.link_label"),
+            hint_text=t("add_dialog.link_hint"),
             multiline=True,
             min_lines=3,
             max_lines=10,
@@ -34,14 +35,14 @@ class AddServerDialog(ft.AlertDialog):
         )
         
         super().__init__(
-            title=ft.Text("Add Server or Subscription"),
+            title=ft.Text(t("add_dialog.title")),
             content=ft.Column(
                 [self._name_input, self._content_input],
                 height=180,
             ),
             actions=[
-                ft.TextButton("Add", on_click=self._handle_add),
-                ft.TextButton("Cancel", on_click=self._handle_close),
+                ft.TextButton(t("add_dialog.add"), on_click=self._handle_add),
+                ft.TextButton(t("add_dialog.cancel"), on_click=self._handle_close),
             ],
             actions_alignment=ft.MainAxisAlignment.END,
         )
@@ -52,11 +53,10 @@ class AddServerDialog(ft.AlertDialog):
         name = self._name_input.value.strip()
         
         if not content:
-            self._content_input.error_text = "Required"
+            self._content_input.error_text = t("add_dialog.required")
             self._content_input.update()
             return
         
-        # Try to parse as server link
         is_config = content.startswith(("vless://", "vmess://", "trojan://", "ss://"))
         
         try:
@@ -68,13 +68,11 @@ class AddServerDialog(ft.AlertDialog):
         except Exception:
             pass
         
-        # Fall back to subscription
         if not name:
-            self._name_input.error_text = "Name required for Subscription"
+            self._name_input.error_text = t("add_dialog.name_required")
             self._name_input.update()
             if is_config:
-                # Show that it's an invalid server link
-                self._show_error("Invalid Server Link")
+                self._show_error(t("add_dialog.invalid_link"))
             return
         
         self._on_subscription_added(name, content)

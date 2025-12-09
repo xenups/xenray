@@ -1,5 +1,8 @@
+"""DNS management page with i18n support."""
 import flet as ft
 from src.core.config_manager import ConfigManager
+from src.core.i18n import t
+
 
 class DNSPage(ft.Container):
     def __init__(self, config_manager: ConfigManager, on_back):
@@ -16,15 +19,15 @@ class DNSPage(ft.Container):
             content=ft.Row([
                 ft.IconButton(ft.Icons.ARROW_BACK, on_click=self._on_back),
                 ft.Column([
-                    ft.Text("DNS Management", size=20, weight=ft.FontWeight.BOLD),
-                    ft.Text("Upstream DNS servers", size=12, color=ft.Colors.ON_SURFACE_VARIANT),
+                    ft.Text(t("dns.title"), size=20, weight=ft.FontWeight.BOLD),
+                    ft.Text(t("dns.subtitle"), size=12, color=ft.Colors.ON_SURFACE_VARIANT),
                 ], spacing=2),
             ], spacing=10),
             padding=ft.padding.symmetric(horizontal=10, vertical=10),
             bgcolor=ft.Colors.SURFACE,
         )
 
-        # Input Area (Full Width)
+        # Input Area
         self._protocol_dd = ft.Dropdown(
             options=[
                 ft.dropdown.Option("udp", "UDP"),
@@ -43,8 +46,8 @@ class DNSPage(ft.Container):
         )
         
         self._address_input = ft.TextField(
-            label="Address",
-            hint_text="8.8.8.8 or quic://...",
+            label=t("dns.address"),
+            hint_text=t("dns.hint"),
             expand=True,
             text_size=14,
             height=40,
@@ -56,7 +59,7 @@ class DNSPage(ft.Container):
         )
         
         add_btn = ft.ElevatedButton(
-            "Add",
+            t("dns.add"),
             icon=ft.Icons.ADD,
             style=ft.ButtonStyle(
                 shape=ft.RoundedRectangleBorder(radius=8),
@@ -76,12 +79,12 @@ class DNSPage(ft.Container):
         # List Header
         list_header = ft.Container(
             content=ft.Row([
-                ft.Text("PROTO", size=11, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE_VARIANT, width=50),
-                ft.Text("ADDRESS", size=11, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE_VARIANT, expand=True),
-                ft.Text("ACTIONS", size=11, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE_VARIANT, width=80, text_align=ft.TextAlign.RIGHT),
+                ft.Text(t("dns.proto"), size=11, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE_VARIANT, width=50),
+                ft.Text(t("dns.address_header"), size=11, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE_VARIANT, expand=True),
+                ft.Text(t("dns.actions"), size=11, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE_VARIANT, width=80, text_align=ft.TextAlign.RIGHT),
             ], alignment=ft.MainAxisAlignment.START),
             padding=ft.padding.symmetric(horizontal=20, vertical=8),
-            bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.ON_SURFACE), # Subtle background
+            bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.ON_SURFACE),
             border=ft.border.only(bottom=ft.border.BorderSide(1, ft.Colors.OUTLINE_VARIANT)),
         )
 
@@ -101,11 +104,11 @@ class DNSPage(ft.Container):
         self._list_view.controls.clear()
         
         if not self._dns_list:
-              self._list_view.controls.append(
+            self._list_view.controls.append(
                 ft.Container(
                     content=ft.Column([
                         ft.Icon(ft.Icons.DNS_OUTLINED, size=48, color=ft.Colors.OUTLINE_VARIANT),
-                        ft.Text("Use System/Default DNS", color=ft.Colors.ON_SURFACE_VARIANT),
+                        ft.Text(t("dns.no_dns"), color=ft.Colors.ON_SURFACE_VARIANT),
                     ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
                     alignment=ft.alignment.center,
                     padding=50,
@@ -117,7 +120,6 @@ class DNSPage(ft.Container):
             proto = item.get("protocol", "udp").upper()
             addr = item.get("address", "?")
             
-            # Row Item
             row = ft.Container(
                 content=ft.Row([
                     ft.Container(
@@ -130,13 +132,13 @@ class DNSPage(ft.Container):
                     ),
                     ft.Text(addr, size=13, weight=ft.FontWeight.W_500, expand=True, overflow=ft.TextOverflow.ELLIPSIS, color=ft.Colors.ON_SURFACE),
                     ft.Row([
-                        ft.IconButton(ft.Icons.ARROW_UPWARD, icon_size=18, tooltip="Move Up", on_click=lambda e, i=idx: self._move_up(i)),
-                        ft.IconButton(ft.Icons.DELETE_OUTLINE, icon_size=18, icon_color=ft.Colors.RED_400, tooltip="Remove", on_click=lambda e, i=idx: self._delete(i))
+                        ft.IconButton(ft.Icons.ARROW_UPWARD, icon_size=18, tooltip=t("dns.move_up"), on_click=lambda e, i=idx: self._move_up(i)),
+                        ft.IconButton(ft.Icons.DELETE_OUTLINE, icon_size=18, icon_color=ft.Colors.RED_400, tooltip=t("dns.remove"), on_click=lambda e, i=idx: self._delete(i))
                     ], spacing=0, alignment=ft.MainAxisAlignment.END, width=80)
                 ]),
                 padding=ft.padding.symmetric(horizontal=20, vertical=12),
                 border=ft.border.only(bottom=ft.border.BorderSide(1, ft.Colors.OUTLINE_VARIANT)),
-                bgcolor=ft.Colors.SURFACE, # Ensure standard background
+                bgcolor=ft.Colors.SURFACE,
             )
             self._list_view.controls.append(row)
             

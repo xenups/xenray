@@ -1,5 +1,7 @@
 import flet as ft
 
+from src.core.i18n import t
+
 
 class ServerCard(ft.Container):
     def __init__(self, on_click):
@@ -26,7 +28,7 @@ class ServerCard(ft.Container):
         )
 
         self._name_text = ft.Text(
-            "No Server Selected",
+            t("server_list.no_server"),
             color=ft.Colors.GREY_400,
             size=14,
             weight=ft.FontWeight.BOLD,
@@ -40,7 +42,7 @@ class ServerCard(ft.Container):
                     ft.Column(
                         [
                             ft.Text(
-                                "Current Server",
+                                t("server_list.current_server"),
                                 size=10,
                                 color=ft.Colors.ON_SURFACE_VARIANT,
                             ),
@@ -76,7 +78,7 @@ class ServerCard(ft.Container):
             self._icon_container.content = self._globe_icon
             self._icon_container.update()
             
-            self._name_text.value = "No Server Selected"
+            self._name_text.value = t("server_list.no_server")
             self._name_text.color = ft.Colors.ON_SURFACE_VARIANT
             self._address_text.value = ""
         else:

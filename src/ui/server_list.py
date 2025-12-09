@@ -8,6 +8,7 @@ from typing import Callable, Optional
 from src.core.config_manager import ConfigManager
 from src.core.subscription_manager import SubscriptionManager
 from src.core.logger import logger
+from src.core.i18n import t
 from src.ui.components.server_list_header import ServerListHeader
 from src.ui.components.server_list_item import ServerListItem
 from src.ui.components.subscription_list_item import SubscriptionListItem
@@ -250,7 +251,7 @@ class ServerList(ft.Container):
         """Start latency test for all visible items."""
         if self._latency_tester.is_testing:
             if self._page:
-                self._page.open(ft.SnackBar(content=ft.Text("Test already in progress...")))
+                self._page.open(ft.SnackBar(content=ft.Text(t("server_list.test_in_progress"))))
                 self._page.update()
             return
 
@@ -262,7 +263,7 @@ class ServerList(ft.Container):
             return
 
         if self._page:
-            self._page.open(ft.SnackBar(content=ft.Text("Started latency test... 🚀")))
+            self._page.open(ft.SnackBar(content=ft.Text(t("server_list.test_started"))))
             self._page.update()
 
         self._latency_tester.test_profiles(profiles)
@@ -271,7 +272,7 @@ class ServerList(ft.Container):
         """Called when a latency test starts for a profile."""
         item = self._item_map.get(profile.get("id"))
         if item:
-            self._ui(lambda: item.update_ping("Testing...", ft.Colors.BLUE_400))
+            self._ui(lambda: item.update_ping(t("server_list.testing"), ft.Colors.BLUE_400))
 
     def _on_latency_test_complete(self, profile: dict, success: bool, result: str, country_data: Optional[dict]):
         """Called when a latency test completes for a profile."""
@@ -337,7 +338,7 @@ class ServerList(ft.Container):
         self._config_manager.delete_profile(profile_id)
         self._load_profiles(update_ui=True)
         if self._page:
-            self._page.open(ft.SnackBar(content=ft.Text("Server deleted successfully. 🗑️")))
+            self._page.open(ft.SnackBar(content=ft.Text(t("server_list.server_deleted"))))
             self._page.update()
 
     # --- Subscription Actions ---
@@ -345,7 +346,7 @@ class ServerList(ft.Container):
         """Update a subscription."""
         if not self._page:
             return
-        self._page.open(ft.SnackBar(content=ft.Text("Updating subscription...")))
+        self._page.open(ft.SnackBar(content=ft.Text(t("server_list.updating_subscription"))))
         self._page.update()
 
         def callback(success, msg):
@@ -354,7 +355,7 @@ class ServerList(ft.Container):
                     self._page.open(ft.SnackBar(content=ft.Text(msg, color=ft.Colors.GREEN_400)))
                     self._load_profiles(update_ui=True)
                 else:
-                    self._page.open(ft.SnackBar(content=ft.Text(f"Update failed: {msg}", color=ft.Colors.RED_400)))
+                    self._page.open(ft.SnackBar(content=ft.Text(t("server_list.update_failed", msg=msg), color=ft.Colors.RED_400)))
                 self._page.update()
 
             self._ui(_ui_update)
@@ -366,7 +367,7 @@ class ServerList(ft.Container):
         self._config_manager.delete_subscription(sub_id)
         self._load_profiles(update_ui=True)
         if self._page:
-            self._page.open(ft.SnackBar(content=ft.Text("Subscription deleted")))
+            self._page.open(ft.SnackBar(content=ft.Text(t("server_list.subscription_deleted"))))
             self._page.update()
 
     def _delete_and_exit_subscription(self, sub_id: str):
@@ -392,12 +393,12 @@ class ServerList(ft.Container):
         """Handle a new server being added."""
         self._config_manager.save_profile(name, config)
         if self._page:
-            self._page.open(ft.SnackBar(content=ft.Text(f"Server '{name}' added! 🚀", color=ft.Colors.GREEN_400)))
+            self._page.open(ft.SnackBar(content=ft.Text(t("add_dialog.server_added", name=name), color=ft.Colors.GREEN_400)))
         self._load_profiles(update_ui=True)
 
     def _handle_subscription_added(self, name: str, url: str):
         """Handle a new subscription being added."""
         self._config_manager.save_subscription(name, url)
         if self._page:
-            self._page.open(ft.SnackBar(content=ft.Text(f"Subscription '{name}' added! 📂", color=ft.Colors.GREEN_400)))
+            self._page.open(ft.SnackBar(content=ft.Text(t("add_dialog.subscription_added", name=name), color=ft.Colors.GREEN_400)))
         self._load_profiles(update_ui=True)

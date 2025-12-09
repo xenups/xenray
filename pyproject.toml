@@ -17,6 +17,9 @@ Pillow = "^10.0.0"
 cryptography = "^46.0.3"
 flet-desktop = "^0.28.3"
 nuitka = "^2.8.9"
+pycountry = "^24.6.1"
+msgpack = "^1.1.2"
+zstandard = "^0.25.0"
 
 
 [tool.poetry.group.dev.dependencies]

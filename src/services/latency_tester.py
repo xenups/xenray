@@ -79,13 +79,17 @@ class LatencyTester:
                     fetch_country=should_fetch,
                 )
                 
-                # Parse latency value
+                # Parse latency value from result (works with any language)
+                import re
                 latency_val = 999999
-                if success and "ms" in result:
-                    try:
-                        latency_val = int(result.replace("ms", ""))
-                    except ValueError:
-                        pass
+                if success:
+                    # Extract numeric value from result string
+                    match = re.search(r'(\d+)', result)
+                    if match:
+                        try:
+                            latency_val = int(match.group(1))
+                        except ValueError:
+                            pass
                 
                 # Determine color
                 import flet as ft

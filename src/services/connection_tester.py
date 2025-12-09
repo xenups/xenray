@@ -12,6 +12,7 @@ from typing import Optional, Tuple
 from src.core.constants import XRAY_EXECUTABLE, TMPDIR
 from src.core.logger import logger
 from src.utils.process_utils import ProcessUtils
+from src.core.i18n import t
 
 # Timeout configuration
 TEST_TIMEOUT = 5  # seconds for the whole test
@@ -107,14 +108,14 @@ class ConnectionTester:
             if "protocol" in profile_config:
                 target_outbound = profile_config
             else:
-                return False, "Invalid Config", None
+                return False, t("connection.invalid_config"), None
 
         # 1. Prepare environment
         port = ConnectionTester._find_free_port()
         config_path = ConnectionTester._create_temp_config(port, target_outbound)
         
         if not config_path:
-            return False, "Config Error", None
+            return False, t("connection.error"), None
 
         process = None
         try:
@@ -139,7 +140,7 @@ class ConnectionTester:
             time.sleep(0.5)
             
             if process.poll() is not None:
-                return False, "Core Failed", None
+                return False, t("connection.core_failed"), None
 
             # 3. Test Connection
             proxies = {
@@ -182,14 +183,14 @@ class ConnectionTester:
                      except:
                          pass # Fail silently for geoip
 
-                 return True, f"{latency}ms", country_data 
+                 return True, t("connection.latency_ms", value=latency), country_data 
 
         except requests.exceptions.Timeout:
-            return False, "Timeout", None
+            return False, t("connection.timeout"), None
         except requests.exceptions.RequestException:
-            return False, "Conn Error", None
+            return False, t("connection.conn_error"), None
         except Exception as e:
-            return False, "Error", None
+            return False, t("connection.error"), None
         finally:
             # 4. Cleanup
             if process:

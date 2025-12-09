@@ -1,4 +1,8 @@
+"""Header component with i18n support."""
 import flet as ft
+
+from src.core.i18n import t
+
 
 class Header(ft.Container):
     def __init__(self, page: ft.Page, on_theme_toggle, on_logs_click, on_settings_click):
@@ -11,7 +15,7 @@ class Header(ft.Container):
                 if page.theme_mode == ft.ThemeMode.DARK
                 else ft.Icons.WB_SUNNY_OUTLINED
             ),
-            tooltip="Toggle Theme",
+            tooltip=t("header.toggle_theme"),
             on_click=self._handle_theme_toggle,
         )
 
@@ -28,12 +32,12 @@ class Header(ft.Container):
                         self._theme_icon,
                         ft.IconButton(
                             icon=ft.Icons.ARTICLE_OUTLINED,
-                            tooltip="Logs",
+                            tooltip=t("header.logs"),
                             on_click=on_logs_click,
                         ),
                         ft.IconButton(
                             icon=ft.Icons.SETTINGS_OUTLINED,
-                            tooltip="Settings",
+                            tooltip=t("header.settings"),
                             on_click=on_settings_click,
                         ),
                     ]
@@ -52,11 +56,8 @@ class Header(ft.Container):
         )
 
     def _handle_theme_toggle(self, e):
-        # Just notify parent, let parent handle state and call update_theme back
         self._on_theme_toggle(e)
 
     def update_theme(self, is_dark: bool):
         self._theme_icon.icon = ft.Icons.NIGHTLIGHT_ROUND if is_dark else ft.Icons.WB_SUNNY_OUTLINED
-        # Also update background if needed, but surface color usually handles itself if using Flet themes
-        # self.bgcolor = ft.Colors.SURFACE 
         self.update()

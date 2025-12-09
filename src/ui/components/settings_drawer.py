@@ -1,10 +1,11 @@
-"""Settings drawer component using reusable section components."""
+"""Settings drawer component with i18n support."""
 from __future__ import annotations
 import threading
 import flet as ft
 
 from src.core.config_manager import ConfigManager
 from src.core.types import ConnectionMode
+from src.core.i18n import t, set_language as set_app_language
 from src.utils.process_utils import ProcessUtils
 from src.services.xray_installer import XrayInstallerService
 from src.services.singbox_service import SingboxService
@@ -14,6 +15,7 @@ from src.ui.components.settings_sections import (
     ModeSwitchRow,
     PortInputRow,
     CountryDropdownRow,
+    LanguageDropdownRow,
 )
 
 
@@ -50,6 +52,10 @@ class SettingsDrawer(ft.NavigationDrawer):
             self._config_manager.get_routing_country(),
             self._save_country,
         )
+        self._language_row = LanguageDropdownRow(
+            self._config_manager.get_language(),
+            self._save_language,
+        )
 
         # Build UI
         super().__init__(
@@ -57,51 +63,54 @@ class SettingsDrawer(ft.NavigationDrawer):
                 # Header
                 ft.Container(
                     content=ft.Column([
-                        ft.Text("Settings", size=28, weight=ft.FontWeight.BOLD),
-                        ft.Text("Configure your connection", size=12, color=ft.Colors.ON_SURFACE_VARIANT),
+                        ft.Text(t("settings.title"), size=28, weight=ft.FontWeight.BOLD),
+                        ft.Text(t("settings.subtitle"), size=12, color=ft.Colors.ON_SURFACE_VARIANT),
                     ], spacing=2),
                     padding=ft.padding.only(left=20, top=20, bottom=20),
                 ),
                 # General Section
-                SettingsSection("General", [self._mode_switch_row]),
+                SettingsSection(t("settings.general"), [
+                    self._mode_switch_row,
+                    self._language_row,
+                ]),
                 ft.Divider(height=1, color=ft.Colors.OUTLINE_VARIANT, opacity=0.2),
                 ft.Container(height=10),
                 # Network Section
-                SettingsSection("Network", [
+                SettingsSection(t("settings.network"), [
                     self._country_row,
                     self._port_row,
                 ]),
                 ft.Divider(height=1, color=ft.Colors.OUTLINE_VARIANT, opacity=0.2),
                 ft.Container(height=10),
                 # Advanced Section
-                SettingsSection("Advanced", [
+                SettingsSection(t("settings.advanced"), [
                     SettingsListTile(
                         ft.Icons.DIRECTIONS,
-                        "Routing Rules",
-                        "Manage direct, proxy, and block lists",
+                        t("settings.routing_rules"),
+                        t("settings.routing_description"),
                         on_click=self._open_routing_manager,
                     ),
                     SettingsListTile(
                         ft.Icons.DNS,
-                        "DNS Settings",
-                        "Configure upstream DNS servers",
+                        t("settings.dns_settings"),
+                        t("settings.dns_description"),
                         on_click=self._open_dns_manager,
                     ),
                 ]),
                 ft.Divider(height=1, color=ft.Colors.OUTLINE_VARIANT, opacity=0.2),
                 ft.Container(height=10),
                 # System Section
-                SettingsSection("System", [
+                SettingsSection(t("settings.system"), [
                     SettingsListTile(
                         ft.Icons.SYSTEM_UPDATE_ALT,
-                        "Check for Updates",
-                        "Update Xray Core",
+                        t("settings.check_updates"),
+                        t("settings.update_xray"),
                         on_click=lambda e: self._on_installer_run("xray"),
                     ),
                     SettingsListTile(
                         ft.Icons.INFO_OUTLINE,
-                        "About XenRay",
-                        "v1.0.0 by Xenups",
+                        t("settings.about"),
+                        t("settings.version"),
                         show_chevron=False,
                     ),
                 ]),
@@ -131,7 +140,6 @@ class SettingsDrawer(ft.NavigationDrawer):
         is_proxy = self._mode_switch_row.value
 
         if not is_proxy and not ProcessUtils.is_admin():
-            # VPN mode requires admin
             self._mode_switch_row.value = True
             self._mode_switch_row.update()
             self._show_admin_restart_dialog()
@@ -156,14 +164,11 @@ class SettingsDrawer(ft.NavigationDrawer):
 
         dlg = ft.AlertDialog(
             modal=True,
-            title=ft.Text("Admin Rights Required"),
-            content=ft.Text(
-                "VPN mode requires Administrator privileges.\n\n"
-                "Do you want to restart the application as Admin?"
-            ),
+            title=ft.Text(t("admin.title")),
+            content=ft.Text(t("admin.message")),
             actions=[
-                ft.TextButton("Cancel", on_click=close_dlg),
-                ft.TextButton("Restart", on_click=confirm_restart),
+                ft.TextButton(t("admin.cancel"), on_click=close_dlg),
+                ft.TextButton(t("admin.restart"), on_click=confirm_restart),
             ],
             actions_alignment=ft.MainAxisAlignment.END,
         )
@@ -180,13 +185,13 @@ class SettingsDrawer(ft.NavigationDrawer):
             if 1024 <= port <= 65535:
                 self._config_manager.set_proxy_port(port)
                 self._port_row.set_border_color(ft.Colors.GREEN_400)
-                page.open(ft.SnackBar(content=ft.Text(f"SOCKS Port saved: {port} 💾")))
+                page.open(ft.SnackBar(content=ft.Text(t("settings.port_saved", port=port))))
             else:
                 self._port_row.set_border_color(ft.Colors.RED_400)
-                page.open(ft.SnackBar(content=ft.Text("Invalid Port Range (1024-65535)"), bgcolor=ft.Colors.RED_700))
+                page.open(ft.SnackBar(content=ft.Text(t("settings.port_invalid_range")), bgcolor=ft.Colors.RED_700))
         except ValueError:
             self._port_row.set_border_color(ft.Colors.RED_400)
-            page.open(ft.SnackBar(content=ft.Text("Port must be a number"), bgcolor=ft.Colors.RED_700))
+            page.open(ft.SnackBar(content=ft.Text(t("settings.port_must_be_number")), bgcolor=ft.Colors.RED_700))
 
         page.update()
 
@@ -198,7 +203,22 @@ class SettingsDrawer(ft.NavigationDrawer):
 
         val = self._country_row.value
         self._config_manager.set_routing_country(val)
-        page.open(ft.SnackBar(content=ft.Text(f"Direct Country saved: {val} 🌐")))
+        page.open(ft.SnackBar(content=ft.Text(t("settings.country_saved", val=val))))
+        page.update()
+
+    def _save_language(self, e):
+        """Save the language setting and update i18n."""
+        page = self.page
+        if not page:
+            return
+
+        lang = self._language_row.value
+        self._config_manager.set_language(lang)
+        set_app_language(lang)
+        
+        # Notify user - app needs restart for full effect
+        msg = "Language changed! Restart app for full effect. / زبان تغییر کرد! برنامه را ریستارت کنید."
+        page.open(ft.SnackBar(content=ft.Text(msg)))
         page.update()
 
     def _on_installer_run(self, component: str):
@@ -208,13 +228,13 @@ class SettingsDrawer(ft.NavigationDrawer):
             return
 
         if component == "xray":
-            page.open(ft.SnackBar(content=ft.Text("Checking for updates... 📡")))
+            page.open(ft.SnackBar(content=ft.Text(t("update.checking"))))
             page.update()
 
             try:
                 available, current, latest = XrayInstallerService.check_for_updates()
                 if not available and current:
-                    page.open(ft.SnackBar(content=ft.Text(f"You are up to date! (v{current}) ✅")))
+                    page.open(ft.SnackBar(content=ft.Text(t("update.up_to_date", version=current))))
                     page.update()
                     return
             except Exception:
@@ -224,7 +244,7 @@ class SettingsDrawer(ft.NavigationDrawer):
 
     def _show_update_dialog(self, page, current: str, latest: str):
         """Show update confirmation dialog."""
-        msg = f"Update available: v{current} -> v{latest}" if current else f"Install Xray Core v{latest}?"
+        msg = t("update.available", current=current, latest=latest) if current else t("update.install", version=latest)
 
         def close_dlg(e):
             page.close(dlg)
@@ -235,11 +255,11 @@ class SettingsDrawer(ft.NavigationDrawer):
 
         dlg = ft.AlertDialog(
             modal=True,
-            title=ft.Text("Update Xray Core"),
+            title=ft.Text(t("update.title")),
             content=ft.Text(msg),
             actions=[
-                ft.TextButton("Cancel", on_click=close_dlg),
-                ft.TextButton("Update", on_click=start_update),
+                ft.TextButton(t("add_dialog.cancel"), on_click=close_dlg),
+                ft.TextButton(t("add_dialog.add"), on_click=start_update),
             ],
             actions_alignment=ft.MainAxisAlignment.END,
         )
@@ -248,11 +268,11 @@ class SettingsDrawer(ft.NavigationDrawer):
     def _run_update_process(self, page):
         """Run the update process with progress dialog."""
         progress_ring = ft.ProgressRing(width=16, height=16, stroke_width=2)
-        status_text = ft.Text("Starting...", size=12)
+        status_text = ft.Text(t("update.starting"), size=12)
 
         progress_dlg = ft.AlertDialog(
             modal=True,
-            title=ft.Text("Updating Xray..."),
+            title=ft.Text(t("update.updating")),
             content=ft.Column([
                 ft.Row([progress_ring, status_text], spacing=10, alignment=ft.MainAxisAlignment.CENTER),
             ], tight=True, alignment=ft.MainAxisAlignment.CENTER),
@@ -277,9 +297,9 @@ class SettingsDrawer(ft.NavigationDrawer):
 
             page.close(progress_dlg)
             if success:
-                page.open(ft.SnackBar(content=ft.Text("Xray Updated Successfully! 🎉"), bgcolor=ft.Colors.GREEN_700))
+                page.open(ft.SnackBar(content=ft.Text(t("update.success")), bgcolor=ft.Colors.GREEN_700))
             else:
-                page.open(ft.SnackBar(content=ft.Text("Update Failed! ❌"), bgcolor=ft.Colors.RED_700))
+                page.open(ft.SnackBar(content=ft.Text(t("update.failed")), bgcolor=ft.Colors.RED_700))
             page.update()
 
         threading.Thread(target=update_task, daemon=True).start()

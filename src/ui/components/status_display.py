@@ -7,6 +7,8 @@ import urllib.request
 
 import flet as ft
 
+from src.core.i18n import t
+
 
 class StatusDisplay(ft.Container):
     """
@@ -30,7 +32,7 @@ class StatusDisplay(ft.Container):
 
         # 2. Status Text
         self._msg_text = ft.Text(
-            "Disconnected",
+            t("app.disconnected"),
             size=12,
             color=ft.Colors.GREY_500,
             text_align=ft.TextAlign.CENTER
@@ -77,13 +79,24 @@ class StatusDisplay(ft.Container):
         Updates the country/city information.
         Persistent: Does NOT reset on disconnect.
         """
+        from src.core.country_translator import translate_country
+        from src.core.city_translator import translate_city
+        
         c_name = "N/A"
         
         if country_data:
-            c_name = country_data.get("country_name") or country_data.get("name") or "Unknown"
+            # Get country code and name
+            country_code = country_data.get("country_code")
+            original_name = country_data.get("country_name") or country_data.get("name") or "Unknown"
+            
+            # Translate country name
+            c_name = translate_country(country_code, original_name)
+            
+            # Translate city name if available
             city = country_data.get("city")
             if city:
-                c_name = f"{c_name}, {city}"
+                translated_city = translate_city(city)
+                c_name = f"{c_name}, {translated_city}"
 
         self._country_text.value = c_name
         self.update()
@@ -104,7 +117,7 @@ class StatusDisplay(ft.Container):
 
     def set_initializing(self):
         self._stop_dots_animation()
-        self._msg_text.value = "Initializing"
+        self._msg_text.value = t("app.initializing")
         self._msg_text.color = ft.Colors.BLUE_400
         self._dots_text.visible = True
         self._start_dots_animation()
@@ -112,7 +125,7 @@ class StatusDisplay(ft.Container):
 
     def set_connecting(self):
         self._stop_dots_animation()
-        self._msg_text.value = "Connecting"
+        self._msg_text.value = t("app.connecting")
         self._msg_text.color = ft.Colors.BLUE_400
         self._dots_text.visible = True
         self._start_dots_animation()
@@ -121,7 +134,7 @@ class StatusDisplay(ft.Container):
     def set_connected(self, is_vpn: bool=True, country_data: dict = None):
         """Sets status to Connected."""
         self._stop_dots_animation()
-        self._msg_text.value = "Verifying..."
+        self._msg_text.value = t("app.verifying")
         self._msg_text.color = ft.Colors.GREEN_400
         self._dots_text.visible = True
         self._start_dots_animation()
@@ -138,27 +151,30 @@ class StatusDisplay(ft.Container):
         time.sleep(1.5) 
         self._stop_dots_animation()
         self._dots_text.visible = False
-        self._msg_text.value = "Connected"
+        self._msg_text.value = t("app.connected")
         self._msg_text.color = ft.Colors.GREEN_400
         self.update()
         
     def set_disconnected(self, mode_name: str=""):
         self._stop_dots_animation()
         self._dots_text.visible = False
-        self._msg_text.value = "Disconnected"
+        self._msg_text.value = t("app.disconnected")
         self._msg_text.color = ft.Colors.GREY_500
         self.update()
 
     def set_pre_connection_ping(self, latency_text: str, is_success: bool):
         """Updates the status text with latency (e.g. 'Ping: 45ms')."""
+        import re
         self._stop_dots_animation()
         self._dots_text.visible = False
         
         if latency_text == "...":
-             self._msg_text.value = "Checking..."
+             self._msg_text.value = t("app.checking")
              self._msg_text.color = ft.Colors.GREY_500
         else:
-             prefix = "Ping: " if "ms" in latency_text else ""
+             # If success and contains number, add ping prefix
+             has_number = bool(re.search(r'\d+', latency_text))
+             prefix = f"{t('connection.ping_prefix')} " if is_success and has_number else ""
              self._msg_text.value = f"{prefix}{latency_text}"
              
              if is_success:

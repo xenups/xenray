@@ -1,15 +1,17 @@
+"""Routing rules management page with i18n support."""
 import flet as ft
 from src.core.config_manager import ConfigManager
+from src.core.i18n import t
+
 
 class RoutingPage(ft.Container):
     def __init__(self, config_manager: ConfigManager, on_back):
         self._config_manager = config_manager
         self._on_back = on_back
         self._rules = self._config_manager.load_routing_rules()
-        self._current_tab = "direct" # direct, proxy, block
+        self._current_tab = "direct"
 
-        super().__init__(expand=True, padding=0) # No padding on container to stretch full
-        
+        super().__init__(expand=True, padding=0)
         self._setup_ui()
 
     def _setup_ui(self):
@@ -18,13 +20,12 @@ class RoutingPage(ft.Container):
             content=ft.Row([
                 ft.IconButton(ft.Icons.ARROW_BACK, on_click=self._on_back),
                 ft.Column([
-                    ft.Text("Routing Rules", size=20, weight=ft.FontWeight.BOLD),
-                    ft.Text("Control traffic flow by domain or IP", size=12, color=ft.Colors.ON_SURFACE_VARIANT),
+                    ft.Text(t("routing.title"), size=20, weight=ft.FontWeight.BOLD),
+                    ft.Text(t("routing.subtitle"), size=12, color=ft.Colors.ON_SURFACE_VARIANT),
                 ], spacing=2),
             ], spacing=10),
             padding=ft.padding.symmetric(horizontal=10, vertical=10),
             bgcolor=ft.Colors.SURFACE,
-            # border=ft.border.only(bottom=ft.border.BorderSide(1, ft.Colors.OUTLINE_VARIANT)),
         )
 
         # Tabs
@@ -33,9 +34,9 @@ class RoutingPage(ft.Container):
             animation_duration=300,
             on_change=self._on_tab_change,
             tabs=[
-                ft.Tab(text="Direct", icon=ft.Icons.DIRECTIONS),
-                ft.Tab(text="Proxy", icon=ft.Icons.VPN_LOCK),
-                ft.Tab(text="Block", icon=ft.Icons.BLOCK),
+                ft.Tab(text=t("routing.direct"), icon=ft.Icons.DIRECTIONS),
+                ft.Tab(text=t("routing.proxy"), icon=ft.Icons.VPN_LOCK),
+                ft.Tab(text=t("routing.block"), icon=ft.Icons.BLOCK),
             ],
             divider_color=ft.Colors.TRANSPARENT,
             indicator_color=ft.Colors.PRIMARY,
@@ -43,10 +44,10 @@ class RoutingPage(ft.Container):
             unselected_label_color=ft.Colors.ON_SURFACE_VARIANT,
         )
 
-        # Input Area (Top)
+        # Input Area
         self._input = ft.TextField(
-            label="Domain or IP",
-            hint_text="e.g. google.com, 1.1.1.1, geoip:ir",
+            label=t("routing.domain_or_ip"),
+            hint_text=t("routing.hint"),
             expand=True,
             text_size=14,
             height=40,
@@ -56,7 +57,7 @@ class RoutingPage(ft.Container):
         )
         
         add_btn = ft.ElevatedButton(
-            "Add",
+            t("routing.add"),
             icon=ft.Icons.ADD,
             style=ft.ButtonStyle(
                 shape=ft.RoundedRectangleBorder(radius=8),
@@ -106,11 +107,12 @@ class RoutingPage(ft.Container):
         items = self._rules.get(self._current_tab, [])
         
         if not items:
-             self._list_view.controls.append(
+            tab_name = t(f"routing.{self._current_tab}")
+            self._list_view.controls.append(
                 ft.Container(
                     content=ft.Column([
                         ft.Icon(ft.Icons.LIST_ALT, size=48, color=ft.Colors.OUTLINE_VARIANT),
-                        ft.Text(f"No {self._current_tab} rules", color=ft.Colors.ON_SURFACE_VARIANT),
+                        ft.Text(t("routing.no_rules", type=tab_name), color=ft.Colors.ON_SURFACE_VARIANT),
                     ], horizontal_alignment=ft.CrossAxisAlignment.CENTER),
                     alignment=ft.alignment.center,
                     padding=50,
@@ -127,7 +129,7 @@ class RoutingPage(ft.Container):
                             ft.Icons.DELETE_OUTLINE, 
                             icon_size=20, 
                             icon_color=ft.Colors.RED_400,
-                            tooltip="Remove",
+                            tooltip=t("routing.remove"),
                             on_click=lambda e, i=item: self._delete_rule(i)
                         ),
                     ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),

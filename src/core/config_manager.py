@@ -19,6 +19,7 @@ DEFAULT_DNS = "8.8.8.8, 1.1.1.1"
 VALID_COUNTRY_CODES = {"ir", "cn", "ru", "none"}
 VALID_MODES = {"proxy", "vpn"}
 VALID_THEMES = {"dark", "light"}
+VALID_LANGUAGES = {"en", "fa", "zh", "ru"}
 
 
 def _validate_file_path(file_path: str) -> bool:
@@ -539,6 +540,31 @@ class ConfigManager:
         path = os.path.join(self._config_dir, "sort_mode.txt")
         if not _atomic_write(path, mode):
             logger.error("Failed to save sort mode")
+
+    # --- Language Management ---
+    def get_language(self) -> str:
+        """Get saved language ('en' or 'fa')."""
+        path = os.path.join(self._config_dir, "language.txt")
+        if not os.path.exists(path):
+            return "en"
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                lang = f.read().strip()
+                if lang in VALID_LANGUAGES:
+                    return lang
+                return "en"
+        except (OSError, IOError, UnicodeDecodeError) as e:
+            logger.error(f"Error reading language: {e}")
+            return "en"
+
+    def set_language(self, lang: str) -> None:
+        """Set language with validation."""
+        if lang not in VALID_LANGUAGES:
+            raise ValueError(f"Language must be one of {VALID_LANGUAGES}")
+            
+        path = os.path.join(self._config_dir, "language.txt")
+        if not _atomic_write(path, lang):
+            logger.error("Failed to save language")
 
     # --- Routing Rules Persistence ---
     def load_routing_rules(self) -> dict:

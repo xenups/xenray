@@ -1,7 +1,9 @@
-"""Server list header component."""
+"""Server list header component with i18n support."""
 from __future__ import annotations
 from typing import Callable, Optional
 import flet as ft
+
+from src.core.i18n import t
 
 
 class ServerListHeader(ft.Container):
@@ -37,7 +39,6 @@ class ServerListHeader(ft.Container):
 
         def set_sort(mode: str):
             self._set_sort_mode(mode)
-            # Rebuild header to update checkmarks
             if self._current_subscription:
                 self.show_subscription_header(self._current_subscription)
             else:
@@ -45,15 +46,15 @@ class ServerListHeader(ft.Container):
 
         return ft.PopupMenuButton(
             icon=ft.Icons.SORT,
-            tooltip="Sort",
+            tooltip=t("server_list.sort"),
             items=[
                 ft.PopupMenuItem(
-                    text="Name (A-Z)",
+                    text=t("server_list.sort_name"),
                     checked=current_sort == "name_asc",
                     on_click=lambda e: set_sort("name_asc"),
                 ),
                 ft.PopupMenuItem(
-                    text="Latency (Low-High)",
+                    text=t("server_list.sort_latency"),
                     checked=current_sort == "ping_asc",
                     on_click=lambda e: set_sort("ping_asc"),
                 ),
@@ -64,17 +65,17 @@ class ServerListHeader(ft.Container):
         """Display the main server list header."""
         self._current_subscription = None
         self._inner_row.controls = [
-            ft.Text("Servers", size=20, weight=ft.FontWeight.BOLD),
+            ft.Text(t("server_list.title"), size=20, weight=ft.FontWeight.BOLD),
             ft.Row([
                 ft.IconButton(
                     ft.Icons.SPEED,
-                    tooltip="Test Latency",
+                    tooltip=t("server_list.test_latency"),
                     on_click=lambda e: self._on_test_latency(),
                 ),
                 self._create_sort_menu(),
                 ft.IconButton(
                     ft.Icons.ADD,
-                    tooltip="Add Server/Subscription",
+                    tooltip=t("server_list.add_server"),
                     on_click=self._on_add_click,
                 ),
             ]),
@@ -97,7 +98,7 @@ class ServerListHeader(ft.Container):
             ft.Row([
                 ft.IconButton(
                     ft.Icons.SPEED,
-                    tooltip="Test Latency",
+                    tooltip=t("server_list.test_latency"),
                     on_click=lambda e: self._on_test_latency(),
                 ),
                 self._create_sort_menu(),
@@ -105,12 +106,12 @@ class ServerListHeader(ft.Container):
                     icon=ft.Icons.MORE_VERT,
                     items=[
                         ft.PopupMenuItem(
-                            text="Update Subscription",
+                            text=t("server_list.update_subscription"),
                             icon=ft.Icons.REFRESH,
                             on_click=lambda e: self._on_update_subscription(sub_id) if self._on_update_subscription else None,
                         ),
                         ft.PopupMenuItem(
-                            text="Delete Subscription",
+                            text=t("server_list.delete_subscription"),
                             icon=ft.Icons.DELETE,
                             on_click=lambda e: self._on_delete_subscription(sub_id) if self._on_delete_subscription else None,
                         ),

@@ -88,9 +88,10 @@ class MainWindow:
         self._page.fonts = FONT_URLS
 
 
+
         icon_path = os.path.join(APPDIR, "assets", "icon.ico")
         if os.path.exists(icon_path):
-            self._page.window_icon = icon_path
+            self._page.window.icon = icon_path
 
         saved_mode = self._config_manager.get_connection_mode()
         saved_theme = self._config_manager.get_theme_mode()
