@@ -8,11 +8,6 @@ import shutil
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 os.chdir(PROJECT_ROOT)
 
-# Path to PyInstaller in the poetry venv
-# Using absolute path from previous step output: 
-# C:\Users\Xenups\AppData\Local\pypoetry\Cache\virtualenvs\xenray-7N7VD6iT-py3.13\Scripts\pyinstaller.exe
-PYINSTALLER_PATH = r"C:\Users\Xenups\AppData\Local\pypoetry\Cache\virtualenvs\xenray-7N7VD6iT-py3.13\Scripts\pyinstaller.exe"
-
 def main():
     print("=" * 60)
     print("Building XenRay with PyInstaller...")
@@ -33,64 +28,65 @@ def main():
     shutil.rmtree("build", ignore_errors=True)
     shutil.rmtree("dist", ignore_errors=True)
     
-    # Build command
+    # Build command - use python -m PyInstaller for cross-environment compatibility  
     cmd = [
-        PYINSTALLER_PATH,
+        sys.executable,  # Use current Python interpreter
+        "-m", "PyInstaller",  # Run PyInstaller as a module
         "--noconfirm",
         "--onefile",
-        "--windowed",  # No console window
+        "--windowed",
         "--name=XenRay",
-        "--clean",
         
-        # Hidden imports (حذف flet_desktop/flet_runtime و واگذاری به Hook)
-        # فقط flet را نگه می‌داریم و بقیه را به Hook می‌سپاریم
+        # Flet imports
         "--hidden-import=flet",
-        # خطوط زیر حذف شدند چون در Hook مدیریت می‌شوند:
-        # "--hidden-import=flet_desktop",
-        # "--hidden-import=flet.desktop",
-        # "--hidden-import=flet_runtime",
+        "--hidden-import=flet.flet",
         
         # Other necessary imports
         "--hidden-import=requests",
         "--hidden-import=loguru",
         "--hidden-import=pystray",
         "--hidden-import=PIL",
+        "--hidden-import=pycountry",
+        "--hidden-import=msgpack",
+        "--hidden-import=zstandard",
+        "--hidden-import=dotenv",
         
         # Main script
         "src/main.py",
         
-        # Custom hooks: مسیر مطلق
+        # Custom hooks
         f"--additional-hooks-dir={os.path.join(PROJECT_ROOT, 'hooks')}"
     ] + icon_option
     
     print("\nRunning PyInstaller...")
+    print(f"Command: {' '.join(cmd[:5])}...") 
     result = subprocess.run(cmd, cwd=PROJECT_ROOT)
     
     if result.returncode == 0:
         print("\n" + "=" * 60)
         print("BUILD SUCCESSFUL!")
-        print("Executable: dist/XenRay.exe")
+        print(f"Executable: dist/XenRay.exe")
         
-        # Post-build: Copy bin and assets folders to dist
+        # Copy external resources
         print("Copying external resources...")
-        dist_dir = os.path.join(PROJECT_ROOT, "dist")
         
-        for folder in ["assets", "bin"]:
-            src = os.path.join(PROJECT_ROOT, folder)
-            dst = os.path.join(dist_dir, folder)
-            if os.path.exists(src):
-                if os.path.exists(dst):
-                    shutil.rmtree(dst)
-                shutil.copytree(src, dst)
-                print(f"Copied {folder} to dist/")
-            else:
-                print(f"Warning: {folder} not found in source!")
-
+        # Copy assets folder
+        assets_src = os.path.join(PROJECT_ROOT, "assets")
+        assets_dst = os.path.join(PROJECT_ROOT, "dist", "assets")
+        if os.path.exists(assets_src):
+            shutil.copytree(assets_src, assets_dst, dirs_exist_ok=True)
+            print("Copied assets to dist/")
+        
+        # Copy bin folder
+        bin_src = os.path.join(PROJECT_ROOT, "bin")
+        bin_dst = os.path.join(PROJECT_ROOT, "dist", "bin")
+        if os.path.exists(bin_src):
+            shutil.copytree(bin_src, bin_dst, dirs_exist_ok=True)
+            print("Copied bin to dist/")
+        
         print("=" * 60)
     else:
-        print("\n" + "=" * 60)
-        print("BUILD FAILED! Check PyInstaller output for details.")
-        print("=" * 60)
+        print("\nBUILD FAILED!")
         sys.exit(1)
 
 if __name__ == "__main__":
