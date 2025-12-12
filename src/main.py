@@ -77,17 +77,57 @@ def run():
     # Singleton Check (Moved here to prevent child processes from starting app)
     import ctypes
 
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-    mutex_name = "Global\\XenRay_Singleton_Mutex_v1"
+    # Import PlatformUtils with proper handling for PyInstaller
+    import sys
+    import os
+    if getattr(sys, 'frozen', False):
+        # Running as PyInstaller executable
+        app_dir = os.path.dirname(sys.executable)
+        sys.path.insert(0, app_dir)
+        sys.path.insert(0, os.path.join(app_dir, 'src'))
+        # Import directly from the module file
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("platform_utils", os.path.join(app_dir, "src", "utils", "platform_utils.py"))
+        platform_utils = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(platform_utils)
+        PlatformUtils = platform_utils.PlatformUtils
+    else:
+        # Running as script
+        from src.utils.platform_utils import PlatformUtils
 
-    # Create named mutex (Keep reference to prevent GC)
-    global _singleton_mutex
-    _singleton_mutex = kernel32.CreateMutexW(None, False, mutex_name)
+    # Platform-specific singleton check
+    if PlatformUtils.get_platform() == "windows":
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        mutex_name = "Global\\XenRay_Singleton_Mutex_v1"
 
-    if kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
-        # Application is already running
-        logger.warning("Another instance is already running. Exiting.")
-        return  # Exit run() without starting app
+        # Create named mutex (Keep reference to prevent GC)
+        global _singleton_mutex
+        _singleton_mutex = kernel32.CreateMutexW(None, False, mutex_name)
+
+        if kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
+            # Application is already running
+            logger.warning("Another instance is already running. Exiting.")
+            return  # Exit run() without starting app
+    else:
+        # For Unix-like systems (macOS, Linux), we can use a PID file
+        import os
+        import fcntl
+        import errno
+
+        pid_file = os.path.expanduser("~/.xenray.pid")
+        try:
+            with open(pid_file, 'w') as f:
+                fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                f.write(str(os.getpid()))
+                global _pid_file_handle
+                _pid_file_handle = f
+        except (IOError, OSError) as e:
+            if e.errno == errno.EAGAIN:
+                # Application is already running
+                logger.warning("Another instance is already running. Exiting.")
+                return
+            else:
+                raise
 
     # Calculate absolute path to assets directory
     # For PyInstaller frozen exe, use the exe's directory
