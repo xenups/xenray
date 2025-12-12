@@ -76,24 +76,12 @@ def run():
     """Entry point for poetry script."""
     # Singleton Check (Moved here to prevent child processes from starting app)
     import ctypes
-
-    # Import PlatformUtils with proper handling for PyInstaller
     import sys
     import os
-    if getattr(sys, 'frozen', False):
-        # Running as PyInstaller executable
-        app_dir = os.path.dirname(sys.executable)
-        sys.path.insert(0, app_dir)
-        sys.path.insert(0, os.path.join(app_dir, 'src'))
-        # Import directly from the module file
-        import importlib.util
-        spec = importlib.util.spec_from_file_location("platform_utils", os.path.join(app_dir, "src", "utils", "platform_utils.py"))
-        platform_utils = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(platform_utils)
-        PlatformUtils = platform_utils.PlatformUtils
-    else:
-        # Running as script
-        from src.utils.platform_utils import PlatformUtils
+
+    # Import PlatformUtils - works for both script and PyInstaller
+    # PyInstaller bundles these as hidden-imports
+    from src.utils.platform_utils import PlatformUtils
 
     # Platform-specific singleton check
     if PlatformUtils.get_platform() == "windows":
@@ -110,17 +98,15 @@ def run():
             return  # Exit run() without starting app
     else:
         # For Unix-like systems (macOS, Linux), we can use a PID file
-        import os
         import fcntl
         import errno
 
         pid_file = os.path.expanduser("~/.xenray.pid")
         try:
-            with open(pid_file, 'w') as f:
-                fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-                f.write(str(os.getpid()))
-                global _pid_file_handle
-                _pid_file_handle = f
+            global _pid_file_handle
+            _pid_file_handle = open(pid_file, 'w')
+            fcntl.flock(_pid_file_handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            _pid_file_handle.write(str(os.getpid()))
         except (IOError, OSError) as e:
             if e.errno == errno.EAGAIN:
                 # Application is already running
