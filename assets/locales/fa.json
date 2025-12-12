@@ -4,9 +4,9 @@
     "connecting": "در حال اتصال",
     "connected": "متصل",
     "disconnected": "قطع شده",
-    "verifying": "در حال تأیید...",
+    "verifying": "در حال تأیید",
     "initializing": "راه‌اندازی",
-    "checking": "در حال بررسی..."
+    "checking": "در حال بررسی"
   },
   "server_list": {
     "title": "سرورها",
@@ -146,7 +146,7 @@
     "add": "افزودن",
     "remove": "حذف",
     "no_rules": "قانون {type} وجود ندارد",
-    "quick_settings": "تنظیمات سریع",
+    "quick_settings": "عمومی",
     "block_udp443": "مسدود کردن UDP 443 (QUIC)",
     "block_udp443_desc": "مسدود کردن پروتکل QUIC برای سازگاری بهتر",
     "block_ads": "مسدود کردن تبلیغات",

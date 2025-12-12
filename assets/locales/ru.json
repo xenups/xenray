@@ -4,9 +4,9 @@
     "connecting": "Подключение",
     "connected": "Подключено",
     "disconnected": "Отключено",
-    "verifying": "Проверка...",
+    "verifying": "Проверка",
     "initializing": "Инициализация",
-    "checking": "Проверка..."
+    "checking": "Проверка"
   },
   "server_list": {
     "title": "Серверы",
@@ -146,7 +146,7 @@
     "add": "Добавить",
     "remove": "Удалить",
     "no_rules": "Нет правил {type}",
-    "quick_settings": "БЫСТРЫЕ НАСТРОЙКИ",
+    "quick_settings": "Общие",
     "block_udp443": "Блокировать UDP 443 (QUIC)",
     "block_udp443_desc": "Блокировать QUIC для лучшей совместимости",
     "block_ads": "Блокировать рекламу",

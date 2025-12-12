@@ -10,7 +10,7 @@ from src.core.i18n import t
 class StatusDisplay(ft.Container):
     """
     Displays the current connection status and country information.
-    Layout: Stack( Center(TextColumn), Left(Flag) )
+    Layout: Center(TextColumn)
     """
 
     def __init__(self):
@@ -18,37 +18,27 @@ class StatusDisplay(ft.Container):
 
         # --- Controls ---
 
-        # 1. Country/City Name
+        # 1. Country/City Name - larger, smoother font
         self._country_text = ft.Text(
             "N/A",
-            size=16,
-            weight=ft.FontWeight.BOLD,
+            size=18,
+            weight=ft.FontWeight.W_600,
             color=ft.Colors.ON_SURFACE,
             text_align=ft.TextAlign.CENTER,
         )
 
-        # 2. Status Text
+        # 2. Status Text - clean, no animation
         self._msg_text = ft.Text(
             t("app.disconnected"),
-            size=12,
+            size=13,
+            weight=ft.FontWeight.W_400,
             color=ft.Colors.GREY_500,
             text_align=ft.TextAlign.CENTER,
-        )
-        self._dots_text = ft.Text(
-            ".", size=12, color=ft.Colors.GREY_500, visible=False, width=20
-        )
-
-        # Status Row (Msg + Dots)
-        self._status_row = ft.Row(
-            [self._msg_text, self._dots_text],
-            alignment=ft.MainAxisAlignment.CENTER,
-            spacing=0,
-            tight=True,
         )
 
         # --- Main Layout (Centered Column) ---
         self._text_column = ft.Column(
-            [self._country_text, self._status_row],
+            [self._country_text, self._msg_text],
             alignment=ft.MainAxisAlignment.CENTER,
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             spacing=2,
@@ -60,9 +50,6 @@ class StatusDisplay(ft.Container):
             alignment=ft.alignment.center,
             width=320,
         )
-
-        self._dots_timer = None
-        self._dots_count = 0
 
     def update_country(self, country_data: dict = None):
         """
@@ -103,35 +90,24 @@ class StatusDisplay(ft.Container):
 
     def set_status(self, msg: str):
         """Updates status message (used for mode changes etc)."""
-        self._stop_dots_animation()
-        self._dots_text.visible = False
         self._msg_text.value = msg
         self._msg_text.color = ft.Colors.GREY_500
         self.update()
 
     def set_initializing(self):
-        self._stop_dots_animation()
         self._msg_text.value = t("app.initializing")
         self._msg_text.color = ft.Colors.BLUE_400
-        self._dots_text.visible = True
-        self._start_dots_animation()
         self.update()
 
     def set_connecting(self):
-        self._stop_dots_animation()
         self._msg_text.value = t("app.connecting")
         self._msg_text.color = ft.Colors.BLUE_400
-        self._dots_text.visible = True
-        self._start_dots_animation()
         self.update()
 
     def set_connected(self, is_vpn: bool = True, country_data: dict = None):
         """Sets status to Connected."""
-        self._stop_dots_animation()
         self._msg_text.value = t("app.verifying")
         self._msg_text.color = ft.Colors.GREEN_400
-        self._dots_text.visible = True
-        self._start_dots_animation()
 
         if country_data:
             self.update_country(country_data)
@@ -144,15 +120,11 @@ class StatusDisplay(ft.Container):
         import time
 
         time.sleep(1.5)
-        self._stop_dots_animation()
-        self._dots_text.visible = False
         self._msg_text.value = t("app.connected")
         self._msg_text.color = ft.Colors.GREEN_400
         self.update()
 
     def set_disconnected(self, mode_name: str = ""):
-        self._stop_dots_animation()
-        self._dots_text.visible = False
         self._msg_text.value = t("app.disconnected")
         self._msg_text.color = ft.Colors.GREY_500
         self.update()
@@ -160,9 +132,6 @@ class StatusDisplay(ft.Container):
     def set_pre_connection_ping(self, latency_text: str, is_success: bool):
         """Updates the status text with latency (e.g. 'Ping: 45ms')."""
         import re
-
-        self._stop_dots_animation()
-        self._dots_text.visible = False
 
         if latency_text == "...":
             self._msg_text.value = t("app.checking")
@@ -182,29 +151,3 @@ class StatusDisplay(ft.Container):
                 self._msg_text.color = ft.Colors.RED_400
 
         self.update()
-
-    # --- Animation Helpers ---
-    def _start_dots_animation(self):
-        self._dots_count = 0
-
-        def _anim():
-            while self._dots_text.visible:
-                self._dots_count = (self._dots_count + 1) % 4
-                self._dots_text.value = "." * self._dots_count
-                try:
-                    self._dots_text.update()
-                except:
-                    break
-                import time
-
-                time.sleep(0.5)
-
-        self._dots_timer = threading.Thread(target=_anim, daemon=True)
-        self._dots_timer.start()
-
-    def _stop_dots_animation(self):
-        self._dots_text.visible = False
-        try:
-            self._dots_text.update()
-        except:
-            pass

@@ -4,9 +4,9 @@
     "connecting": "连接中",
     "connected": "已连接",
     "disconnected": "已断开",
-    "verifying": "验证中...",
+    "verifying": "验证中",
     "initializing": "初始化中",
-    "checking": "检查中..."
+    "checking": "检查中"
   },
   "server_list": {
     "title": "服务器",
@@ -146,7 +146,7 @@
     "add": "添加",
     "remove": "删除",
     "no_rules": "无{type}规则",
-    "quick_settings": "快速设置",
+    "quick_settings": "常规",
     "block_udp443": "阻止UDP 443 (QUIC)",
     "block_udp443_desc": "阻止QUIC协议以提高兼容性",
     "block_ads": "阻止广告",

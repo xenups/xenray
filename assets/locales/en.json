@@ -4,9 +4,9 @@
     "connecting": "Connecting",
     "connected": "Connected",
     "disconnected": "Disconnected",
-    "verifying": "Verifying...",
+    "verifying": "Verifying",
     "initializing": "Initializing",
-    "checking": "Checking..."
+    "checking": "Checking"
   },
   "server_list": {
     "title": "Servers",
@@ -146,7 +146,7 @@
     "add": "Add",
     "remove": "Remove",
     "no_rules": "No {type} rules",
-    "quick_settings": "QUICK SETTINGS",
+    "quick_settings": "General",
     "block_udp443": "Block UDP 443 (QUIC)",
     "block_udp443_desc": "Block QUIC protocol for better compatibility",
     "block_ads": "Block Ads",
