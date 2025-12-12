@@ -5,10 +5,8 @@ import re
 import uuid
 from datetime import datetime
 from typing import List, Optional, Tuple
-import shutil
 
-from src.core.constants import (LAST_FILE_PATH, MAX_RECENT_FILES,
-                                RECENT_FILES_PATH)
+from src.core.constants import LAST_FILE_PATH, MAX_RECENT_FILES, RECENT_FILES_PATH
 from src.core.logger import logger
 
 # Validation constants
@@ -34,17 +32,17 @@ def _validate_file_path(file_path: str) -> bool:
     return True
 
 
-def _atomic_write(file_path: str, content: str, mode: str = 'w') -> bool:
+def _atomic_write(file_path: str, content: str, mode: str = "w") -> bool:
     """
     Atomically write to a file to prevent corruption.
     Uses a temporary file and rename operation.
     """
     try:
         temp_path = file_path + ".tmp"
-        with open(temp_path, mode, encoding='utf-8') as f:
+        with open(temp_path, mode, encoding="utf-8") as f:
             f.write(content)
         # Atomic rename (works on both Windows and Unix)
-        if os.name == 'nt':
+        if os.name == "nt":
             # Windows: use replace which is atomic
             os.replace(temp_path, file_path)
         else:
@@ -74,13 +72,13 @@ def _atomic_write_json(file_path: str, data: dict) -> bool:
 
 class ConfigManager:
     """Manages application configuration and recent files."""
-    
+
     def __init__(self):
         """Initialize config manager."""
         self._config_dir = os.path.dirname(RECENT_FILES_PATH)
         self._ensure_config_dir()
         self._recent_files = self.get_recent_files()
-    
+
     def _ensure_config_dir(self) -> None:
         """Ensure configuration directory exists."""
         try:
@@ -88,14 +86,14 @@ class ConfigManager:
         except (OSError, PermissionError) as e:
             logger.error(f"Failed to create config directory: {e}")
             raise
-    
+
     def load_config(self, file_path: str) -> Tuple[Optional[dict], bool]:
         """
         Load configuration from file.
-        
+
         Args:
             file_path: Path to the configuration file
-            
+
         Returns:
             Tuple of (config_dict, should_remove_from_recent)
             Returns (None, True) if file doesn't exist or is invalid
@@ -103,21 +101,21 @@ class ConfigManager:
         if not _validate_file_path(file_path):
             logger.warning(f"Invalid file path: {file_path}")
             return None, True
-            
+
         if not os.path.exists(file_path):
             return None, True
-            
+
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
+            with open(file_path, "r", encoding="utf-8") as f:
                 content = f.read()
                 # Remove comments safely using string-aware regex
                 # Pattern matches: "string" OR //comment OR /* comment */
                 pattern = r'("[^"\\]*(?:\\.[^"\\]*)*")|//[^\n]*|/\*[\s\S]*?\*/'
-                
+
                 def replacer(match):
                     if match.group(1):
-                        return match.group(1) # Keep strings
-                    return "" # Remove comments
+                        return match.group(1)  # Keep strings
+                    return ""  # Remove comments
 
                 content = re.sub(pattern, replacer, content)
                 config = json.loads(content)
@@ -143,13 +141,17 @@ class ConfigManager:
         """Get list of recent files."""
         if not os.path.exists(RECENT_FILES_PATH):
             return []
-            
+
         try:
-            with open(RECENT_FILES_PATH, 'r', encoding='utf-8') as f:
+            with open(RECENT_FILES_PATH, "r", encoding="utf-8") as f:
                 files = json.load(f)
                 # Validate that it's a list of strings
                 if isinstance(files, list):
-                    return [f for f in files if isinstance(f, str) and _validate_file_path(f)]
+                    return [
+                        f
+                        for f in files
+                        if isinstance(f, str) and _validate_file_path(f)
+                    ]
                 return []
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
             logger.error(f"Error parsing recent files: {e}")
@@ -163,18 +165,18 @@ class ConfigManager:
         if not _validate_file_path(file_path):
             logger.warning(f"Invalid file path for recent files: {file_path}")
             return
-            
+
         recent = self.get_recent_files()
-        
+
         if file_path in recent:
             recent.remove(file_path)
-            
+
         recent.insert(0, file_path)
-        
+
         # Limit size
         if len(recent) > MAX_RECENT_FILES:
             recent = recent[:MAX_RECENT_FILES]
-            
+
         self._save_recent_files(recent)
         self.set_last_selected_file(file_path)
 
@@ -182,7 +184,7 @@ class ConfigManager:
         """Remove file from recent list."""
         if not _validate_file_path(file_path):
             return
-            
+
         recent = self.get_recent_files()
         if file_path in recent:
             recent.remove(file_path)
@@ -197,9 +199,9 @@ class ConfigManager:
         """Get last selected file path."""
         if not os.path.exists(LAST_FILE_PATH):
             return None
-            
+
         try:
-            with open(LAST_FILE_PATH, 'r', encoding='utf-8') as f:
+            with open(LAST_FILE_PATH, "r", encoding="utf-8") as f:
                 path = f.read().strip()
                 if _validate_file_path(path):
                     return path
@@ -213,7 +215,7 @@ class ConfigManager:
         if not _validate_file_path(file_path):
             logger.warning(f"Invalid file path: {file_path}")
             return
-            
+
         if not _atomic_write(LAST_FILE_PATH, file_path):
             logger.error("Failed to save last selected file")
 
@@ -224,7 +226,7 @@ class ConfigManager:
         if not os.path.exists(profiles_path):
             return []
         try:
-            with open(profiles_path, 'r', encoding='utf-8') as f:
+            with open(profiles_path, "r", encoding="utf-8") as f:
                 profiles = json.load(f)
                 if isinstance(profiles, list):
                     return profiles
@@ -244,15 +246,17 @@ class ConfigManager:
         if not isinstance(config, dict):
             logger.warning("Invalid profile config")
             return
-            
+
         profiles = self.load_profiles()
-        profiles.append({
-            "id": str(uuid.uuid4()),
-            "name": name,
-            "config": config,
-            "created_at": str(datetime.now())
-        })
-        
+        profiles.append(
+            {
+                "id": str(uuid.uuid4()),
+                "name": name,
+                "config": config,
+                "created_at": str(datetime.now()),
+            }
+        )
+
         profiles_path = os.path.join(self._config_dir, "profiles.json")
         if not _atomic_write_json(profiles_path, profiles):
             logger.error("Failed to save profile")
@@ -261,16 +265,16 @@ class ConfigManager:
         """Update an existing profile with new data."""
         if not profile_id:
             return False
-            
+
         profiles = self.load_profiles()
         updated = False
-        
+
         for p in profiles:
             if p.get("id") == profile_id:
                 p.update(updates)
                 updated = True
                 break
-        
+
         if updated:
             profiles_path = os.path.join(self._config_dir, "profiles.json")
             if not _atomic_write_json(profiles_path, profiles):
@@ -283,10 +287,10 @@ class ConfigManager:
         """Delete a profile by ID."""
         if not profile_id or not isinstance(profile_id, str):
             return
-            
+
         profiles = self.load_profiles()
         profiles = [p for p in profiles if p.get("id") != profile_id]
-        
+
         profiles_path = os.path.join(self._config_dir, "profiles.json")
         if not _atomic_write_json(profiles_path, profiles):
             logger.error("Failed to delete profile")
@@ -301,28 +305,30 @@ class ConfigManager:
             if "profiles" not in sub:
                 sub["profiles"] = []
                 # Not necessarily dirty, but good to normalize
-            
+
             if isinstance(sub["profiles"], list):
                 for profile in sub["profiles"]:
                     if not profile.get("id"):
                         profile["id"] = str(uuid.uuid4())
                         dirty = True
-        
+
         if dirty:
             self._save_json_list("subscriptions.json", subs)
-            
+
         return subs
 
     def save_subscription(self, name: str, url: str) -> None:
         """Save a new subscription."""
         subs = self.load_subscriptions()
-        subs.append({
-            "id": str(uuid.uuid4()),
-            "name": name,
-            "url": url,
-            "profiles": [],
-            "created_at": str(datetime.now())
-        })
+        subs.append(
+            {
+                "id": str(uuid.uuid4()),
+                "name": name,
+                "url": url,
+                "profiles": [],
+                "created_at": str(datetime.now()),
+            }
+        )
         self._save_json_list("subscriptions.json", subs)
 
     def save_subscription_data(self, subscription: dict) -> None:
@@ -345,7 +351,7 @@ class ConfigManager:
         if not os.path.exists(path):
             return []
         try:
-            with open(path, 'r', encoding='utf-8') as f:
+            with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 return data if isinstance(data, list) else []
         except Exception as e:
@@ -360,7 +366,7 @@ class ConfigManager:
         """Get config for a specific profile."""
         if not profile_id:
             return None
-            
+
         profiles = self.load_profiles()
         for p in profiles:
             if p.get("id") == profile_id:
@@ -373,7 +379,7 @@ class ConfigManager:
         if not os.path.exists(last_profile_path):
             return None
         try:
-            with open(last_profile_path, 'r', encoding='utf-8') as f:
+            with open(last_profile_path, "r", encoding="utf-8") as f:
                 profile_id = f.read().strip()
                 return profile_id if profile_id else None
         except (OSError, IOError, UnicodeDecodeError) as e:
@@ -384,7 +390,7 @@ class ConfigManager:
         """Set last selected profile ID using atomic write."""
         if not profile_id:
             return
-            
+
         last_profile_path = os.path.join(self._config_dir, "last_profile.txt")
         if not _atomic_write(last_profile_path, profile_id):
             logger.error("Failed to save last profile ID")
@@ -396,12 +402,14 @@ class ConfigManager:
         if not os.path.exists(port_path):
             return DEFAULT_PROXY_PORT
         try:
-            with open(port_path, 'r', encoding='utf-8') as f:
+            with open(port_path, "r", encoding="utf-8") as f:
                 port_str = f.read().strip()
                 port = int(port_str)
                 if MIN_PORT <= port <= MAX_PORT:
                     return port
-                logger.warning(f"Invalid port {port}, using default {DEFAULT_PROXY_PORT}")
+                logger.warning(
+                    f"Invalid port {port}, using default {DEFAULT_PROXY_PORT}"
+                )
                 return DEFAULT_PROXY_PORT
         except (ValueError, OSError, IOError) as e:
             logger.error(f"Error reading proxy port: {e}")
@@ -411,7 +419,7 @@ class ConfigManager:
         """Set the proxy port with validation."""
         if not isinstance(port, int) or not (MIN_PORT <= port <= MAX_PORT):
             raise ValueError(f"Port must be between {MIN_PORT} and {MAX_PORT}")
-            
+
         port_path = os.path.join(self._config_dir, "proxy_port.txt")
         if not _atomic_write(port_path, str(port)):
             logger.error("Failed to save proxy port")
@@ -423,7 +431,7 @@ class ConfigManager:
         if not os.path.exists(path):
             return "none"  # Default to no routing
         try:
-            with open(path, 'r', encoding='utf-8') as f:
+            with open(path, "r", encoding="utf-8") as f:
                 val = f.read().strip()
                 if val in VALID_COUNTRY_CODES:
                     return val
@@ -437,7 +445,7 @@ class ConfigManager:
         if country_code and country_code not in VALID_COUNTRY_CODES:
             logger.warning(f"Invalid country code: {country_code}")
             return
-            
+
         path = os.path.join(self._config_dir, "routing_country.txt")
         content = country_code if country_code else ""
         if not _atomic_write(path, content):
@@ -449,7 +457,7 @@ class ConfigManager:
         if not os.path.exists(path):
             return DEFAULT_DNS
         try:
-            with open(path, 'r', encoding='utf-8') as f:
+            with open(path, "r", encoding="utf-8") as f:
                 val = f.read().strip()
                 return val if val else DEFAULT_DNS
         except (OSError, IOError, UnicodeDecodeError) as e:
@@ -461,7 +469,7 @@ class ConfigManager:
         if not isinstance(dns_string, str):
             logger.warning("Invalid DNS string type")
             return
-            
+
         path = os.path.join(self._config_dir, "custom_dns.txt")
         if not _atomic_write(path, dns_string):
             logger.error("Failed to save custom DNS")
@@ -472,7 +480,7 @@ class ConfigManager:
         if not os.path.exists(path):
             return "proxy"
         try:
-            with open(path, 'r', encoding='utf-8') as f:
+            with open(path, "r", encoding="utf-8") as f:
                 mode = f.read().strip()
                 if mode in VALID_MODES:
                     return mode
@@ -485,7 +493,7 @@ class ConfigManager:
         """Set connection mode with validation."""
         if mode not in VALID_MODES:
             raise ValueError(f"Mode must be one of {VALID_MODES}")
-            
+
         path = os.path.join(self._config_dir, "connection_mode.txt")
         if not _atomic_write(path, mode):
             logger.error("Failed to save connection mode")
@@ -497,7 +505,7 @@ class ConfigManager:
         if not os.path.exists(path):
             return "dark"
         try:
-            with open(path, 'r', encoding='utf-8') as f:
+            with open(path, "r", encoding="utf-8") as f:
                 theme = f.read().strip()
                 if theme in VALID_THEMES:
                     return theme
@@ -510,7 +518,7 @@ class ConfigManager:
         """Set theme mode with validation."""
         if mode not in VALID_THEMES:
             raise ValueError(f"Theme must be one of {VALID_THEMES}")
-            
+
         path = os.path.join(self._config_dir, "theme_mode.txt")
         if not _atomic_write(path, mode):
             logger.error("Failed to save theme mode")
@@ -522,7 +530,7 @@ class ConfigManager:
         if not os.path.exists(path):
             return "name_asc"
         try:
-            with open(path, 'r', encoding='utf-8') as f:
+            with open(path, "r", encoding="utf-8") as f:
                 mode = f.read().strip()
                 if mode in ["name_asc", "ping_asc", "ping_desc"]:
                     return mode
@@ -536,7 +544,7 @@ class ConfigManager:
         valid_modes = {"name_asc", "ping_asc", "ping_desc"}
         if mode not in valid_modes:
             return
-            
+
         path = os.path.join(self._config_dir, "sort_mode.txt")
         if not _atomic_write(path, mode):
             logger.error("Failed to save sort mode")
@@ -548,7 +556,7 @@ class ConfigManager:
         if not os.path.exists(path):
             return "en"
         try:
-            with open(path, 'r', encoding='utf-8') as f:
+            with open(path, "r", encoding="utf-8") as f:
                 lang = f.read().strip()
                 if lang in VALID_LANGUAGES:
                     return lang
@@ -561,7 +569,7 @@ class ConfigManager:
         """Set language with validation."""
         if lang not in VALID_LANGUAGES:
             raise ValueError(f"Language must be one of {VALID_LANGUAGES}")
-            
+
         path = os.path.join(self._config_dir, "language.txt")
         if not _atomic_write(path, lang):
             logger.error("Failed to save language")
@@ -569,12 +577,14 @@ class ConfigManager:
     # --- Routing Rules Persistence ---
     def load_routing_rules(self) -> dict:
         """
-        Load routing rules. 
+        Load routing rules.
         Returns dict with keys: 'direct', 'proxy', 'block'.
         Each value is a list of strings (domains/IPs).
         """
         defaults = {"direct": [], "proxy": [], "block": []}
-        return self._load_json_list("routing_rules.json", default_type=dict, default_val=defaults)
+        return self._load_json_list(
+            "routing_rules.json", default_type=dict, default_val=defaults
+        )
 
     def save_routing_rules(self, rules: dict):
         """Save routing rules."""
@@ -584,14 +594,16 @@ class ConfigManager:
     def load_dns_config(self) -> list:
         """
         Load DNS configuration.
-        Returns list of dicts: 
+        Returns list of dicts:
         [{ "address": "...", "protocol": "doh/udp/tcp", "domains": [...] }]
         """
         defaults = [
-             {"address": "1.1.1.1", "protocol": "udp", "domains": []},
-             {"address": "8.8.8.8", "protocol": "udp", "domains": []}
+            {"address": "1.1.1.1", "protocol": "udp", "domains": []},
+            {"address": "8.8.8.8", "protocol": "udp", "domains": []},
         ]
-        return self._load_json_list("dns_config.json", default_type=list, default_val=defaults)
+        return self._load_json_list(
+            "dns_config.json", default_type=list, default_val=defaults
+        )
 
     def save_dns_config(self, dns_list: list):
         """Save DNS configuration."""
@@ -601,7 +613,7 @@ class ConfigManager:
     def _load_json_list(self, filename: str, default_type=list, default_val=None):
         if default_val is None:
             default_val = [] if default_type is list else {}
-            
+
         path = os.path.join(self._config_dir, filename)
         if not os.path.exists(path):
             return default_val

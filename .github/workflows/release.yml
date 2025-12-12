@@ -76,8 +76,10 @@ jobs:
           # Copy bin
           Copy-Item -Recurse "dist/bin" "package/"
           
-          # Copy .env.example for users
-          Copy-Item ".env.example" "package/"
+          # Copy updater script
+          Copy-Item "scripts/xenray_updater.ps1" "package/scripts/" -Force
+          New-Item -ItemType Directory -Force -Path "package/scripts"
+          Copy-Item "scripts/xenray_updater.ps1" "package/scripts/xenray_updater.ps1"
           
           # Create zip
           Compress-Archive -Path "package/*" -DestinationPath $zipName
@@ -98,8 +100,7 @@ jobs:
             ### Installation
             1. Download `${{ env.ZIP_NAME }}`
             2. Extract to a folder
-            3. Copy `.env.example` to `.env` (if needed)
-            4. Run `XenRay.exe`
+            3. Run `XenRay.exe`
             
             ### Requirements
             - Windows 7 or higher
@@ -110,6 +111,7 @@ jobs:
             - Xray Core ${{ env.XRAY_VERSION }}
             - Singbox ${{ env.SINGBOX_VERSION }}
             - Multilingual support (EN, FA, RU, ZH)
+            - Auto-updater script
           draft: false
           prerelease: false
         env:

@@ -1,6 +1,8 @@
 """Server list item component for individual server display."""
 from __future__ import annotations
+
 from typing import Callable, Optional
+
 import flet as ft
 
 
@@ -20,16 +22,16 @@ class ServerListItem(ft.Container):
         self._on_select = on_select
         self._on_delete = on_delete
         self._read_only = read_only
-        
+
         # Extract data
         config = profile.get("config", {})
         address, port = self._extract_address_port(config)
         pid = profile.get("id")
-        
+
         # Ping state from cache or profile
         last_ping = "..."
         last_ping_color = ft.Colors.GREY_500
-        
+
         if cached_ping:
             last_ping, last_ping_color, _ = cached_ping
         elif profile.get("last_latency"):
@@ -41,20 +43,26 @@ class ServerListItem(ft.Container):
                 last_ping_color = ft.Colors.ORANGE_400
             else:
                 last_ping_color = ft.Colors.RED_400
-        
+
         # Selection styling
         if is_selected:
             border_color = ft.Colors.PRIMARY
             border_width = 2
             bg_color = ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY)
         else:
-            border_color = ft.Colors.with_opacity(0.5, ft.Colors.OUTLINE_VARIANT) if read_only else ft.Colors.OUTLINE_VARIANT
+            border_color = (
+                ft.Colors.with_opacity(0.5, ft.Colors.OUTLINE_VARIANT)
+                if read_only
+                else ft.Colors.OUTLINE_VARIANT
+            )
             border_width = 1
             bg_color = ft.Colors.SURFACE
-        
+
         # Ping label (exposed for updates)
-        self.ping_label = ft.Text(last_ping, size=12, color=last_ping_color, weight=ft.FontWeight.BOLD)
-        
+        self.ping_label = ft.Text(
+            last_ping, size=12, color=last_ping_color, weight=ft.FontWeight.BOLD
+        )
+
         # Icon container (exposed for flag updates)
         icon_content = self._create_icon_content(profile)
         self.icon_container = ft.Container(
@@ -73,27 +81,34 @@ class ServerListItem(ft.Container):
                 offset=ft.Offset(0, 1),
             ),
         )
-        
+
         # Left content
-        left_content = ft.Row([
-            self.icon_container,
-            ft.Column([
-                ft.Text(
-                    profile["name"],
-                    weight=ft.FontWeight.BOLD,
-                    size=14,
-                    color=ft.Colors.ON_SURFACE,
-                    overflow=ft.TextOverflow.ELLIPSIS,
+        left_content = ft.Row(
+            [
+                self.icon_container,
+                ft.Column(
+                    [
+                        ft.Text(
+                            profile["name"],
+                            weight=ft.FontWeight.BOLD,
+                            size=14,
+                            color=ft.Colors.ON_SURFACE,
+                            overflow=ft.TextOverflow.ELLIPSIS,
+                        ),
+                        ft.Text(
+                            f"{address}:{port}",
+                            size=11,
+                            color=ft.Colors.ON_SURFACE_VARIANT,
+                            overflow=ft.TextOverflow.ELLIPSIS,
+                        ),
+                    ],
+                    spacing=2,
                 ),
-                ft.Text(
-                    f"{address}:{port}",
-                    size=11,
-                    color=ft.Colors.ON_SURFACE_VARIANT,
-                    overflow=ft.TextOverflow.ELLIPSIS,
-                ),
-            ], spacing=2),
-        ], spacing=10, expand=True)
-        
+            ],
+            spacing=10,
+            expand=True,
+        )
+
         # Right content
         right_controls = [self.ping_label]
         if not read_only and on_delete:
@@ -105,8 +120,10 @@ class ServerListItem(ft.Container):
                     on_click=lambda e: on_delete(pid),
                 )
             )
-        right_content = ft.Row(right_controls, spacing=5, alignment=ft.MainAxisAlignment.END)
-        
+        right_content = ft.Row(
+            right_controls, spacing=5, alignment=ft.MainAxisAlignment.END
+        )
+
         super().__init__(
             content=ft.Row(
                 [left_content, right_content],

@@ -8,13 +8,12 @@ class ServerCard(ft.Container):
         # Icon Container (Holds Flag or Globe)
         # Use Icon instead of emoji for consistent sizing
         self._globe_icon = ft.Icon(
-            ft.Icons.PUBLIC,
-            size=18,
-            color=ft.Colors.ON_SURFACE_VARIANT
+            ft.Icons.PUBLIC, size=18, color=ft.Colors.ON_SURFACE_VARIANT
         )
         self._icon_container = ft.Container(
             content=self._globe_icon,
-            width=32, height=32,
+            width=32,
+            height=32,
             alignment=ft.alignment.center,
             border_radius=16,
             clip_behavior=ft.ClipBehavior.HARD_EDGE,
@@ -77,7 +76,7 @@ class ServerCard(ft.Container):
         if not profile:
             self._icon_container.content = self._globe_icon
             self._icon_container.update()
-            
+
             self._name_text.value = t("server_list.no_server")
             self._name_text.color = ft.Colors.ON_SURFACE_VARIANT
             self._address_text.value = ""
@@ -94,7 +93,7 @@ class ServerCard(ft.Container):
                     gapless_playback=True,
                     filter_quality=ft.FilterQuality.HIGH,
                     border_radius=ft.border_radius.all(16),
-                    anti_alias=True
+                    anti_alias=True,
                 )
                 self._icon_container.content = new_image
                 self._icon_container.tooltip = profile.get("country_name", cc)
@@ -105,7 +104,7 @@ class ServerCard(ft.Container):
 
             self._name_text.value = profile["name"]
             self._name_text.color = ft.Colors.PRIMARY
-            
+
             # ... Address logic ...
             try:
                 vnext = profile["config"]["outbounds"][0]["settings"]["vnext"][0]

@@ -1,6 +1,8 @@
 """Reusable settings section components with i18n support."""
 from __future__ import annotations
+
 from typing import Callable, Optional
+
 import flet as ft
 
 from src.core.i18n import t
@@ -11,11 +13,18 @@ class SettingsSection(ft.Container):
 
     def __init__(self, title: str, controls: list, padding_horizontal: int = 20):
         super().__init__(
-            content=ft.Column([
-                ft.Text(title, color=ft.Colors.PRIMARY, weight=ft.FontWeight.BOLD, size=12),
-                ft.Container(height=5),
-                *controls,
-            ]),
+            content=ft.Column(
+                [
+                    ft.Text(
+                        title,
+                        color=ft.Colors.PRIMARY,
+                        weight=ft.FontWeight.BOLD,
+                        size=12,
+                    ),
+                    ft.Container(height=5),
+                    *controls,
+                ]
+            ),
             padding=ft.padding.symmetric(horizontal=padding_horizontal),
         )
 
@@ -30,21 +39,28 @@ class SettingsRow(ft.Container):
         control: ft.Control,
         sublabel: Optional[str] = None,
     ):
-        label_column = ft.Column([
-            ft.Text(label, weight=ft.FontWeight.W_500),
-        ], spacing=2, expand=True)
-        
+        label_column = ft.Column(
+            [
+                ft.Text(label, weight=ft.FontWeight.W_500),
+            ],
+            spacing=2,
+            expand=True,
+        )
+
         if sublabel:
             label_column.controls.append(
                 ft.Text(sublabel, size=11, color=ft.Colors.ON_SURFACE_VARIANT)
             )
 
         super().__init__(
-            content=ft.Row([
-                ft.Icon(icon, color=ft.Colors.ON_SURFACE_VARIANT),
-                label_column,
-                control,
-            ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+            content=ft.Row(
+                [
+                    ft.Icon(icon, color=ft.Colors.ON_SURFACE_VARIANT),
+                    label_column,
+                    control,
+                ],
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            ),
             padding=10,
             border_radius=8,
             bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE),
@@ -62,8 +78,12 @@ class SettingsListTile(ft.ListTile):
         on_click: Optional[Callable] = None,
         show_chevron: bool = True,
     ):
-        trailing = ft.Icon(ft.Icons.CHEVRON_RIGHT, size=18, color=ft.Colors.OUTLINE) if show_chevron else None
-        
+        trailing = (
+            ft.Icon(ft.Icons.CHEVRON_RIGHT, size=18, color=ft.Colors.OUTLINE)
+            if show_chevron
+            else None
+        )
+
         super().__init__(
             leading=ft.Icon(icon, color=ft.Colors.ON_SURFACE_VARIANT),
             title=ft.Text(title, weight=ft.FontWeight.W_500),
@@ -86,24 +106,49 @@ class ModeSwitchRow(ft.Container):
         self._is_proxy = is_proxy
 
         super().__init__(
-            content=ft.Row([
-                ft.Icon(ft.Icons.VPN_LOCK, color=ft.Colors.ON_SURFACE_VARIANT),
-                ft.Column([
-                    ft.Text(t("settings.connection_mode"), weight=ft.FontWeight.W_500),
-                    ft.Text(t("settings.mode_description"), size=11, color=ft.Colors.ON_SURFACE_VARIANT),
-                ], spacing=2, expand=True),
-                ft.Row([
-                    ft.Text(
-                        t("settings.vpn"), size=11, color=ft.Colors.ON_SURFACE_VARIANT,
-                        weight=ft.FontWeight.BOLD if not is_proxy else ft.FontWeight.NORMAL,
+            content=ft.Row(
+                [
+                    ft.Icon(ft.Icons.VPN_LOCK, color=ft.Colors.ON_SURFACE_VARIANT),
+                    ft.Column(
+                        [
+                            ft.Text(
+                                t("settings.connection_mode"),
+                                weight=ft.FontWeight.W_500,
+                            ),
+                            ft.Text(
+                                t("settings.mode_description"),
+                                size=11,
+                                color=ft.Colors.ON_SURFACE_VARIANT,
+                            ),
+                        ],
+                        spacing=2,
+                        expand=True,
                     ),
-                    self._switch,
-                    ft.Text(
-                        t("settings.proxy"), size=11, color=ft.Colors.ON_SURFACE_VARIANT,
-                        weight=ft.FontWeight.BOLD if is_proxy else ft.FontWeight.NORMAL,
+                    ft.Row(
+                        [
+                            ft.Text(
+                                t("settings.vpn"),
+                                size=11,
+                                color=ft.Colors.ON_SURFACE_VARIANT,
+                                weight=ft.FontWeight.BOLD
+                                if not is_proxy
+                                else ft.FontWeight.NORMAL,
+                            ),
+                            self._switch,
+                            ft.Text(
+                                t("settings.proxy"),
+                                size=11,
+                                color=ft.Colors.ON_SURFACE_VARIANT,
+                                weight=ft.FontWeight.BOLD
+                                if is_proxy
+                                else ft.FontWeight.NORMAL,
+                            ),
+                        ],
+                        spacing=5,
                     ),
-                ], spacing=5),
-            ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                ],
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            ),
             padding=10,
             border_radius=8,
             bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE),
@@ -135,20 +180,30 @@ class PortInputRow(ft.Container):
         )
 
         super().__init__(
-            content=ft.Row([
-                ft.Icon(ft.Icons.INPUT, size=20, color=ft.Colors.ON_SURFACE_VARIANT),
-                ft.Text(t("settings.socks_port"), size=12, weight=ft.FontWeight.W_500, width=80),
-                self._field,
-                ft.ElevatedButton(
-                    text=t("settings.save"),
-                    height=30,
-                    style=ft.ButtonStyle(
-                        padding=ft.padding.symmetric(horizontal=10),
-                        shape=ft.RoundedRectangleBorder(radius=4),
+            content=ft.Row(
+                [
+                    ft.Icon(
+                        ft.Icons.INPUT, size=20, color=ft.Colors.ON_SURFACE_VARIANT
                     ),
-                    on_click=lambda e: on_save(self._field.value),
-                ),
-            ], spacing=5),
+                    ft.Text(
+                        t("settings.socks_port"),
+                        size=12,
+                        weight=ft.FontWeight.W_500,
+                        width=80,
+                    ),
+                    self._field,
+                    ft.ElevatedButton(
+                        text=t("settings.save"),
+                        height=30,
+                        style=ft.ButtonStyle(
+                            padding=ft.padding.symmetric(horizontal=10),
+                            shape=ft.RoundedRectangleBorder(radius=4),
+                        ),
+                        on_click=lambda e: on_save(self._field.value),
+                    ),
+                ],
+                spacing=5,
+            ),
             padding=ft.padding.only(left=5, top=5, right=20, bottom=5),
         )
 
@@ -182,11 +237,21 @@ class CountryDropdownRow(ft.Container):
         )
 
         super().__init__(
-            content=ft.Row([
-                ft.Icon(ft.Icons.PUBLIC, size=20, color=ft.Colors.ON_SURFACE_VARIANT),
-                ft.Text(t("settings.direct_country"), size=12, weight=ft.FontWeight.W_500, width=80),
-                self._dropdown,
-            ], spacing=5),
+            content=ft.Row(
+                [
+                    ft.Icon(
+                        ft.Icons.PUBLIC, size=20, color=ft.Colors.ON_SURFACE_VARIANT
+                    ),
+                    ft.Text(
+                        t("settings.direct_country"),
+                        size=12,
+                        weight=ft.FontWeight.W_500,
+                        width=80,
+                    ),
+                    self._dropdown,
+                ],
+                spacing=5,
+            ),
             padding=ft.padding.symmetric(horizontal=5, vertical=5),
         )
 
@@ -206,7 +271,7 @@ class LanguageDropdownRow(ft.Container):
             ("zh", "cn", "中文"),
             ("ru", "ru", "Русский"),
         ]
-        
+
         self._dropdown = ft.Dropdown(
             width=160,
             text_size=12,
@@ -220,14 +285,14 @@ class LanguageDropdownRow(ft.Container):
             focused_border_color=ft.Colors.PRIMARY,
             on_change=on_change,
         )
-        
+
         # Get current flag code
         current_flag = "gb"
         for lang_code, flag_code, name in self._languages:
             if lang_code == (current_value or "en"):
                 current_flag = flag_code
                 break
-        
+
         self._flag_image = ft.Image(
             src=f"/flags/{current_flag}.svg",
             width=24,
@@ -237,9 +302,10 @@ class LanguageDropdownRow(ft.Container):
             filter_quality=ft.FilterQuality.HIGH,
             anti_alias=True,
         )
-        
+
         # Update flag when language changes
         original_on_change = on_change
+
         def wrapped_on_change(e):
             selected = self._dropdown.value
             for lang_code, flag_code, name in self._languages:
@@ -248,15 +314,23 @@ class LanguageDropdownRow(ft.Container):
                     self._flag_image.update()
                     break
             original_on_change(e)
-        
+
         self._dropdown.on_change = wrapped_on_change
 
         super().__init__(
-            content=ft.Row([
-                self._flag_image,
-                ft.Text(t("settings.language"), size=12, weight=ft.FontWeight.W_500, width=60),
-                self._dropdown,
-            ], spacing=8),
+            content=ft.Row(
+                [
+                    self._flag_image,
+                    ft.Text(
+                        t("settings.language"),
+                        size=12,
+                        weight=ft.FontWeight.W_500,
+                        width=60,
+                    ),
+                    self._dropdown,
+                ],
+                spacing=8,
+            ),
             padding=ft.padding.symmetric(horizontal=5, vertical=5),
         )
 

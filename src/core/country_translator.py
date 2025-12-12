@@ -1,5 +1,6 @@
 """Country name translations using pycountry library."""
 import gettext
+
 import pycountry
 
 from src.core.i18n import get_language
@@ -36,44 +37,44 @@ def _get_translator(lang_code: str):
 def translate_country(country_code: str, fallback: str = None) -> str:
     """
     Translate a country code to the current language using pycountry.
-    
+
     Args:
         country_code: ISO 2-letter country code (e.g., 'US', 'DE')
         fallback: Fallback name if translation not found
-    
+
     Returns:
         Translated country name or fallback/code
     """
     if not country_code:
         return fallback or "Unknown"
-    
+
     code = country_code.upper()
-    
+
     try:
         # Get country from pycountry
         country = pycountry.countries.get(alpha_2=code)
         if not country:
             return fallback or code
-        
+
         english_name = country.name
-        
+
         # Get current language
         lang = get_language()
-        
+
         # If English, return directly
         if lang == "en":
             return english_name
-        
+
         # Try to get translation
         translator = _get_translator(lang)
         if translator:
             translated = translator.gettext(english_name)
             if translated and translated != english_name:
                 return translated
-        
+
         # Fallback to English name
         return english_name
-        
+
     except Exception:
         return fallback or code
 

@@ -63,6 +63,8 @@
     "routing_description": "管理直连、代理和阻止列表",
     "dns_settings": "DNS设置",
     "dns_description": "配置上游DNS服务器",
+    "check_app_updates": "检查应用更新",
+    "app_update_description": "检查XenRay更新",
     "check_updates": "检查更新",
     "update_xray": "更新Xray核心",
     "about": "关于XenRay",
@@ -86,6 +88,24 @@
     "starting": "启动中...",
     "success": "Xray更新成功! 🎉",
     "failed": "更新失败! ❌"
+  },
+  "app_update": {
+    "checking": "正在检查应用更新... 📡",
+    "up_to_date": "应用已是最新版本! (v{version}) ✅",
+    "available": "有可用更新: v{current} -> v{latest}",
+    "install": "安装XenRay v{version}?",
+    "title": "应用更新可用",
+    "message": "有新版本可用。更新后应用将重启。",
+    "confirm": "下载并安装",
+    "cancel": "暂不更新",
+    "release_notes": "查看发布说明",
+    "downloading": "正在下载更新... {progress}%",
+    "extracting": "正在准备更新...",
+    "restarting": "正在重启应用...",
+    "download_failed": "更新下载失败。请重试。",
+    "permission_denied": "无法写入应用目录。请以管理员身份运行。",
+    "extract_failed": "无法提取更新文件。",
+    "check_failed": "检查更新失败"
   },
   "countries": {
     "none": "无",

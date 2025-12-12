@@ -76,7 +76,8 @@ XenRay-vx.y.z-windows-x64.zip
 ├── bin/                    # Binaries
 │   ├── xray.exe           # Xray Core
 │   └── sing-box.exe       # Singbox
-└── .env.example           # Configuration template
+└── scripts/                # Support scripts
+    └── xenray_updater.ps1 # Auto-updater (Windows)
 ```
 
 ## Versioning

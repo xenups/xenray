@@ -1,16 +1,7 @@
 import requests
+
 from src.core.logger import logger
 
-class GeoIPService:
-    @staticmethod
-    def get_country():
-        """
-        Fetches the current IP's country code.
-        Returns: 2-letter country code (e.g., 'US', 'DE') or None if failed.
-        """
-        try:
-import requests
-from src.core.logger import logger
 
 class GeoIPService:
     @staticmethod
@@ -30,9 +21,11 @@ class GeoIPService:
                     country_data = {
                         "country_code": data.get("countryCode"),
                         "country_name": data.get("country"),
-                        "city": data.get("city")
+                        "city": data.get("city"),
                     }
-                    logger.debug(f"[GeoIP] Found: {country_data.get('country_code')} - {country_data.get('country_name')}")
+                    logger.debug(
+                        f"[GeoIP] Found: {country_data.get('country_code')} - {country_data.get('country_name')}"
+                    )
                     return country_data
         except Exception as e:
             logger.error(f"[GeoIP] Failed to fetch country: {e}")

@@ -1,10 +1,12 @@
 """Add server/subscription dialog component with i18n support."""
 from __future__ import annotations
-from typing import Callable, Optional
+
+from typing import Callable
+
 import flet as ft
 
-from src.utils.link_parser import LinkParser
 from src.core.i18n import t
+from src.utils.link_parser import LinkParser
 
 
 class AddServerDialog(ft.AlertDialog):
@@ -19,7 +21,7 @@ class AddServerDialog(ft.AlertDialog):
         self._on_server_added = on_server_added
         self._on_subscription_added = on_subscription_added
         self._on_close = on_close
-        
+
         self._name_input = ft.TextField(
             label=t("add_dialog.name_label"),
             hint_text=t("add_dialog.name_hint"),
@@ -33,16 +35,18 @@ class AddServerDialog(ft.AlertDialog):
             max_lines=10,
             text_size=12,
         )
-        
+
         super().__init__(
             title=ft.Text(t("add_dialog.title")),
             content=ft.Column(
                 [self._name_input, self._content_input],
-                height=180,
+                width=400,
+                spacing=10,
+                tight=True,
             ),
             actions=[
-                ft.TextButton(t("add_dialog.add"), on_click=self._handle_add),
                 ft.TextButton(t("add_dialog.cancel"), on_click=self._handle_close),
+                ft.TextButton(t("add_dialog.add"), on_click=self._handle_add),
             ],
             actions_alignment=ft.MainAxisAlignment.END,
         )
@@ -51,30 +55,32 @@ class AddServerDialog(ft.AlertDialog):
         """Handle the add button click."""
         content = self._content_input.value.strip()
         name = self._name_input.value.strip()
-        
+
         if not content:
             self._content_input.error_text = t("add_dialog.required")
             self._content_input.update()
             return
-        
-        is_config = content.startswith(("vless://", "vmess://", "trojan://", "ss://"))
-        
+
+        is_config = content.startswith(
+            ("vless://", "vmess://", "trojan://", "ss://", "hysteria2://")
+        )
+
         try:
-            parsed = LinkParser.parse_vless(content)
+            parsed = LinkParser.parse_link(content)
             final_name = name if name else parsed["name"]
             self._on_server_added(final_name, parsed["config"])
             self._reset_and_close()
             return
         except Exception:
             pass
-        
+
         if not name:
             self._name_input.error_text = t("add_dialog.name_required")
             self._name_input.update()
             if is_config:
                 self._show_error(t("add_dialog.invalid_link"))
             return
-        
+
         self._on_subscription_added(name, content)
         self._reset_and_close()
 

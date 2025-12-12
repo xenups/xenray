@@ -63,6 +63,8 @@
     "routing_description": "Manage direct, proxy, and block lists",
     "dns_settings": "DNS Settings",
     "dns_description": "Configure upstream DNS servers",
+    "check_app_updates": "Check for App Updates",
+    "app_update_description": "Check for XenRay updates",
     "check_updates": "Check for Updates",
     "update_xray": "Update Xray Core",
     "about": "About XenRay",
@@ -86,6 +88,24 @@
     "starting": "Starting...",
     "success": "Xray Updated Successfully! 🎉",
     "failed": "Update Failed! ❌"
+  },
+  "app_update": {
+    "checking": "Checking for app updates... 📡",
+    "up_to_date": "App is up to date! (v{version}) ✅",
+    "available": "Update available: v{current} -> v{latest}",
+    "install": "Install XenRay v{version}?",
+    "title": "App Update Available",
+    "message": "A new version is available. The app will restart after updating.",
+    "confirm": "Download & Install",
+    "cancel": "Not Now",
+    "release_notes": "View Release Notes",
+    "downloading": "Downloading update... {progress}%",
+    "extracting": "Preparing update...",
+    "restarting": "Restarting application...",
+    "download_failed": "Update download failed. Please try again.",
+    "permission_denied": "Cannot write to app directory. Please run as administrator.",
+    "extract_failed": "Failed to extract update files.",
+    "check_failed": "Failed to check for updates"
   },
   "countries": {
     "none": "None",

@@ -3,13 +3,15 @@ import flet as ft
 
 class ConnectionButton(ft.Container):
     """Connection button with pulsing glow animation during connecting."""
-    
+
     def __init__(self, on_click):
-        self._icon = ft.Icon(ft.Icons.POWER_SETTINGS_NEW, size=60, color=ft.Colors.WHITE)
+        self._icon = ft.Icon(
+            ft.Icons.POWER_SETTINGS_NEW, size=60, color=ft.Colors.WHITE
+        )
         self._is_connected = False
         self._is_connecting = False
         self._pulse_thread = None
-        
+
         super().__init__(
             content=self._icon,
             width=180,
@@ -18,7 +20,7 @@ class ConnectionButton(ft.Container):
             gradient=ft.LinearGradient(
                 begin=ft.alignment.top_left,
                 end=ft.alignment.bottom_right,
-                colors=["#2b2d42", "#1a1b26"], 
+                colors=["#2b2d42", "#1a1b26"],
             ),
             shadow=ft.BoxShadow(
                 spread_radius=1,
@@ -29,7 +31,7 @@ class ConnectionButton(ft.Container):
             on_click=on_click,
             animate=ft.Animation(500, ft.AnimationCurve.EASE_IN_OUT),
             alignment=ft.alignment.center,
-            border=ft.border.all(2, ft.Colors.OUTLINE)
+            border=ft.border.all(2, ft.Colors.OUTLINE),
         )
 
     def update_theme(self, is_dark: bool):
@@ -87,7 +89,7 @@ class ConnectionButton(ft.Container):
         """Start pulsing animation if not already running."""
         if self._is_connected or not self.page or self._is_connecting is False:
             return
-        
+
         # Stop any existing pulse thread
         if self._pulse_thread and self._pulse_thread.is_alive():
             # Thread will stop when _is_connecting becomes False
@@ -95,6 +97,7 @@ class ConnectionButton(ft.Container):
 
         def _pulse_loop():
             import time
+
             grow = True
             # Initial state - set to connecting appearance immediately
             self.shadow.blur_radius = 50
@@ -103,20 +106,24 @@ class ConnectionButton(ft.Container):
             self.border = ft.border.all(4, ft.Colors.with_opacity(0.8, "#fbbf24"))
             if self.page:
                 self.update()
-            
+
             while self._is_connecting and not self._is_connected and self.page:
                 try:
                     if grow:
                         self.shadow.blur_radius = 50
                         self.shadow.spread_radius = 5
                         self.shadow.color = ft.Colors.with_opacity(0.8, "#fbbf24")
-                        self.border = ft.border.all(4, ft.Colors.with_opacity(0.8, "#fbbf24"))
+                        self.border = ft.border.all(
+                            4, ft.Colors.with_opacity(0.8, "#fbbf24")
+                        )
                     else:
                         self.shadow.blur_radius = 20
                         self.shadow.spread_radius = 1
                         self.shadow.color = ft.Colors.with_opacity(0.4, "#fbbf24")
-                        self.border = ft.border.all(2, ft.Colors.with_opacity(0.5, "#fbbf24"))
-                    
+                        self.border = ft.border.all(
+                            2, ft.Colors.with_opacity(0.5, "#fbbf24")
+                        )
+
                     if self.page:
                         self.update()
                     grow = not grow
@@ -125,8 +132,8 @@ class ConnectionButton(ft.Container):
                     break
                 except Exception:
                     break
-        
+
         import threading
+
         self._pulse_thread = threading.Thread(target=_pulse_loop, daemon=True)
         self._pulse_thread.start()
-

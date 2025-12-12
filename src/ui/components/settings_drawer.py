@@ -1,22 +1,29 @@
 """Settings drawer component with i18n support."""
 from __future__ import annotations
+
+import os
 import threading
+import time
+
 import flet as ft
 
 from src.core.config_manager import ConfigManager
+from src.core.constants import APP_VERSION
+from src.core.i18n import set_language as set_app_language
+from src.core.i18n import t
 from src.core.types import ConnectionMode
-from src.core.i18n import t, set_language as set_app_language
-from src.utils.process_utils import ProcessUtils
-from src.services.xray_installer import XrayInstallerService
+from src.services.app_update_service import AppUpdateService
 from src.services.singbox_service import SingboxService
+from src.services.xray_installer import XrayInstallerService
 from src.ui.components.settings_sections import (
-    SettingsSection,
-    SettingsListTile,
-    ModeSwitchRow,
-    PortInputRow,
     CountryDropdownRow,
     LanguageDropdownRow,
+    ModeSwitchRow,
+    PortInputRow,
+    SettingsListTile,
+    SettingsSection,
 )
+from src.utils.process_utils import ProcessUtils
 
 
 class SettingsDrawer(ft.NavigationDrawer):
@@ -62,71 +69,114 @@ class SettingsDrawer(ft.NavigationDrawer):
             controls=[
                 # Header
                 ft.Container(
-                    content=ft.Column([
-                        ft.Text(t("settings.title"), size=28, weight=ft.FontWeight.BOLD),
-                        ft.Text(t("settings.subtitle"), size=12, color=ft.Colors.ON_SURFACE_VARIANT),
-                    ], spacing=2),
+                    content=ft.Column(
+                        [
+                            ft.Text(
+                                t("settings.title"), size=28, weight=ft.FontWeight.BOLD
+                            ),
+                            ft.Text(
+                                t("settings.subtitle"),
+                                size=12,
+                                color=ft.Colors.ON_SURFACE_VARIANT,
+                            ),
+                        ],
+                        spacing=2,
+                    ),
                     padding=ft.padding.only(left=20, top=20, bottom=20),
                 ),
                 # General Section
-                SettingsSection(t("settings.general"), [
-                    self._mode_switch_row,
-                    self._language_row,
-                ]),
+                SettingsSection(
+                    t("settings.general"),
+                    [
+                        self._mode_switch_row,
+                        self._language_row,
+                    ],
+                ),
                 ft.Divider(height=1, color=ft.Colors.OUTLINE_VARIANT, opacity=0.2),
                 ft.Container(height=10),
                 # Network Section
-                SettingsSection(t("settings.network"), [
-                    self._country_row,
-                    self._port_row,
-                ]),
+                SettingsSection(
+                    t("settings.network"),
+                    [
+                        self._country_row,
+                        self._port_row,
+                    ],
+                ),
                 ft.Divider(height=1, color=ft.Colors.OUTLINE_VARIANT, opacity=0.2),
                 ft.Container(height=10),
                 # Advanced Section
-                SettingsSection(t("settings.advanced"), [
-                    SettingsListTile(
-                        ft.Icons.DIRECTIONS,
-                        t("settings.routing_rules"),
-                        t("settings.routing_description"),
-                        on_click=self._open_routing_manager,
-                    ),
-                    SettingsListTile(
-                        ft.Icons.DNS,
-                        t("settings.dns_settings"),
-                        t("settings.dns_description"),
-                        on_click=self._open_dns_manager,
-                    ),
-                ]),
+                SettingsSection(
+                    t("settings.advanced"),
+                    [
+                        SettingsListTile(
+                            ft.Icons.DIRECTIONS,
+                            t("settings.routing_rules"),
+                            t("settings.routing_description"),
+                            on_click=self._open_routing_manager,
+                        ),
+                        SettingsListTile(
+                            ft.Icons.DNS,
+                            t("settings.dns_settings"),
+                            t("settings.dns_description"),
+                            on_click=self._open_dns_manager,
+                        ),
+                    ],
+                ),
                 ft.Divider(height=1, color=ft.Colors.OUTLINE_VARIANT, opacity=0.2),
                 ft.Container(height=10),
                 # System Section
-                SettingsSection(t("settings.system"), [
-                    SettingsListTile(
-                        ft.Icons.SYSTEM_UPDATE_ALT,
-                        t("settings.check_updates"),
-                        t("settings.update_xray"),
-                        on_click=lambda e: self._on_installer_run("xray"),
-                    ),
-                    SettingsListTile(
-                        ft.Icons.INFO_OUTLINE,
-                        t("settings.about"),
-                        t("settings.version"),
-                        show_chevron=False,
-                    ),
-                ]),
+                SettingsSection(
+                    t("settings.system"),
+                    [
+                        SettingsListTile(
+                            ft.Icons.UPGRADE,
+                            t("settings.check_app_updates"),
+                            t("settings.app_update_description"),
+                            on_click=self._check_app_updates,
+                        ),
+                        SettingsListTile(
+                            ft.Icons.SYSTEM_UPDATE_ALT,
+                            t("settings.check_updates"),
+                            t("settings.update_xray"),
+                            on_click=lambda e: self._on_installer_run("xray"),
+                        ),
+                        SettingsListTile(
+                            ft.Icons.INFO_OUTLINE,
+                            t("settings.about"),
+                            t("settings.version"),
+                            show_chevron=False,
+                        ),
+                    ],
+                ),
                 # Version Footer
                 ft.Container(
-                    content=ft.Row([
-                        ft.Text(
-                            f"Xray: v{XrayInstallerService.get_local_version() or 'ND'}",
-                            size=11, color=ft.Colors.OUTLINE,
-                        ),
-                        ft.Container(width=1, height=10, bgcolor=ft.Colors.OUTLINE_VARIANT),
-                        ft.Text(
-                            f"Sing-box: v{SingboxService().get_version() or 'ND'}",
-                            size=11, color=ft.Colors.OUTLINE,
-                        ),
-                    ], spacing=10, alignment=ft.MainAxisAlignment.CENTER),
+                    content=ft.Row(
+                        [
+                            ft.Text(
+                                f"XenRay: v{APP_VERSION}",
+                                size=11,
+                                color=ft.Colors.OUTLINE,
+                            ),
+                            ft.Container(
+                                width=1, height=10, bgcolor=ft.Colors.OUTLINE_VARIANT
+                            ),
+                            ft.Text(
+                                f"Xray: v{XrayInstallerService.get_local_version() or 'ND'}",
+                                size=11,
+                                color=ft.Colors.OUTLINE,
+                            ),
+                            ft.Container(
+                                width=1, height=10, bgcolor=ft.Colors.OUTLINE_VARIANT
+                            ),
+                            ft.Text(
+                                f"Sing-box: v{SingboxService().get_version() or 'ND'}",
+                                size=11,
+                                color=ft.Colors.OUTLINE,
+                            ),
+                        ],
+                        spacing=10,
+                        alignment=ft.MainAxisAlignment.CENTER,
+                    ),
                     alignment=ft.alignment.center,
                     padding=20,
                 ),
@@ -185,13 +235,25 @@ class SettingsDrawer(ft.NavigationDrawer):
             if 1024 <= port <= 65535:
                 self._config_manager.set_proxy_port(port)
                 self._port_row.set_border_color(ft.Colors.GREEN_400)
-                page.open(ft.SnackBar(content=ft.Text(t("settings.port_saved", port=port))))
+                page.open(
+                    ft.SnackBar(content=ft.Text(t("settings.port_saved", port=port)))
+                )
             else:
                 self._port_row.set_border_color(ft.Colors.RED_400)
-                page.open(ft.SnackBar(content=ft.Text(t("settings.port_invalid_range")), bgcolor=ft.Colors.RED_700))
+                page.open(
+                    ft.SnackBar(
+                        content=ft.Text(t("settings.port_invalid_range")),
+                        bgcolor=ft.Colors.RED_700,
+                    )
+                )
         except ValueError:
             self._port_row.set_border_color(ft.Colors.RED_400)
-            page.open(ft.SnackBar(content=ft.Text(t("settings.port_must_be_number")), bgcolor=ft.Colors.RED_700))
+            page.open(
+                ft.SnackBar(
+                    content=ft.Text(t("settings.port_must_be_number")),
+                    bgcolor=ft.Colors.RED_700,
+                )
+            )
 
         page.update()
 
@@ -215,7 +277,7 @@ class SettingsDrawer(ft.NavigationDrawer):
         lang = self._language_row.value
         self._config_manager.set_language(lang)
         set_app_language(lang)
-        
+
         # Notify user - app needs restart for full effect
         msg = "Language changed! Restart app for full effect. / زبان تغییر کرد! برنامه را ریستارت کنید."
         page.open(ft.SnackBar(content=ft.Text(msg)))
@@ -234,7 +296,11 @@ class SettingsDrawer(ft.NavigationDrawer):
             try:
                 available, current, latest = XrayInstallerService.check_for_updates()
                 if not available and current:
-                    page.open(ft.SnackBar(content=ft.Text(t("update.up_to_date", version=current))))
+                    page.open(
+                        ft.SnackBar(
+                            content=ft.Text(t("update.up_to_date", version=current))
+                        )
+                    )
                     page.update()
                     return
             except Exception:
@@ -244,7 +310,11 @@ class SettingsDrawer(ft.NavigationDrawer):
 
     def _show_update_dialog(self, page, current: str, latest: str):
         """Show update confirmation dialog."""
-        msg = t("update.available", current=current, latest=latest) if current else t("update.install", version=latest)
+        msg = (
+            t("update.available", current=current, latest=latest)
+            if current
+            else t("update.install", version=latest)
+        )
 
         def close_dlg(e):
             page.close(dlg)
@@ -273,9 +343,17 @@ class SettingsDrawer(ft.NavigationDrawer):
         progress_dlg = ft.AlertDialog(
             modal=True,
             title=ft.Text(t("update.updating")),
-            content=ft.Column([
-                ft.Row([progress_ring, status_text], spacing=10, alignment=ft.MainAxisAlignment.CENTER),
-            ], tight=True, alignment=ft.MainAxisAlignment.CENTER),
+            content=ft.Column(
+                [
+                    ft.Row(
+                        [progress_ring, status_text],
+                        spacing=10,
+                        alignment=ft.MainAxisAlignment.CENTER,
+                    ),
+                ],
+                tight=True,
+                alignment=ft.MainAxisAlignment.CENTER,
+            ),
             actions=[],
         )
         page.open(progress_dlg)
@@ -297,9 +375,18 @@ class SettingsDrawer(ft.NavigationDrawer):
 
             page.close(progress_dlg)
             if success:
-                page.open(ft.SnackBar(content=ft.Text(t("update.success")), bgcolor=ft.Colors.GREEN_700))
+                page.open(
+                    ft.SnackBar(
+                        content=ft.Text(t("update.success")),
+                        bgcolor=ft.Colors.GREEN_700,
+                    )
+                )
             else:
-                page.open(ft.SnackBar(content=ft.Text(t("update.failed")), bgcolor=ft.Colors.RED_700))
+                page.open(
+                    ft.SnackBar(
+                        content=ft.Text(t("update.failed")), bgcolor=ft.Colors.RED_700
+                    )
+                )
             page.update()
 
         threading.Thread(target=update_task, daemon=True).start()
@@ -313,6 +400,7 @@ class SettingsDrawer(ft.NavigationDrawer):
     def _open_routing_manager(self, e):
         """Open the routing rules page."""
         from src.ui.pages.routing_page import RoutingPage
+
         self.open = False
         self.update()
         routing_page = RoutingPage(self._config_manager, on_back=self._on_subpage_back)
@@ -321,7 +409,167 @@ class SettingsDrawer(ft.NavigationDrawer):
     def _open_dns_manager(self, e):
         """Open the DNS settings page."""
         from src.ui.pages.dns_page import DNSPage
+
         self.open = False
         self.update()
         dns_page = DNSPage(self._config_manager, on_back=self._on_subpage_back)
         self._navigate_to(dns_page)
+
+    def _check_app_updates(self, e):
+        """Check for app updates."""
+        page = self.page
+        if not page:
+            return
+
+        page.open(ft.SnackBar(content=ft.Text(t("app_update.checking"))))
+        page.update()
+
+        def check_task():
+            try:
+                (
+                    available,
+                    current,
+                    latest,
+                    download_url,
+                ) = AppUpdateService.check_for_updates()
+
+                if not available and current:
+                    page.open(
+                        ft.SnackBar(
+                            content=ft.Text(t("app_update.up_to_date", version=current))
+                        )
+                    )
+                    page.update()
+                    return
+
+                if available and download_url:
+                    self._show_app_update_dialog(page, current, latest, download_url)
+                else:
+                    page.open(
+                        ft.SnackBar(
+                            content=ft.Text(t("app_update.check_failed")),
+                            bgcolor=ft.Colors.RED_700,
+                        )
+                    )
+                    page.update()
+            except Exception as ex:
+                page.open(
+                    ft.SnackBar(
+                        content=ft.Text(t("app_update.check_failed")),
+                        bgcolor=ft.Colors.RED_700,
+                    )
+                )
+                page.update()
+
+        threading.Thread(target=check_task, daemon=True).start()
+
+    def _show_app_update_dialog(
+        self, page, current: str, latest: str, download_url: str
+    ):
+        """Show app update confirmation dialog."""
+        msg = (
+            t("app_update.available", current=current, latest=latest)
+            if current
+            else t("app_update.install", version=latest)
+        )
+
+        def close_dlg(e):
+            page.close(dlg)
+
+        def start_update(e):
+            page.close(dlg)
+            self._run_app_update_process(page, download_url)
+
+        dlg = ft.AlertDialog(
+            modal=True,
+            title=ft.Text(t("app_update.title")),
+            content=ft.Column(
+                [
+                    ft.Text(msg),
+                    ft.Text(
+                        t("app_update.message"),
+                        size=12,
+                        color=ft.Colors.ON_SURFACE_VARIANT,
+                    ),
+                ],
+                tight=True,
+                spacing=10,
+            ),
+            actions=[
+                ft.TextButton(t("app_update.cancel"), on_click=close_dlg),
+                ft.TextButton(t("app_update.confirm"), on_click=start_update),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+        page.open(dlg)
+
+    def _run_app_update_process(self, page, download_url: str):
+        """Run the app update process with progress dialog."""
+        progress_ring = ft.ProgressRing(width=16, height=16, stroke_width=2)
+        status_text = ft.Text(t("app_update.downloading", progress=0), size=12)
+
+        progress_dlg = ft.AlertDialog(
+            modal=True,
+            title=ft.Text(t("app_update.title")),
+            content=ft.Column(
+                [
+                    ft.Row(
+                        [progress_ring, status_text],
+                        spacing=10,
+                        alignment=ft.MainAxisAlignment.CENTER,
+                    ),
+                ],
+                tight=True,
+                alignment=ft.MainAxisAlignment.CENTER,
+            ),
+            actions=[],
+        )
+        page.open(progress_dlg)
+        page.update()
+
+        def update_task():
+            def on_progress(progress: int):
+                status_text.value = t("app_update.downloading", progress=progress)
+                status_text.update()
+
+            # Download update
+            zip_path = AppUpdateService.download_update(download_url, on_progress)
+
+            if not zip_path:
+                page.close(progress_dlg)
+                page.open(
+                    ft.SnackBar(
+                        content=ft.Text(t("app_update.download_failed")),
+                        bgcolor=ft.Colors.RED_700,
+                    )
+                )
+                page.update()
+                return
+
+            # Update status
+            status_text.value = t("app_update.extracting")
+            status_text.update()
+
+            # Apply update (launches updater and exits)
+            success = AppUpdateService.apply_update(zip_path)
+
+            if success:
+                # The updater will handle the rest, signal app to close
+                status_text.value = t("app_update.restarting")
+                status_text.update()
+                time.sleep(1)
+
+                # Trigger app exit
+                ProcessUtils.kill_process_tree()
+                os._exit(0)
+            else:
+                page.close(progress_dlg)
+                page.open(
+                    ft.SnackBar(
+                        content=ft.Text(t("app_update.extract_failed")),
+                        bgcolor=ft.Colors.RED_700,
+                    )
+                )
+                page.update()
+
+        threading.Thread(target=update_task, daemon=True).start()

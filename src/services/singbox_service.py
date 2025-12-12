@@ -1,21 +1,22 @@
 """Sing-box Service Manager (safe, clean, fully compatible with sing-box 1.12.12)."""
 
+import ipaddress
 import json
 import os
+import socket
 import subprocess
 import time
-from typing import Optional, List, Union
-import socket
-import ipaddress
+from typing import List, Optional, Union
+
 from loguru import logger
 
 from src.core.constants import (
-    SINGBOX_EXECUTABLE,
-    SINGBOX_CONFIG_PATH,
-    SINGBOX_LOG_FILE,
-    XRAY_EXECUTABLE,
     DNS_PROVIDERS,
+    SINGBOX_CONFIG_PATH,
+    SINGBOX_EXECUTABLE,
+    SINGBOX_LOG_FILE,
     SINGBOX_RULE_SETS,
+    XRAY_EXECUTABLE,
 )
 from src.utils.network_interface import NetworkInterfaceDetector
 from src.utils.platform_utils import PlatformUtils
@@ -109,10 +110,10 @@ class SingboxService:
             return
         try:
             logger.info(f"[SingboxService] Adding static route: {ip} → {gateway}")
-            
+
             # Platform-specific route commands
             platform = PlatformUtils.get_platform()
-            
+
             if platform == "windows":
                 cmd = [
                     "route",
@@ -142,7 +143,7 @@ class SingboxService:
                     "via",
                     gateway,
                 ]
-            
+
             subprocess.run(
                 cmd,
                 check=False,
@@ -155,11 +156,11 @@ class SingboxService:
     def _cleanup_routes(self) -> None:
         """Remove all added static routes."""
         platform = PlatformUtils.get_platform()
-        
+
         for ip in self._added_routes[:]:
             try:
                 logger.info(f"[SingboxService] Removing static route: {ip}")
-                
+
                 # Platform-specific route delete commands
                 if platform == "windows":
                     cmd = ["route", "delete", ip]
@@ -167,7 +168,7 @@ class SingboxService:
                     cmd = ["route", "-n", "delete", "-host", ip]
                 else:  # Linux
                     cmd = ["ip", "route", "del", ip]
-                
+
                 subprocess.run(
                     cmd,
                     check=False,
@@ -188,9 +189,12 @@ class SingboxService:
         """Start Sing-box TUN service."""
         try:
             # 1. Detect interface & gateway
-            iface_name, iface_ip, _, gateway = (
-                NetworkInterfaceDetector.get_primary_interface()
-            )
+            (
+                iface_name,
+                iface_ip,
+                _,
+                gateway,
+            ) = NetworkInterfaceDetector.get_primary_interface()
             if not gateway:
                 logger.warning(
                     "[SingboxService] No gateway detected! Route bypass may be incomplete."
@@ -245,20 +249,24 @@ class SingboxService:
                 logger.error(
                     f"[SingboxService] Process exited immediately with code {self._process.returncode}"
                 )
-                
+
                 # Close log handle to ensure flush
                 self._close_log()
-                
+
                 # Read and log the error details
                 try:
                     if os.path.exists(SINGBOX_LOG_FILE):
-                        with open(SINGBOX_LOG_FILE, "r", encoding="utf-8", errors="ignore") as f:
+                        with open(
+                            SINGBOX_LOG_FILE, "r", encoding="utf-8", errors="ignore"
+                        ) as f:
                             log_content = f.read().strip()
                             if log_content:
-                                logger.error(f"[SingboxService] Fatal Error Log:\n{log_content}")
+                                logger.error(
+                                    f"[SingboxService] Fatal Error Log:\n{log_content}"
+                                )
                 except Exception as e:
                     logger.error(f"[SingboxService] Failed to read log file: {e}")
-                    
+
                 return None
             except subprocess.TimeoutExpired:
                 # Process is still running, good!

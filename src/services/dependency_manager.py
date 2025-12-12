@@ -1,12 +1,11 @@
 """Unified Dependency Manager."""
-import os
 
 from src.services.xray_installer import XrayInstallerService
 
 
 class DependencyManager:
     """Manages installation of external dependencies."""
-    
+
     @staticmethod
     def check_installed() -> list:
         """Return list of missing components."""

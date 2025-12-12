@@ -7,7 +7,7 @@ from typing import Optional
 
 import flet as ft
 
-from src.core.logger import logger 
+from src.core.logger import logger
 
 
 class LogViewer:
@@ -16,19 +16,19 @@ class LogViewer:
     def __init__(self, title: str):
         """Initialize log viewer."""
         self._title = title
-        
+
         # --- وضعیت مکث (جدید و ضروری) ---
         self._is_paused = False
         # Event که در حالت Play ست (Set) و در حالت Pause پاک (Clear) می شود.
-        self._pause_blocker = threading.Event() 
-        self._pause_blocker.set() # به صورت پیش‌فرض، شروع به کار (Play)
+        self._pause_blocker = threading.Event()
+        self._pause_blocker.set()  # به صورت پیش‌فرض، شروع به کار (Play)
 
         # 1. تنظیم کنترل نمایشگر لاگ
         self._log_text = ft.TextField(
             value="",
             multiline=True,
             read_only=True,
-            expand=True, 
+            expand=True,
             text_style=ft.TextStyle(font_family="Consolas", size=12),
             border_color=ft.Colors.TRANSPARENT,
             focused_border_color=ft.Colors.TRANSPARENT,
@@ -39,7 +39,7 @@ class LogViewer:
         self._log_thread: Optional[threading.Thread] = None
         self._stop_flag: Optional[threading.Event] = None
         self._page: Optional[ft.Page] = None
-        self.MAX_CHARS = 10000 
+        self.MAX_CHARS = 10000
 
     @property
     def control(self) -> ft.Container:
@@ -56,21 +56,19 @@ class LogViewer:
 
         stop_event = threading.Event()
         self._stop_flag = stop_event
-        
+
         # بازنشانی وضعیت مکث به حالت فعال
         self._is_paused = False
         self._pause_blocker.set()
-
 
         def tail_log():
             file_handles = {}
             last_inodes = {}
 
             while not stop_event.is_set():
-                
                 # --- تغییر ۱: چک کردن وضعیت مکث ---
                 # اگر self._pause_blocker.is_set() نباشد، ترد در اینجا مسدود می شود
-                self._pause_blocker.wait() 
+                self._pause_blocker.wait()
 
                 for filepath in filepaths:
                     try:
@@ -114,7 +112,7 @@ class LogViewer:
         if self._stop_flag:
             self._stop_flag.set()
         # در صورت توقف کامل، از حالت مکث خارج می شویم تا ترد بتواند join شود.
-        self._pause_blocker.set() 
+        self._pause_blocker.set()
         if self._log_thread:
             logger.debug("[DEBUG] Joining log thread...")
             self._log_thread.join(timeout=1)
@@ -127,16 +125,15 @@ class LogViewer:
     def toggle_pause(self) -> bool:
         """Toggle between paused and running states and returns the new state (is_paused)."""
         self._is_paused = not self._is_paused
-        
+
         if self._is_paused:
             # حالت مکث: ترد را مسدود کن (Clear the event)
             self._pause_blocker.clear()
         else:
             # حالت ادامه: ترد را آزاد کن (Set the event)
             self._pause_blocker.set()
-            
-        return self._is_paused # وضعیت جدید را به LogsDrawer برمی‌گرداند
 
+        return self._is_paused  # وضعیت جدید را به LogsDrawer برمی‌گرداند
 
     def _append_text(self, text: str):
         """Append text to log viewer (New line at the top)."""
@@ -144,8 +141,8 @@ class LogViewer:
 
             async def update_ui():
                 current = self._log_text.value or ""
-                cleaned_text = text.rstrip() 
-                
+                cleaned_text = text.rstrip()
+
                 # نمایش معکوس (جدیدترین در بالا)
                 if current:
                     self._log_text.value = cleaned_text + "\n" + current
@@ -154,7 +151,7 @@ class LogViewer:
 
                 # مدیریت تاریخچه
                 if len(self._log_text.value) > self.MAX_CHARS + 2000:
-                    self._log_text.value = self._log_text.value[:self.MAX_CHARS]
+                    self._log_text.value = self._log_text.value[: self.MAX_CHARS]
 
                 self._page.update()
 

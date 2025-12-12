@@ -5,10 +5,12 @@ from src.core.i18n import t
 
 
 class Header(ft.Container):
-    def __init__(self, page: ft.Page, on_theme_toggle, on_logs_click, on_settings_click):
+    def __init__(
+        self, page: ft.Page, on_theme_toggle, on_logs_click, on_settings_click
+    ):
         self._page = page
         self._on_theme_toggle = on_theme_toggle
-        
+
         self._theme_icon = ft.IconButton(
             icon=(
                 ft.Icons.NIGHTLIGHT_ROUND
@@ -59,5 +61,7 @@ class Header(ft.Container):
         self._on_theme_toggle(e)
 
     def update_theme(self, is_dark: bool):
-        self._theme_icon.icon = ft.Icons.NIGHTLIGHT_ROUND if is_dark else ft.Icons.WB_SUNNY_OUTLINED
+        self._theme_icon.icon = (
+            ft.Icons.NIGHTLIGHT_ROUND if is_dark else ft.Icons.WB_SUNNY_OUTLINED
+        )
         self.update()
