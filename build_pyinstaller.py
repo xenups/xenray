@@ -96,6 +96,12 @@ def main():
         "--windowed",
         "--name=XenRay",
         
+        # Exclude tkinter/tcl (Flet uses Flutter, not Tkinter)
+        "--exclude-module=tkinter",
+        "--exclude-module=_tkinter",
+        "--exclude-module=tcl",
+        "--exclude-module=tk",
+        
         # Flet imports
         "--hidden-import=flet",
         "--hidden-import=flet.flet",
