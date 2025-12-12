@@ -1,9 +1,12 @@
 """Network interface utilities for Windows."""
+import os
 import re
 import subprocess
 from typing import Optional, Tuple
 
 from loguru import logger
+
+from src.utils.platform_utils import PlatformUtils
 
 # Constants
 ROUTE_COMMAND_TIMEOUT = 5  # seconds
@@ -33,6 +36,8 @@ class NetworkInterfaceDetector:
                 text=True,
                 timeout=ROUTE_COMMAND_TIMEOUT,
                 check=False,
+                creationflags=PlatformUtils.get_subprocess_flags(),
+                startupinfo=PlatformUtils.get_startupinfo(),
             )
 
             if result.returncode != 0:
@@ -120,6 +125,8 @@ class NetworkInterfaceDetector:
                 text=True,
                 timeout=IPCONFIG_COMMAND_TIMEOUT,
                 check=False,
+                creationflags=PlatformUtils.get_subprocess_flags(),
+                startupinfo=PlatformUtils.get_startupinfo(),
             )
 
             if result.returncode != 0:

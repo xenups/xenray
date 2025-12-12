@@ -116,17 +116,14 @@ class ConnectionTester:
             cmd = [XRAY_EXECUTABLE, "run", "-c", config_path]
 
             # Using startupinfo to hide window on Windows
-            startupinfo = None
-            if os.name == "nt":
-                startupinfo = subprocess.STARTUPINFO()
-                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            from src.utils.platform_utils import PlatformUtils
 
             process = subprocess.Popen(
                 cmd,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
-                startupinfo=startupinfo,
-                creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+                startupinfo=PlatformUtils.get_startupinfo(),
+                creationflags=PlatformUtils.get_subprocess_flags(),
             )
 
             # Give it a moment to bind port

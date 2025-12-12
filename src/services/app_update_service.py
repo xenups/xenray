@@ -224,32 +224,60 @@ class AppUpdateService:
             # Get current process ID
             pid = os.getpid()
 
+            # Log mode and paths for debugging
+            is_frozen = getattr(sys, "frozen", False)
+            logger.info(f"[AppUpdate] Running in {'EXE' if is_frozen else 'DEV'} mode")
+            logger.info(f"[AppUpdate] sys.executable: {sys.executable}")
+            logger.info(f"[AppUpdate] app_dir: {app_dir}")
+            logger.info(f"[AppUpdate] zip_path: {zip_path}")
+            logger.info(f"[AppUpdate] PID: {pid}")
+
             # Determine executable path
-            if getattr(sys, "frozen", False):
+            if is_frozen:
                 exe_path = sys.executable
+                logger.info(f"[AppUpdate] EXE path (frozen): {exe_path}")
             else:
                 # Development mode - use poetry run
                 exe_path = os.path.join(app_dir, "XenRay.exe")
+                logger.info(f"[AppUpdate] EXE path (dev): {exe_path}")
 
             # Find the updater script template
-            if getattr(sys, "frozen", False):
+            if is_frozen:
                 # Running as exe - script should be in scripts/ next to exe
                 script_template = os.path.join(
                     os.path.dirname(sys.executable), "scripts", "xenray_updater.ps1"
+                )
+                logger.info(
+                    f"[AppUpdate] Looking for script in EXE dir: {script_template}"
                 )
             else:
                 # Running from source
                 script_template = os.path.join(
                     Path(__file__).parent.parent.parent, "scripts", "xenray_updater.ps1"
                 )
+                logger.info(
+                    f"[AppUpdate] Looking for script in source dir: {script_template}"
+                )
 
             if not os.path.exists(script_template):
-                logger.error(f"Updater script template not found: {script_template}")
+                logger.error(f"[AppUpdate] Updater script NOT FOUND: {script_template}")
+                # List what IS in the scripts directory for debugging
+                scripts_dir = os.path.dirname(script_template)
+                if os.path.exists(scripts_dir):
+                    files = os.listdir(scripts_dir)
+                    logger.error(f"[AppUpdate] Files in {scripts_dir}: {files}")
+                else:
+                    logger.error(
+                        f"[AppUpdate] Scripts directory does not exist: {scripts_dir}"
+                    )
                 return None
+
+            logger.info(f"[AppUpdate] Script template found: {script_template}")
 
             # Create a copy in temp directory with parameters file
             script_copy = os.path.join(tempfile.gettempdir(), "xenray_updater_run.ps1")
             shutil.copy(script_template, script_copy)
+            logger.info(f"[AppUpdate] Copied script to: {script_copy}")
 
             # Create wrapper script that calls the main script with parameters
             wrapper_path = os.path.join(
@@ -263,7 +291,8 @@ class AppUpdateService:
             with open(wrapper_path, "w", encoding="utf-8") as f:
                 f.write(wrapper_content)
 
-            logger.info(f"Created updater wrapper script: {wrapper_path}")
+            logger.info(f"[AppUpdate] Created wrapper script: {wrapper_path}")
+            logger.info(f"[AppUpdate] Wrapper content:\n{wrapper_content}")
             return wrapper_path
 
         except Exception as e:

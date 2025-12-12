@@ -7,6 +7,7 @@ from typing import List, Optional
 import psutil
 
 from src.core.logger import logger
+from src.utils.platform_utils import PlatformUtils
 
 
 class ProcessUtils:
@@ -130,7 +131,8 @@ class ProcessUtils:
                 stdout=stdout,
                 stderr=stderr,
                 shell=False,
-                creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+                creationflags=PlatformUtils.get_subprocess_flags(),
+                startupinfo=PlatformUtils.get_startupinfo(),
             )
             return proc
         except (OSError, IOError) as e:
@@ -180,7 +182,8 @@ class ProcessUtils:
                 text=True,
                 encoding="utf-8",
                 errors="replace",
-                creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+                creationflags=PlatformUtils.get_subprocess_flags(),
+                startupinfo=PlatformUtils.get_startupinfo(),
             )
             stdout, stderr = proc.communicate(timeout=timeout)
             return stdout, stderr

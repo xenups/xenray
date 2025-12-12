@@ -19,12 +19,12 @@ from src.ui.main_window import MainWindow
 
 def main(page: ft.Page):
     """Main entry point."""
-
-    # Window Placement (Start Hidden)
-    page.window.visible = False
+    # Window setup FIRST - as early as possible
+    page.title = "XenRay"
+    page.window.width = 420
+    page.window.height = 650
+    page.window.resizable = False
     page.window.center()
-
-    # Ensure tray icon matches app state (basic setup here, detailed in MainWindow)
 
     # Setup logging
     Settings.create_temp_directories()

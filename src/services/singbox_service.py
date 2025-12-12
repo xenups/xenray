@@ -148,6 +148,7 @@ class SingboxService:
                 cmd,
                 check=False,
                 creationflags=PlatformUtils.get_subprocess_flags(),
+                startupinfo=PlatformUtils.get_startupinfo(),
             )
             self._added_routes.append(ip)
         except (OSError, subprocess.SubprocessError) as e:
@@ -173,6 +174,7 @@ class SingboxService:
                     cmd,
                     check=False,
                     creationflags=PlatformUtils.get_subprocess_flags(),
+                    startupinfo=PlatformUtils.get_startupinfo(),
                 )
             except (OSError, subprocess.SubprocessError) as e:
                 logger.error(f"[SingboxService] Failed to remove route for {ip}: {e}")
@@ -307,13 +309,15 @@ class SingboxService:
             # Open Log File
             self._log_handle = open(SINGBOX_LOG_FILE, "w", encoding="utf-8")
 
-            # Start Process
+            # Start Process - use both creationflags and startupinfo for complete window hiding
             creationflags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+            startupinfo = PlatformUtils.get_startupinfo()
             self._process = subprocess.Popen(
                 [SINGBOX_EXECUTABLE, "run", "-c", SINGBOX_CONFIG_PATH],
                 stdout=self._log_handle,
                 stderr=self._log_handle,
                 creationflags=creationflags,
+                startupinfo=startupinfo,
             )
             return True
         except Exception as e:
@@ -358,7 +362,8 @@ class SingboxService:
                 [SINGBOX_EXECUTABLE, "version"],
                 capture_output=True,
                 text=True,
-                creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+                creationflags=PlatformUtils.get_subprocess_flags(),
+                startupinfo=PlatformUtils.get_startupinfo(),
             )
             if result.returncode == 0:
                 first_line = result.stdout.split("\n")[0]

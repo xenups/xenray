@@ -182,6 +182,13 @@ def main():
             if os.path.exists(bin_src):
                 shutil.copytree(bin_src, bin_dst, dirs_exist_ok=True)
                 print("Copied bin to dist/")
+            
+            # Copy scripts folder (for updater)
+            scripts_src = os.path.join(PROJECT_ROOT, "scripts")
+            scripts_dst = os.path.join(PROJECT_ROOT, "dist", "scripts")
+            if os.path.exists(scripts_src):
+                shutil.copytree(scripts_src, scripts_dst, dirs_exist_ok=True)
+                print("Copied scripts to dist/")
         
         print("=" * 60)
         

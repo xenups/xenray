@@ -130,6 +130,23 @@ class PlatformUtils:
         )
 
     @staticmethod
+    def get_startupinfo():
+        """
+        Get STARTUPINFO object for hiding subprocess windows on Windows.
+
+        Returns:
+            STARTUPINFO object with STARTF_USESHOWWINDOW on Windows, None otherwise
+        """
+        import subprocess
+
+        if PlatformUtils.get_platform() == "windows":
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            startupinfo.wShowWindow = subprocess.SW_HIDE
+            return startupinfo
+        return None
+
+    @staticmethod
     def get_tun_interface_name() -> str:
         """
         Get the default TUN interface name for the platform.
