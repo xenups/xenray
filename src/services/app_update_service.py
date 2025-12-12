@@ -298,14 +298,14 @@ class AppUpdateService:
                 return False
 
             # Launch updater script as detached process
-            # Note: close_fds must be False on Windows when using creationflags
+            # Use START command for reliable detached launch on Windows
+            cmd = (
+                f'start "" powershell.exe -ExecutionPolicy Bypass -File "{script_path}"'
+            )
             subprocess.Popen(
-                ["powershell.exe", "-ExecutionPolicy", "Bypass", "-File", script_path],
-                creationflags=subprocess.CREATE_NEW_CONSOLE
-                | subprocess.DETACHED_PROCESS,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+                cmd,
+                shell=True,
+                creationflags=subprocess.CREATE_NO_WINDOW,
             )
 
             logger.info("Updater script launched successfully")
