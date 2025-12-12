@@ -64,8 +64,9 @@ jobs:
           $version = "${{ github.ref_name }}".TrimStart('v')
           $zipName = "XenRay-v$version-windows-x64.zip"
           
-          # Create package directory
+          # Create package directory structure
           New-Item -ItemType Directory -Force -Path "package"
+          New-Item -ItemType Directory -Force -Path "package/scripts"
           
           # Copy exe
           Copy-Item "dist/XenRay.exe" "package/"
@@ -77,8 +78,6 @@ jobs:
           Copy-Item -Recurse "dist/bin" "package/"
           
           # Copy updater script
-          Copy-Item "scripts/xenray_updater.ps1" "package/scripts/" -Force
-          New-Item -ItemType Directory -Force -Path "package/scripts"
           Copy-Item "scripts/xenray_updater.ps1" "package/scripts/xenray_updater.ps1"
           
           # Create zip
