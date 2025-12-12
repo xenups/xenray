@@ -10,10 +10,48 @@ class RoutingPage(ft.Container):
         self._config_manager = config_manager
         self._on_back = on_back
         self._rules = self._config_manager.load_routing_rules()
+        self._toggles = self._config_manager.get_routing_toggles()
         self._current_tab = "direct"
 
         super().__init__(expand=True, padding=0)
         self._setup_ui()
+
+    def _create_toggle_row(
+        self, key: str, title: str, subtitle: str, icon
+    ) -> ft.Container:
+        """Create a toggle row for quick settings."""
+        switch = ft.Switch(
+            value=self._toggles.get(key, False),
+            on_change=lambda e, k=key: self._on_toggle_change(k, e.control.value),
+        )
+        return ft.Container(
+            content=ft.Row(
+                [
+                    ft.Icon(icon, size=20, color=ft.Colors.PRIMARY),
+                    ft.Column(
+                        [
+                            ft.Text(title, size=13, weight=ft.FontWeight.W_500),
+                            ft.Text(
+                                subtitle, size=11, color=ft.Colors.ON_SURFACE_VARIANT
+                            ),
+                        ],
+                        spacing=2,
+                        expand=True,
+                    ),
+                    switch,
+                ],
+                spacing=12,
+            ),
+            padding=ft.padding.symmetric(horizontal=15, vertical=12),
+            border=ft.border.only(
+                bottom=ft.border.BorderSide(1, ft.Colors.OUTLINE_VARIANT)
+            ),
+        )
+
+    def _on_toggle_change(self, key: str, value: bool):
+        """Handle toggle change."""
+        self._toggles[key] = value
+        self._config_manager.set_routing_toggle(key, value)
 
     def _setup_ui(self):
         # Header
@@ -41,12 +79,48 @@ class RoutingPage(ft.Container):
             bgcolor=ft.Colors.SURFACE,
         )
 
-        # Tabs
+        # Quick Settings Content (shown when Quick tab is selected)
+        self._quick_settings_view = ft.Container(
+            content=ft.Column(
+                [
+                    self._create_toggle_row(
+                        "block_udp_443",
+                        t("routing.block_udp443"),
+                        t("routing.block_udp443_desc"),
+                        ft.Icons.BLOCK,
+                    ),
+                    self._create_toggle_row(
+                        "block_ads",
+                        t("routing.block_ads"),
+                        t("routing.block_ads_desc"),
+                        ft.Icons.AD_UNITS_OUTLINED,
+                    ),
+                    self._create_toggle_row(
+                        "direct_private_ips",
+                        t("routing.direct_private"),
+                        t("routing.direct_private_desc"),
+                        ft.Icons.LAN,
+                    ),
+                    self._create_toggle_row(
+                        "direct_local_domains",
+                        t("routing.direct_local"),
+                        t("routing.direct_local_desc"),
+                        ft.Icons.HOME_WORK,
+                    ),
+                ],
+                spacing=0,
+            ),
+            padding=ft.padding.symmetric(horizontal=10, vertical=10),
+            expand=True,
+        )
+
+        # Tabs - now with 4 tabs including Quick Settings
         self._tabs = ft.Tabs(
             selected_index=0,
             animation_duration=300,
             on_change=self._on_tab_change,
             tabs=[
+                ft.Tab(text=t("routing.quick_settings"), icon=ft.Icons.TUNE),
                 ft.Tab(text=t("routing.direct"), icon=ft.Icons.DIRECTIONS),
                 ft.Tab(text=t("routing.proxy"), icon=ft.Icons.VPN_LOCK),
                 ft.Tab(text=t("routing.block"), icon=ft.Icons.BLOCK),
@@ -57,7 +131,7 @@ class RoutingPage(ft.Container):
             unselected_label_color=ft.Colors.ON_SURFACE_VARIANT,
         )
 
-        # Input Area
+        # Input Area (hidden for Quick Settings tab)
         self._input = ft.TextField(
             label=t("routing.domain_or_ip"),
             hint_text=t("routing.hint"),
@@ -82,16 +156,23 @@ class RoutingPage(ft.Container):
             height=40,
         )
 
-        input_container = ft.Container(
+        self._input_container = ft.Container(
             content=ft.Row([self._input, add_btn], spacing=10),
             padding=ft.padding.symmetric(horizontal=20, vertical=10),
+            visible=False,  # Hidden by default (Quick Settings tab)
         )
 
-        # List View
+        # List View (hidden for Quick Settings tab)
         self._list_view = ft.ListView(
             expand=True,
             spacing=2,
             padding=ft.padding.symmetric(horizontal=20, vertical=0),
+        )
+
+        self._list_container = ft.Container(
+            content=self._list_view,
+            expand=True,
+            visible=False,  # Hidden by default (Quick Settings tab)
         )
 
         # Main Layout
@@ -99,24 +180,43 @@ class RoutingPage(ft.Container):
             [
                 header,
                 self._tabs,
-                input_container,
+                self._quick_settings_view,
+                self._input_container,
                 ft.Divider(height=1, color=ft.Colors.OUTLINE_VARIANT, opacity=0.5),
-                self._list_view,
+                self._list_container,
             ],
             spacing=0,
         )
 
-        self._refresh_list(update=False)
-
     def _on_tab_change(self, e):
         idx = self._tabs.selected_index
         if idx == 0:
-            self._current_tab = "direct"
+            # Quick Settings tab
+            self._current_tab = "quick"
+            self._quick_settings_view.visible = True
+            self._input_container.visible = False
+            self._list_container.visible = False
         elif idx == 1:
+            self._current_tab = "direct"
+            self._quick_settings_view.visible = False
+            self._input_container.visible = True
+            self._list_container.visible = True
+            self._refresh_list(update=True)
+        elif idx == 2:
             self._current_tab = "proxy"
+            self._quick_settings_view.visible = False
+            self._input_container.visible = True
+            self._list_container.visible = True
+            self._refresh_list(update=True)
         else:
             self._current_tab = "block"
-        self._refresh_list(update=True)
+            self._quick_settings_view.visible = False
+            self._input_container.visible = True
+            self._list_container.visible = True
+            self._refresh_list(update=True)
+
+        if self.page:
+            self.content.update()
 
     def _refresh_list(self, update=True):
         self._list_view.controls.clear()

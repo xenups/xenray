@@ -499,7 +499,7 @@ class LinkParser:
             "inbounds": [
                 {
                     "tag": "socks",
-                    "port": 10808,
+                    "port": 10805,
                     "listen": "127.0.0.1",
                     "protocol": "socks",
                     "settings": {"udp": True},

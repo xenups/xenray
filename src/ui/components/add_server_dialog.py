@@ -52,7 +52,7 @@ class AddServerDialog(ft.AlertDialog):
         )
 
     def _handle_add(self, e):
-        """Handle the add button click."""
+        """Handle the add button click. Supports multiple configs separated by newlines."""
         content = self._content_input.value.strip()
         name = self._name_input.value.strip()
 
@@ -61,10 +61,44 @@ class AddServerDialog(ft.AlertDialog):
             self._content_input.update()
             return
 
+        # Split by newlines to detect multi-config input
+        lines = content.splitlines()
+        valid_configs = []
+        
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            
+            # Check if line is a config link
+            if line.startswith(("vless://", "vmess://", "trojan://", "ss://", "hysteria2://")):
+                try:
+                    parsed = LinkParser.parse_link(line)
+                    valid_configs.append(parsed)
+                except Exception:
+                    pass  # Skip invalid lines
+        
+        # If we found multiple configs, add them all
+        if len(valid_configs) > 1:
+            for parsed in valid_configs:
+                self._on_server_added(parsed["name"], parsed["config"])
+            self._show_success(f"{len(valid_configs)} servers added! 🚀")
+            self._reset_and_close()
+            return
+        
+        # Single config case
+        if len(valid_configs) == 1:
+            parsed = valid_configs[0]
+            final_name = name if name else parsed["name"]
+            self._on_server_added(final_name, parsed["config"])
+            self._reset_and_close()
+            return
+        
+        # If no valid configs found, try treating entire content as single config
         is_config = content.startswith(
             ("vless://", "vmess://", "trojan://", "ss://", "hysteria2://")
         )
-
+        
         try:
             parsed = LinkParser.parse_link(content)
             final_name = name if name else parsed["name"]
@@ -74,6 +108,7 @@ class AddServerDialog(ft.AlertDialog):
         except Exception:
             pass
 
+        # Treat as subscription URL
         if not name:
             self._name_input.error_text = t("add_dialog.name_required")
             self._name_input.update()
@@ -83,6 +118,12 @@ class AddServerDialog(ft.AlertDialog):
 
         self._on_subscription_added(name, content)
         self._reset_and_close()
+    
+    def _show_success(self, msg: str):
+        """Show a success message via snackbar."""
+        if self.page:
+            self.page.open(ft.SnackBar(content=ft.Text(msg, color=ft.Colors.GREEN_400)))
+            self.page.update()
 
     def _handle_close(self, e):
         """Handle the cancel button click."""

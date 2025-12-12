@@ -145,7 +145,16 @@
     "hint": "напр. google.com, 1.1.1.1, geoip:ir",
     "add": "Добавить",
     "remove": "Удалить",
-    "no_rules": "Нет правил {type}"
+    "no_rules": "Нет правил {type}",
+    "quick_settings": "БЫСТРЫЕ НАСТРОЙКИ",
+    "block_udp443": "Блокировать UDP 443 (QUIC)",
+    "block_udp443_desc": "Блокировать QUIC для лучшей совместимости",
+    "block_ads": "Блокировать рекламу",
+    "block_ads_desc": "Блокировать рекламные домены",
+    "direct_private": "Прямые частные IP",
+    "direct_private_desc": "Прямое подключение для локальной сети (10.x, 192.168.x)",
+    "direct_local": "Прямые локальные домены",
+    "direct_local_desc": "Прямое подключение для .local, .lan, .home"
   },
   "dns": {
     "title": "Управление DNS",

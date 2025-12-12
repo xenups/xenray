@@ -145,7 +145,16 @@
     "hint": "e.g. google.com, 1.1.1.1, geoip:ir",
     "add": "Add",
     "remove": "Remove",
-    "no_rules": "No {type} rules"
+    "no_rules": "No {type} rules",
+    "quick_settings": "QUICK SETTINGS",
+    "block_udp443": "Block UDP 443 (QUIC)",
+    "block_udp443_desc": "Block QUIC protocol for better compatibility",
+    "block_ads": "Block Ads",
+    "block_ads_desc": "Block common ad domains",
+    "direct_private": "Direct Private IPs",
+    "direct_private_desc": "Bypass proxy for local network (10.x, 192.168.x)",
+    "direct_local": "Direct Local Domains",
+    "direct_local_desc": "Bypass proxy for .local, .lan, .home domains"
   },
   "dns": {
     "title": "DNS Management",

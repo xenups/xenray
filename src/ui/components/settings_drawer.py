@@ -148,18 +148,10 @@ class SettingsDrawer(ft.NavigationDrawer):
                         ),
                     ],
                 ),
-                # Version Footer
+                # Version Footer (Xray and Singbox versions only - app version shown in About)
                 ft.Container(
                     content=ft.Row(
                         [
-                            ft.Text(
-                                f"XenRay: v{APP_VERSION}",
-                                size=11,
-                                color=ft.Colors.OUTLINE,
-                            ),
-                            ft.Container(
-                                width=1, height=10, bgcolor=ft.Colors.OUTLINE_VARIANT
-                            ),
                             ft.Text(
                                 f"Xray: v{XrayInstallerService.get_local_version() or 'ND'}",
                                 size=11,

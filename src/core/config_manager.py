@@ -12,7 +12,7 @@ from src.core.logger import logger
 # Validation constants
 MIN_PORT = 1024
 MAX_PORT = 65535
-DEFAULT_PROXY_PORT = 10808
+DEFAULT_PROXY_PORT = 10805
 DEFAULT_DNS = "8.8.8.8, 1.1.1.1"
 VALID_COUNTRY_CODES = {"ir", "cn", "ru", "none"}
 VALID_MODES = {"proxy", "vpn"}
@@ -78,6 +78,22 @@ class ConfigManager:
         self._config_dir = os.path.dirname(RECENT_FILES_PATH)
         self._ensure_config_dir()
         self._recent_files = self.get_recent_files()
+        self._migrate_old_port()
+
+    def _migrate_old_port(self) -> None:
+        """Migrate old 10808 port to new 10805 default."""
+        OLD_PORT = 10808
+        port_path = os.path.join(self._config_dir, "proxy_port.txt")
+        if os.path.exists(port_path):
+            try:
+                with open(port_path, "r", encoding="utf-8") as f:
+                    port_str = f.read().strip()
+                    if port_str == str(OLD_PORT):
+                        # Migrate to new default
+                        _atomic_write(port_path, str(DEFAULT_PROXY_PORT))
+                        logger.info(f"Migrated port from {OLD_PORT} to {DEFAULT_PROXY_PORT}")
+            except Exception as e:
+                logger.debug(f"Port migration check failed: {e}")
 
     def _ensure_config_dir(self) -> None:
         """Ensure configuration directory exists."""
@@ -397,7 +413,7 @@ class ConfigManager:
 
     # --- Proxy Port Management ---
     def get_proxy_port(self) -> int:
-        """Get the configured proxy port (default: 10808)."""
+        """Get the configured proxy port (default: 10805)."""
         port_path = os.path.join(self._config_dir, "proxy_port.txt")
         if not os.path.exists(port_path):
             return DEFAULT_PROXY_PORT
@@ -478,16 +494,16 @@ class ConfigManager:
         """Get saved connection mode ('proxy' or 'vpn')."""
         path = os.path.join(self._config_dir, "connection_mode.txt")
         if not os.path.exists(path):
-            return "proxy"
+            return "vpn"  # Default to VPN mode for first-time users
         try:
             with open(path, "r", encoding="utf-8") as f:
                 mode = f.read().strip()
                 if mode in VALID_MODES:
                     return mode
-                return "proxy"
+                return "vpn"
         except (OSError, IOError, UnicodeDecodeError) as e:
             logger.error(f"Error reading connection mode: {e}")
-            return "proxy"
+            return "vpn"
 
     def set_connection_mode(self, mode: str) -> None:
         """Set connection mode with validation."""
@@ -589,6 +605,24 @@ class ConfigManager:
     def save_routing_rules(self, rules: dict):
         """Save routing rules."""
         self._save_json_list("routing_rules.json", rules)
+
+    def get_routing_toggles(self) -> dict:
+        """Get routing toggle states."""
+        defaults = {
+            "block_udp_443": False,
+            "block_ads": False,
+            "direct_private_ips": True,
+            "direct_local_domains": True,
+        }
+        return self._load_json_list(
+            "routing_toggles.json", default_type=dict, default_val=defaults
+        )
+
+    def set_routing_toggle(self, name: str, value: bool) -> None:
+        """Set a single routing toggle."""
+        toggles = self.get_routing_toggles()
+        toggles[name] = value
+        self._save_json_list("routing_toggles.json", toggles)
 
     # --- DNS Config Persistence ---
     def load_dns_config(self) -> list:

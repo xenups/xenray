@@ -145,7 +145,16 @@
     "hint": "مثال: google.com, 1.1.1.1, geoip:ir",
     "add": "افزودن",
     "remove": "حذف",
-    "no_rules": "قانون {type} وجود ندارد"
+    "no_rules": "قانون {type} وجود ندارد",
+    "quick_settings": "تنظیمات سریع",
+    "block_udp443": "مسدود کردن UDP 443 (QUIC)",
+    "block_udp443_desc": "مسدود کردن پروتکل QUIC برای سازگاری بهتر",
+    "block_ads": "مسدود کردن تبلیغات",
+    "block_ads_desc": "مسدود کردن دامنه‌های تبلیغاتی رایج",
+    "direct_private": "IP‌های خصوصی مستقیم",
+    "direct_private_desc": "عبور مستقیم برای شبکه محلی (10.x, 192.168.x)",
+    "direct_local": "دامنه‌های محلی مستقیم",
+    "direct_local_desc": "عبور مستقیم برای دامنه‌های .local, .lan, .home"
   },
   "dns": {
     "title": "مدیریت DNS",

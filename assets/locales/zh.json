@@ -145,7 +145,16 @@
     "hint": "例如: google.com, 1.1.1.1, geoip:ir",
     "add": "添加",
     "remove": "删除",
-    "no_rules": "无{type}规则"
+    "no_rules": "无{type}规则",
+    "quick_settings": "快速设置",
+    "block_udp443": "阻止UDP 443 (QUIC)",
+    "block_udp443_desc": "阻止QUIC协议以提高兼容性",
+    "block_ads": "阻止广告",
+    "block_ads_desc": "阻止常见广告域名",
+    "direct_private": "直连私有IP",
+    "direct_private_desc": "本地网络直连 (10.x, 192.168.x)",
+    "direct_local": "直连本地域名",
+    "direct_local_desc": "直连 .local, .lan, .home 域名"
   },
   "dns": {
     "title": "DNS管理",
