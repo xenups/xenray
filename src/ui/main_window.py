@@ -84,10 +84,7 @@ class MainWindow:
     # Page setup
     # -----------------------------
     def _setup_page(self):
-        self._page.title = "XenRay"
-        self._page.window.width = 420
-        self._page.window.height = 650
-        self._page.window.resizable = False
+        # Window size/center already set in main() - just handle theme/styling here
         self._page.padding = 0
         self._page.theme_mode = ft.ThemeMode.DARK
         self._page.theme = ft.Theme(font_family="Roboto")
@@ -192,6 +189,7 @@ class MainWindow:
 
         # Wrap in AppContainer for Theme/Styling consistency
         self._main_container = AppContainer(self._view_switcher)
+        # Add content while window is still hidden
         self._page.add(self._main_container)
 
         # Sync Initial Theme State
@@ -200,10 +198,7 @@ class MainWindow:
         self._connection_button.update_theme(is_dark)
         self._server_card.update_theme(is_dark)
 
-        # Center and Show Window
-        self._page.window.width = 420
-        self._page.window.height = 650
-        self._page.window.center()
+        # Show window (already positioned via alignment in _setup_page)
         self._page.window.visible = True
         self._page.update()
 
