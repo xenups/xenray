@@ -139,23 +139,30 @@ def main():
             
             # Copy external resources to macOS app bundle
             print("\nCopying external resources to app bundle...")
-            
+
             bundle_resources = os.path.join(PROJECT_ROOT, "dist", "XenRay.app", "Contents", "MacOS")
-            
+
             # Copy assets folder
             assets_src = os.path.join(PROJECT_ROOT, "assets")
             assets_dst = os.path.join(bundle_resources, "assets")
             if os.path.exists(assets_src):
                 shutil.copytree(assets_src, assets_dst, dirs_exist_ok=True)
                 print("Copied assets to app bundle")
-            
+
+            # Copy src folder (needed for dynamic imports)
+            src_src = os.path.join(PROJECT_ROOT, "src")
+            src_dst = os.path.join(bundle_resources, "src")
+            if os.path.exists(src_src):
+                shutil.copytree(src_src, src_dst, dirs_exist_ok=True)
+                print("Copied src to app bundle")
+
             # Copy bin folder
             bin_src = os.path.join(PROJECT_ROOT, "bin")
             bin_dst = os.path.join(bundle_resources, "bin")
             if os.path.exists(bin_src):
                 shutil.copytree(bin_src, bin_dst, dirs_exist_ok=True)
                 print("Copied bin to app bundle")
-                
+
                 # Make binaries executable
                 for root, dirs, files in os.walk(bin_dst):
                     for file in files:
