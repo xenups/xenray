@@ -594,6 +594,24 @@ class ConfigManager:
         if not _atomic_write(path, lang):
             logger.error("Failed to save language")
 
+    # --- Close Preference ---
+    def get_remember_close_choice(self) -> bool:
+        """Get 'Remember Choice' for close dialog (default: False)."""
+        path = os.path.join(self._config_dir, "remember_close.txt")
+        if not os.path.exists(path):
+            return False
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return f.read().strip().lower() == "true"
+        except Exception:
+            return False
+
+    def set_remember_close_choice(self, enabled: bool) -> None:
+        """Set 'Remember Choice' for close dialog."""
+        path = os.path.join(self._config_dir, "remember_close.txt")
+        if not _atomic_write(path, "true" if enabled else "false"):
+            logger.error("Failed to save remember close choice")
+
     # --- Routing Rules Persistence ---
     def load_routing_rules(self) -> dict:
         """

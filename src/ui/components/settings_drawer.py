@@ -115,6 +115,12 @@ class SettingsDrawer(ft.NavigationDrawer):
                                             t("settings.dns_description"),
                                             on_click=self._open_dns_manager,
                                         ),
+                                        SettingsListTile(
+                                            ft.Icons.RESTART_ALT,
+                                            t("settings.reset_close_choice"),
+                                            t("settings.reset_close_choice_desc"),
+                                            on_click=self._reset_close_preference,
+                                        ),
                                     ],
                                 ),
                                 ft.Divider(height=1, color=ft.Colors.OUTLINE_VARIANT, opacity=0.2),
@@ -289,6 +295,18 @@ class SettingsDrawer(ft.NavigationDrawer):
         # Notify user - app needs restart for full effect
         msg = "Language changed! Restart app for full effect. / زبان تغییر کرد! برنامه را ریستارت کنید."
         page.open(ft.SnackBar(content=ft.Text(msg)))
+        page.update()
+
+    def _reset_close_preference(self, e):
+        """Reset the 'Remember Choice' for close dialog."""
+        page = self.page
+        if not page:
+            return
+
+        self._config_manager.set_remember_close_choice(False)
+        page.open(
+            ft.SnackBar(content=ft.Text(t("settings.reset_close_success")))
+        )
         page.update()
 
     def _on_installer_run(self, component: str):

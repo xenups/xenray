@@ -47,108 +47,77 @@ class SubscriptionManager:
 
         # 1. Try parsing as JSON (Handling comments)
         try:
-            # Helper to strip comments while preserving strings
             # Pattern matches: "string" OR //comment OR /* comment */
-            # We must preserve strings (group 1) to avoid breaking URLs like https://...
             pattern = r'("[^"\\]*(?:\\.[^"\\]*)*")|//[^\n]*|/\*[\s\S]*?\*/'
 
             def replacer(match):
-                # If group 1 (string) matches, preserve it
                 if match.group(1):
                     return match.group(1)
-                # Otherwise it's a comment, replace with empty string
                 return ""
 
             json_content = re.sub(pattern, replacer, content)
-
-            # Remove trailing commas (common in JSONC)
-            # Matches a comma followed by whitespace and then a closing brace/bracket
             json_content = re.sub(r",\s*([\]}])", r"\1", json_content)
-
-            # Scrub invisible control characters (except common whitespace)
-            # This handles weird null bytes or other garbage sometimes found in raw URLs
             json_content = "".join(
                 ch
                 for ch in json_content
                 if ch == "\n" or ch == "\r" or ch == "\t" or ord(ch) >= 32
             )
 
-            # Allow control characters like newlines in strings (strict=False)
-            data = json.loads(json_content, strict=False)
+            # Detect if it's likely JSON before trying to parse (must start with [ or {)
+            stripped_json = json_content.strip()
+            if stripped_json.startswith("[") or stripped_json.startswith("{"):
+                data = json.loads(json_content, strict=False)
 
-            if isinstance(data, list):
-                for item in data:
-                    if isinstance(item, dict):
-                        # Use 'remarks' or 'tag' or default name
-                        name = item.get("remarks", item.get("tag", "Server"))
+                if isinstance(data, list):
+                    for item in data:
+                        if isinstance(item, dict):
+                            name = item.get("remarks", item.get("tag", "Server"))
+                            profile_id = str(uuid.uuid4())
+                            if "outbounds" in item or "inbounds" in item:
+                                profiles.append(
+                                    {"id": profile_id, "name": name, "config": item}
+                                )
+                    if profiles:
+                        return profiles
+        except Exception:
+            # Silence JSON errors as it's common for subscriptions to not be JSON
+            pass
 
-                        # Generate ID
-                        profile_id = str(uuid.uuid4())
-
-                        # If the item looks like a full config (has inbounds/outbounds), use it directly
-                        if "outbounds" in item or "inbounds" in item:
-                            profiles.append(
-                                {"id": profile_id, "name": name, "config": item}
-                            )
-                        # TODO: Handle simplified JSON formats if needed
-
-                if profiles:
-                    return profiles
-
-        except json.JSONDecodeError as e:
-            logger.warning(
-                f"JSON parsing failed: {e.msg} at line {e.lineno} col {e.colno}"
-            )
-            # Fallback to Base64/Links
-        except Exception as e:
-            logger.warning(f"JSON parsing error: {e}")
-
-        # 2. Existing Base64 / Plain Text Parsing
-
+        # 2. Base64 / Plain Text Parsing
         decoded = content
 
-        # Try base64 decode if it looks like base64
-        # Skip if it definitely looks like a protocol link or raw JSON/config
-        if (
-            not content.startswith("vless://")
-            and not content.startswith("vmess://")
-            and "outbounds" not in content
-        ):
+        # Check if it's base64 encoded by trying to decode it
+        # Real base64 subscriptions usually don't have protocol headers in the encoded blob
+        if not any(content.strip().startswith(p) for p in ["vless://", "vmess://", "trojan://", "hysteria2://"]):
             try:
                 # Add padding if needed
-                missing_padding = len(content) % 4
+                padded_content = content.strip()
+                missing_padding = len(padded_content) % 4
                 if missing_padding:
-                    content += "=" * (4 - missing_padding)
+                    padded_content += "=" * (4 - missing_padding)
 
-                decoded_bytes = base64.b64decode(content)
+                decoded_bytes = base64.b64decode(padded_content)
                 decoded = decoded_bytes.decode("utf-8")
             except Exception:
-                # Assuming raw text if decode fails
-                pass
+                # Fallback to original content if not valid base64
+                decoded = content
 
         # Split by newlines and parse each link
         links = decoded.splitlines()
         for link in links:
             link = link.strip()
-            if not link:
+            # Skip empty lines and metadata/comments starting with #
+            if not link or link.startswith("#"):
                 continue
 
             try:
-                # Initialize name to None
-                parsed = None
-
-                if link.startswith("vless://"):
-                    parsed = LinkParser.parse_vless(link)
-                # Future: Add VMess, etc.
-
+                # Use LinkParser.parse_link which handles multiple protocols
+                parsed = LinkParser.parse_link(link)
                 if parsed:
-                    # Assign a unique ID to the profile
                     parsed["id"] = str(uuid.uuid4())
                     profiles.append(parsed)
-            except Exception as e:
-                logger.warning(
-                    f"Skipping invalid link in sub: {link[:20]}... Error: {e}"
-                )
+            except Exception:
+                # Silently skip invalid lines in a subscription
                 continue
 
         return profiles

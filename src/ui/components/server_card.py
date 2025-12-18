@@ -30,8 +30,16 @@ class ServerCard(ft.Container):
             color=ft.Colors.ON_SURFACE_VARIANT,
             size=15,
             weight=ft.FontWeight.W_600,
+            overflow=ft.TextOverflow.ELLIPSIS,
+            max_lines=1,
         )
-        self._address_text = ft.Text("", size=11, color=ft.Colors.ON_SURFACE_VARIANT)
+        self._address_text = ft.Text(
+            "", 
+            size=11, 
+            color=ft.Colors.ON_SURFACE_VARIANT,
+            overflow=ft.TextOverflow.ELLIPSIS,
+            max_lines=1,
+        )
 
         # List icon button
         self._list_btn = ft.Container(
@@ -52,6 +60,8 @@ class ServerCard(ft.Container):
             size=10,
             color=ft.Colors.ON_SURFACE_VARIANT,
             weight=ft.FontWeight.W_400,
+            overflow=ft.TextOverflow.ELLIPSIS,
+            max_lines=1,
         )
 
         # Main content row

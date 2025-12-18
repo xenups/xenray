@@ -57,6 +57,8 @@ class LinkParser:
             return LinkParser.parse_hysteria2(link)
         elif link.startswith("vmess://"):
             return LinkParser.parse_vmess(link)
+        elif link.startswith("trojan://"):
+            return LinkParser.parse_trojan(link)
         else:
             raise ValueError("Unsupported link protocol")
 
@@ -488,6 +490,95 @@ class LinkParser:
             if data.get("authority"):  # custom field sometimes
                 # ss["grpcSettings"]["authority"] = ... # Xray doesn't strictly need authority for client usually
                 pass
+
+        return {"name": name, "config": LinkParser._build_config(outbound)}
+
+    @staticmethod
+    def parse_trojan(link: str) -> Dict[str, any]:
+        """
+        Parse Trojan link into Xray configuration.
+        Format: trojan://password@host:port?params#name
+        """
+        if not link.startswith("trojan://"):
+            raise ValueError("Invalid Trojan link")
+
+        try:
+            parsed = urllib.parse.urlparse(link)
+        except Exception as e:
+            raise ValueError(f"Failed to parse URL: {e}") from e
+
+        if "@" in parsed.netloc:
+            password, host_port = parsed.netloc.split("@", 1)
+        else:
+            raise ValueError("Invalid Trojan link: missing password")
+
+        if ":" in host_port:
+            address, port_str = host_port.rsplit(":", 1)
+            try:
+                port = int(port_str)
+            except ValueError:
+                port = DEFAULT_PORT
+        else:
+            address = host_port
+            port = DEFAULT_PORT
+
+        params = urllib.parse.parse_qs(parsed.query)
+
+        def get_param(key: str, default: Optional[str] = None) -> Optional[str]:
+            val = params.get(key)
+            return val[0] if val and len(val) > 0 else default
+
+        name = (
+            urllib.parse.unquote(parsed.fragment)
+            if parsed.fragment
+            else "Trojan Server"
+        )
+
+        sni = get_param("sni") or get_param("peer") or address
+        allow_insecure = get_param("allowInsecure", get_param("insecure", "0")) == "1"
+
+        outbound = {
+            "tag": "proxy",
+            "protocol": "trojan",
+            "settings": {
+                "servers": [
+                    {
+                        "address": address,
+                        "port": port,
+                        "password": password,
+                    }
+                ]
+            },
+            "streamSettings": {
+                "network": get_param("type", DEFAULT_NETWORK),
+                "security": get_param("security", "tls"),
+            },
+        }
+
+        # TLS Configuration
+        if outbound["streamSettings"]["security"] == "tls":
+            tls_settings = {"serverName": sni, "allowInsecure": allow_insecure}
+            fp = get_param("fp")
+            if fp:
+                tls_settings["fingerprint"] = fp
+            alpn_raw = get_param("alpn")
+            if alpn_raw:
+                alpn_list = [x.strip() for x in alpn_raw.split(",") if x.strip()]
+                if alpn_list:
+                    tls_settings["alpn"] = alpn_list
+            outbound["streamSettings"]["tlsSettings"] = tls_settings
+
+        # Network Transports
+        network = outbound["streamSettings"]["network"]
+        if network == "ws":
+            outbound["streamSettings"]["wsSettings"] = {
+                "path": get_param("path", "/"),
+                "headers": {"Host": get_param("host") or address},
+            }
+        elif network == "grpc":
+            outbound["streamSettings"]["grpcSettings"] = {
+                "serviceName": get_param("serviceName", "")
+            }
 
         return {"name": name, "config": LinkParser._build_config(outbound)}
 

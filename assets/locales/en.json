@@ -78,7 +78,10 @@
     "about": "About XenRay",
     "version": "v1.0.0 by Xenups",
     "language": "Language",
-    "language_description": "Select application language"
+    "language_description": "Select application language",
+    "reset_close_choice": "Reset Close Preference",
+    "reset_close_choice_desc": "Show confirmation dialog again when closing",
+    "reset_close_success": "Close preference reset! 🔄"
   },
   "admin": {
     "title": "Admin Rights Required",
@@ -188,5 +191,20 @@
     "toggle_theme": "Toggle Theme",
     "logs": "Logs",
     "settings": "Settings"
+  },
+  "tray": {
+    "open": "Open XenRay",
+    "exit": "Exit",
+    "connect": "Connect",
+    "disconnect": "Disconnect",
+    "connected_to": "Connected: {server}"
+  },
+  "close_dialog": {
+    "title": "Exit Application",
+    "message": "Do you want to exit XenRay or minimize to system tray?",
+    "exit": "Exit",
+    "minimize": "Minimize",
+    "cancel": "Cancel",
+    "remember": "Always minimize to tray"
   }
 }

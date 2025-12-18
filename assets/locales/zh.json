@@ -78,7 +78,10 @@
     "about": "关于XenRay",
     "version": "v1.0.0 by Xenups",
     "language": "语言",
-    "language_description": "选择应用语言"
+    "language_description": "选择应用语言",
+    "reset_close_choice": "重置关闭偏好",
+    "reset_close_choice_desc": "关闭时再次显示确认对话框",
+    "reset_close_success": "关闭偏好已重置! 🔄"
   },
   "admin": {
     "title": "需要管理员权限",
@@ -188,5 +191,20 @@
     "toggle_theme": "切换主题",
     "logs": "日志",
     "settings": "设置"
+  },
+  "tray": {
+    "open": "打开 XenRay",
+    "exit": "退出",
+    "connect": "连接",
+    "disconnect": "断开连接",
+    "connected_to": "已连接: {server}"
+  },
+  "close_dialog": {
+    "title": "退出应用",
+    "message": "您要退出 XenRay 还是最小化到系统托盘？",
+    "exit": "退出",
+    "minimize": "最小化",
+    "cancel": "取消",
+    "remember": "总是最小化到托盘"
   }
 }
