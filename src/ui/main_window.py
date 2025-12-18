@@ -21,6 +21,7 @@ from src.utils.process_utils import ProcessUtils
 from src.services.connection_tester import ConnectionTester
 from src.ui.handlers.network_stats_handler import NetworkStatsHandler
 from src.ui.handlers.connection_handler import ConnectionHandler
+from src.ui.handlers.systray_handler import SystrayHandler
 from src.ui.managers.drawer_manager import DrawerManager
 from src.ui.builders.ui_builder import UIBuilder
 from src.ui.helpers.glow_helper import GlowHelper
@@ -67,12 +68,14 @@ class MainWindow:
         self._drawer_manager = DrawerManager(self)
         self._ui_builder = UIBuilder(self)
         self._glow_helper = GlowHelper(self)
+        self._systray = SystrayHandler(self)
 
         # --- Initialization ---
         self._define_callbacks()
         self._setup_page()
         self._ui_builder.build_ui()  # Delegate to builder
         self._drawer_manager.setup_drawers()  # Delegate to manager
+        self._systray.setup()  # Initialize system tray
 
         # Start background tasks
         self._page.run_task(self._start_ui_tasks)
@@ -90,7 +93,7 @@ class MainWindow:
     # Page setup
     # -----------------------------
     def _setup_page(self):
-        # Window size/center already set in main() - just handle theme/styling here
+        # Window icons already set in main() - just handle theme/styling here
         self._page.padding = 0
         self._page.theme_mode = ft.ThemeMode.DARK
         self._page.theme = ft.Theme(font_family="Roboto")
@@ -115,8 +118,19 @@ class MainWindow:
     # -----------------------------
     def _ui_call(self, fn: Callable, *args, update_page: bool = False, **kwargs):
         """Wraps UI updates in an async task to be thread-safe."""
+        if not self._page:
+            return
 
         async def _coro():
+            # Check if loop is still running
+            try:
+                loop = getattr(self._page, "loop", None)
+                if loop and loop.is_closed():
+                    logger.debug(f"[DEBUG] Skipping UI call ({fn.__name__ if hasattr(fn, '__name__') else 'lambda'}): Event loop is closed")
+                    return
+            except Exception:
+                pass
+
             try:
                 fn(*args, **kwargs)
                 if update_page:
@@ -125,9 +139,16 @@ class MainWindow:
                     except Exception:
                         pass
             except Exception as e:
-                logger.debug(f"UI call error: {e}")
+                logger.debug(f"[DEBUG] UI call error in {fn.__name__ if hasattr(fn, '__name__') else 'lambda'}: {e}")
 
-        self._page.run_task(_coro)
+        try:
+            self._page.run_task(_coro)
+        except RuntimeError as e:
+            if "Event loop is closed" in str(e):
+                logger.debug(f"[DEBUG] RuntimeError caught in _ui_call: Event loop is closed")
+            else:
+                logger.warning(f"[DEBUG] RuntimeError in _ui_call: {e}")
+
 
     # -----------------------------
     # Build UI Structure
@@ -650,10 +671,155 @@ class MainWindow:
         # self._page.run_task(monitor_latency_loop)
 
     # -----------------------------
+    # Close Dialog
+    # -----------------------------
+    def show_close_dialog(self):
+        """Public method to trigger the close confirmation dialog."""
+        logger.debug("[DEBUG] MainWindow.show_close_dialog() called")
+        
+        # Check if user already chose to always minimize
+        if self._config_manager.get_remember_close_choice():
+            logger.debug("[DEBUG] Remembered choice found: Always minimize")
+            self._handle_minimize_action()
+            return
+            
+        self._show_close_dialog()
+
+    def _handle_minimize_action(self):
+        """Helper to minimize window to tray."""
+        self._page.window.visible = False
+        self._page.window.skip_task_bar = True
+        self._page.update()
+
+    def _show_close_dialog(self):
+        """Shows a redesigned premium dialog asking user to minimize or exit."""
+        logger.debug("[DEBUG] MainWindow._show_close_dialog() triggered")
+        from src.core.i18n import t
+
+        # Define checkbox early so the handlers can reference it
+        remember_checkbox = ft.Checkbox(
+            label=t("close_dialog.remember"),
+            value=False,
+            label_style=ft.TextStyle(size=13, color=ft.Colors.with_opacity(0.7, ft.Colors.ON_SURFACE)),
+            # White inside when empty, blue accent checkmark
+            fill_color={
+                ft.ControlState.SELECTED: ft.Colors.BLUE_ACCENT,
+                ft.ControlState.DEFAULT: ft.Colors.WHITE,
+            },
+            check_color=ft.Colors.WHITE,
+        )
+
+        def handle_exit(e):
+            logger.debug("[DEBUG] Close dialog: Exit clicked")
+            dialog.open = False
+            self._page.update()
+            self.cleanup()
+            from src.utils.process_utils import ProcessUtils
+            ProcessUtils.kill_process_tree()
+            os._exit(0)
+
+        def handle_minimize(e):
+            logger.debug(f"[DEBUG] Close dialog: Minimize clicked (remember={remember_checkbox.value})")
+            if remember_checkbox.value:
+                self._config_manager.set_remember_close_choice(True)
+            
+            dialog.open = False
+            self._handle_minimize_action()
+
+        def handle_cancel(e):
+            logger.debug("[DEBUG] Close dialog: Cancel clicked")
+            dialog.open = False
+            self._page.update()
+
+        try:
+            title_text = t("close_dialog.title")
+            message_text = t("close_dialog.message")
+            exit_label = t("close_dialog.exit")
+            minimize_label = t("close_dialog.minimize")
+            cancel_label = t("close_dialog.cancel")
+        except Exception:
+            title_text, message_text = "Exit", "Exit or Minimize?"
+            exit_label, minimize_label, cancel_label = "Exit", "Minimize", "Cancel"
+
+        dialog = ft.AlertDialog(
+            modal=True,
+            content=ft.Container(
+                content=ft.Column(
+                    [
+                        # Header
+                        ft.Row(
+                            [
+                                ft.Icon(ft.Icons.EXIT_TO_APP_ROUNDED, color=ft.Colors.BLUE_ACCENT, size=28),
+                                ft.Text(title_text, size=18, weight=ft.FontWeight.BOLD),
+                            ],
+                            alignment=ft.MainAxisAlignment.START,
+                            spacing=10,
+                        ),
+                        # Message
+                        ft.Text(message_text, size=14, opacity=0.9),
+                        
+                        ft.Divider(height=10, color=ft.Colors.TRANSPARENT),
+                        
+                        # Buttons Row (Moved into content for precise placement)
+                        ft.Row(
+                            [
+                                ft.TextButton(
+                                    exit_label, 
+                                    on_click=handle_exit, 
+                                    icon=ft.Icons.POWER_SETTINGS_NEW, 
+                                    icon_color=ft.Colors.RED_ACCENT,
+                                    style=ft.ButtonStyle(color=ft.Colors.RED_ACCENT)
+                                ),
+                                ft.ElevatedButton(
+                                    minimize_label, 
+                                    on_click=handle_minimize, 
+                                    icon=ft.Icons.MINIMIZE,
+                                    style=ft.ButtonStyle(
+                                        bgcolor=ft.Colors.BLUE_ACCENT,
+                                        color=ft.Colors.WHITE,
+                                    )
+                                ),
+                            ],
+                            alignment=ft.MainAxisAlignment.START,
+                            spacing=10,
+                        ),
+                        
+                        # Checkbox (Under the buttons)
+                        ft.Container(
+                            content=remember_checkbox,
+                            margin=ft.margin.only(top=5),
+                        ),
+                    ],
+                    tight=True,
+                    spacing=10,
+                ),
+                padding=10,
+                width=320,
+            ),
+            shape=ft.RoundedRectangleBorder(radius=15),
+            bgcolor=ft.Colors.with_opacity(0.95, ft.Colors.SURFACE),
+        )
+
+        self._page.overlay.append(dialog)
+        dialog.open = True
+        self._page.update()
+        logger.debug("[DEBUG] Redesigned close dialog opened")
+
+    # -----------------------------
     # Cleanup
     # -----------------------------
     def cleanup(self):
+        """Cleanup resources before exit."""
+        logger.info("Cleaning up MainWindow resources...")
         try:
-            self._disconnect()
+            self._network_stats.stop()
+        except Exception:
+            pass
+        try:
+            self._connection_manager.disconnect()
+        except Exception:
+            pass
+        try:
+            self._systray.stop()
         except Exception:
             pass

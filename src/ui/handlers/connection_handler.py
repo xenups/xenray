@@ -110,6 +110,9 @@ class ConnectionHandler:
             )
             self._main._ui_call(self._main._connection_button.set_connected)
             self._main._ui_call(lambda: self._main._update_horizon_glow("connected"))
+            
+            # Update system tray state
+            self._main._systray.update_state()
 
             # Start network stats service
             if self._main._network_stats:
@@ -156,6 +159,9 @@ class ConnectionHandler:
             
             self._main._ui_call(self.reset_ui_disconnected)
             self._main._ui_call(lambda: self._main._show_snackbar("Disconnected"))
+
+            # Update system tray state
+            self._main._systray.update_state()
 
         threading.Thread(target=disconnect_task, daemon=True).start()
 

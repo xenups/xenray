@@ -17,14 +17,20 @@ from src.core.settings import Settings
 from src.ui.main_window import MainWindow
 
 
-def main(page: ft.Page):
+import asyncio
+
+async def main(page: ft.Page):
     """Main entry point."""
-    # Window setup FIRST - as early as possible
+    logger.debug("[DEBUG] Starting Flet session (async main)")
+    
+    # Window settings MUST be set as early as possible
+    page.window.prevent_close = True
     page.title = "XenRay"
     page.window.width = 420
     page.window.height = 550
     page.window.resizable = False
     page.window.center()
+    page.update()
 
     # Setup logging
     Settings.create_temp_directories()
@@ -35,41 +41,34 @@ def main(page: ft.Page):
     config_manager = ConfigManager()
     connection_manager = ConnectionManager(config_manager)
 
-    # Initialize i18n with saved language
+    # Initialize i18n
     from src.core.i18n import set_language
-
-    saved_lang = config_manager.get_language()
-    set_language(saved_lang)
+    set_language(config_manager.get_language())
 
     # Initialize UI
     window = MainWindow(page, config_manager, connection_manager)
 
-    # Handle window close and minimize
+    # Register window event handler
     def on_window_event(e):
-        logger.debug(f"[DEBUG] Window event: {e.data}")
+        logger.debug(f"[DEBUG] Window event in main.py: {e.data}")
         if e.data == "close":
-            logger.debug("[DEBUG] Closing window...")
-            try:
-                # Cleanup resources
-                window.cleanup()
-                logger.debug("[DEBUG] Cleanup finished")
-            except Exception as ex:
-                logger.debug(f"[DEBUG] Cleanup error: {ex}")
+            logger.debug("[DEBUG] Close event detected, calling show_close_dialog")
+            window.show_close_dialog()
+            # Explicit update to ensure dialog renders before any potential default hide
+            page.update()
 
-            logger.debug("[DEBUG] Destroying window")
-            page.window.destroy()
-            logger.debug("[DEBUG] Window destroyed")
-            # Force exit to ensure no hanging threads or zombie processes
-            logger.info("[DEBUG] Killing process tree...")
-            from src.utils.process_utils import ProcessUtils
-
-            ProcessUtils.kill_process_tree()
-
-            # Fallback
-            os._exit(0)
-
-    page.window.prevent_close = True
     page.window.on_event = on_window_event
+    page.update()
+
+    # Keep session alive - use a larger sleep to reduce overhead
+    logger.debug("[DEBUG] Session initialized, entering persistence loop")
+    try:
+        while True:
+            await asyncio.sleep(3600)
+    except asyncio.CancelledError:
+        logger.debug("[DEBUG] Flet session task cancelled")
+    except Exception as e:
+        logger.error(f"[ERROR] Main persistence loop crashed: {e}")
 
 
 def run():

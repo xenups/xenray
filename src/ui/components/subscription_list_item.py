@@ -21,11 +21,19 @@ class SubscriptionListItem(ft.Container):
         super().__init__(
             content=ft.ListTile(
                 leading=ft.Icon(ft.Icons.FOLDER, color=ft.Colors.PRIMARY, size=24),
-                title=ft.Text(sub["name"], weight=ft.FontWeight.BOLD, size=14),
+                title=ft.Text(
+                    sub["name"], 
+                    weight=ft.FontWeight.BOLD, 
+                    size=14,
+                    overflow=ft.TextOverflow.ELLIPSIS,
+                    max_lines=1,
+                ),
                 subtitle=ft.Text(
                     f"{len(profiles)} servers • {url_display}",
                     size=11,
                     color=ft.Colors.GREY_500,
+                    overflow=ft.TextOverflow.ELLIPSIS,
+                    max_lines=1,
                 ),
                 trailing=ft.Icon(
                     ft.Icons.ARROW_FORWARD_IOS, size=14, color=ft.Colors.GREY_400
