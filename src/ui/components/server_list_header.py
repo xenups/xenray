@@ -32,7 +32,7 @@ class ServerListHeader(ft.Container):
         self._current_subscription: Optional[dict] = None
         self._inner_row = ft.Row([], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
 
-        super().__init__(content=self._inner_row, padding=0)
+        super().__init__(content=self._inner_row, padding=ft.padding.only(left=15, right=5))
         self.show_main_header()
 
     def _create_sort_menu(self) -> ft.PopupMenuButton:
@@ -67,7 +67,7 @@ class ServerListHeader(ft.Container):
         """Display the main server list header."""
         self._current_subscription = None
         self._inner_row.controls = [
-            ft.Text(t("server_list.title"), size=20, weight=ft.FontWeight.BOLD),
+            ft.Text(t("server_list.title"), size=17, weight=ft.FontWeight.BOLD),
             ft.Row(
                 [
                     ft.IconButton(
@@ -100,7 +100,7 @@ class ServerListHeader(ft.Container):
                         if self._on_back_click
                         else None,
                     ),
-                    ft.Text(sub["name"], size=20, weight=ft.FontWeight.BOLD),
+                    ft.Text(sub["name"], size=17, weight=ft.FontWeight.BOLD),
                 ],
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
             ),

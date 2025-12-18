@@ -39,6 +39,10 @@ def _atomic_write(file_path: str, content: str, mode: str = "w") -> bool:
     """
     try:
         temp_path = file_path + ".tmp"
+        
+        # Ensure directory exists
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        
         with open(temp_path, mode, encoding="utf-8") as f:
             f.write(content)
         # Atomic rename (works on both Windows and Unix)

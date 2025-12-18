@@ -45,6 +45,13 @@ class ConnectionManager:
             logger.error("Failed to load config")
             return False
 
+        # Check Internet Connectivity
+        report_step(t("connection.checking_network"))
+        if not self._check_internet_connection():
+            logger.error("No internet connection detected")
+            report_step(t("connection.no_internet"))
+            return False
+
         # Stop existing processes if any (don't call full disconnect to avoid race)
         if self._current_connection:
             report_step(t("connection.stopping_existing"))
@@ -133,6 +140,39 @@ class ConnectionManager:
 
         self._current_connection = None
         return True
+
+    def _check_internet_connection(self) -> bool:
+        """
+        Check if there is an active internet connection.
+        """
+        # 1. Check if we have a default gateway (basic network config check)
+        gateway = self._get_default_gateway()
+        if not gateway:
+            logger.warning("[ConnectionManager] No default gateway found.")
+            # We fail here because if there's no gateway, we can't route anywhere.
+            # Exception: User might be on a weird specialized network, but for general VPN use, this is a blocker.
+            return False
+
+        # 2. Check actual connectivity to a high-availability host
+        # We use standard DNS ports (53) which are rarely blocked, unlike ICMP
+        test_hosts = [
+            ("8.8.8.8", 53),  # Google DNS
+            ("1.1.1.1", 53),  # Cloudflare DNS
+            ("208.67.222.222", 53),  # OpenDNS
+        ]
+
+        for host, port in test_hosts:
+            try:
+                # Create a socket connection with short timeout
+                s = socket.create_connection((host, port), timeout=3)
+                s.close()
+                logger.info(f"[ConnectionManager] Connection verified via {host}:{port}")
+                return True
+            except OSError:
+                continue
+
+        logger.error("[ConnectionManager] Failed to connect to any test host.")
+        return False
 
     def _process_config(self, config: dict) -> dict:
         """

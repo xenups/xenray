@@ -65,117 +65,133 @@ class SettingsDrawer(ft.NavigationDrawer):
         )
 
         # Build UI
-        super().__init__(
-            controls=[
-                # Header
-                ft.Container(
-                    content=ft.Column(
-                        [
-                            ft.Text(
-                                t("settings.title"), size=28, weight=ft.FontWeight.BOLD
-                            ),
-                            ft.Text(
-                                t("settings.subtitle"),
-                                size=12,
-                                color=ft.Colors.ON_SURFACE_VARIANT,
-                            ),
-                        ],
-                        spacing=2,
+        # Glass container wrapping all content
+        glass_content = ft.Container(
+            content=ft.Column(
+                [
+                    # Top Bar with Back Button
+                    ft.Container(
+                        content=ft.Row(
+                            [
+                                ft.IconButton(
+                                    ft.Icons.ARROW_BACK,
+                                    on_click=self._close_drawer,
+                                ),
+                                ft.Text(t("settings.title"), size=20, weight=ft.FontWeight.BOLD),
+                            ],
+                        ),
+                        padding=20,
                     ),
-                    padding=ft.padding.only(left=20, top=20, bottom=20),
-                ),
-                # General Section
-                SettingsSection(
-                    t("settings.general"),
-                    [
-                        self._mode_switch_row,
-                        self._language_row,
-                    ],
-                ),
-                ft.Divider(height=1, color=ft.Colors.OUTLINE_VARIANT, opacity=0.2),
-                ft.Container(height=10),
-                # Network Section
-                SettingsSection(
-                    t("settings.network"),
-                    [
-                        self._country_row,
-                        self._port_row,
-                    ],
-                ),
-                ft.Divider(height=1, color=ft.Colors.OUTLINE_VARIANT, opacity=0.2),
-                ft.Container(height=10),
-                # Advanced Section
-                SettingsSection(
-                    t("settings.advanced"),
-                    [
-                        SettingsListTile(
-                            ft.Icons.DIRECTIONS,
-                            t("settings.routing_rules"),
-                            t("settings.routing_description"),
-                            on_click=self._open_routing_manager,
+                    ft.Divider(height=1, color=ft.Colors.OUTLINE_VARIANT, opacity=0.2),
+                    # Content
+                    ft.Container(
+                        content=ft.Column(
+                            [
+                                # Connection Section
+                                SettingsSection(
+                                    t("settings.connection"),
+                                    [
+                                        self._mode_switch_row,
+                                        self._port_row,
+                                        self._country_row,
+                                    ],
+                                ),
+                                ft.Divider(height=1, color=ft.Colors.OUTLINE_VARIANT, opacity=0.2),
+                                ft.Container(height=10),
+                                # App Settings
+                                SettingsSection(
+                                    t("settings.application"),
+                                    [
+                                        self._language_row,
+                                        SettingsListTile(
+                                            ft.Icons.ROUTE,
+                                            t("settings.routing_rules"),
+                                            t("settings.routing_description"),
+                                            on_click=self._open_routing_manager,
+                                        ),
+                                        SettingsListTile(
+                                            ft.Icons.DNS,
+                                            t("settings.dns_manager"),
+                                            t("settings.dns_description"),
+                                            on_click=self._open_dns_manager,
+                                        ),
+                                    ],
+                                ),
+                                ft.Divider(height=1, color=ft.Colors.OUTLINE_VARIANT, opacity=0.2),
+                                ft.Container(height=10),
+                                # System Section
+                                SettingsSection(
+                                    t("settings.system"),
+                                    [
+                                        SettingsListTile(
+                                            ft.Icons.UPGRADE,
+                                            t("settings.check_app_updates"),
+                                            t("settings.app_update_description"),
+                                            on_click=self._check_app_updates,
+                                        ),
+                                        SettingsListTile(
+                                            ft.Icons.SYSTEM_UPDATE_ALT,
+                                            t("settings.check_updates"),
+                                            t("settings.update_xray"),
+                                            on_click=lambda e: self._on_installer_run_external("xray"),
+                                        ),
+                                        SettingsListTile(
+                                            ft.Icons.INFO_OUTLINE,
+                                            t("settings.about"),
+                                            f"v{APP_VERSION} by Xenups",
+                                            show_chevron=False,
+                                        ),
+                                    ],
+                                ),
+                            ],
+                            scroll=ft.ScrollMode.HIDDEN,
                         ),
-                        SettingsListTile(
-                            ft.Icons.DNS,
-                            t("settings.dns_settings"),
-                            t("settings.dns_description"),
-                            on_click=self._open_dns_manager,
-                        ),
-                    ],
-                ),
-                ft.Divider(height=1, color=ft.Colors.OUTLINE_VARIANT, opacity=0.2),
-                ft.Container(height=10),
-                # System Section
-                SettingsSection(
-                    t("settings.system"),
-                    [
-                        SettingsListTile(
-                            ft.Icons.UPGRADE,
-                            t("settings.check_app_updates"),
-                            t("settings.app_update_description"),
-                            on_click=self._check_app_updates,
-                        ),
-                        SettingsListTile(
-                            ft.Icons.SYSTEM_UPDATE_ALT,
-                            t("settings.check_updates"),
-                            t("settings.update_xray"),
-                            on_click=lambda e: self._on_installer_run("xray"),
-                        ),
-                        SettingsListTile(
-                            ft.Icons.INFO_OUTLINE,
-                            t("settings.about"),
-                            t("settings.version"),
-                            show_chevron=False,
-                        ),
-                    ],
-                ),
-                # Version Footer (Xray and Singbox versions only - app version shown in About)
-                ft.Container(
-                    content=ft.Row(
-                        [
-                            ft.Text(
-                                f"Xray: v{XrayInstallerService.get_local_version() or 'ND'}",
-                                size=11,
-                                color=ft.Colors.OUTLINE,
-                            ),
-                            ft.Container(
-                                width=1, height=10, bgcolor=ft.Colors.OUTLINE_VARIANT
-                            ),
-                            ft.Text(
-                                f"Sing-box: v{SingboxService().get_version() or 'ND'}",
-                                size=11,
-                                color=ft.Colors.OUTLINE,
-                            ),
-                        ],
-                        spacing=10,
-                        alignment=ft.MainAxisAlignment.CENTER,
+                        expand=True,
                     ),
-                    alignment=ft.alignment.center,
-                    padding=20,
-                ),
-            ],
-            bgcolor=ft.Colors.SURFACE,
-            surface_tint_color=ft.Colors.SURFACE_TINT,
+                    # Version Footer
+                    ft.Container(
+                        content=ft.Row(
+                            [
+                                ft.Text(
+                                    f"Xray: v{XrayInstallerService.get_local_version() or 'ND'}",
+                                    size=11,
+                                    color=ft.Colors.OUTLINE,
+                                ),
+                                ft.Container(
+                                    width=1, height=10, bgcolor=ft.Colors.OUTLINE_VARIANT
+                                ),
+                                ft.Text(
+                                    f"Sing-box: v{SingboxService().get_version() or 'ND'}",
+                                    size=11,
+                                    color=ft.Colors.OUTLINE,
+                                ),
+                            ],
+                            spacing=10,
+                            alignment=ft.MainAxisAlignment.CENTER,
+                        ),
+                        alignment=ft.alignment.center,
+                        padding=20,
+                    ),
+                ],
+                spacing=0,
+            ),
+            bgcolor=ft.Colors.with_opacity(0.7, "#0f172a"),
+            blur=ft.Blur(20, 20, ft.BlurTileMode.MIRROR),
+            expand=True,
         )
+
+        super().__init__(
+            controls=[glass_content],
+            bgcolor=ft.Colors.TRANSPARENT,
+            surface_tint_color=ft.Colors.TRANSPARENT,
+            shadow_color=ft.Colors.TRANSPARENT,
+        )
+
+    def _close_drawer(self, e=None):
+        """Close this settings drawer."""
+        self.open = False
+        if self.page:
+            self.page.close(self)
 
     def _handle_mode_change(self, e):
         """Handle VPN/Proxy mode switch."""

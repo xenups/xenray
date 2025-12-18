@@ -44,19 +44,17 @@ class ServerListItem(ft.Container):
             else:
                 last_ping_color = ft.Colors.RED_400
 
-        # Selection styling
+        # Selection styling (Glass Theme) - only border changes
         if is_selected:
-            border_color = ft.Colors.PRIMARY
-            border_width = 2
-            bg_color = ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY)
+            border_color = ft.Colors.with_opacity(0.9, ft.Colors.PRIMARY)
+            border_width = 2.5  # Thicker border for selected
+            bg_color = ft.Colors.with_opacity(0.15, "#1e293b")  # Same as unselected
+            shadow_color = ft.Colors.TRANSPARENT  # No shadow glow
         else:
-            border_color = (
-                ft.Colors.with_opacity(0.5, ft.Colors.OUTLINE_VARIANT)
-                if read_only
-                else ft.Colors.OUTLINE_VARIANT
-            )
+            border_color = ft.Colors.with_opacity(0.15, ft.Colors.WHITE) if not read_only else ft.Colors.TRANSPARENT
             border_width = 1
-            bg_color = ft.Colors.SURFACE
+            bg_color = ft.Colors.with_opacity(0.15, "#1e293b")
+            shadow_color = ft.Colors.TRANSPARENT
 
         # Ping label (exposed for updates)
         self.ping_label = ft.Text(
@@ -130,11 +128,17 @@ class ServerListItem(ft.Container):
                 alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
             ),
             padding=ft.padding.symmetric(horizontal=10, vertical=8),
-            border_radius=8,
+            border_radius=12, # Slightly more rounded
             bgcolor=bg_color,
             border=ft.border.all(border_width, border_color),
+            blur=ft.Blur(10, 10, ft.BlurTileMode.MIRROR), # Glass blur
             on_click=lambda e: on_select(profile),
             ink=True,
+            shadow=ft.BoxShadow(
+                spread_radius=0,
+                blur_radius=10,
+                color=shadow_color,
+            ) if is_selected else None,
         )
 
     def _create_icon_content(self, profile: dict) -> ft.Control:

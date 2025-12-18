@@ -22,7 +22,7 @@ def main(page: ft.Page):
     # Window setup FIRST - as early as possible
     page.title = "XenRay"
     page.window.width = 420
-    page.window.height = 650
+    page.window.height = 550
     page.window.resizable = False
     page.window.center()
 

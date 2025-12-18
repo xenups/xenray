@@ -17,7 +17,7 @@ class SettingsSection(ft.Container):
                 [
                     ft.Text(
                         title,
-                        color=ft.Colors.PRIMARY,
+                        color=ft.Colors.WHITE,
                         weight=ft.FontWeight.BOLD,
                         size=12,
                     ),
