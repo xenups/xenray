@@ -2,11 +2,16 @@
   "app": {
     "name": "XenRay",
     "connecting": "Connecting",
+    "disconnecting": "Disconnecting",
     "connected": "Connected",
     "disconnected": "Disconnected",
     "verifying": "Verifying",
     "initializing": "Initializing",
-    "checking": "Checking"
+    "checking": "Checking",
+    "tap_to_connect": "Tap to Connect",
+    "start": "Start",
+    "stop": "Stop",
+    "starting": "Starting"
   },
   "server_list": {
     "title": "Servers",
@@ -44,6 +49,8 @@
   "settings": {
     "title": "Settings",
     "subtitle": "Configure your connection",
+    "connection": "Connection",
+    "application": "Application",
     "general": "General",
     "network": "Network",
     "advanced": "Advanced",
@@ -62,6 +69,7 @@
     "routing_rules": "Routing Rules",
     "routing_description": "Manage direct, proxy, and block lists",
     "dns_settings": "DNS Settings",
+    "dns_manager": "DNS Management",
     "dns_description": "Configure upstream DNS servers",
     "check_app_updates": "Check for App Updates",
     "app_update_description": "Check for XenRay updates",
@@ -133,7 +141,9 @@
     "conn_error": "Conn Error",
     "core_failed": "Core Failed",
     "invalid_config": "Invalid Config",
-    "error": "Error"
+    "error": "Error",
+    "checking_network": "Checking network connection...",
+    "no_internet": "No Internet Connection!"
   },
   "routing": {
     "title": "Routing Rules",

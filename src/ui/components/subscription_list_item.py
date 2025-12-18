@@ -36,7 +36,8 @@ class SubscriptionListItem(ft.Container):
             ),
             padding=0,
             border_radius=8,
-            bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.PRIMARY),
-            border=ft.border.all(1, ft.Colors.with_opacity(0.2, ft.Colors.PRIMARY)),
+            bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.PRIMARY),  # More transparent
+            blur=ft.Blur(15, 15, ft.BlurTileMode.MIRROR),  # Glass blur
+            border=ft.border.all(1, ft.Colors.with_opacity(0.15, ft.Colors.PRIMARY)),  # Subtle border
             margin=ft.margin.only(bottom=2),
         )

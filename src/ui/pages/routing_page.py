@@ -13,7 +13,12 @@ class RoutingPage(ft.Container):
         self._toggles = self._config_manager.get_routing_toggles()
         self._current_tab = "direct"
 
-        super().__init__(expand=True, padding=0)
+        super().__init__(
+            expand=True, 
+            padding=0,
+            bgcolor=ft.Colors.with_opacity(0.3, "#0f172a"),
+            blur=ft.Blur(20, 20, ft.BlurTileMode.MIRROR),
+        )
         self._setup_ui()
 
     def _create_toggle_row(
@@ -76,7 +81,8 @@ class RoutingPage(ft.Container):
                 spacing=10,
             ),
             padding=ft.padding.symmetric(horizontal=10, vertical=10),
-            bgcolor=ft.Colors.SURFACE,
+            bgcolor=ft.Colors.with_opacity(0.2, "#1e293b"),
+            blur=ft.Blur(10, 10, ft.BlurTileMode.MIRROR),
         )
 
         # Quick Settings Content (shown when Quick tab is selected)

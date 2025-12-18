@@ -39,7 +39,7 @@ class ServerList(ft.Container):
         # State
         self._page: Optional[ft.Page] = None
         self._current_list_view = None
-        self._selected_profile_id = None
+        self._selected_profile_id = self._config_manager.get_last_selected_profile_id()  # Load last selected
         self._active_subscription = None
 
         # Item tracking for updates
@@ -90,7 +90,9 @@ class ServerList(ft.Container):
                 spacing=0,
             ),
             padding=5,
-            bgcolor=ft.Colors.TRANSPARENT,
+            bgcolor=ft.Colors.with_opacity(0.15, "#0f172a"),  # More transparent
+            blur=ft.Blur(25, 25, ft.BlurTileMode.MIRROR),  # Higher blur
+            border_radius=ft.border_radius.only(top_left=20, top_right=20),
             expand=True,
         )
 

@@ -46,18 +46,21 @@ class ServerCard(ft.Container):
             on_click=on_click,
         )
 
+        # Country/City text (replaces "Current Server" label)
+        self._country_city_text = ft.Text(
+            "",
+            size=10,
+            color=ft.Colors.ON_SURFACE_VARIANT,
+            weight=ft.FontWeight.W_400,
+        )
+
         # Main content row
         self._content_row = ft.Row(
             [
                 self._icon_container,
                 ft.Column(
                     [
-                        ft.Text(
-                            t("server_list.current_server"),
-                            size=10,
-                            color=ft.Colors.ON_SURFACE_VARIANT,
-                            weight=ft.FontWeight.W_400,
-                        ),
+                        self._country_city_text,
                         self._name_text,
                         self._address_text,
                     ],
@@ -75,20 +78,22 @@ class ServerCard(ft.Container):
                 begin=ft.alignment.top_left,
                 end=ft.alignment.bottom_right,
                 colors=[
-                    ft.Colors.with_opacity(0.15, "#6366f1"),
-                    ft.Colors.with_opacity(0.10, "#8b5cf6"),
-                    ft.Colors.with_opacity(0.08, "#6366f1"),
+                    ft.Colors.with_opacity(0.35, "#6366f1"),
+                    ft.Colors.with_opacity(0.20, "#8b5cf6"),
+                    ft.Colors.with_opacity(0.12, "#6366f1"),
                 ],
                 tile_mode=ft.GradientTileMode.CLAMP,
             ),
-            border=ft.border.all(1, ft.Colors.with_opacity(0.15, ft.Colors.ON_SURFACE)),
+            # Removed bgcolor to allow gradient to show through
+            blur=ft.Blur(15, 15, ft.BlurTileMode.MIRROR), # High blur
+            border=ft.border.all(1, ft.Colors.with_opacity(0.15, ft.Colors.WHITE)),
             border_radius=20,
             padding=ft.padding.symmetric(horizontal=16, vertical=14),
             margin=ft.margin.only(left=20, right=20, bottom=16),
             shadow=ft.BoxShadow(
                 spread_radius=0,
                 blur_radius=20,
-                color=ft.Colors.with_opacity(0.1, ft.Colors.BLACK),
+                color=ft.Colors.with_opacity(0.2, ft.Colors.BLACK),
                 offset=ft.Offset(0, 4),
             ),
             on_click=on_click,
@@ -107,20 +112,24 @@ class ServerCard(ft.Container):
             begin=ft.alignment.top_left,
             end=ft.alignment.bottom_right,
             colors=[
-                ft.Colors.with_opacity(0.20, color1),
-                ft.Colors.with_opacity(0.12, color2),
-                ft.Colors.with_opacity(0.08, color1),
+                ft.Colors.with_opacity(0.35, color1),
+                ft.Colors.with_opacity(0.20, color2),
+                ft.Colors.with_opacity(0.12, color1),
             ],
             tile_mode=ft.GradientTileMode.CLAMP,
         )
 
     def update_server(self, profile):
         """Update server card with profile data."""
+        from src.core.city_translator import translate_city
+        from src.core.country_translator import translate_country
+
         if not profile:
             self._icon_container.content = self._globe_icon
             self._name_text.value = t("server_list.no_server")
             self._name_text.color = ft.Colors.ON_SURFACE_VARIANT
             self._address_text.value = ""
+            self._country_city_text.value = ""
             self._current_colors = FLAG_COLORS["default"]
             self._update_gradient_colors()
         else:
@@ -143,6 +152,17 @@ class ServerCard(ft.Container):
             else:
                 self._icon_container.content = self._globe_icon
                 self._current_colors = FLAG_COLORS["default"]
+
+            # Update country/city text
+            country_name = profile.get("country_name") or profile.get("name", "")
+            if cc:
+                country_name = translate_country(cc, country_name)
+            city = profile.get("city")
+            if city:
+                translated_city = translate_city(city)
+                self._country_city_text.value = f"{country_name}, {translated_city}"
+            else:
+                self._country_city_text.value = country_name
 
             self._name_text.value = profile["name"]
             self._name_text.color = ft.Colors.ON_SURFACE

@@ -6,7 +6,11 @@
     "disconnected": "Отключено",
     "verifying": "Проверка",
     "initializing": "Инициализация",
-    "checking": "Проверка"
+    "checking": "Проверка",
+    "tap_to_connect": "Нажмите для подключения",
+    "start": "Старт",
+    "stop": "Стоп",
+    "starting": "Запуск"
   },
   "server_list": {
     "title": "Серверы",
@@ -44,6 +48,8 @@
   "settings": {
     "title": "Настройки",
     "subtitle": "Настройте подключение",
+    "connection": "Подключение",
+    "application": "Приложение",
     "general": "Общие",
     "network": "Сеть",
     "advanced": "Расширенные",
@@ -62,6 +68,7 @@
     "routing_rules": "Правила маршрутизации",
     "routing_description": "Управление списками прямых, прокси и блокировки",
     "dns_settings": "Настройки DNS",
+    "dns_manager": "Управление DNS",
     "dns_description": "Настройка вышестоящих DNS-серверов",
     "check_app_updates": "Проверить обновления приложения",
     "app_update_description": "Проверить обновления XenRay",
@@ -133,7 +140,9 @@
     "conn_error": "Ошибка соед.",
     "core_failed": "Ошибка ядра",
     "invalid_config": "Неверная конфиг.",
-    "error": "Ошибка"
+    "error": "Ошибка",
+    "checking_network": "Проверка подключения к сети...",
+    "no_internet": "Нет подключения к Интернету!"
   },
   "routing": {
     "title": "Правила маршрутизации",

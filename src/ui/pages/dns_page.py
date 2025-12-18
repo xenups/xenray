@@ -11,7 +11,12 @@ class DNSPage(ft.Container):
         self._on_back = on_back
         self._dns_list = self._config_manager.load_dns_config()
 
-        super().__init__(expand=True, padding=0)
+        super().__init__(
+            expand=True, 
+            padding=0,
+            bgcolor=ft.Colors.with_opacity(0.3, "#0f172a"),
+            blur=ft.Blur(20, 20, ft.BlurTileMode.MIRROR),
+        )
         self._setup_ui()
 
     def _setup_ui(self):
@@ -35,7 +40,8 @@ class DNSPage(ft.Container):
                 spacing=10,
             ),
             padding=ft.padding.symmetric(horizontal=10, vertical=10),
-            bgcolor=ft.Colors.SURFACE,
+            bgcolor=ft.Colors.with_opacity(0.2, "#1e293b"),
+            blur=ft.Blur(10, 10, ft.BlurTileMode.MIRROR),
         )
 
         # Input Area
@@ -223,7 +229,7 @@ class DNSPage(ft.Container):
                 border=ft.border.only(
                     bottom=ft.border.BorderSide(1, ft.Colors.OUTLINE_VARIANT)
                 ),
-                bgcolor=ft.Colors.SURFACE,
+                bgcolor=ft.Colors.with_opacity(0.15, "#1e293b"),
             )
             self._list_view.controls.append(row)
 

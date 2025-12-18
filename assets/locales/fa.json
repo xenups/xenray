@@ -2,11 +2,16 @@
   "app": {
     "name": "زن‌ری",
     "connecting": "در حال اتصال",
+    "disconnecting": "در حال قطع اتصال",
     "connected": "متصل",
     "disconnected": "قطع شده",
     "verifying": "در حال تأیید",
     "initializing": "راه‌اندازی",
-    "checking": "در حال بررسی"
+    "checking": "در حال بررسی",
+    "tap_to_connect": "برای اتصال ضربه بزنید",
+    "start": "شروع",
+    "stop": "توقف",
+    "starting": "در حال شروع"
   },
   "server_list": {
     "title": "سرورها",
@@ -44,6 +49,8 @@
   "settings": {
     "title": "تنظیمات",
     "subtitle": "پیکربندی اتصال",
+    "connection": "اتصال",
+    "application": "برنامه",
     "general": "عمومی",
     "network": "شبکه",
     "advanced": "پیشرفته",
@@ -62,6 +69,7 @@
     "routing_rules": "قوانین مسیریابی",
     "routing_description": "مدیریت لیست مستقیم، پروکسی و مسدود",
     "dns_settings": "تنظیمات DNS",
+    "dns_manager": "مدیریت DNS",
     "dns_description": "پیکربندی سرورهای DNS",
     "check_app_updates": "بررسی به‌روزرسانی برنامه",
     "app_update_description": "بررسی به‌روزرسانی زن‌ری",
@@ -133,7 +141,9 @@
     "conn_error": "خطای اتصال",
     "core_failed": "خطای هسته",
     "invalid_config": "پیکربندی نامعتبر",
-    "error": "خطا"
+    "error": "خطا",
+    "checking_network": "در حال بررسی اتصال شبکه...",
+    "no_internet": "اتصال اینترنت برقرار نیست!"
   },
   "routing": {
     "title": "قوانین مسیریابی",

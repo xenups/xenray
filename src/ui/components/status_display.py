@@ -1,6 +1,4 @@
-"""Status display component for showing connection status."""
-
-import threading
+"""Status display component for showing connection status below button."""
 
 import flet as ft
 
@@ -9,145 +7,120 @@ from src.core.i18n import t
 
 class StatusDisplay(ft.Container):
     """
-    Displays the current connection status and country information.
-    Layout: Center(TextColumn)
+    Displays the connection status below the button.
+    Simple layout - just status label.
     """
 
     def __init__(self):
         super().__init__()
 
-        # --- Controls ---
+        self._is_connected = False
 
-        # 1. Country/City Name - larger, smoother font
-        self._country_text = ft.Text(
-            "N/A",
-            size=18,
-            weight=ft.FontWeight.W_600,
-            color=ft.Colors.ON_SURFACE,
-            text_align=ft.TextAlign.CENTER,
+        # Status Label (initial instance)
+        self._status_label = self._create_label(t("app.disconnected"), ft.Colors.ORANGE_400)
+
+        # Animated Switcher for Morphism
+        self._switcher = ft.AnimatedSwitcher(
+            content=self._status_label,
+            transition=ft.AnimatedSwitcherTransition.FADE,
+            duration=200,
+            reverse_duration=200,
+            switch_in_curve=ft.AnimationCurve.EASE_OUT,
+            switch_out_curve=ft.AnimationCurve.EASE_IN,
         )
 
-        # 2. Status Text - clean, no animation
-        self._msg_text = ft.Text(
-            t("app.disconnected"),
-            size=13,
-            weight=ft.FontWeight.W_400,
-            color=ft.Colors.GREY_500,
-            text_align=ft.TextAlign.CENTER,
-        )
-
-        # --- Main Layout (Centered Column) ---
+        # Main Layout
         self._text_column = ft.Column(
-            [self._country_text, self._msg_text],
+            [
+                self._switcher,
+            ],
             alignment=ft.MainAxisAlignment.CENTER,
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            spacing=2,
+            spacing=0,
         )
 
         self.content = ft.Container(
             content=self._text_column,
-            padding=ft.padding.symmetric(horizontal=10),
+            padding=ft.padding.symmetric(horizontal=10, vertical=10),
             alignment=ft.alignment.center,
             width=320,
         )
 
-    def update_country(self, country_data: dict = None):
-        """
-        Updates the country/city information.
-        Persistent: Does NOT reset on disconnect.
-        """
-        from src.core.city_translator import translate_city
-        from src.core.country_translator import translate_country
+    def _create_label(self, text: str, color: str) -> ft.Text:
+        """Creates a new text instance for the switcher."""
+        return ft.Text(
+            text,
+            size=14,
+            weight=ft.FontWeight.W_500,
+            color=color,
+            text_align=ft.TextAlign.CENTER,
+        )
 
-        c_name = "N/A"
-
-        if country_data:
-            # Get country code and name
-            country_code = country_data.get("country_code")
-            original_name = (
-                country_data.get("country_name")
-                or country_data.get("name")
-                or "Unknown"
-            )
-
-            # Translate country name
-            c_name = translate_country(country_code, original_name)
-
-            # Translate city name if available
-            city = country_data.get("city")
-            if city:
-                translated_city = translate_city(city)
-                c_name = f"{c_name}, {translated_city}"
-
-        self._country_text.value = c_name
+    def _update_label(self, text: str, color: str):
+        """Triggers a smooth transition to a new label."""
+        self._status_label = self._create_label(text, color)
+        self._switcher.content = self._status_label
         self.update()
+
+    def update_country(self, country_data: dict = None):
+        """Country display moved to ServerCard."""
+        pass
 
     def set_step(self, msg: str):
-        """Updates just the status message text."""
-        self._msg_text.value = msg
-        self._msg_text.color = ft.Colors.BLUE_400
-        self.update()
+        """Updates the status text during connection steps."""
+        self._update_label(msg, ft.Colors.AMBER_400)
 
     def set_status(self, msg: str):
-        """Updates status message (used for mode changes etc)."""
-        self._msg_text.value = msg
-        self._msg_text.color = ft.Colors.GREY_500
-        self.update()
+        """Updates status message."""
+        self._update_label(msg, ft.Colors.GREY_500)
 
     def set_initializing(self):
-        self._msg_text.value = t("app.initializing")
-        self._msg_text.color = ft.Colors.BLUE_400
-        self.update()
+        self._update_label(t("app.initializing"), ft.Colors.AMBER_400)
 
     def set_connecting(self):
-        self._msg_text.value = t("app.connecting")
-        self._msg_text.color = ft.Colors.BLUE_400
-        self.update()
+        self._update_label(t("app.connecting"), ft.Colors.AMBER_400)
 
     def set_connected(self, is_vpn: bool = True, country_data: dict = None):
         """Sets status to Connected."""
-        self._msg_text.value = t("app.verifying")
-        self._msg_text.color = ft.Colors.GREEN_400
-
-        if country_data:
-            self.update_country(country_data)
-        else:
-            self.update()
-
-        threading.Thread(target=self._animate_verifying, daemon=True).start()
-
-    def _animate_verifying(self):
-        import time
-
-        time.sleep(1.5)
-        self._msg_text.value = t("app.connected")
-        self._msg_text.color = ft.Colors.GREEN_400
-        self.update()
+        self._is_connected = True
+        self._update_label(t("app.connected"), "#7c3aed")  # Purple
 
     def set_disconnected(self, mode_name: str = ""):
-        self._msg_text.value = t("app.disconnected")
-        self._msg_text.color = ft.Colors.GREY_500
-        self.update()
+        """Reset to disconnected state."""
+        self._is_connected = False
+        self._update_label(t("app.disconnected"), ft.Colors.ORANGE_400)
+
+    def set_disconnecting(self):
+        """Show disconnecting state."""
+        self._is_connected = False
+        self._update_label(t("app.disconnecting"), ft.Colors.RED_400)
 
     def set_pre_connection_ping(self, latency_text: str, is_success: bool):
-        """Updates the status text with latency (e.g. 'Ping: 45ms')."""
+        """Updates the status text with latency."""
         import re
 
+        status_text = ""
+        status_color = ft.Colors.GREY_500
+
         if latency_text == "...":
-            self._msg_text.value = t("app.checking")
-            self._msg_text.color = ft.Colors.GREY_500
+            status_text = t("app.checking")
+            status_color = ft.Colors.GREY_500
         else:
-            # If success and contains number, add ping prefix
             has_number = bool(re.search(r"\d+", latency_text))
             prefix = (
                 f"{t('connection.ping_prefix')} " if is_success and has_number else ""
             )
-            self._msg_text.value = f"{prefix}{latency_text}"
+            status_text = f"{prefix}{latency_text}"
 
             if is_success:
-                # Simple Green logic
-                self._msg_text.color = ft.Colors.GREEN_400
+                status_color = ft.Colors.GREEN_400
             else:
-                self._msg_text.color = ft.Colors.RED_400
+                status_color = ft.Colors.RED_400
 
-        self.update()
+        self._update_label(status_text, status_color)
+
+    def update_network_stats(self, download_speed: str, upload_speed: str):
+        """Update the network stats display."""
+        # Note: Not currently using stats row in this simplified view, 
+        # but kept for potential future use or to avoid breakage if called.
+        pass

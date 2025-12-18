@@ -21,11 +21,11 @@ FLAG_COLORS = {
     "dk": ("#c8102e", "#ff7070"),  # Denmark - Red, Pale Red
     "ee": ("#4891d9", "#1a1a1a"),  # Estonia - Blue, Dark
     "es": ("#aa151b", "#f1bf00"),  # Spain - Red, Yellow
-    "fi": ("#003580", "#7799cc"),  # Finland - Blue, Pale Blue
+    "fi": ("#002f6c", "#00d4ff"),  # Finland - Deep Blue, Electric Blue (Vibrant)
     "fr": ("#0055a4", "#ef4135"),  # France - Blue, Red
     "gb": ("#012169", "#c8102e"),  # UK - Blue, Red
     "ge": ("#ff0000", "#ff8888"),  # Georgia - Red, Pale Red
-    "gr": ("#0d5eaf", "#77aadd"),  # Greece - Blue, Pale Blue
+    "gr": ("#005bb8", "#00d4ff"),  # Greece - Vibrant Blue, Electric Blue
     "hr": ("#171796", "#ff0000"),  # Croatia - Blue, Red
     "hu": ("#cd2a3e", "#477050"),  # Hungary - Red, Green
     "ie": ("#169b62", "#ff883e"),  # Ireland - Green, Orange
@@ -64,7 +64,7 @@ FLAG_COLORS = {
     "cn": ("#de2910", "#ffde00"),  # China - Red, Yellow
     "hk": ("#de2910", "#ff9080"),  # Hong Kong - Red, Pale Red
     "id": ("#ff0000", "#ff8888"),  # Indonesia - Red, Pale Red
-    "il": ("#0038b8", "#7799dd"),  # Israel - Blue, Pale Blue
+    "il": ("#0038b8", "#00d4ff"),  # Israel - Blue, Electric Blue
     "in": ("#ff9933", "#138808"),  # India - Orange, Green
     "iq": ("#ce1126", "#007a3d"),  # Iraq - Red, Green
     "ir": ("#00a651", "#77cc99"),  # Iran - Green, Pale Green
@@ -102,7 +102,7 @@ FLAG_COLORS = {
     "ye": ("#ce1126", "#1a1a1a"),  # Yemen - Red, Dark
     
     # Americas
-    "ar": ("#74acdf", "#aaccee"),  # Argentina - Blue, Pale Blue
+    "ar": ("#1199ff", "#00d4ff"),  # Argentina - Sky Blue, Cyan
     "bo": ("#ce1126", "#007934"),  # Bolivia - Red, Green
     "br": ("#009c3b", "#ffdf00"),  # Brazil - Green, Yellow
     "ca": ("#ff0000", "#ff8888"),  # Canada - Red, Pale Red

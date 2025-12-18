@@ -2,11 +2,16 @@
   "app": {
     "name": "XenRay",
     "connecting": "连接中",
+    "disconnecting": "正在断开连接",
     "connected": "已连接",
     "disconnected": "已断开",
     "verifying": "验证中",
     "initializing": "初始化中",
-    "checking": "检查中"
+    "checking": "检查中",
+    "tap_to_connect": "点击连接",
+    "start": "开始",
+    "stop": "停止",
+    "starting": "启动中"
   },
   "server_list": {
     "title": "服务器",
@@ -44,6 +49,8 @@
   "settings": {
     "title": "设置",
     "subtitle": "配置您的连接",
+    "connection": "连接",
+    "application": "应用",
     "general": "常规",
     "network": "网络",
     "advanced": "高级",
@@ -62,6 +69,7 @@
     "routing_rules": "路由规则",
     "routing_description": "管理直连、代理和阻止列表",
     "dns_settings": "DNS设置",
+    "dns_manager": "DNS管理",
     "dns_description": "配置上游DNS服务器",
     "check_app_updates": "检查应用更新",
     "app_update_description": "检查XenRay更新",
@@ -133,7 +141,9 @@
     "conn_error": "连接错误",
     "core_failed": "核心失败",
     "invalid_config": "配置无效",
-    "error": "错误"
+    "error": "错误",
+    "checking_network": "正在检查网络连接...",
+    "no_internet": "无网络连接！"
   },
   "routing": {
     "title": "路由规则",
