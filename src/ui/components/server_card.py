@@ -34,8 +34,8 @@ class ServerCard(ft.Container):
             max_lines=1,
         )
         self._address_text = ft.Text(
-            "", 
-            size=11, 
+            "",
+            size=11,
             color=ft.Colors.ON_SURFACE_VARIANT,
             overflow=ft.TextOverflow.ELLIPSIS,
             max_lines=1,
@@ -84,7 +84,7 @@ class ServerCard(ft.Container):
         # Initialize with solid gradient + subtle overlay
         super().__init__(
             content=self._content_row,
-            bgcolor="#121212", # Solid background to prevent transparency issues
+            bgcolor="#121212",  # Solid background to prevent transparency issues
             gradient=ft.LinearGradient(
                 begin=ft.alignment.top_left,
                 end=ft.alignment.bottom_right,
@@ -111,14 +111,20 @@ class ServerCard(ft.Container):
     def _update_gradient_colors(self):
         """Update gradient with current country colors."""
         from src.ui.helpers.gradient_helper import GradientHelper
-        cc = self._profile.get("country_code") if hasattr(self, "_profile") and self._profile else None
+
+        cc = (
+            self._profile.get("country_code")
+            if hasattr(self, "_profile") and self._profile
+            else None
+        )
         self.gradient = GradientHelper.get_flag_gradient(cc)
 
     def update_server(self, profile):
         """Update server card with profile data."""
         from src.core.city_translator import translate_city
         from src.core.country_translator import translate_country
-        self._profile = profile # CRITICAL: Save profile so gradient helper can find it
+
+        self._profile = profile  # CRITICAL: Save profile so gradient helper can find it
         if not profile:
             self._icon_container.content = self._globe_icon
             self._name_text.value = t("server_list.no_server")
@@ -191,7 +197,9 @@ class ServerCard(ft.Container):
             if self.shadow:
                 if isinstance(self.shadow, list):
                     if len(self.shadow) > 0:
-                        self.shadow[0].color = ft.Colors.with_opacity(0.15, ft.Colors.BLACK)
+                        self.shadow[0].color = ft.Colors.with_opacity(
+                            0.15, ft.Colors.BLACK
+                        )
                 else:
                     self.shadow.color = ft.Colors.with_opacity(0.15, ft.Colors.BLACK)
         else:
@@ -204,7 +212,9 @@ class ServerCard(ft.Container):
             if self.shadow:
                 if isinstance(self.shadow, list):
                     if len(self.shadow) > 0:
-                        self.shadow[0].color = ft.Colors.with_opacity(0.08, ft.Colors.BLACK)
+                        self.shadow[0].color = ft.Colors.with_opacity(
+                            0.08, ft.Colors.BLACK
+                        )
                 else:
                     self.shadow.color = ft.Colors.with_opacity(0.08, ft.Colors.BLACK)
 

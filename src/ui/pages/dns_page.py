@@ -12,7 +12,7 @@ class DNSPage(ft.Container):
         self._dns_list = self._config_manager.load_dns_config()
 
         super().__init__(
-            expand=True, 
+            expand=True,
             padding=0,
             bgcolor=ft.Colors.with_opacity(0.3, "#0f172a"),
             blur=ft.Blur(20, 20, ft.BlurTileMode.MIRROR),

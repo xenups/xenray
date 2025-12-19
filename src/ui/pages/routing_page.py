@@ -14,7 +14,7 @@ class RoutingPage(ft.Container):
         self._current_tab = "direct"
 
         super().__init__(
-            expand=True, 
+            expand=True,
             padding=0,
             bgcolor=ft.Colors.with_opacity(0.3, "#0f172a"),
             blur=ft.Blur(20, 20, ft.BlurTileMode.MIRROR),

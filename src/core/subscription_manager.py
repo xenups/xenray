@@ -88,7 +88,10 @@ class SubscriptionManager:
 
         # Check if it's base64 encoded by trying to decode it
         # Real base64 subscriptions usually don't have protocol headers in the encoded blob
-        if not any(content.strip().startswith(p) for p in ["vless://", "vmess://", "trojan://", "hysteria2://"]):
+        if not any(
+            content.strip().startswith(p)
+            for p in ["vless://", "vmess://", "trojan://", "hysteria2://"]
+        ):
             try:
                 # Add padding if needed
                 padded_content = content.strip()

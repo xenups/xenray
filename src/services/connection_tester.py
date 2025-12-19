@@ -168,11 +168,11 @@ class ConnectionTester:
                                     "country_name": gdata.get("country"),
                                     "city": gdata.get("city"),
                                 }
-                    except:
+                    except Exception:
                         pass  # Fail silently for geoip
 
                 return True, t("connection.latency_ms", value=latency), country_data
-            
+
             # If status code is not 204/2xx (e.g. 503, 404), return failure
             return False, t("connection.conn_error"), None
 
@@ -180,7 +180,7 @@ class ConnectionTester:
             return False, t("connection.timeout"), None
         except requests.exceptions.RequestException:
             return False, t("connection.conn_error"), None
-        except Exception as e:
+        except Exception:
             return False, t("connection.error"), None
         finally:
             # 4. Cleanup
@@ -194,7 +194,7 @@ class ConnectionTester:
             if os.path.exists(config_path):
                 try:
                     os.remove(config_path)
-                except:
+                except Exception:
                     pass
 
     @staticmethod

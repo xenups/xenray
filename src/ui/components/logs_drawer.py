@@ -125,9 +125,17 @@ class LogsDrawer(ft.NavigationDrawer):
     def update_network_stats(self, download_speed: str, upload_speed: str):
         """Update network stats elements (Idempotent)."""
         # Only update if values changed to prevent unnecessary repaints
-        dl_val = to_persian_numerals(download_speed) if get_language() == "fa" else download_speed
-        ul_val = to_persian_numerals(upload_speed) if get_language() == "fa" else upload_speed
-        
+        dl_val = (
+            to_persian_numerals(download_speed)
+            if get_language() == "fa"
+            else download_speed
+        )
+        ul_val = (
+            to_persian_numerals(upload_speed)
+            if get_language() == "fa"
+            else upload_speed
+        )
+
         changed = False
         if self._download_text.value != dl_val:
             self._download_text.value = dl_val
@@ -135,7 +143,7 @@ class LogsDrawer(ft.NavigationDrawer):
         if self._upload_text.value != ul_val:
             self._upload_text.value = ul_val
             changed = True
-        
+
         if changed and self._stats_row.page:
             self._stats_row.update()
 

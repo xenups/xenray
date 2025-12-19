@@ -26,7 +26,7 @@ class ServerList(ft.Container):
         config_manager: ConfigManager,
         on_server_selected: Callable,
         on_profile_updated: Callable = None,
-        toast_manager = None,
+        toast_manager=None,
     ):
         self._config_manager = config_manager
         self._subscription_manager = SubscriptionManager(config_manager)
@@ -41,7 +41,9 @@ class ServerList(ft.Container):
         # State
         self._page: Optional[ft.Page] = None
         self._current_list_view = None
-        self._selected_profile_id = self._config_manager.get_last_selected_profile_id()  # Load last selected
+        self._selected_profile_id = (
+            self._config_manager.get_last_selected_profile_id()
+        )  # Load last selected
         self._active_subscription = None
 
         # Item tracking for updates
@@ -188,9 +190,7 @@ class ServerList(ft.Container):
             for sub in self._subscriptions:
                 new_list_view.controls.append(
                     SubscriptionListItem(
-                        sub, 
-                        on_click=self._enter_subscription_view,
-                        on_delete=self._delete_subscription
+                        sub, self._enter_subscription_view, self._delete_subscription
                     )
                 )
 
@@ -218,7 +218,7 @@ class ServerList(ft.Container):
             else:
                 self._current_list_view = new_list_view
                 self._body_switcher.content = new_list_view
-            
+
             # Restart testing if it was in progress (Prioritize new sort order)
             if self._latency_tester.is_testing:
                 # Filter out already cached profiles to avoid re-testing
@@ -226,7 +226,7 @@ class ServerList(ft.Container):
                 for p in self._profiles:
                     if not self._latency_tester.get_cached_result(p.get("id")):
                         untested.append(p)
-                
+
                 if untested:
                     self._latency_tester.restart_testing(untested)
 
@@ -270,14 +270,14 @@ class ServerList(ft.Container):
 
         # Restart testing if it was in progress (Prioritize new sort order)
         if self._latency_tester.is_testing:
-           # Filter out already cached profiles
-           untested = []
-           for p in profiles:
-               if not self._latency_tester.get_cached_result(p.get("id")):
-                   untested.append(p)
-           
-           if untested:
-               self._latency_tester.restart_testing(untested)
+            # Filter out already cached profiles
+            untested = []
+            for p in profiles:
+                if not self._latency_tester.get_cached_result(p.get("id")):
+                    untested.append(p)
+
+            if untested:
+                self._latency_tester.restart_testing(untested)
 
     def _exit_subscription_view(self):
         """Exit subscription view and return to main list."""
@@ -303,8 +303,6 @@ class ServerList(ft.Container):
 
         if not profiles:
             return
-
-
 
         self._latency_tester.test_profiles(profiles)
 
@@ -443,16 +441,12 @@ class ServerList(ft.Container):
         """Handle a new server being added."""
         self._config_manager.save_profile(name, config)
         if self._toast:
-            self._toast.success(
-                t("add_dialog.server_added", name=name)
-            )
+            self._toast.success(t("add_dialog.server_added", name=name))
         self._load_profiles(update_ui=True)
 
     def _handle_subscription_added(self, name: str, url: str):
         """Handle a new subscription being added."""
         self._config_manager.save_subscription(name, url)
         if self._toast:
-            self._toast.success(
-                t("add_dialog.subscription_added", name=name)
-            )
+            self._toast.success(t("add_dialog.subscription_added", name=name))
         self._load_profiles(update_ui=True)

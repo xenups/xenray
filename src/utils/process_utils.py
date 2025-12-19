@@ -357,7 +357,7 @@ class ProcessUtils:
                 script_path = sys.argv[0]
                 script = f'do shell script "\\"{executable}\\" \\"{script_path}\\"" with administrator privileges'
 
-            logger.info(f"Requesting admin privileges via osascript...")
+            logger.info("Requesting admin privileges via osascript...")
 
             # Execute AppleScript to request admin privileges
             result = subprocess.run(

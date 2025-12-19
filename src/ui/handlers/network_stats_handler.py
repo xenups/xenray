@@ -26,7 +26,10 @@ class NetworkStatsHandler:
             try:
                 # 1. Lifecycle Check (Prevent Race Condition)
                 # Ensure StatusDisplay is fully mounted and ready
-                if not self._main._status_display or not self._main._status_display.page:
+                if (
+                    not self._main._status_display
+                    or not self._main._status_display.page
+                ):
                     await asyncio.sleep(1.0)
                     continue
 
@@ -61,40 +64,42 @@ class NetworkStatsHandler:
         # Read Shared State (Thread-Safe)
         if not self._main._network_stats:
             return
-            
+
         stats = self._main._network_stats.get_stats()
-        
+
         # Speeds are pre-formatted strings
         down_str = stats.get("download_speed", "0 B/s")
         up_str = stats.get("upload_speed", "0 B/s")
-        
+
         try:
             total_bps = float(stats.get("total_bps", 0))
         except (ValueError, TypeError):
             total_bps = 0.0
-        
+
         # Update Connection Button Glow
         if self._main._connection_button and self._main._connection_button.page:
             self._main._connection_button.update_network_activity(total_bps)
-        
+
         # Update LogsDrawer stats if open AND mounted
-        if (self._main._logs_drawer_component 
-            and self._main._logs_drawer_component.open 
-            and self._main._logs_drawer_component.page):
+        if (
+            self._main._logs_drawer_component
+            and self._main._logs_drawer_component.open
+            and self._main._logs_drawer_component.page
+        ):
             self._main._logs_drawer_component.update_network_stats(down_str, up_str)
 
         # Earth Glow Animation
         if self._main._earth_glow and self._main._earth_glow.page:
             total_mbps = total_bps / (1024 * 1024)
             intensity = min(1.0, total_mbps / 5.0)
-            
+
             base_opacity = 0.3
             base_scale = 1.0
-            
+
             self._main._earth_glow.opacity = base_opacity + (0.5 * intensity)
             self._main._earth_glow.scale = base_scale + (0.2 * intensity)
             self._main._earth_glow.update()
-        
+
         # Heartbeat logic
         if self._main._logs_heartbeat and self._main._logs_heartbeat.page:
             is_bright = self._main._logs_heartbeat.opacity > 0.5

@@ -157,5 +157,5 @@ class LogViewer:
 
             try:
                 self._page.run_task(update_ui)
-            except:
+            except Exception:
                 pass

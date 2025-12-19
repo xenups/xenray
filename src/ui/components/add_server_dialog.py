@@ -4,8 +4,8 @@ from __future__ import annotations
 from typing import Callable
 
 import flet as ft
-
 from loguru import logger
+
 from src.core.i18n import t
 from src.utils.link_parser import LinkParser
 
@@ -71,20 +71,22 @@ class AddServerDialog(ft.AlertDialog):
         # Split by newlines to detect multi-config input
         lines = content.splitlines()
         valid_configs = []
-        
+
         for line in lines:
             line = line.strip()
             if not line:
                 continue
-            
+
             # Check if line is a config link
-            if line.startswith(("vless://", "vmess://", "trojan://", "ss://", "hysteria2://")):
+            if line.startswith(
+                ("vless://", "vmess://", "trojan://", "ss://", "hysteria2://")
+            ):
                 try:
                     parsed = LinkParser.parse_link(line)
                     valid_configs.append(parsed)
                 except Exception:
                     pass  # Skip invalid lines
-        
+
         # If we found multiple configs, add them all
         if len(valid_configs) > 1:
             for parsed in valid_configs:
@@ -92,7 +94,7 @@ class AddServerDialog(ft.AlertDialog):
             self._show_success(f"{len(valid_configs)} servers added!")
             self._reset_and_close()
             return
-        
+
         # Single config case
         if len(valid_configs) == 1:
             parsed = valid_configs[0]
@@ -100,10 +102,12 @@ class AddServerDialog(ft.AlertDialog):
             self._on_server_added(final_name, parsed["config"])
             self._reset_and_close()
             return
-        
+
         # If no valid configs found, check if entire content is a single config
-        is_config_link = content.startswith(("vless://", "vmess://", "trojan://", "ss://", "hysteria2://"))
-        
+        is_config_link = content.startswith(
+            ("vless://", "vmess://", "trojan://", "ss://", "hysteria2://")
+        )
+
         if is_config_link:
             # Try to parse as config
             try:
@@ -120,7 +124,7 @@ class AddServerDialog(ft.AlertDialog):
                 self._content_input.error_text = error_msg
                 self._content_input.update()
                 return
-        
+
         # Not a config link, treat as subscription URL
         if not name:
             self._name_input.error_text = t("add_dialog.name_required")
@@ -129,10 +133,10 @@ class AddServerDialog(ft.AlertDialog):
 
         self._on_subscription_added(name, content)
         self._reset_and_close()
-    
+
     def _show_success(self, msg: str):
         """Show a success message via toast."""
-        if self.page and hasattr(self.page, '_toast_manager'):
+        if self.page and hasattr(self.page, "_toast_manager"):
             self.page._toast_manager.success(msg)
 
     def _handle_close(self, e):
@@ -149,5 +153,5 @@ class AddServerDialog(ft.AlertDialog):
 
     def _show_error(self, msg: str):
         """Show an error message via toast."""
-        if self.page and hasattr(self.page, '_toast_manager'):
+        if self.page and hasattr(self.page, "_toast_manager"):
             self.page._toast_manager.error(msg)

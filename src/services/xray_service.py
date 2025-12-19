@@ -97,7 +97,7 @@ class XrayService:
             try:
                 with open(XRAY_PID_FILE, "r") as f:
                     pid_to_kill = int(f.read().strip())
-            except:
+            except Exception:
                 pass
 
         if not pid_to_kill:
@@ -124,7 +124,7 @@ class XrayService:
             if os.path.exists(XRAY_PID_FILE):
                 try:
                     os.remove(XRAY_PID_FILE)
-                except:
+                except Exception:
                     pass
 
         return success
@@ -142,7 +142,7 @@ class XrayService:
                 if ProcessUtils.is_running(old_pid):
                     self._pid = old_pid  # Restore memory PID
                     return True
-            except:
+            except Exception:
                 pass
 
         return False

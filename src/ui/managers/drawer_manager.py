@@ -21,7 +21,7 @@ class DrawerManager:
 
     def __init__(self, main_window: MainWindow):
         self._main = main_window
-        
+
     def setup_drawers(self):
         """Initialize all drawer components."""
         # Log viewer
@@ -120,6 +120,7 @@ class DrawerManager:
 
     def _safe_update_server_list(self):
         """Wait for sheet to be mounted before updating list."""
+
         def _wait_and_update():
             max_wait = 2
             start = time.time()

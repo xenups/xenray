@@ -166,7 +166,9 @@ class ConnectionManager:
                 # Create a socket connection with short timeout
                 s = socket.create_connection((host, port), timeout=3)
                 s.close()
-                logger.info(f"[ConnectionManager] Connection verified via {host}:{port}")
+                logger.info(
+                    f"[ConnectionManager] Connection verified via {host}:{port}"
+                )
                 return True
             except OSError:
                 continue
@@ -321,9 +323,11 @@ class ConnectionManager:
             else:
                 # FALLBACK: Resolution failed. Keep the original domain and rely on Xray's internal DNS/routing.
                 # CRUCIAL: Must still patch stream settings to ensure SNI/Host is correctly set.
-                logger.warning(
-                    f"[ConnectionManager] DNS resolution failed for {domain}. Keeping domain address and relying on Xray's internal DNS/routing."
+                msg = (
+                    f"DNS resolution failed for {domain}. "
+                    "Keeping domain address and relying on Xray internal DNS/routing."
                 )
+                logger.warning(f"[ConnectionManager] {msg}")
                 # Ensure address remains the domain (in case it was somehow altered)
                 server_obj["address"] = domain
 
@@ -356,9 +360,7 @@ class ConnectionManager:
                     "destOverride": ["http", "tls", "quic"],
                     "metadataOnly": False,
                 }
-                logger.debug(
-                    f"[ConnectionManager] Injected Sniffing settings into Xray SOCKS inbound."
-                )
+                logger.debug("[ConnectionManager] Injected Sniffing settings into Xray SOCKS inbound.")
             # We don't modify http inbound for simplicity unless required
             # elif inbound.get("protocol") == "http":
             #     pass
@@ -386,22 +388,6 @@ class ConnectionManager:
                         if addr:
                             addresses.append(addr)
         return list(set(addresses))  # Unique addresses
-
-    def _get_default_gateway(self) -> str:
-        """Get the default gateway IP address (Windows PowerShell)."""
-        try:
-            # Use PowerShell to get default gateway
-            cmd = 'Get-NetRoute -DestinationPrefix "0.0.0.0/0" | Select-Object -ExpandProperty NextHop'
-            result = subprocess.check_output(
-                ["powershell", "-Command", cmd], text=True
-            ).strip()
-            # Handle multiple gateways if present (take the first one)
-            if "\n" in result:
-                result = result.split("\n")[0].strip()
-            return result
-        except Exception as e:
-            logger.error(f"[ConnectionManager] Failed to get default gateway: {e}")
-            return ""
 
     def _get_default_gateway(self) -> str:
         """
@@ -560,6 +546,7 @@ class ConnectionManager:
             "ip": [f"geoip:{geoip_tag}"],
         }
 
+        rules = []
         rules.append(domain_rule)
         rules.append(ip_rule)
 
@@ -596,8 +583,12 @@ class ConnectionManager:
         # Assign back
         config["routing"]["rules"] = rules + config["routing"]["rules"]  # Prepend
 
+        direct_rules = len(user_rules.get("direct", []))
+        proxy_rules = len(user_rules.get("proxy", []))
+        block_rules = len(user_rules.get("block", []))
+        total_rules = direct_rules + proxy_rules + block_rules
         logger.info(
-            f"[ConnectionManager] Added routing rules. Country: {routing_country}, User Rules: {len(user_rules.get('direct', [])) + len(user_rules.get('proxy', [])) + len(user_rules.get('block', []))}"
+            f"[ConnectionManager] Added routing rules. Country: {routing_country}, User Rules: {total_rules}"
         )
 
     def _is_ip(self, val: str) -> bool:
@@ -607,7 +598,7 @@ class ConnectionManager:
         try:
             socket.inet_aton(val)
             return True
-        except:
+        except Exception:
             return False
 
     def _configure_dns(self, config: dict):

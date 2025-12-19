@@ -146,7 +146,7 @@ class LatencyTester:
                     # Force break if stuck
                     break
                 time.sleep(0.05)
-            
+
             # Start new test
             self.test_profiles(profiles)
 

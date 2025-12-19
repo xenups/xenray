@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+
 import flet as ft
 
 
@@ -51,7 +52,7 @@ class Toast(ft.Container):
             animate_opacity=300,
             opacity=1,
         )
-        
+
         self.duration = duration
 
 
@@ -60,7 +61,7 @@ class ToastManager:
 
     def __init__(self, page: ft.Page):
         self._page = page
-        
+
     def show(
         self,
         message: str,
@@ -69,7 +70,7 @@ class ToastManager:
     ):
         """Show a toast notification."""
         toast = Toast(message, message_type, duration)
-        
+
         # Create a positioned container - positioned above connect button
         toast_container = ft.Container(
             content=toast,
@@ -78,23 +79,23 @@ class ToastManager:
             right=0,
             alignment=ft.alignment.top_center,
         )
-        
+
         # Add to overlay
         self._page.overlay.append(toast_container)
         self._page.update()
-        
+
         # Auto-dismiss
         async def auto_dismiss():
             try:
                 await asyncio.sleep(duration / 1000)
-                
+
                 # Fade out
                 toast.opacity = 0
                 self._page.update()
-                
+
                 # Wait for fade animation
                 await asyncio.sleep(0.3)
-                
+
                 # Remove from overlay
                 if toast_container in self._page.overlay:
                     self._page.overlay.remove(toast_container)
@@ -108,7 +109,7 @@ class ToastManager:
                 except Exception:
                     # Ignore errors during cleanup
                     pass
-        
+
         # Use page.run_task for proper async execution
         self._page.run_task(auto_dismiss)
 

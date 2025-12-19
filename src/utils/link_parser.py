@@ -397,7 +397,7 @@ class LinkParser:
         # aid: alterId
         # scy: security (auto/aes-128-gcm/chacha20-poly1305/none)
         # net: network (tcp/kcp/ws/h2/quic)
-        # type: header type (none/http/srtp/utp/wechat-video/dtls/wireguard) -> for kcp/quic
+        # header type (none/http/srtp/utp/wechat-video/dtls/wireguard) -> for kcp/quic
         # host: host/sni
         # path: path
         # tls: tls ("" or "tls")
@@ -408,7 +408,7 @@ class LinkParser:
         address = data.get("add", "")
         try:
             port = int(data.get("port", 443))
-        except:
+        except (ValueError, TypeError):
             port = 443
         uuid = data.get("id", "")
         alter_id = int(data.get("aid", 0))
@@ -582,7 +582,6 @@ class LinkParser:
 
         return {"name": name, "config": LinkParser._build_config(outbound)}
 
-
     @staticmethod
     def _build_config(outbound: Dict) -> Dict:
         """Helper to wrap outbound in full config structure."""
@@ -634,12 +633,12 @@ class LinkParser:
         try:
             outbounds = config.get("outbounds", [])
             proxy_out = next((o for o in outbounds if o.get("tag") == "proxy"), None)
-            
+
             if not proxy_out:
                 # Fallback: try first outbound
-                 if outbounds:
-                     proxy_out = outbounds[0]
-            
+                if outbounds:
+                    proxy_out = outbounds[0]
+
             if not proxy_out:
                 return ""
 
@@ -653,7 +652,7 @@ class LinkParser:
             elif protocol == "hysteria2":
                 return LinkParser._generate_hysteria2(proxy_out, name)
             else:
-                return "" # Unsupported
+                return ""  # Unsupported
         except Exception as e:
             logger.error(f"Failed to generate link: {e}")
             return ""
@@ -664,16 +663,16 @@ class LinkParser:
         stream = outbound.get("streamSettings", {})
         vnext = settings.get("vnext", [{}])[0]
         user = vnext.get("users", [{}])[0]
-        
+
         uuid = user.get("id", "")
         address = vnext.get("address", "")
         port = vnext.get("port", 443)
         flow = user.get("flow", "")
         encryption = user.get("encryption", "none")
-        
+
         security = stream.get("security", "none")
         network = stream.get("network", "tcp")
-        
+
         params = []
         params.append(f"type={network}")
         if security != "none":
@@ -682,7 +681,7 @@ class LinkParser:
             params.append(f"flow={flow}")
         if encryption and encryption != "none":
             params.append(f"encryption={encryption}")
-            
+
         # Stream specific
         if network == "ws":
             ws = stream.get("wsSettings", {})
@@ -695,7 +694,7 @@ class LinkParser:
             service = grpc.get("serviceName", "")
             if service:
                 params.append(f"serviceName={service}")
-                
+
         # Security specific
         if security == "tls":
             tls = stream.get("tlsSettings", {})
@@ -703,7 +702,7 @@ class LinkParser:
             if tls.get("fingerprint"):
                 params.append(f"fp={tls.get('fingerprint')}")
             if tls.get("alpn"):
-                 params.append(f"alpn={','.join(tls['alpn'])}")
+                params.append(f"alpn={','.join(tls['alpn'])}")
         elif security == "reality":
             reality = stream.get("realitySettings", {})
             params.append(f"sni={reality.get('serverName', '')}")
@@ -714,7 +713,7 @@ class LinkParser:
 
         query = "&".join(params)
         fragment = urllib.parse.quote(name)
-        
+
         return f"vless://{uuid}@{address}:{port}?{query}#{fragment}"
 
     @staticmethod
@@ -722,12 +721,12 @@ class LinkParser:
         # VMess uses base64 encoded JSON
         import base64
         import json
-        
+
         settings = outbound.get("settings", {})
         stream = outbound.get("streamSettings", {})
         vnext = settings.get("vnext", [{}])[0]
         user = vnext.get("users", [{}])[0]
-        
+
         data = {
             "v": "2",
             "ps": name,
@@ -737,14 +736,14 @@ class LinkParser:
             "aid": str(user.get("alterId", 0)),
             "scy": user.get("security", "auto"),
             "net": stream.get("network", "tcp"),
-            "type": "none", # Default
+            "type": "none",  # Default
             "host": "",
             "path": "",
             "tls": "",
             "sni": "",
-            "alpn": ""
+            "alpn": "",
         }
-        
+
         net = data["net"]
         security = stream.get("security", "none")
         if security == "tls":
@@ -752,16 +751,16 @@ class LinkParser:
             tls = stream.get("tlsSettings", {})
             data["sni"] = tls.get("serverName", "")
             if tls.get("alpn"):
-                 data["alpn"] = ",".join(tls["alpn"])
-        
+                data["alpn"] = ",".join(tls["alpn"])
+
         if net == "ws":
             ws = stream.get("wsSettings", {})
             data["path"] = ws.get("path", "")
             data["host"] = ws.get("headers", {}).get("Host", "")
         elif net == "grpc":
-             grpc = stream.get("grpcSettings", {})
-             data["path"] = grpc.get("serviceName", "")
-             
+            grpc = stream.get("grpcSettings", {})
+            data["path"] = grpc.get("serviceName", "")
+
         # Encode
         json_str = json.dumps(data)
         b64 = base64.b64encode(json_str.encode("utf-8")).decode("utf-8")
@@ -772,23 +771,23 @@ class LinkParser:
         settings = outbound.get("settings", {})
         stream = outbound.get("streamSettings", {})
         server = settings.get("servers", [{}])[0]
-        
+
         password = server.get("password", "")
         address = server.get("address", "")
         port = server.get("port", 443)
-        
+
         security = stream.get("security", "none")
         network = stream.get("network", "tcp")
-        
+
         params = []
         params.append(f"type={network}")
         if security != "none":
-             params.append(f"security={security}")
-             
+            params.append(f"security={security}")
+
         if security == "tls":
             tls = stream.get("tlsSettings", {})
             params.append(f"sni={tls.get('serverName', '')}")
-            
+
         if network == "ws":
             ws = stream.get("wsSettings", {})
             params.append(f"path={urllib.parse.quote(ws.get('path', '/'))}")
@@ -800,12 +799,12 @@ class LinkParser:
             service = grpc.get("serviceName", "")
             if service:
                 params.append(f"serviceName={service}")
-                
+
         query = "&".join(params)
         fragment = urllib.parse.quote(name)
-        
+
         return f"trojan://{password}@{address}:{port}?{query}#{fragment}"
-    
+
     @staticmethod
     def _generate_hysteria2(outbound: dict, name: str) -> str:
         settings = outbound.get("settings", {})
@@ -817,15 +816,17 @@ class LinkParser:
         port = server.get("port", 443)
         user = server.get("users", [{}])[0]
         password = user.get("password", "")
-        
+
         tls = stream.get("tlsSettings", {})
         sni = tls.get("serverName", "")
         insecure = "1" if tls.get("allowInsecure") else "0"
-        
+
         params = []
-        if sni: params.append(f"sni={sni}")
-        if insecure == "1": params.append("insecure=1")
-        
+        if sni:
+            params.append(f"sni={sni}")
+        if insecure == "1":
+            params.append("insecure=1")
+
         obfs = user.get("obfs")
         if obfs:
             params.append(f"obfs={obfs.get('type', 'none')}")

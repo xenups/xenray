@@ -17,7 +17,9 @@ class StatusDisplay(ft.Container):
         self._is_connected = False
 
         # Status Label (initial instance)
-        self._status_label = self._create_label(t("app.disconnected"), ft.Colors.ORANGE_400)
+        self._status_label = self._create_label(
+            t("app.disconnected"), ft.Colors.ORANGE_400
+        )
 
         # Animated Switcher for Morphism
         self._switcher = ft.AnimatedSwitcher(
@@ -61,7 +63,6 @@ class StatusDisplay(ft.Container):
         self._status_label = self._create_label(text, color)
         self._switcher.content = self._status_label
         self.update()
-
 
     def set_step(self, msg: str):
         """Updates the status text during connection steps."""

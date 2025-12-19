@@ -1,9 +1,11 @@
 """Network utilities."""
 import os
+import shutil
 import socket
 import subprocess
-import shutil
+
 from src.core.logger import logger
+
 
 class NetworkUtils:
     """Utilities for network operations."""
@@ -24,7 +26,9 @@ class NetworkUtils:
             return False
 
     @staticmethod
-    def check_proxy_connectivity(port: int, target_url="http://www.gstatic.com/generate_204", timeout=5) -> bool:
+    def check_proxy_connectivity(
+        port: int, target_url="http://www.gstatic.com/generate_204", timeout=5
+    ) -> bool:
         """
         Check connectivity through a local SOCKS5 proxy using curl.
         Returns True if successful (HTTP 204/200), False otherwise.
@@ -41,27 +45,31 @@ class NetworkUtils:
         # -w "%{http_code}" to get status code
         cmd = [
             curl_path,
-            "-x", f"socks5h://127.0.0.1:{port}",
+            "-x",
+            f"socks5h://127.0.0.1:{port}",
             target_url,
-            "--connect-timeout", str(timeout),
+            "--connect-timeout",
+            str(timeout),
             "-s",
-            "-o", os.devnull,
-            "-w", "%{http_code}"
+            "-o",
+            os.devnull,
+            "-w",
+            "%{http_code}",
         ]
-
 
         try:
             from src.utils.platform_utils import PlatformUtils
+
             startupinfo = PlatformUtils.get_startupinfo()
-            
+
             result = subprocess.run(
-                cmd, 
-                capture_output=True, 
-                text=True, 
+                cmd,
+                capture_output=True,
+                text=True,
                 startupinfo=startupinfo,
-                check=False
+                check=False,
             )
-            
+
             if result.returncode == 0:
                 code = result.stdout.strip()
                 logger.info(f"Proxy check to {target_url} returned: {code}")
@@ -69,7 +77,7 @@ class NetworkUtils:
                     return True
             else:
                 logger.warning(f"Proxy check curl failed: {result.stderr}")
-                
+
             return False
         except Exception as e:
             logger.error(f"Proxy connectivity check error: {e}")

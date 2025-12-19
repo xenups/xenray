@@ -43,8 +43,12 @@ class XrayInstallerService:
         try:
             os.makedirs(BIN_DIR, exist_ok=True)
             os.makedirs(BIN_DIR, exist_ok=True)
-            # os.makedirs(ASSETS_DIR, exist_ok=True) # Assets dir might still be needed for other things, but ensuring it here isn't strictly necessary for only Xray bin if we aren't downloading geo files. But keeping it safe doesn't hurt, or we can just remove it if empty. Let's remove it to clean up if ASSETS_DIR is only for geo files. Actually ConfigManager might use it. Let's safe keep it or remove if I am sure.
-            # Reviewing: Xray binary goes to BIN_DIR. ASSETS_DIR was for geo files. If we don't download geo files, we might not need to create ASSETS_DIR here.
+            # os.makedirs(ASSETS_DIR, exist_ok=True)
+            # Assets dir might still be needed for other things, but ensuring it here isn't strictly necessary
+            # for only Xray bin if we aren't downloading geo files.
+            # But keeping it safe doesn't hurt, or we can just remove it if empty.
+            # Reviewing: Xray binary goes to BIN_DIR. ASSETS_DIR was for geo files.
+            # If we don't download geo files, we might not need to create ASSETS_DIR here.
             # However, to be safe and clean, I will just remove the line creating ASSETS_DIR if it's not used.
 
             # 1. Download Xray Core to temp location first

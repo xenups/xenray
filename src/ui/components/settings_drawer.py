@@ -77,7 +77,11 @@ class SettingsDrawer(ft.NavigationDrawer):
                                     ft.Icons.ARROW_BACK,
                                     on_click=self._close_drawer,
                                 ),
-                                ft.Text(t("settings.title"), size=20, weight=ft.FontWeight.BOLD),
+                                ft.Text(
+                                    t("settings.title"),
+                                    size=20,
+                                    weight=ft.FontWeight.BOLD,
+                                ),
                             ],
                         ),
                         padding=20,
@@ -96,7 +100,11 @@ class SettingsDrawer(ft.NavigationDrawer):
                                         self._country_row,
                                     ],
                                 ),
-                                ft.Divider(height=1, color=ft.Colors.OUTLINE_VARIANT, opacity=0.2),
+                                ft.Divider(
+                                    height=1,
+                                    color=ft.Colors.OUTLINE_VARIANT,
+                                    opacity=0.2,
+                                ),
                                 ft.Container(height=10),
                                 # App Settings
                                 SettingsSection(
@@ -123,7 +131,11 @@ class SettingsDrawer(ft.NavigationDrawer):
                                         ),
                                     ],
                                 ),
-                                ft.Divider(height=1, color=ft.Colors.OUTLINE_VARIANT, opacity=0.2),
+                                ft.Divider(
+                                    height=1,
+                                    color=ft.Colors.OUTLINE_VARIANT,
+                                    opacity=0.2,
+                                ),
                                 ft.Container(height=10),
                                 # System Section
                                 SettingsSection(
@@ -139,7 +151,9 @@ class SettingsDrawer(ft.NavigationDrawer):
                                             ft.Icons.SYSTEM_UPDATE_ALT,
                                             t("settings.check_updates"),
                                             t("settings.update_xray"),
-                                            on_click=lambda e: self._on_installer_run_external("xray"),
+                                            on_click=lambda e: self._on_installer_run_external(
+                                                "xray"
+                                            ),
                                         ),
                                         SettingsListTile(
                                             ft.Icons.INFO_OUTLINE,
@@ -164,7 +178,9 @@ class SettingsDrawer(ft.NavigationDrawer):
                                     color=ft.Colors.OUTLINE,
                                 ),
                                 ft.Container(
-                                    width=1, height=10, bgcolor=ft.Colors.OUTLINE_VARIANT
+                                    width=1,
+                                    height=10,
+                                    bgcolor=ft.Colors.OUTLINE_VARIANT,
                                 ),
                                 ft.Text(
                                     f"Sing-box: v{SingboxService().get_version() or 'ND'}",
@@ -247,7 +263,7 @@ class SettingsDrawer(ft.NavigationDrawer):
     def _show_toast(self, message: str, message_type: str = "info"):
         """Show a toast notification."""
         # Try to get toast manager from page
-        if hasattr(self.page, '_toast_manager'):
+        if hasattr(self.page, "_toast_manager"):
             self.page._toast_manager.show(message, message_type)
         else:
             # Fallback to simple snackbar
@@ -455,7 +471,9 @@ class SettingsDrawer(ft.NavigationDrawer):
                 ) = AppUpdateService.check_for_updates()
 
                 if not available and current:
-                    self._show_toast(t("app_update.up_to_date", version=current), "info")
+                    self._show_toast(
+                        t("app_update.up_to_date", version=current), "info"
+                    )
                     page.update()
                     return
 
@@ -464,7 +482,7 @@ class SettingsDrawer(ft.NavigationDrawer):
                 else:
                     self._show_toast(t("app_update.check_failed"), "error")
                     page.update()
-            except Exception as ex:
+            except Exception:
                 self._show_toast(t("app_update.check_failed"), "error")
                 page.update()
 

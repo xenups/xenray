@@ -5,9 +5,7 @@ from src.core.i18n import t
 
 
 class Header(ft.Container):
-    def __init__(
-        self, page: ft.Page, on_logs_click, on_settings_click
-    ):
+    def __init__(self, page: ft.Page, on_logs_click, on_settings_click):
         self._page = page
 
         content = ft.Row(
@@ -36,5 +34,3 @@ class Header(ft.Container):
             padding=ft.padding.symmetric(horizontal=20, vertical=20),
             # Fully transparent - no background, part of main window
         )
-
-

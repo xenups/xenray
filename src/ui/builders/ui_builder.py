@@ -86,7 +86,9 @@ class UIBuilder:
             right=0,
             opacity=0.0,
             animate_opacity=500,
-            animate=ft.Animation(800, ft.AnimationCurve.EASE_IN_OUT),  # Smooth gradient transitions
+            animate=ft.Animation(
+                800, ft.AnimationCurve.EASE_IN_OUT
+            ),  # Smooth gradient transitions
         )
 
         # Main content
