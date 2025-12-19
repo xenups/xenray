@@ -22,17 +22,12 @@ A modern, lightweight Xray GUI client for Windows and Linux, focusing on simplic
 ## Gallery
 
 <div align="center">
-  <img src="screenshots/main_window.png" alt="Main Window" width="800"/>
+  <img src="https://raw.githubusercontent.com/xenups/xenray/refs/heads/main/screenshots/main.png" alt="Main Window" width="800"/>
   <p><em>Modern Glass UI with Server List</em></p>
 </div>
 
 <div align="center">
-  <img src="screenshots/connection.png" alt="Connected State" width="800"/>
-  <p><em>Dynamic Glow Effect when Connected</em></p>
-</div>
-
-<div align="center">
-  <img src="screenshots/settings.png" alt="Settings" width="800"/>
+  <img src="https://raw.githubusercontent.com/xenups/xenray/refs/heads/main/screenshots/settings.png" alt="Settings" width="800"/>
   <p><em>Comprehensive Settings & Routing</em></p>
 </div>
 
