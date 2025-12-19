@@ -44,14 +44,14 @@ class NetworkUtils:
             target_url,
             "--connect-timeout", str(timeout),
             "-s",
-            "-o", "NUL",
+            "-o", os.devnull,
             "-w", "%{http_code}"
         ]
 
+
         try:
-            # CREATE_NO_WINDOW for windows consistency if run from valid env
-            startupinfo = subprocess.STARTUPINFO()
-            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            from src.utils.platform_utils import PlatformUtils
+            startupinfo = PlatformUtils.get_startupinfo()
             
             result = subprocess.run(
                 cmd, 

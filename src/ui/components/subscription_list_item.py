@@ -82,7 +82,8 @@ class SubscriptionListItem(ft.Container):
                 if hasattr(self.page, '_toast_manager'):
                     self.page._toast_manager.success("Subscription link copied", 2000)
                 self.page.update()
-        except:
+        except Exception:
+            # Silently fail if clipboard operation fails
             pass
 
     def _delete_item(self, e):

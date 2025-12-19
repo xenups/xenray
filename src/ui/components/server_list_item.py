@@ -155,7 +155,9 @@ class ServerListItem(ft.Container):
                 if hasattr(self.page, '_toast_manager'):
                     self.page._toast_manager.success("Link copied to clipboard", 2000)
                 self.page.update()
-        except: pass
+        except Exception:
+            # Silently fail if clipboard or link generation fails
+            pass
 
     def _delete_item(self, e):
         """Delete item."""

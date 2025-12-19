@@ -105,7 +105,8 @@ class ToastManager:
                     if toast_container in self._page.overlay:
                         self._page.overlay.remove(toast_container)
                         self._page.update()
-                except:
+                except Exception:
+                    # Ignore errors during cleanup
                     pass
         
         # Use page.run_task for proper async execution
