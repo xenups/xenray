@@ -30,7 +30,13 @@
     "test_in_progress": "Test already in progress...",
     "test_started": "Started latency test... 🚀",
     "updating_subscription": "Updating subscription...",
-    "update_failed": "Update failed: {msg}"
+    "update_failed": "Update failed: {msg}",
+    "link_copied": "Link copied to clipboard",
+    "subscription_link_copied": "Subscription link copied",
+    "share": "Share",
+    "delete": "Delete",
+    "copy_link": "Copy Link",
+    "subscription_updated": "Updated {count} servers"
   },
   "add_dialog": {
     "title": "Add Server or Subscription",
@@ -98,7 +104,8 @@
     "updating": "Updating Xray...",
     "starting": "Starting...",
     "success": "Xray Updated Successfully! 🎉",
-    "failed": "Update Failed! ❌"
+    "failed": "Update Failed! ❌",
+    "check_failed": "Failed to check for updates"
   },
   "app_update": {
     "checking": "Checking for app updates... 📡",
@@ -129,7 +136,10 @@
     "connection_in_progress": "Connection in progress...",
     "connection_failed": "Connection Failed",
     "mode_selected": "{mode} Mode Selected",
-    "ping": "Ping: {latency}"
+    "ping": "Ping: {latency}",
+    "update_complete": "{component} Update Complete!",
+    "update_error": "Error: {error}",
+    "admin_required": "Admin rights required for VPN mode"
   },
   "connection": {
     "loading_config": "Loading configuration...",
@@ -146,7 +156,8 @@
     "invalid_config": "Invalid Config",
     "error": "Error",
     "checking_network": "Checking network connection...",
-    "no_internet": "No Internet Connection!"
+    "no_internet": "No Internet Connection!",
+    "connected_no_internet": "Connected but No Internet Access"
   },
   "routing": {
     "title": "Routing Rules",

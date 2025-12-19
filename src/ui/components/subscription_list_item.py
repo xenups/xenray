@@ -5,6 +5,8 @@ from typing import Callable
 
 import flet as ft
 
+from src.core.i18n import t
+
 
 class SubscriptionListItem(ft.Container):
     """
@@ -21,13 +23,13 @@ class SubscriptionListItem(ft.Container):
         # --- Menu Items ---
         menu_items = [
             ft.PopupMenuItem(
-                text="Copy Link", icon=ft.Icons.LINK, on_click=self._copy_link
+                text=t("server_list.copy_link"), icon=ft.Icons.LINK, on_click=self._copy_link
             ),
         ]
         if on_delete:
             menu_items.append(
                 ft.PopupMenuItem(
-                    text="Delete",
+                    text=t("server_list.delete"),
                     icon=ft.Icons.DELETE_OUTLINE_ROUNDED,
                     on_click=self._delete_item,
                 )
@@ -97,7 +99,7 @@ class SubscriptionListItem(ft.Container):
                 self.page.set_clipboard(url)
                 # Use toast manager if available
                 if hasattr(self.page, "_toast_manager"):
-                    self.page._toast_manager.success("Subscription link copied", 2000)
+                    self.page._toast_manager.success(t("server_list.subscription_link_copied"), 2000)
                 self.page.update()
         except Exception:
             # Silently fail if clipboard operation fails

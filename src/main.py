@@ -22,15 +22,15 @@ from src.ui.main_window import MainWindow
 async def main(page: ft.Page):
     """Main entry point."""
     logger.debug("[DEBUG] Starting Flet session (async main)")
-
-    # Window settings MUST be set as early as possible
-    page.window.prevent_close = True
-    page.title = "XenRay"
     page.window.width = 420
     page.window.height = 550
-    page.window.resizable = False
     page.window.center()
-    page.update()
+    page.title = "XenRay"
+    page.window.prevent_close = True
+    page.window.resizable = False
+    page.window.minimizable = True
+    page.window.maximizable = False
+    # Don't update yet - keep window hidden
 
     # Setup logging
     Settings.create_temp_directories()
@@ -59,6 +59,9 @@ async def main(page: ft.Page):
             page.update()
 
     page.window.on_event = on_window_event
+    
+    # NOW show the window - it already has correct size so no flash
+    page.window.visible = True
     page.update()
 
     # Keep session alive - use a larger sleep to reduce overhead
@@ -115,20 +118,18 @@ def run():
             else:
                 raise
 
-    # Calculate absolute path to assets directory
-    # For PyInstaller frozen exe, use the exe's directory
-    # For normal Python run, use the source directory
-    if getattr(sys, "frozen", False):
-        # Running as compiled exe - assets are next to the exe
-        root_dir = os.path.dirname(sys.executable)
-    else:
-        # Running as script - assets are in project root
-        root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
+    # Calculate absolute path to assets directory using PlatformUtils
+    # This handles both script development and frozen executable environments
+    root_dir = PlatformUtils.get_app_dir()
     assets_path = os.path.join(root_dir, "assets")
     logger.debug(f"Assets path: {assets_path}")
 
-    ft.app(target=main, assets_dir=assets_path)
+    # Start with hidden window to prevent flash
+    ft.app(
+        target=main,
+        assets_dir=assets_path,
+        view=ft.AppView.FLET_APP_HIDDEN,
+    )
 
 
 if __name__ == "__main__":

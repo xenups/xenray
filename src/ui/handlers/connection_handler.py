@@ -7,6 +7,7 @@ import threading
 from typing import TYPE_CHECKING
 
 from src.core.constants import SINGBOX_LOG_FILE, TMPDIR, XRAY_LOG_FILE
+from src.core.i18n import t
 from src.core.logger import logger
 from src.core.types import ConnectionMode
 
@@ -73,7 +74,7 @@ class ConnectionHandler:
             if not NetworkUtils.check_internet_connection():
                 self._main._connecting = False
                 self._main._ui_call(self.reset_ui_disconnected)
-                self._main._toast.error("No Internet Connection", 3000)
+                self._main._toast.error(t("connection.no_internet"), 3000)
                 return
 
             profile_config = (
@@ -110,7 +111,7 @@ class ConnectionHandler:
             if not success:
                 self._main._connecting = False
                 self._main._ui_call(self.reset_ui_disconnected)
-                self._main._toast.error("Connection Failed", 3000)
+                self._main._toast.error(t("status.connection_failed"), 3000)
                 return
 
             self._main._is_running = True
@@ -122,7 +123,7 @@ class ConnectionHandler:
             time.sleep(1)
 
             self._main._ui_call(
-                self._main._status_display.set_step, "Verifying Internet Access..."
+                self._main._status_display.set_step, t("connection.checking_network")
             )
 
             proxy_port = self._main._config_manager.get_proxy_port()
@@ -132,7 +133,7 @@ class ConnectionHandler:
                 # Use disconnect to cleanup
                 self._main._connection_manager.disconnect()
                 self._main._ui_call(self.reset_ui_disconnected)
-                self._main._toast.warning("Connected but No Internet Access", 3000)
+                self._main._toast.warning(t("connection.connected_no_internet"), 3000)
                 return
             # --------------------------------------
 

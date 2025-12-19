@@ -10,14 +10,9 @@ from typing import List, Optional, Union
 
 from loguru import logger
 
-from src.core.constants import (
-    DNS_PROVIDERS,
-    SINGBOX_CONFIG_PATH,
-    SINGBOX_EXECUTABLE,
-    SINGBOX_LOG_FILE,
-    SINGBOX_RULE_SETS,
-    XRAY_EXECUTABLE,
-)
+from src.core.constants import (DNS_PROVIDERS, SINGBOX_CONFIG_PATH,
+                                SINGBOX_EXECUTABLE, SINGBOX_LOG_FILE,
+                                SINGBOX_RULE_SETS, XRAY_EXECUTABLE)
 from src.utils.network_interface import NetworkInterfaceDetector
 from src.utils.platform_utils import PlatformUtils
 

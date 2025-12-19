@@ -96,7 +96,9 @@ class NetworkStatsHandler:
             base_opacity = 0.3
             base_scale = 1.0
 
-            self._main._earth_glow.opacity = base_opacity + (0.5 * intensity)
+            # Clamp opacity to valid range [0.0, 1.0]
+            calculated_opacity = base_opacity + (0.5 * intensity)
+            self._main._earth_glow.opacity = min(1.0, max(0.0, calculated_opacity))
             self._main._earth_glow.scale = base_scale + (0.2 * intensity)
             self._main._earth_glow.update()
 

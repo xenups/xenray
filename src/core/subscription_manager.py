@@ -10,6 +10,7 @@ import uuid
 from typing import Callable, List, Optional
 
 from src.core.config_manager import ConfigManager
+from src.core.i18n import t
 from src.core.logger import logger
 from src.utils.link_parser import LinkParser
 
@@ -148,7 +149,7 @@ class SubscriptionManager:
                 self._config_manager.save_subscription_data(sub)
 
                 if callback:
-                    callback(True, f"Updated {len(profiles)} servers")
+                    callback(True, t("server_list.subscription_updated", count=len(profiles)))
             except Exception as e:
                 logger.error(f"Subscription update failed: {e}")
                 if callback:

@@ -290,11 +290,8 @@ class ServerList(ft.Container):
     def _test_all_latencies(self):
         """Start latency test for all visible items."""
         if self._latency_tester.is_testing:
-            if self._page:
-                self._page.open(
-                    ft.SnackBar(content=ft.Text(t("server_list.test_in_progress")))
-                )
-                self._page.update()
+            if self._toast:
+                self._toast.info(t("server_list.test_in_progress"))
             return
 
         profiles = []

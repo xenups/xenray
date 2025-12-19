@@ -9,7 +9,8 @@ from typing import Optional
 from loguru import logger
 
 from src.core.config_manager import ConfigManager
-from src.core.constants import ASSETS_DIR, OUTPUT_CONFIG_PATH, XRAY_LOCATION_ASSET
+from src.core.constants import (ASSETS_DIR, OUTPUT_CONFIG_PATH,
+                                XRAY_LOCATION_ASSET)
 from src.core.i18n import t
 from src.services.singbox_service import SingboxService
 from src.services.xray_service import XrayService
@@ -396,8 +397,12 @@ class ConnectionManager:
         try:
             # Use PowerShell to get default gateway
             cmd = 'Get-NetRoute -DestinationPrefix "0.0.0.0/0" | Select-Object -ExpandProperty NextHop'
+            from src.utils.platform_utils import PlatformUtils
             result = subprocess.check_output(
-                ["powershell", "-Command", cmd], text=True
+                ["powershell", "-Command", cmd],
+                text=True,
+                creationflags=PlatformUtils.get_subprocess_flags(),
+                startupinfo=PlatformUtils.get_startupinfo(),
             ).strip()
             # Handle multiple gateways if present (take the first one)
             if "\n" in result:

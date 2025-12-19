@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
-Download Xray geo files (geoip.dat and geosite.dat).
+[DEPRECATED] Download Xray geo files (geoip.dat and geosite.dat).
 
-These files are required for Xray routing rules to work properly.
+NOTE: Modern Xray versions (v1.8.0+) include geo data internally.
+This script is kept for legacy purposes only and is no longer used in the build process.
 
-Usage:
+For manual downloads (if needed for older Xray versions):
     python scripts/download_geo_files.py
 """
 

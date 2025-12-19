@@ -42,7 +42,6 @@ class XrayInstallerService:
         """
         try:
             os.makedirs(BIN_DIR, exist_ok=True)
-            os.makedirs(BIN_DIR, exist_ok=True)
             # os.makedirs(ASSETS_DIR, exist_ok=True)
             # Assets dir might still be needed for other things, but ensuring it here isn't strictly necessary
             # for only Xray bin if we aren't downloading geo files.
@@ -190,6 +189,7 @@ class XrayInstallerService:
                 capture_output=True,
                 text=True,
                 creationflags=PlatformUtils.get_subprocess_flags(),
+                startupinfo=PlatformUtils.get_startupinfo(),
             )
 
             if result.returncode == 0:
@@ -209,7 +209,6 @@ class XrayInstallerService:
         Returns: (update_available, current_version, latest_version)
         """
         current_version = XrayInstallerService.get_local_version()
-
         try:
             url = "https://api.github.com/repos/XTLS/Xray-core/releases/latest"
             response = requests.get(url, timeout=10)  # Short timeout for API check
@@ -218,17 +217,24 @@ class XrayInstallerService:
             data = response.json()
             tag_name = data.get("tag_name", "")  # e.g., "v1.8.4" or "1.8.4"
 
-            # Normalize version strings (remove 'v' prefix)
+            # Normalize version strings (remove 'v' prefix from both versions)
             latest_version = tag_name.lstrip("v")
+            current_version_normalized = current_version.lstrip("v") if current_version else None
 
-            if not current_version:
+            # Debug logging
+            logger.info(f"Version check - Current (normalized): {current_version_normalized}")
+            logger.info(f"Version check - Latest (normalized): {latest_version}")
+
+            if not current_version_normalized:
+                logger.info("No current version found, update available")
                 return True, None, latest_version
 
-            if current_version != latest_version:
-                logger.info(f"Update available: {current_version} -> {latest_version}")
-                return True, current_version, latest_version
+            if current_version_normalized != latest_version:
+                logger.info(f"Update available: {current_version_normalized} -> {latest_version}")
+                return True, current_version_normalized, latest_version
 
-            return False, current_version, latest_version
+            logger.info("Already up to date")
+            return False, current_version_normalized, latest_version
 
         except Exception as e:
             logger.error(f"Failed to check for updates: {e}")

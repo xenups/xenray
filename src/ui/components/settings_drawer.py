@@ -15,14 +15,11 @@ from src.core.types import ConnectionMode
 from src.services.app_update_service import AppUpdateService
 from src.services.singbox_service import SingboxService
 from src.services.xray_installer import XrayInstallerService
-from src.ui.components.settings_sections import (
-    CountryDropdownRow,
-    LanguageDropdownRow,
-    ModeSwitchRow,
-    PortInputRow,
-    SettingsListTile,
-    SettingsSection,
-)
+from src.ui.components.settings_sections import (CountryDropdownRow,
+                                                 LanguageDropdownRow,
+                                                 ModeSwitchRow, PortInputRow,
+                                                 SettingsListTile,
+                                                 SettingsSection)
 from src.utils.process_utils import ProcessUtils
 
 
@@ -151,9 +148,7 @@ class SettingsDrawer(ft.NavigationDrawer):
                                             ft.Icons.SYSTEM_UPDATE_ALT,
                                             t("settings.check_updates"),
                                             t("settings.update_xray"),
-                                            on_click=lambda e: self._on_installer_run_external(
-                                                "xray"
-                                            ),
+                                            on_click=lambda e: self._on_installer_run("xray"),
                                         ),
                                         SettingsListTile(
                                             ft.Icons.INFO_OUTLINE,
@@ -262,19 +257,11 @@ class SettingsDrawer(ft.NavigationDrawer):
 
     def _show_toast(self, message: str, message_type: str = "info"):
         """Show a toast notification."""
-        # Try to get toast manager from page
         if hasattr(self.page, "_toast_manager"):
             self.page._toast_manager.show(message, message_type)
-        else:
-            # Fallback to simple snackbar
-            if self.page:
-                snackbar = ft.SnackBar(
-                    content=ft.Text(message),
-                    duration=3000,
-                )
-                self.page.overlay.append(snackbar)
-                snackbar.open = True
-                self.page.update()
+        elif self.page:
+            # Log if toast manager is missing
+            logger.warning("Toast manager not available, message not shown")
 
     def _save_port(self, value: str):
         """Save the SOCKS port setting."""
@@ -340,19 +327,29 @@ class SettingsDrawer(ft.NavigationDrawer):
             return
 
         if component == "xray":
-            page.open(ft.SnackBar(content=ft.Text(t("update.checking"))))
-            page.update()
+            self._show_toast(t("update.checking"), "info")
 
             try:
                 available, current, latest = XrayInstallerService.check_for_updates()
+                
+                # If up to date, show message and return
                 if not available and current:
                     self._show_toast(t("update.up_to_date", version=current), "info")
                     page.update()
                     return
-            except Exception:
-                pass
-
-            self._show_update_dialog(page, current, latest)
+                
+                # If update is available, show update dialog
+                if available and latest:
+                    self._show_update_dialog(page, current, latest)
+                else:
+                    # Failed to check or no update info
+                    self._show_toast(t("update.check_failed"), "error")
+                    page.update()
+                    
+            except Exception as e:
+                logger.error(f"Update check failed: {e}")
+                self._show_toast(t("update.check_failed"), "error")
+                page.update()
 
     def _show_update_dialog(self, page, current: str, latest: str):
         """Show update confirmation dialog."""
@@ -458,8 +455,7 @@ class SettingsDrawer(ft.NavigationDrawer):
         if not page:
             return
 
-        page.open(ft.SnackBar(content=ft.Text(t("app_update.checking"))))
-        page.update()
+        self._show_toast(t("app_update.checking"), "info")
 
         def check_task():
             try:
@@ -562,13 +558,7 @@ class SettingsDrawer(ft.NavigationDrawer):
 
             if not zip_path:
                 page.close(progress_dlg)
-                page.open(
-                    ft.SnackBar(
-                        content=ft.Text(t("app_update.download_failed")),
-                        bgcolor=ft.Colors.RED_700,
-                    )
-                )
-                page.update()
+                self._show_toast(t("app_update.download_failed"), "error")
                 return
 
             # Update status

@@ -96,83 +96,38 @@ def main():
         "--windowed",
         "--name=XenRay",
         
-        # Exclude tkinter/tcl (Flet uses Flutter, not Tkinter)
+        # Exclude large unused modules
         "--exclude-module=tkinter",
         "--exclude-module=_tkinter",
         "--exclude-module=tcl",
         "--exclude-module=tk",
+        "--exclude-module=matplotlib",
+        "--exclude-module=numpy",
+        "--exclude-module=scipy",
+        "--exclude-module=pandas",
+        "--exclude-module=IPython",
+        "--exclude-module=jupyter",
+        "--exclude-module=notebook",
+        "--exclude-module=pytest",
+        "--exclude-module=unittest",
+        "--exclude-module=test",
         
-        # Flet imports
-        "--hidden-import=flet",
-        "--hidden-import=flet.flet",
-        
-        # Other necessary imports
+        # Core dependencies (minimal set)
         "--hidden-import=requests",
         "--hidden-import=loguru",
         "--hidden-import=pystray",
         "--hidden-import=PIL",
-        "--hidden-import=pycountry",
-        "--hidden-import=msgpack",
-        "--hidden-import=zstandard",
-        "--hidden-import=dotenv",
-        
-        # All src module imports (required for dynamic imports at runtime)
-        "--hidden-import=src",
-        "--hidden-import=src.core",
-        "--hidden-import=src.core.config_manager",
-        "--hidden-import=src.core.connection_manager",
-        "--hidden-import=src.core.constants",
-        "--hidden-import=src.core.country_translator",
-        "--hidden-import=src.core.city_translator",
-        "--hidden-import=src.core.flag_colors",
-        "--hidden-import=src.core.i18n",
-        "--hidden-import=src.core.logger",
-        "--hidden-import=src.core.settings",
-        "--hidden-import=src.core.subscription_manager",
-        "--hidden-import=src.core.types",
-        "--hidden-import=src.services",
-        "--hidden-import=src.services.app_update_service",
-        "--hidden-import=src.services.connection_tester",
-        "--hidden-import=src.services.dependency_manager",
-        "--hidden-import=src.services.geoip_service",
-        "--hidden-import=src.services.latency_tester",
-        "--hidden-import=src.services.singbox_service",
-        "--hidden-import=src.services.xray_installer",
-        "--hidden-import=src.services.xray_service",
-        "--hidden-import=src.ui",
-        "--hidden-import=src.ui.components",
-        "--hidden-import=src.ui.components.add_server_dialog",
-        "--hidden-import=src.ui.components.app_container",
-        "--hidden-import=src.ui.components.connection_button",
-        "--hidden-import=src.ui.components.header",
-        "--hidden-import=src.ui.components.server_card",
-        "--hidden-import=src.ui.components.server_list_header",
-        "--hidden-import=src.ui.components.server_list_item",
-        "--hidden-import=src.ui.components.settings_drawer",
-        "--hidden-import=src.ui.components.settings_sections",
-        "--hidden-import=src.ui.components.status_display",
-        "--hidden-import=src.ui.components.subscription_list_item",
-        "--hidden-import=src.ui.log_viewer",
-        "--hidden-import=src.ui.main_window",
-        "--hidden-import=src.ui.pages",
-        "--hidden-import=src.ui.pages.dns_page",
-        "--hidden-import=src.ui.pages.routing_page",
-        "--hidden-import=src.ui.server_list",
-        "--hidden-import=src.utils",
-        "--hidden-import=src.utils.country_flags",
-        "--hidden-import=src.utils.file_utils",
-        "--hidden-import=src.utils.link_parser",
-        "--hidden-import=src.utils.network_interface",
-        "--hidden-import=src.utils.platform_utils",
-        "--hidden-import=src.utils.process_utils",
-        "--hidden-import=src.utils.system_proxy_linux",
-        "--hidden-import=src.utils.system_proxy_macos",
+        "--hidden-import=psutil",
         
         # Main script
         "src/main.py",
         
-        #Custom hooks
-        f"--additional-hooks-dir={os.path.join(PROJECT_ROOT, 'hooks')}"
+        # Custom hooks (handles flet, pycountry, etc.)
+        f"--additional-hooks-dir={os.path.join(PROJECT_ROOT, 'hooks')}",
+        
+        # Include assets folder in the bundle (internal)
+        # On Windows, separator is ';', on Unix it's ':'
+        f"--add-data={'assets;assets' if current_platform == 'windows' else 'assets:assets'}"
     ]
     
     # Add icon
@@ -234,7 +189,7 @@ def main():
             # Copy external resources
             print("\nCopying external resources...")
             
-            # Copy assets folder
+            # Copy assets folder (fonts, translations, images)
             assets_src = os.path.join(PROJECT_ROOT, "assets")
             assets_dst = os.path.join(PROJECT_ROOT, "dist", "assets")
             if os.path.exists(assets_src):

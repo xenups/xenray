@@ -66,6 +66,7 @@ class NetworkUtils:
                 cmd,
                 capture_output=True,
                 text=True,
+                creationflags=PlatformUtils.get_subprocess_flags(),
                 startupinfo=startupinfo,
                 check=False,
             )

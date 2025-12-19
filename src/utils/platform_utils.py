@@ -100,18 +100,38 @@ class PlatformUtils:
     @staticmethod
     def get_app_dir() -> str:
         """
-        Get the application directory (where executable or main script is located).
-
+        Get the application directory for BUNDLED resources (like assets).
+        
         Returns:
-            Absolute path to application directory
+            - When frozen (PyInstaller): _MEIPASS (temporary extraction directory for bundled files)
+            - When running as script: Project root directory
         """
         if PlatformUtils.is_frozen():
-            # If compiled, use the directory of the executable
+            # Return _MEIPASS for bundled assets (from --add-data)
+            if hasattr(sys, "_MEIPASS"):
+                return sys._MEIPASS
+            # Fallback to the directory of the executable
             return os.path.dirname(sys.executable)
         else:
             # If running as script, go up from src/utils to project root
             current_file = os.path.abspath(__file__)
             return os.path.dirname(os.path.dirname(os.path.dirname(current_file)))
+
+    @staticmethod
+    def get_executable_dir() -> str:
+        """
+        Get the directory containing the executable for EXTERNAL resources (like bin/, scripts/).
+        
+        Returns:
+            - When frozen (PyInstaller): Directory containing the .exe file
+            - When running as script: Same as get_app_dir()
+        """
+        if PlatformUtils.is_frozen():
+            # Return the directory containing the executable (for external resources)
+            return os.path.dirname(sys.executable)
+        else:
+            # If running as script, same as app dir
+            return PlatformUtils.get_app_dir()
 
     @staticmethod
     def get_subprocess_flags() -> int:

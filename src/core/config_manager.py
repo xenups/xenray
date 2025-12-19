@@ -6,7 +6,8 @@ import uuid
 from datetime import datetime
 from typing import List, Optional, Tuple
 
-from src.core.constants import LAST_FILE_PATH, MAX_RECENT_FILES, RECENT_FILES_PATH
+from src.core.constants import (LAST_FILE_PATH, MAX_RECENT_FILES,
+                                RECENT_FILES_PATH)
 from src.core.logger import logger
 
 # Validation constants

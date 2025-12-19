@@ -13,12 +13,8 @@ from typing import Callable, Optional, Tuple
 import requests
 from loguru import logger
 
-from src.core.constants import (
-    APP_VERSION,
-    GITHUB_REPO,
-    UPDATE_DOWNLOAD_TIMEOUT,
-    UPDATE_MIN_FILE_SIZE,
-)
+from src.core.constants import (APP_VERSION, GITHUB_REPO,
+                                UPDATE_DOWNLOAD_TIMEOUT, UPDATE_MIN_FILE_SIZE)
 from src.utils.platform_utils import PlatformUtils
 
 # API URL constructed from configurable repo
@@ -63,13 +59,18 @@ class AppUpdateService:
         Returns:
             True if latest is newer than current
         """
-        # Normalize versions
-        current = AppUpdateService.parse_version(current)
-        latest = AppUpdateService.parse_version(latest)
+        # Normalize versions (remove 'v' prefix)
+        current_normalized = AppUpdateService.parse_version(current)
+        latest_normalized = AppUpdateService.parse_version(latest)
 
-        # Simple string comparison for now
-        # This works for semantic versioning and alpha/beta tags
-        return current != latest
+        try:
+            from packaging import version
+            return version.parse(latest_normalized) > version.parse(current_normalized)
+        except Exception:
+            # Fallback: simple string comparison (only if versions are different)
+            # This is not ideal but prevents false positives
+            logger.warning(f"Failed to compare versions properly: {current} vs {latest}")
+            return current_normalized != latest_normalized
 
     @staticmethod
     def check_for_updates() -> Tuple[bool, Optional[str], Optional[str], Optional[str]]:

@@ -63,7 +63,7 @@ class UIBuilder:
         # Background
         self._main._background = ft.Container(
             image=ft.DecorationImage(
-                src="assets/earth_horizon.png",
+                src="earth_horizon.png",
                 fit=ft.ImageFit.COVER,
             ),
             expand=True,

@@ -12,12 +12,12 @@ _project_root = Path(__file__).parent.parent.parent
 load_dotenv(_project_root / ".env")
 
 # Application version from environment
-APP_VERSION = os.getenv("APP_VERSION", "0.1.6-alpha")
+APP_VERSION = os.getenv("APP_VERSION", "0.1.7-alpha")
 GITHUB_REPO = os.getenv("GITHUB_REPO", "xenups/xenray")
 UPDATE_DOWNLOAD_TIMEOUT = float(os.getenv("UPDATE_DOWNLOAD_TIMEOUT", "60"))
 UPDATE_MIN_FILE_SIZE = int(os.getenv("UPDATE_MIN_FILE_SIZE", "1048576"))
-XRAY_VERSION = os.getenv("XRAY_VERSION", "1.8.24")
-SINGBOX_VERSION = os.getenv("SINGBOX_VERSION", "1.10.6")
+XRAY_VERSION = os.getenv("XRAY_VERSION", "25.12.8")
+SINGBOX_VERSION = os.getenv("SINGBOX_VERSION", "1.12.13")
 ARCH = os.getenv("ARCH", "64")
 
 # Application Limits
@@ -54,7 +54,10 @@ RECENT_FILES_PATH = os.path.join(CONFIG_DIR, "recent_files.json")
 SOCKET_PATH = os.path.join(TMPDIR, "xenray.sock")
 
 # AppImage directory (Legacy support) / Root directory
-APPDIR = PlatformUtils.get_app_dir()
+APPDIR = PlatformUtils.get_app_dir()  # For bundled assets
+
+# Executable directory for external resources (bin/, scripts/)
+EXECDIR = PlatformUtils.get_executable_dir()
 
 # Local directories
 ASSETS_DIR = os.path.join(APPDIR, "assets")
@@ -62,8 +65,8 @@ ASSETS_DIR = os.path.join(APPDIR, "assets")
 # Binary directory - platform specific
 # For development: bin/darwin-arm64/, bin/windows-x86_64/, etc.
 # For releases: bin/ (flat structure with platform-specific builds)
-BIN_DIR_PLATFORM = PlatformUtils.get_platform_bin_dir(os.path.join(APPDIR, "bin"))
-BIN_DIR_FLAT = os.path.join(APPDIR, "bin")
+BIN_DIR_PLATFORM = PlatformUtils.get_platform_bin_dir(os.path.join(EXECDIR, "bin"))
+BIN_DIR_FLAT = os.path.join(EXECDIR, "bin")
 
 # Use platform-specific directory if it exists, otherwise use flat structure
 if os.path.exists(BIN_DIR_PLATFORM):
@@ -81,8 +84,8 @@ SINGBOX_EXECUTABLE = os.path.join(
 SINGBOX_CONFIG_PATH = os.path.join(TMPDIR, "singbox_config.json")
 SINGBOX_LOG_FILE = os.path.join(TMPDIR, "xenray_singbox.log")
 
-# Xray geo files directory
-XRAY_LOCATION_ASSET = ASSETS_DIR
+# Xray geo files directory (geoip.dat, geosite.dat are in bin/)
+XRAY_LOCATION_ASSET = BIN_DIR
 
 # Temp root for Xray and Singbox
 TEMP_ROOT = TMPDIR

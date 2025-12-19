@@ -11,6 +11,7 @@ import flet as ft
 from src.core.config_manager import ConfigManager
 from src.core.connection_manager import ConnectionManager
 from src.core.constants import APPDIR, FONT_URLS
+from src.core.i18n import t
 from src.core.logger import logger
 from src.core.types import ConnectionMode
 from src.services.connection_tester import ConnectionTester
@@ -224,10 +225,10 @@ class MainWindow:
     # -----------------------------
     def _on_connect_clicked_impl(self, e=None):
         if not self._selected_profile:
-            self._show_toast("Please select a server first", "warning")
+            self._show_toast(t("status.select_server"), "warning")
             return
         if self._connecting:
-            self._show_toast("Connection in progress...")
+            self._show_toast(t("status.connection_in_progress"))
             return
 
         # Admin Check for VPN Mode
@@ -581,16 +582,17 @@ class MainWindow:
         def install_task():
             try:
                 if component == "xray":
-                    from src.services.xray_installer import XrayInstallerService
+                    from src.services.xray_installer import \
+                        XrayInstallerService
 
                     XrayInstallerService.install(
                         progress_callback=update_status,
                         stop_service_callback=self._connection_manager.disconnect,
                     )
 
-                self._show_toast(f"{component} Update Complete!", "success")
+                self._show_toast(t("status.update_complete", component=component), "success")
             except Exception as e:
-                self._show_toast(f"Error: {e}", "error")
+                self._show_toast(t("status.update_error", error=str(e)), "error")
             finally:
                 self._ui_call(lambda: self._page.close(dialog))
 
@@ -614,7 +616,7 @@ class MainWindow:
         from src.utils.process_utils import ProcessUtils
 
         if mode == ConnectionMode.VPN and not ProcessUtils.is_admin():
-            self._show_toast("Admin rights required for VPN mode", "warning")
+            self._show_toast(t("status.admin_required"), "warning")
             return
 
         self._current_mode = mode

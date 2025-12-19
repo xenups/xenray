@@ -30,7 +30,13 @@
     "test_in_progress": "测试正在进行中...",
     "test_started": "延迟测试已开始... 🚀",
     "updating_subscription": "正在更新订阅...",
-    "update_failed": "更新失败: {msg}"
+    "update_failed": "更新失败: {msg}",
+    "link_copied": "链接已复制到剪贴板",
+    "subscription_link_copied": "订阅链接已复制",
+    "share": "分享",
+    "delete": "删除",
+    "copy_link": "复制链接",
+    "subscription_updated": "已更新 {count} 个服务器"
   },
   "add_dialog": {
     "title": "添加服务器或订阅",
@@ -98,7 +104,8 @@
     "updating": "正在更新Xray...",
     "starting": "启动中...",
     "success": "Xray更新成功! 🎉",
-    "failed": "更新失败! ❌"
+    "failed": "更新失败! ❌",
+    "check_failed": "检查更新失败"
   },
   "app_update": {
     "checking": "正在检查应用更新... 📡",
@@ -129,7 +136,10 @@
     "connection_in_progress": "连接进行中...",
     "connection_failed": "连接失败",
     "mode_selected": "已选择{mode}模式",
-    "ping": "延迟: {latency}"
+    "ping": "延迟: {latency}",
+    "update_complete": "{component} 更新完成！",
+    "update_error": "错误: {error}",
+    "admin_required": "VPN模式需要管理员权限"
   },
   "connection": {
     "loading_config": "正在加载配置...",
@@ -146,7 +156,8 @@
     "invalid_config": "配置无效",
     "error": "错误",
     "checking_network": "正在检查网络连接...",
-    "no_internet": "无网络连接！"
+    "no_internet": "无网络连接！",
+    "connected_no_internet": "已连接但无网络访问"
   },
   "routing": {
     "title": "路由规则",

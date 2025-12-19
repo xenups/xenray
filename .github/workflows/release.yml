@@ -42,9 +42,6 @@ jobs:
       - name: Download Xray and Singbox binaries
         run: poetry run python scripts/download_binaries.py --arch 64
       
-      - name: Download Xray geo files
-        run: poetry run python scripts/download_geo_files.py
-      
       - name: Build city database
         run: poetry run python scripts/build_city_database.py
       
