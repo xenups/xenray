@@ -132,7 +132,7 @@ class ConnectionTester:
             if process.poll() is not None:
                 return False, t("connection.core_failed"), None
 
-            # 3. Test Connection
+            # 3. Test Connection with retries
             proxies = {
                 "http": f"http://127.0.0.1:{port}",
                 "https": f"http://127.0.0.1:{port}",
@@ -140,41 +140,70 @@ class ConnectionTester:
 
             # Target URL: Use something reliable and fast
             target_url = "http://cp.cloudflare.com/"
+            
+            # Retry logic for connection test
+            max_retries = 3
+            last_exception = None
+            
+            for attempt in range(max_retries):
+                try:
+                    start_time = time.time()
+                    response = requests.get(
+                        target_url, proxies=proxies, timeout=CONNECT_TIMEOUT
+                    )
 
-            start_time = time.time()
-            response = requests.get(
-                target_url, proxies=proxies, timeout=CONNECT_TIMEOUT
-            )
+                    latency = int((time.time() - start_time) * 1000)
 
-            latency = int((time.time() - start_time) * 1000)
+                    country_data = None
+                    # ANY response means connection works! Even 5xx errors mean proxy is functional.
+                    # The key is that we got a response through the proxy tunnel.
+                    # Strict check: 204 is expected from cp.cloudflare.com
+                    # We also accept 200-299 range just in case of different target or redirect
+                    if 200 <= response.status_code < 300:
+                        if fetch_country:
+                            try:
+                                # Use ip-api via the same proxy
+                                geo_resp = requests.get(
+                                    "http://ip-api.com/json", proxies=proxies, timeout=3
+                                )
+                                if geo_resp.status_code == 200:
+                                    gdata = geo_resp.json()
+                                    if gdata.get("status") == "success":
+                                        country_data = {
+                                            "country_code": gdata.get("countryCode"),
+                                            "country_name": gdata.get("country"),
+                                            "city": gdata.get("city"),
+                                        }
+                            except Exception:
+                                pass  # Fail silently for geoip
 
-            country_data = None
-            # ANY response means connection works! Even 5xx errors mean proxy is functional.
-            # The key is that we got a response through the proxy tunnel.
-            # Strict check: 204 is expected from cp.cloudflare.com
-            # We also accept 200-299 range just in case of different target or redirect
-            if 200 <= response.status_code < 300:
-                if fetch_country:
-                    try:
-                        # Use ip-api via the same proxy
-                        geo_resp = requests.get(
-                            "http://ip-api.com/json", proxies=proxies, timeout=3
-                        )
-                        if geo_resp.status_code == 200:
-                            gdata = geo_resp.json()
-                            if gdata.get("status") == "success":
-                                country_data = {
-                                    "country_code": gdata.get("countryCode"),
-                                    "country_name": gdata.get("country"),
-                                    "city": gdata.get("city"),
-                                }
-                    except Exception:
-                        pass  # Fail silently for geoip
+                        return True, t("connection.latency_ms", value=latency), country_data
 
-                return True, t("connection.latency_ms", value=latency), country_data
-
-            # If status code is not 204/2xx (e.g. 503, 404), return failure
-            return False, t("connection.conn_error"), None
+                    # If status code is not 204/2xx, retry
+                    if attempt < max_retries - 1:
+                        logger.debug(f"Connection test attempt {attempt + 1}/{max_retries} got status {response.status_code}, retrying...")
+                        time.sleep(0.5)
+                        continue
+                    else:
+                        return False, t("connection.conn_error"), None
+                        
+                except requests.exceptions.Timeout as e:
+                    last_exception = e
+                    if attempt < max_retries - 1:
+                        logger.debug(f"Connection test attempt {attempt + 1}/{max_retries} timed out, retrying...")
+                        time.sleep(0.5)
+                        continue
+                    else:
+                        return False, t("connection.timeout"), None
+                        
+                except requests.exceptions.RequestException as e:
+                    last_exception = e
+                    if attempt < max_retries - 1:
+                        logger.debug(f"Connection test attempt {attempt + 1}/{max_retries} failed: {e}, retrying...")
+                        time.sleep(0.5)
+                        continue
+                    else:
+                        return False, t("connection.conn_error"), None
 
         except requests.exceptions.Timeout:
             return False, t("connection.timeout"), None

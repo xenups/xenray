@@ -14,6 +14,7 @@ from src.core.constants import (ASSETS_DIR, OUTPUT_CONFIG_PATH,
 from src.core.i18n import t
 from src.services.singbox_service import SingboxService
 from src.services.xray_service import XrayService
+from src.utils.platform_utils import PlatformUtils
 
 
 class ConnectionManager:
@@ -96,10 +97,19 @@ class ConnectionManager:
         if mode == "vpn":
             report_step(t("connection.initializing_vpn"))
 
+            # Detect if QUIC/HTTP3 transport is used
+            from src.utils.network_utils import NetworkUtils
+            
+            is_quic = self._is_quic_transport(processed_config)
+            mtu_mode = "quic_safe" if is_quic else "auto"
+            
+            # Detect optimal MTU for VPN TUN interface
+            optimal_mtu = NetworkUtils.detect_optimal_mtu(mtu_mode=mtu_mode)
+            logger.info(f"Using MTU for TUN interface: {optimal_mtu}")
+
             # Since _get_socks_port updated the config, socks_port is valid
             routing_country = self._config_manager.get_routing_country()
             proxy_server_ip = self._get_proxy_server_ip(processed_config)
-            gateway_ip = self._get_default_gateway()
 
             # Pass required parameters to Sing-box service
             # Load routing rules for Sing-box injection (Consistent Routing)
@@ -108,9 +118,9 @@ class ConnectionManager:
             singbox_pid = self._singbox_service.start(
                 xray_socks_port=socks_port,
                 proxy_server_ip=proxy_server_ip,
-                gateway_ip=gateway_ip,
                 routing_country=routing_country,
                 routing_rules=routing_rules,
+                mtu=optimal_mtu,
             )
             if not singbox_pid:
                 logger.error("Failed to start Sing-box. Stopping Xray.")
@@ -176,6 +186,59 @@ class ConnectionManager:
 
         logger.error("[ConnectionManager] Failed to connect to any test host.")
         return False
+
+    def _is_quic_transport(self, config: dict) -> bool:
+        """
+        Check if the config uses QUIC/HTTP3 transport.
+        
+        QUIC-based transports in Xray:
+        - h3: Native HTTP/3 (QUIC)
+        - splithttp: Can use HTTP/3 when configured
+        - grpc: Can use HTTP/3 when configured
+        - httpupgrade: Can use HTTP/3 when configured
+        
+        Returns:
+            True if QUIC transport is detected, False otherwise
+        """
+        try:
+            # QUIC-sensitive network types (mostly UDP-based or requiring conservative MTU)
+            quic_networks = ["h3", "quic", "xhttp", "splithttp"]
+            
+            # Check outbounds for streamSettings with QUIC-capable network types
+            outbounds = config.get("outbounds", [])
+            logger.debug(f"Checking {len(outbounds)} outbounds for QUIC/h3 transport")
+            
+            for i, outbound in enumerate(outbounds):
+                stream_settings = outbound.get("streamSettings", {})
+                network = stream_settings.get("network", "")
+                protocol = outbound.get("protocol", "")
+                
+                # Check ALPN for h3 (strong indicator of QUIC)
+                security = stream_settings.get("security", "")
+                alpn = []
+                if security == "tls":
+                    alpn = stream_settings.get("tlsSettings", {}).get("alpn", [])
+                elif security == "reality":
+                    alpn = stream_settings.get("realitySettings", {}).get("alpn", [])
+                elif security == "xtls":
+                    alpn = stream_settings.get("xtlsSettings", {}).get("alpn", [])
+                    
+                if alpn and ("h3" in alpn or "h3-29" in alpn):
+                    logger.info(f"Detected HTTP/3 ALPN in outbound {i} - using QUIC-safe MTU 1420")
+                    return True
+                
+                logger.debug(f"Outbound {i}: protocol={protocol}, network={network}, security={security}")
+                
+                # Check if network type is QUIC-capable
+                if network in quic_networks:
+                    logger.info(f"Detected QUIC-capable transport ({network}) - using QUIC-safe MTU 1420")
+                    return True
+                        
+            logger.debug("No QUIC transport detected - using auto MTU detection")
+            return False
+        except Exception as e:
+            logger.debug(f"Error detecting QUIC transport: {e}")
+            return False
 
     def _process_config(self, config: dict) -> dict:
         """
@@ -397,7 +460,6 @@ class ConnectionManager:
         try:
             # Use PowerShell to get default gateway
             cmd = 'Get-NetRoute -DestinationPrefix "0.0.0.0/0" | Select-Object -ExpandProperty NextHop'
-            from src.utils.platform_utils import PlatformUtils
             result = subprocess.check_output(
                 ["powershell", "-Command", cmd],
                 text=True,

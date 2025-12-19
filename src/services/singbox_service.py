@@ -179,9 +179,9 @@ class SingboxService:
         self,
         xray_socks_port: int,
         proxy_server_ip: Union[str, List[str]] = "",
-        gateway_ip: Union[str, List[str]] = "",
         routing_country: str = "",
         routing_rules: dict = None,
+        mtu: int = 1420,
     ) -> Optional[int]:
         """Start Sing-box TUN service."""
         try:
@@ -216,14 +216,14 @@ class SingboxService:
                 for ip in resolved_ips:
                     self._add_static_route(ip, gateway)
 
-            # 4. Generate config - pass interface name for default_interface
+            # 4. Generate config - pass interface name for default_interface and MTU
             config = self._generate_config(
                 xray_socks_port,
                 proxy_server_ip,
-                gateway_ip,
                 routing_country,
                 iface_name,
                 routing_rules,
+                mtu,
             )
 
             # 5. Wait for Xray to be ready (with retry)
@@ -376,10 +376,10 @@ class SingboxService:
         self,
         socks_port: int,
         proxy_server_ip: Union[str, List[str]],
-        gateway_ip: Union[str, List[str]],
         routing_country: str = "",
         interface_name: Optional[str] = None,
         routing_rules: dict = None,
+        mtu: int = 1420,
     ) -> dict:
         """Generate Sing-box configuration."""
         proxy_list = self._normalize_list(proxy_server_ip)
@@ -420,7 +420,7 @@ class SingboxService:
                     "tag": "tun-in",
                     "interface_name": PlatformUtils.get_tun_interface_name(),
                     "address": ["172.20.0.1/30"],
-                    "mtu": 1280,
+                    "mtu": mtu,
                     "auto_route": True,
                     "strict_route": True,
                     "stack": "system",
