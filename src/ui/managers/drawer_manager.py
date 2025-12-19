@@ -21,7 +21,7 @@ class DrawerManager:
 
     def __init__(self, main_window: MainWindow):
         self._main = main_window
-        
+
     def setup_drawers(self):
         """Initialize all drawer components."""
         # Log viewer
@@ -33,6 +33,7 @@ class DrawerManager:
             self._main._config_manager,
             self._main._on_server_selected,
             on_profile_updated=self._main._on_profile_updated,
+            toast_manager=self._main._toast,
         )
         self._main._server_list.set_page(self._main._page)
 
@@ -93,7 +94,6 @@ class DrawerManager:
                 if profile.get("id") == last_profile_id:
                     self._main._selected_profile = profile
                     self._main._server_card.update_server(profile)
-                    self._main._status_display.update_country(profile)
                     break
 
     def open_server_drawer(self, e=None):
@@ -120,6 +120,7 @@ class DrawerManager:
 
     def _safe_update_server_list(self):
         """Wait for sheet to be mounted before updating list."""
+
         def _wait_and_update():
             max_wait = 2
             start = time.time()

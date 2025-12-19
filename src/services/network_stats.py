@@ -11,11 +11,11 @@ from loguru import logger
 def _stats_worker(queue: Queue, stop_event: multiprocessing.Event):
     """Worker function that runs in a separate process."""
     import psutil
-    
+
     last_bytes_sent = 0
     last_bytes_recv = 0
     last_time = time.time()
-    
+
     # Initialize counters
     try:
         counters = psutil.net_io_counters()
@@ -23,47 +23,49 @@ def _stats_worker(queue: Queue, stop_event: multiprocessing.Event):
         last_bytes_recv = counters.bytes_recv
     except Exception:
         pass
-    
+
     while not stop_event.is_set():
         try:
             time.sleep(1.5)  # Collection interval
-            
+
             if stop_event.is_set():
                 break
-            
+
             counters = psutil.net_io_counters()
             current_time = time.time()
             elapsed = current_time - last_time
-            
+
             if elapsed > 0:
                 download_bps = (counters.bytes_recv - last_bytes_recv) / elapsed
                 upload_bps = (counters.bytes_sent - last_bytes_sent) / elapsed
                 total_bps = download_bps + upload_bps
-                
+
                 download_fmt = _format_speed(download_bps)
                 upload_fmt = _format_speed(upload_bps)
-                
+
                 # Send stats to main process (non-blocking)
                 try:
                     # Clear old data if queue is full
                     while not queue.empty():
                         try:
                             queue.get_nowait()
-                        except:
+                        except Exception:
                             break
-                    
-                    queue.put_nowait({
-                        "download_speed": download_fmt,
-                        "upload_speed": upload_fmt,
-                        "total_bps": total_bps
-                    })
-                except:
+
+                    queue.put_nowait(
+                        {
+                            "download_speed": download_fmt,
+                            "upload_speed": upload_fmt,
+                            "total_bps": total_bps,
+                        }
+                    )
+                except Exception:
                     pass  # Queue full, skip this update
-            
+
             last_bytes_sent = counters.bytes_sent
             last_bytes_recv = counters.bytes_recv
             last_time = current_time
-            
+
         except Exception:
             time.sleep(1)
 
@@ -88,12 +90,12 @@ class NetworkStatsService:
         self._queue: Optional[Queue] = None
         self._stop_event: Optional[multiprocessing.Event] = None
         self._running = False
-        
+
         # Cached stats (read from queue)
         self._cached_stats = {
             "download_speed": "0 B/s",
             "upload_speed": "0 B/s",
-            "total_bps": 0.0
+            "total_bps": 0.0,
         }
 
     def start(self):
@@ -104,11 +106,9 @@ class NetworkStatsService:
         self._running = True
         self._queue = Queue(maxsize=5)
         self._stop_event = multiprocessing.Event()
-        
+
         self._process = Process(
-            target=_stats_worker, 
-            args=(self._queue, self._stop_event),
-            daemon=True
+            target=_stats_worker, args=(self._queue, self._stop_event), daemon=True
         )
         self._process.start()
         logger.debug("[NetworkStats] Started monitoring (Multiprocessing)")
@@ -116,15 +116,15 @@ class NetworkStatsService:
     def stop(self):
         """Stop monitoring network stats."""
         self._running = False
-        
+
         if self._stop_event:
             self._stop_event.set()
-        
+
         if self._process and self._process.is_alive():
             self._process.join(timeout=2)
             if self._process.is_alive():
                 self._process.terminate()
-        
+
         self._process = None
         self._queue = None
         self._stop_event = None
@@ -137,7 +137,7 @@ class NetworkStatsService:
                 # Read all available updates, keep the latest
                 while not self._queue.empty():
                     self._cached_stats = self._queue.get_nowait()
-            except:
+            except Exception:
                 pass
-        
+
         return self._cached_stats.copy()

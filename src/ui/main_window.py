@@ -10,21 +10,19 @@ import flet as ft
 # Local modules
 from src.core.config_manager import ConfigManager
 from src.core.connection_manager import ConnectionManager
-from src.core.constants import (
-    APPDIR,
-    FONT_URLS,
-)
+from src.core.constants import APPDIR, FONT_URLS
 from src.core.logger import logger
 from src.core.types import ConnectionMode
-from src.services.network_stats import NetworkStatsService
-from src.utils.process_utils import ProcessUtils
 from src.services.connection_tester import ConnectionTester
-from src.ui.handlers.network_stats_handler import NetworkStatsHandler
-from src.ui.handlers.connection_handler import ConnectionHandler
-from src.ui.handlers.systray_handler import SystrayHandler
-from src.ui.managers.drawer_manager import DrawerManager
+from src.services.network_stats import NetworkStatsService
 from src.ui.builders.ui_builder import UIBuilder
+from src.ui.components.toast import ToastManager
+from src.ui.handlers.connection_handler import ConnectionHandler
+from src.ui.handlers.network_stats_handler import NetworkStatsHandler
+from src.ui.handlers.systray_handler import SystrayHandler
 from src.ui.helpers.glow_helper import GlowHelper
+from src.ui.managers.drawer_manager import DrawerManager
+from src.utils.process_utils import ProcessUtils
 
 
 class MainWindow:
@@ -61,7 +59,10 @@ class MainWindow:
 
         # --- Services ---
         self._network_stats = NetworkStatsService()
-        
+
+        # --- Toast Manager ---
+        self._toast = None  # Will be initialized after page setup
+
         # --- Handlers ---
         self._network_stats_handler = NetworkStatsHandler(self)
         self._connection_handler = ConnectionHandler(self)
@@ -73,12 +74,22 @@ class MainWindow:
         # --- Initialization ---
         self._define_callbacks()
         self._setup_page()
+
+        # Initialize toast manager after page setup
+        self._toast = ToastManager(self._page)
+        # Store in page for components to access
+        self._page._toast_manager = self._toast
+
         self._ui_builder.build_ui()  # Delegate to builder
         self._drawer_manager.setup_drawers()  # Delegate to manager
         self._systray.setup()  # Initialize system tray
 
         # Start background tasks
         self._page.run_task(self._start_ui_tasks)
+
+        # Initialize UI with selected profile if exists
+        if self._selected_profile:
+            self._update_selected_profile_ui(self._selected_profile)
 
     # -----------------------------
     # Define callbacks
@@ -113,6 +124,15 @@ class MainWindow:
             ft.ThemeMode.DARK if saved_theme == "dark" else ft.ThemeMode.LIGHT
         )
 
+        # Load last selected profile (from local OR subscriptions)
+        last_profile_id = self._config_manager.get_last_selected_profile_id()
+        if last_profile_id:
+            profile = self._config_manager.get_profile_by_id(last_profile_id)
+            if profile:
+                self._selected_profile = profile
+                # We can't update UI here as it's not built yet, but we set the state
+                # The components (ServerCard, StatusDisplay) will need to be updated after build or in __init__
+
     # -----------------------------
     # Helper: Thread-safe UI call
     # -----------------------------
@@ -126,7 +146,8 @@ class MainWindow:
             try:
                 loop = getattr(self._page, "loop", None)
                 if loop and loop.is_closed():
-                    logger.debug(f"[DEBUG] Skipping UI call ({fn.__name__ if hasattr(fn, '__name__') else 'lambda'}): Event loop is closed")
+                    fn_name = fn.__name__ if hasattr(fn, "__name__") else "lambda"
+                    logger.debug(f"[DEBUG] Skipping UI call ({fn_name}): Event loop is closed")
                     return
             except Exception:
                 pass
@@ -139,16 +160,19 @@ class MainWindow:
                     except Exception:
                         pass
             except Exception as e:
-                logger.debug(f"[DEBUG] UI call error in {fn.__name__ if hasattr(fn, '__name__') else 'lambda'}: {e}")
+                logger.debug(
+                    f"[DEBUG] UI call error in {fn.__name__ if hasattr(fn, '__name__') else 'lambda'}: {e}"
+                )
 
         try:
             self._page.run_task(_coro)
         except RuntimeError as e:
             if "Event loop is closed" in str(e):
-                logger.debug(f"[DEBUG] RuntimeError caught in _ui_call: Event loop is closed")
+                logger.debug(
+                    "[DEBUG] RuntimeError caught in _ui_call: Event loop is closed"
+                )
             else:
                 logger.warning(f"[DEBUG] RuntimeError in _ui_call: {e}")
-
 
     # -----------------------------
     # Build UI Structure
@@ -179,7 +203,6 @@ class MainWindow:
                 # Server Card at bottom
                 self._server_card,
             ],
-
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             alignment=ft.MainAxisAlignment.START,
             expand=True,
@@ -201,17 +224,15 @@ class MainWindow:
     # -----------------------------
     def _on_connect_clicked_impl(self, e=None):
         if not self._selected_profile:
-            self._show_snackbar("Please select a server first")
+            self._show_toast("Please select a server first", "warning")
             return
         if self._connecting:
-            self._show_snackbar("Connection in progress...")
+            self._show_toast("Connection in progress...")
             return
 
         # Admin Check for VPN Mode
         if not self._is_running:
             if self._current_mode == ConnectionMode.VPN:
-
-
                 if not ProcessUtils.is_admin():
                     # CALL THE NEW CLASS METHOD
                     self._show_admin_restart_dialog()
@@ -226,7 +247,6 @@ class MainWindow:
 
     def _show_admin_restart_dialog(self):
         """Shows an AlertDialog asking the user to restart the app as Admin."""
-
 
         page = self._page
 
@@ -275,8 +295,6 @@ class MainWindow:
         self._selected_profile = profile
         self._server_card.update_server(profile)
         self._server_sheet.open = False
-        # Immediately update status display with country info (persistent)
-        self._status_display.update_country(profile)
         self._page.update()  # Update page to close sheet
 
     def _handle_pre_connection_test(self, success, result_str, country_data, profile):
@@ -290,13 +308,8 @@ class MainWindow:
             # Update country if found
             if country_data and profile:
                 profile.update(country_data)
-                self._config_manager.update_profile(
-                    profile.get("id"), country_data
-                )
+                self._config_manager.update_profile(profile.get("id"), country_data)
                 # Update display
-                self._ui_call(
-                    lambda: self._status_display.update_country(country_data)
-                )
                 self._ui_call(lambda: self._server_card.update_server(profile))
 
                 if country_data.get("country_code"):
@@ -323,12 +336,12 @@ class MainWindow:
         # 2. Trigger immediate latency check if not running
         if not self._is_running and not self._connecting:
             self._ui_call(self._status_display.set_pre_connection_ping, "...", False)
-            
+
             fetch_flag = not profile.get("country_code")
             ConnectionTester.test_connection(
-                profile.get("config", {}), 
-                lambda s, r, d=None: self._handle_pre_connection_test(s, r, d, profile), 
-                fetch_country=fetch_flag
+                profile.get("config", {}),
+                lambda s, r, d=None: self._handle_pre_connection_test(s, r, d, profile),
+                fetch_country=fetch_flag,
             )
 
         # 3. Handle live switch if running
@@ -401,7 +414,6 @@ class MainWindow:
                     # Visual Updates (Pass current profile state)
                     # We use lambda to capture specific values or allow delayed execution,
                     # but here we want to ensure self._selected_profile is read at call time.
-                    self._ui_call(lambda: self._status_display.update_country(profile))
                     self._ui_call(lambda: self._server_card.update_server(profile))
 
                     if country_data and country_data.get("country_code"):
@@ -437,13 +449,13 @@ class MainWindow:
             try:
                 # 1. Timing Control (Frequency Rule: >= 1s, prefer 1.5s)
                 await asyncio.sleep(1.5)
-                
+
                 if not self._is_running:
                     # Reset heartbeat if needed (idempotent check)
                     if self._heartbeat and self._heartbeat.opacity != 0:
                         self._heartbeat.opacity = 0
                         self._heartbeat.update()
-                    
+
                     if not self._network_stats:
                         break
                     continue
@@ -455,48 +467,47 @@ class MainWindow:
 
                 # 3. Read Shared State (Thread-Safe)
                 stats = self._network_stats.get_stats()
-                
+
                 # 4. Update UI (Main Thread)
                 # Stats come pre-formatted as strings (e.g., "1.5 MB/s")
                 # Only total_bps is a raw float
                 down_str = stats.get("download_speed", "0 B/s")
                 up_str = stats.get("upload_speed", "0 B/s")
-                
+
                 try:
                     total_bps = float(stats.get("total_bps", 0))
                 except (ValueError, TypeError):
                     total_bps = 0.0
-                
+
                 # Update Connection Button Glow based on network activity
                 if self._connection_button and self._connection_button.page:
                     # Always update button glow - it will handle the intensity internally
                     self._connection_button.update_network_activity(total_bps)
-                
+
                 # Update LogsDrawer stats if open AND mounted
-                if (self._logs_drawer_component 
-                    and self._logs_drawer_component.open 
-                    and self._logs_drawer_component.page):
+                if (
+                    self._logs_drawer_component
+                    and self._logs_drawer_component.open
+                    and self._logs_drawer_component.page
+                ):
                     # Speeds are already formatted strings, use them directly
-                    self._logs_drawer_component.update_network_stats(
-                        down_str, 
-                        up_str
-                    )
+                    self._logs_drawer_component.update_network_stats(down_str, up_str)
 
                 # Earth Glow Animation (Sun Rays) - replaces button glow
                 if self._earth_glow and self._earth_glow.page:
                     total_mbps = stats["total_bps"] / (1024 * 1024)
-                    
+
                     # Calculate intensity (0.0 to 1.0)
-                    intensity = min(1.0, total_mbps / 5.0) # Max glow at 5 MB/s
-                    
+                    intensity = min(1.0, total_mbps / 5.0)  # Max glow at 5 MB/s
+
                     # Base glow (Idle)
                     base_opacity = 0.3
                     base_scale = 1.0
-                    
+
                     # Target glow (Active)
                     target_opacity = base_opacity + (0.5 * intensity)
                     target_scale = base_scale + (0.2 * intensity)
-                    
+
                     self._earth_glow.opacity = target_opacity
                     self._earth_glow.scale = target_scale
                     self._earth_glow.update()
@@ -504,7 +515,7 @@ class MainWindow:
                 # Button Glow - Disabled in Earth Theme
                 # if self._connection_button and self._connection_button.page:
                 #     self._connection_button.update_network_activity(stats["total_bps"])
-                
+
                 # 5. Heartbeat logic for LogsDrawer only - fade in/out only
                 if self._logs_heartbeat and self._logs_heartbeat.page:
                     # Fade in/out animation without scale
@@ -541,11 +552,10 @@ class MainWindow:
         # Force a page update to ensure theme mode change applies globally
         self._page.update()
 
-    def _show_snackbar(self, message: str):
-        def _set():
-            self._page.open(ft.SnackBar(ft.Text(message)))
-
-        self._ui_call(_set)
+    def _show_toast(self, message: str, message_type: str = "info"):
+        """Show a toast notification."""
+        if self._toast:
+            self._toast.show(message, message_type)
 
     def _run_specific_installer(self, component: str):
         progress = ft.ProgressRing()
@@ -578,9 +588,9 @@ class MainWindow:
                         stop_service_callback=self._connection_manager.disconnect,
                     )
 
-                self._show_snackbar(f"{component} Update Complete!")
+                self._show_toast(f"{component} Update Complete!", "success")
             except Exception as e:
-                self._show_snackbar(f"Error: {e}")
+                self._show_toast(f"Error: {e}", "error")
             finally:
                 self._ui_call(lambda: self._page.close(dialog))
 
@@ -595,8 +605,6 @@ class MainWindow:
         if updated_profile.get("id") == self._selected_profile.get("id"):
             # Update local reference
             self._selected_profile.update(updated_profile)
-            # Update Status Display
-            self._ui_call(lambda: self._status_display.update_country(updated_profile))
             # Update Server Card
             self._ui_call(
                 lambda: self._server_card.update_server(self._selected_profile)
@@ -606,7 +614,7 @@ class MainWindow:
         from src.utils.process_utils import ProcessUtils
 
         if mode == ConnectionMode.VPN and not ProcessUtils.is_admin():
-            self._show_snackbar("Admin rights required for VPN mode")
+            self._show_toast("Admin rights required for VPN mode", "warning")
             return
 
         self._current_mode = mode
@@ -625,7 +633,7 @@ class MainWindow:
     # -----------------------------
     async def _start_ui_tasks(self):
         """Manages background UI updates like heartbeat animation."""
-        
+
         # Start network stats loop
         self._page.run_task(self._network_stats_handler.run_stats_loop)
 
@@ -652,9 +660,6 @@ class MainWindow:
                                 self._config_manager.update_profile(
                                     self._selected_profile.get("id"), country_data
                                 )
-                                self._ui_call(
-                                    self._status_display.update_country, country_data
-                                )
 
                     from src.services.connection_tester import ConnectionTester
 
@@ -676,13 +681,13 @@ class MainWindow:
     def show_close_dialog(self):
         """Public method to trigger the close confirmation dialog."""
         logger.debug("[DEBUG] MainWindow.show_close_dialog() called")
-        
+
         # Check if user already chose to always minimize
         if self._config_manager.get_remember_close_choice():
             logger.debug("[DEBUG] Remembered choice found: Always minimize")
             self._handle_minimize_action()
             return
-            
+
         self._show_close_dialog()
 
     def _handle_minimize_action(self):
@@ -700,7 +705,9 @@ class MainWindow:
         remember_checkbox = ft.Checkbox(
             label=t("close_dialog.remember"),
             value=False,
-            label_style=ft.TextStyle(size=13, color=ft.Colors.with_opacity(0.7, ft.Colors.ON_SURFACE)),
+            label_style=ft.TextStyle(
+                size=13, color=ft.Colors.with_opacity(0.7, ft.Colors.ON_SURFACE)
+            ),
             # White inside when empty, blue accent checkmark
             fill_color={
                 ft.ControlState.SELECTED: ft.Colors.BLUE_ACCENT,
@@ -715,14 +722,17 @@ class MainWindow:
             self._page.update()
             self.cleanup()
             from src.utils.process_utils import ProcessUtils
+
             ProcessUtils.kill_process_tree()
             os._exit(0)
 
         def handle_minimize(e):
-            logger.debug(f"[DEBUG] Close dialog: Minimize clicked (remember={remember_checkbox.value})")
+            logger.debug(
+                f"[DEBUG] Close dialog: Minimize clicked (remember={remember_checkbox.value})"
+            )
             if remember_checkbox.value:
                 self._config_manager.set_remember_close_choice(True)
-            
+
             dialog.open = False
             self._handle_minimize_action()
 
@@ -736,10 +746,9 @@ class MainWindow:
             message_text = t("close_dialog.message")
             exit_label = t("close_dialog.exit")
             minimize_label = t("close_dialog.minimize")
-            cancel_label = t("close_dialog.cancel")
         except Exception:
             title_text, message_text = "Exit", "Exit or Minimize?"
-            exit_label, minimize_label, cancel_label = "Exit", "Minimize", "Cancel"
+            exit_label, minimize_label = "Exit", "Minimize"
 
         dialog = ft.AlertDialog(
             modal=True,
@@ -749,7 +758,11 @@ class MainWindow:
                         # Header
                         ft.Row(
                             [
-                                ft.Icon(ft.Icons.EXIT_TO_APP_ROUNDED, color=ft.Colors.BLUE_ACCENT, size=28),
+                                ft.Icon(
+                                    ft.Icons.EXIT_TO_APP_ROUNDED,
+                                    color=ft.Colors.BLUE_ACCENT,
+                                    size=28,
+                                ),
                                 ft.Text(title_text, size=18, weight=ft.FontWeight.BOLD),
                             ],
                             alignment=ft.MainAxisAlignment.START,
@@ -757,33 +770,30 @@ class MainWindow:
                         ),
                         # Message
                         ft.Text(message_text, size=14, opacity=0.9),
-                        
                         ft.Divider(height=10, color=ft.Colors.TRANSPARENT),
-                        
                         # Buttons Row (Moved into content for precise placement)
                         ft.Row(
                             [
                                 ft.TextButton(
-                                    exit_label, 
-                                    on_click=handle_exit, 
-                                    icon=ft.Icons.POWER_SETTINGS_NEW, 
+                                    exit_label,
+                                    on_click=handle_exit,
+                                    icon=ft.Icons.POWER_SETTINGS_NEW,
                                     icon_color=ft.Colors.RED_ACCENT,
-                                    style=ft.ButtonStyle(color=ft.Colors.RED_ACCENT)
+                                    style=ft.ButtonStyle(color=ft.Colors.RED_ACCENT),
                                 ),
                                 ft.ElevatedButton(
-                                    minimize_label, 
-                                    on_click=handle_minimize, 
+                                    minimize_label,
+                                    on_click=handle_minimize,
                                     icon=ft.Icons.MINIMIZE,
                                     style=ft.ButtonStyle(
                                         bgcolor=ft.Colors.BLUE_ACCENT,
                                         color=ft.Colors.WHITE,
-                                    )
+                                    ),
                                 ),
                             ],
                             alignment=ft.MainAxisAlignment.START,
                             spacing=10,
                         ),
-                        
                         # Checkbox (Under the buttons)
                         ft.Container(
                             content=remember_checkbox,

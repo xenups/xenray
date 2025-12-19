@@ -31,7 +31,7 @@ class Settings:
                 self.log = None
                 try:
                     self.log = open(logfile_path, "w", buffering=1)
-                except Exception as e:
+                except Exception:
                     # If we can't open log file (e.g. locked by another instance),
                     # we proceed without file logging to avoid crash.
                     pass
@@ -84,5 +84,5 @@ class Settings:
                 should_clear = True
 
             if should_clear:
-                with open(log_file, "w") as f:
+                with open(log_file, "w"):
                     pass

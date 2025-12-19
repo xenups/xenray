@@ -130,3 +130,25 @@ class LatencyTester:
     def clear_cache(self):
         """Clear the results cache."""
         self._results_cache.clear()
+
+    def restart_testing(self, profiles: List[dict]):
+        """
+        Restart testing with a new list of profiles.
+        Cancels current test and queues the new list.
+        """
+        self.cancel()
+
+        def _restart_task():
+            # Wait for current test to stop
+            start_wait = time.time()
+            while self._is_testing:
+                if time.time() - start_wait > 2.0:
+                    # Force break if stuck
+                    break
+                time.sleep(0.05)
+
+            # Start new test
+            self.test_profiles(profiles)
+
+        # Run restart logic in a separate thread to avoid blocking
+        threading.Thread(target=_restart_task, daemon=True).start()

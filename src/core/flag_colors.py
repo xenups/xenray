@@ -53,7 +53,6 @@ FLAG_COLORS = {
     "sm": ("#5eb6e4", "#88ccee"),  # San Marino - Blue, Pale Blue
     "ua": ("#0057b7", "#ffd700"),  # Ukraine - Blue, Yellow
     "va": ("#ffe000", "#ffee77"),  # Vatican - Yellow, Pale Yellow
-    
     # Asia
     "ae": ("#00732f", "#ff0000"),  # UAE - Green, Red
     "af": ("#1a1a1a", "#009900"),  # Afghanistan - Dark, Green
@@ -100,7 +99,6 @@ FLAG_COLORS = {
     "uz": ("#1eb53a", "#0099b5"),  # Uzbekistan - Green, Blue
     "vn": ("#da251d", "#ffff00"),  # Vietnam - Red, Yellow
     "ye": ("#ce1126", "#1a1a1a"),  # Yemen - Red, Dark
-    
     # Americas
     "ar": ("#1199ff", "#00d4ff"),  # Argentina - Sky Blue, Cyan
     "bo": ("#ce1126", "#007934"),  # Bolivia - Red, Green
@@ -125,7 +123,6 @@ FLAG_COLORS = {
     "us": ("#3c3b6e", "#b22234"),  # USA - Blue, Red
     "uy": ("#001489", "#7799dd"),  # Uruguay - Blue, Pale Blue
     "ve": ("#cf142b", "#00247d"),  # Venezuela - Red, Blue
-    
     # Africa
     "ao": ("#cc092f", "#1a1a1a"),  # Angola - Red, Dark
     "bf": ("#ef2b2d", "#009e49"),  # Burkina Faso - Red, Green
@@ -179,7 +176,6 @@ FLAG_COLORS = {
     "za": ("#007a4d", "#1a1a1a"),  # South Africa - Green, Dark
     "zm": ("#198a00", "#ef7d00"),  # Zambia - Green, Orange
     "zw": ("#319208", "#ffd200"),  # Zimbabwe - Green, Yellow
-    
     # Oceania
     "au": ("#00008b", "#6666bb"),  # Australia - Blue, Pale Blue
     "fj": ("#68bfe5", "#002868"),  # Fiji - Blue, Navy
@@ -195,7 +191,6 @@ FLAG_COLORS = {
     "tv": ("#00247d", "#ffce00"),  # Tuvalu - Blue, Yellow
     "vu": ("#009543", "#d21034"),  # Vanuatu - Green, Red
     "ws": ("#ce1126", "#002b7f"),  # Samoa - Red, Blue
-    
     # Default fallback
     "default": ("#6366f1", "#8b5cf6"),  # Indigo, Purple
 }

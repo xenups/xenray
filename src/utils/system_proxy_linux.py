@@ -152,8 +152,7 @@ class SystemProxyLinux:
         """
         try:
             # KDE uses kioslaverc configuration file
-            config_file = os.path.expanduser("~/.config/kioslaverc")
-
+            os.path.expanduser("~/.config/kioslaverc")
             # Set proxy mode to manual
             subprocess.run(
                 [
@@ -302,7 +301,7 @@ class SystemProxyLinux:
             ]
 
             proxy_lines = [
-                f"\n# XenRay Proxy Settings\n",
+                "\n# XenRay Proxy Settings\n",
                 f'export HTTP_PROXY="{proxy_url}"\n',
                 f'export HTTPS_PROXY="{proxy_url}"\n',
                 f'export http_proxy="{proxy_url}"\n',

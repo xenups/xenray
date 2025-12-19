@@ -15,8 +15,8 @@ from src.core.i18n import t
 from src.core.logger import logger
 
 # Timeout configuration
-TEST_TIMEOUT = 5  # seconds for the whole test
-CONNECT_TIMEOUT = 3  # seconds for HTTP request
+TEST_TIMEOUT = 10  # seconds for the whole test
+CONNECT_TIMEOUT = 5  # seconds for HTTP request
 
 
 class ConnectionTester:
@@ -151,7 +151,9 @@ class ConnectionTester:
             country_data = None
             # ANY response means connection works! Even 5xx errors mean proxy is functional.
             # The key is that we got a response through the proxy tunnel.
-            if response.status_code:  # Any response code = success
+            # Strict check: 204 is expected from cp.cloudflare.com
+            # We also accept 200-299 range just in case of different target or redirect
+            if 200 <= response.status_code < 300:
                 if fetch_country:
                     try:
                         # Use ip-api via the same proxy
@@ -166,16 +168,19 @@ class ConnectionTester:
                                     "country_name": gdata.get("country"),
                                     "city": gdata.get("city"),
                                 }
-                    except:
+                    except Exception:
                         pass  # Fail silently for geoip
 
                 return True, t("connection.latency_ms", value=latency), country_data
+
+            # If status code is not 204/2xx (e.g. 503, 404), return failure
+            return False, t("connection.conn_error"), None
 
         except requests.exceptions.Timeout:
             return False, t("connection.timeout"), None
         except requests.exceptions.RequestException:
             return False, t("connection.conn_error"), None
-        except Exception as e:
+        except Exception:
             return False, t("connection.error"), None
         finally:
             # 4. Cleanup
@@ -189,7 +194,7 @@ class ConnectionTester:
             if os.path.exists(config_path):
                 try:
                     os.remove(config_path)
-                except:
+                except Exception:
                     pass
 
     @staticmethod

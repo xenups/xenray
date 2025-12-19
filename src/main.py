@@ -9,6 +9,8 @@ import flet as ft
 if __name__ == "__main__":
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import asyncio
+
 from src.core.config_manager import ConfigManager
 from src.core.connection_manager import ConnectionManager
 from src.core.constants import EARLY_LOG_FILE
@@ -17,12 +19,10 @@ from src.core.settings import Settings
 from src.ui.main_window import MainWindow
 
 
-import asyncio
-
 async def main(page: ft.Page):
     """Main entry point."""
     logger.debug("[DEBUG] Starting Flet session (async main)")
-    
+
     # Window settings MUST be set as early as possible
     page.window.prevent_close = True
     page.title = "XenRay"
@@ -43,6 +43,7 @@ async def main(page: ft.Page):
 
     # Initialize i18n
     from src.core.i18n import set_language
+
     set_language(config_manager.get_language())
 
     # Initialize UI
@@ -75,8 +76,8 @@ def run():
     """Entry point for poetry script."""
     # Singleton Check (Moved here to prevent child processes from starting app)
     import ctypes
-    import sys
     import os
+    import sys
 
     # Import PlatformUtils - works for both script and PyInstaller
     # PyInstaller bundles these as hidden-imports
@@ -97,13 +98,13 @@ def run():
             return  # Exit run() without starting app
     else:
         # For Unix-like systems (macOS, Linux), we can use a PID file
-        import fcntl
         import errno
+        import fcntl
 
         pid_file = os.path.expanduser("~/.xenray.pid")
         try:
             global _pid_file_handle
-            _pid_file_handle = open(pid_file, 'w')
+            _pid_file_handle = open(pid_file, "w")
             fcntl.flock(_pid_file_handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
             _pid_file_handle.write(str(os.getpid()))
         except (IOError, OSError) as e:

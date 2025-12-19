@@ -77,7 +77,11 @@ class SettingsDrawer(ft.NavigationDrawer):
                                     ft.Icons.ARROW_BACK,
                                     on_click=self._close_drawer,
                                 ),
-                                ft.Text(t("settings.title"), size=20, weight=ft.FontWeight.BOLD),
+                                ft.Text(
+                                    t("settings.title"),
+                                    size=20,
+                                    weight=ft.FontWeight.BOLD,
+                                ),
                             ],
                         ),
                         padding=20,
@@ -96,7 +100,11 @@ class SettingsDrawer(ft.NavigationDrawer):
                                         self._country_row,
                                     ],
                                 ),
-                                ft.Divider(height=1, color=ft.Colors.OUTLINE_VARIANT, opacity=0.2),
+                                ft.Divider(
+                                    height=1,
+                                    color=ft.Colors.OUTLINE_VARIANT,
+                                    opacity=0.2,
+                                ),
                                 ft.Container(height=10),
                                 # App Settings
                                 SettingsSection(
@@ -123,7 +131,11 @@ class SettingsDrawer(ft.NavigationDrawer):
                                         ),
                                     ],
                                 ),
-                                ft.Divider(height=1, color=ft.Colors.OUTLINE_VARIANT, opacity=0.2),
+                                ft.Divider(
+                                    height=1,
+                                    color=ft.Colors.OUTLINE_VARIANT,
+                                    opacity=0.2,
+                                ),
                                 ft.Container(height=10),
                                 # System Section
                                 SettingsSection(
@@ -139,7 +151,9 @@ class SettingsDrawer(ft.NavigationDrawer):
                                             ft.Icons.SYSTEM_UPDATE_ALT,
                                             t("settings.check_updates"),
                                             t("settings.update_xray"),
-                                            on_click=lambda e: self._on_installer_run_external("xray"),
+                                            on_click=lambda e: self._on_installer_run_external(
+                                                "xray"
+                                            ),
                                         ),
                                         SettingsListTile(
                                             ft.Icons.INFO_OUTLINE,
@@ -164,7 +178,9 @@ class SettingsDrawer(ft.NavigationDrawer):
                                     color=ft.Colors.OUTLINE,
                                 ),
                                 ft.Container(
-                                    width=1, height=10, bgcolor=ft.Colors.OUTLINE_VARIANT
+                                    width=1,
+                                    height=10,
+                                    bgcolor=ft.Colors.OUTLINE_VARIANT,
                                 ),
                                 ft.Text(
                                     f"Sing-box: v{SingboxService().get_version() or 'ND'}",
@@ -186,8 +202,14 @@ class SettingsDrawer(ft.NavigationDrawer):
             expand=True,
         )
 
+        # Wrap in container to control width
+        drawer_container = ft.Container(
+            content=glass_content,
+            width=320,
+        )
+
         super().__init__(
-            controls=[glass_content],
+            controls=[drawer_container],
             bgcolor=ft.Colors.TRANSPARENT,
             surface_tint_color=ft.Colors.TRANSPARENT,
             shadow_color=ft.Colors.TRANSPARENT,
@@ -238,6 +260,22 @@ class SettingsDrawer(ft.NavigationDrawer):
         )
         page.open(dlg)
 
+    def _show_toast(self, message: str, message_type: str = "info"):
+        """Show a toast notification."""
+        # Try to get toast manager from page
+        if hasattr(self.page, "_toast_manager"):
+            self.page._toast_manager.show(message, message_type)
+        else:
+            # Fallback to simple snackbar
+            if self.page:
+                snackbar = ft.SnackBar(
+                    content=ft.Text(message),
+                    duration=3000,
+                )
+                self.page.overlay.append(snackbar)
+                snackbar.open = True
+                self.page.update()
+
     def _save_port(self, value: str):
         """Save the SOCKS port setting."""
         page = self.page
@@ -249,25 +287,13 @@ class SettingsDrawer(ft.NavigationDrawer):
             if 1024 <= port <= 65535:
                 self._config_manager.set_proxy_port(port)
                 self._port_row.set_border_color(ft.Colors.GREEN_400)
-                page.open(
-                    ft.SnackBar(content=ft.Text(t("settings.port_saved", port=port)))
-                )
+                self._show_toast(t("settings.port_saved", port=port), "success")
             else:
                 self._port_row.set_border_color(ft.Colors.RED_400)
-                page.open(
-                    ft.SnackBar(
-                        content=ft.Text(t("settings.port_invalid_range")),
-                        bgcolor=ft.Colors.RED_700,
-                    )
-                )
+                self._show_toast(t("settings.port_invalid_range"), "error")
         except ValueError:
             self._port_row.set_border_color(ft.Colors.RED_400)
-            page.open(
-                ft.SnackBar(
-                    content=ft.Text(t("settings.port_must_be_number")),
-                    bgcolor=ft.Colors.RED_700,
-                )
-            )
+            self._show_toast(t("settings.port_must_be_number"), "error")
 
         page.update()
 
@@ -279,7 +305,7 @@ class SettingsDrawer(ft.NavigationDrawer):
 
         val = self._country_row.value
         self._config_manager.set_routing_country(val)
-        page.open(ft.SnackBar(content=ft.Text(t("settings.country_saved", val=val))))
+        self._show_toast(t("settings.country_saved", val=val), "success")
         page.update()
 
     def _save_language(self, e):
@@ -294,7 +320,7 @@ class SettingsDrawer(ft.NavigationDrawer):
 
         # Notify user - app needs restart for full effect
         msg = "Language changed! Restart app for full effect. / زبان تغییر کرد! برنامه را ریستارت کنید."
-        page.open(ft.SnackBar(content=ft.Text(msg)))
+        self._show_toast(msg, "success")
         page.update()
 
     def _reset_close_preference(self, e):
@@ -304,9 +330,7 @@ class SettingsDrawer(ft.NavigationDrawer):
             return
 
         self._config_manager.set_remember_close_choice(False)
-        page.open(
-            ft.SnackBar(content=ft.Text(t("settings.reset_close_success")))
-        )
+        self._show_toast(t("settings.reset_close_success"), "success")
         page.update()
 
     def _on_installer_run(self, component: str):
@@ -322,11 +346,7 @@ class SettingsDrawer(ft.NavigationDrawer):
             try:
                 available, current, latest = XrayInstallerService.check_for_updates()
                 if not available and current:
-                    page.open(
-                        ft.SnackBar(
-                            content=ft.Text(t("update.up_to_date", version=current))
-                        )
-                    )
+                    self._show_toast(t("update.up_to_date", version=current), "info")
                     page.update()
                     return
             except Exception:
@@ -401,18 +421,9 @@ class SettingsDrawer(ft.NavigationDrawer):
 
             page.close(progress_dlg)
             if success:
-                page.open(
-                    ft.SnackBar(
-                        content=ft.Text(t("update.success")),
-                        bgcolor=ft.Colors.GREEN_700,
-                    )
-                )
+                self._show_toast(t("update.success"), "success")
             else:
-                page.open(
-                    ft.SnackBar(
-                        content=ft.Text(t("update.failed")), bgcolor=ft.Colors.RED_700
-                    )
-                )
+                self._show_toast(t("update.failed"), "error")
             page.update()
 
         threading.Thread(target=update_task, daemon=True).start()
@@ -460,10 +471,8 @@ class SettingsDrawer(ft.NavigationDrawer):
                 ) = AppUpdateService.check_for_updates()
 
                 if not available and current:
-                    page.open(
-                        ft.SnackBar(
-                            content=ft.Text(t("app_update.up_to_date", version=current))
-                        )
+                    self._show_toast(
+                        t("app_update.up_to_date", version=current), "info"
                     )
                     page.update()
                     return
@@ -471,20 +480,10 @@ class SettingsDrawer(ft.NavigationDrawer):
                 if available and download_url:
                     self._show_app_update_dialog(page, current, latest, download_url)
                 else:
-                    page.open(
-                        ft.SnackBar(
-                            content=ft.Text(t("app_update.check_failed")),
-                            bgcolor=ft.Colors.RED_700,
-                        )
-                    )
+                    self._show_toast(t("app_update.check_failed"), "error")
                     page.update()
-            except Exception as ex:
-                page.open(
-                    ft.SnackBar(
-                        content=ft.Text(t("app_update.check_failed")),
-                        bgcolor=ft.Colors.RED_700,
-                    )
-                )
+            except Exception:
+                self._show_toast(t("app_update.check_failed"), "error")
                 page.update()
 
         threading.Thread(target=check_task, daemon=True).start()
@@ -590,12 +589,7 @@ class SettingsDrawer(ft.NavigationDrawer):
                 os._exit(0)
             else:
                 page.close(progress_dlg)
-                page.open(
-                    ft.SnackBar(
-                        content=ft.Text(t("app_update.extract_failed")),
-                        bgcolor=ft.Colors.RED_700,
-                    )
-                )
+                self._show_toast(t("app_update.extract_failed"), "error")
                 page.update()
 
         threading.Thread(target=update_task, daemon=True).start()

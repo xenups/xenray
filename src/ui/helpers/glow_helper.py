@@ -18,7 +18,7 @@ class GlowHelper:
     def update_horizon_glow(self, state: str):
         """
         Update horizon glow color based on state.
-        
+
         Args:
             state: 'connecting', 'connected', or 'disconnected'
         """

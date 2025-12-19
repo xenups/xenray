@@ -39,10 +39,10 @@ def _atomic_write(file_path: str, content: str, mode: str = "w") -> bool:
     """
     try:
         temp_path = file_path + ".tmp"
-        
+
         # Ensure directory exists
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
-        
+
         with open(temp_path, mode, encoding="utf-8") as f:
             f.write(content)
         # Atomic rename (works on both Windows and Unix)
@@ -95,7 +95,9 @@ class ConfigManager:
                     if port_str == str(OLD_PORT):
                         # Migrate to new default
                         _atomic_write(port_path, str(DEFAULT_PROXY_PORT))
-                        logger.info(f"Migrated port from {OLD_PORT} to {DEFAULT_PROXY_PORT}")
+                        logger.info(
+                            f"Migrated port from {OLD_PORT} to {DEFAULT_PROXY_PORT}"
+                        )
             except Exception as e:
                 logger.debug(f"Port migration check failed: {e}")
 
@@ -366,32 +368,56 @@ class ConfigManager:
         subs = [s for s in subs if s.get("id") != sub_id]
         self._save_json_list("subscriptions.json", subs)
 
-    def _load_json_list(self, filename: str) -> List[dict]:
+    def _load_json_list(self, filename: str, default_type=list, default_val=None):
+        if default_val is None:
+            default_val = [] if default_type is list else {}
+
         path = os.path.join(self._config_dir, filename)
         if not os.path.exists(path):
-            return []
+            return default_val
         try:
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                return data if isinstance(data, list) else []
+                # Validation: ensure loaded data matches expected type (list vs dict)
+                if isinstance(data, default_type):
+                    return data
+                return default_val
         except Exception as e:
-            logger.error(f"Error loading {filename}: {e}")
-            return []
+            logger.error(f"Failed to load {filename}: {e}")
+            return default_val
 
-    def _save_json_list(self, filename: str, data: List[dict]) -> bool:
+    def _save_json_list(self, filename: str, data):
+        # We use atomic write via _atomic_write_json but we need to pass full path?
+        # No, _atomic_write_json takes full path. Use helper logic here.
         path = os.path.join(self._config_dir, filename)
-        return _atomic_write_json(path, data)
+        try:
+            _atomic_write_json(path, data)
+        except Exception as e:
+            logger.error(f"Failed to save {filename}: {e}")
 
-    def get_profile_config(self, profile_id: str) -> Optional[dict]:
-        """Get config for a specific profile."""
+    def get_profile_by_id(self, profile_id: str) -> Optional[dict]:
+        """Get a profile by ID, searching both local profiles and subscriptions."""
         if not profile_id:
             return None
 
+        # 1. Search local profiles
         profiles = self.load_profiles()
         for p in profiles:
             if p.get("id") == profile_id:
-                return p.get("config")
+                return p
+
+        # 2. Search subscriptions
+        subs = self.load_subscriptions()
+        for sub in subs:
+            for p in sub.get("profiles", []):
+                if p.get("id") == profile_id:
+                    return p
         return None
+
+    def get_profile_config(self, profile_id: str) -> Optional[dict]:
+        """Get config for a specific profile."""
+        profile = self.get_profile_by_id(profile_id)
+        return profile.get("config") if profile else None
 
     def get_last_selected_profile_id(self) -> Optional[str]:
         """Get last selected profile ID."""
@@ -664,31 +690,3 @@ class ConfigManager:
     def save_dns_config(self, dns_list: list):
         """Save DNS configuration."""
         self._save_json_list("dns_config.json", dns_list)
-
-    # --- Internal Helpers ---
-    def _load_json_list(self, filename: str, default_type=list, default_val=None):
-        if default_val is None:
-            default_val = [] if default_type is list else {}
-
-        path = os.path.join(self._config_dir, filename)
-        if not os.path.exists(path):
-            return default_val
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                # Validation: ensure loaded data matches expected type (list vs dict)
-                if isinstance(data, default_type):
-                    return data
-                return default_val
-        except Exception as e:
-            logger.error(f"Failed to load {filename}: {e}")
-            return default_val
-
-    def _save_json_list(self, filename: str, data):
-        # We use atomic write via _atomic_write_json but we need to pass full path?
-        # No, _atomic_write_json takes full path. Use helper logic here.
-        path = os.path.join(self._config_dir, filename)
-        try:
-            _atomic_write_json(path, data)
-        except Exception as e:
-            logger.error(f"Failed to save {filename}: {e}")

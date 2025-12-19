@@ -11,7 +11,6 @@ from PIL import Image
 from src.core.constants import APPDIR
 from src.core.i18n import t
 from src.core.logger import logger
-from src.utils.platform_utils import PlatformUtils
 
 if TYPE_CHECKING:
     from src.ui.main_window import MainWindow
@@ -24,17 +23,17 @@ class SystrayHandler:
         self._main = main_window
         self._icon: Optional[pystray.Icon] = None
         self._tray_thread: Optional[threading.Thread] = None
-        
+
         # Load icon image
         self._icon_image = self._load_icon()
-        
+
     def _load_icon(self) -> Image.Image:
         """Load the application icon using Pillow."""
         icon_path = os.path.join(APPDIR, "assets", "icon.png")
         if not os.path.exists(icon_path):
             # Fallback to ico if png doesn't exist (though pystray handles PIL images best)
             icon_path = os.path.join(APPDIR, "assets", "icon.ico")
-            
+
         try:
             return Image.open(icon_path)
         except Exception as e:
@@ -51,9 +50,9 @@ class SystrayHandler:
             name="XenRay",
             icon=self._icon_image,
             title="XenRay",
-            menu=self._create_menu()
+            menu=self._create_menu(),
         )
-        
+
         # Start tray in a separate thread or detached
         # run_detached works well on Windows, but threading.Thread is safer cross-platform
         try:
@@ -69,7 +68,9 @@ class SystrayHandler:
         if self._main._is_running:
             toggle_label = t("tray.disconnect")
             status_text = t("tray.connected_to").format(
-                server=self._main._selected_profile.get("name", "Unknown") if self._main._selected_profile else "..."
+                server=self._main._selected_profile.get("name", "Unknown")
+                if self._main._selected_profile
+                else "..."
             )
         else:
             toggle_label = t("tray.connect")
@@ -81,7 +82,7 @@ class SystrayHandler:
             pystray.MenuItem(t("tray.open"), self._on_open, default=True),
             pystray.MenuItem(toggle_label, self._on_toggle_connect),
             pystray.Menu.SEPARATOR,
-            pystray.MenuItem(t("tray.exit"), self._on_exit)
+            pystray.MenuItem(t("tray.exit"), self._on_exit),
         ]
         return pystray.Menu(*menu_items)
 
@@ -89,10 +90,10 @@ class SystrayHandler:
         """Update the menu and title when connection state changes."""
         if not self._icon:
             return
-        
+
         # Refresh the menu to update Connect/Disconnect labels
         self._icon.menu = self._create_menu()
-        
+
     def update_title(self, title: str):
         """Update the hover tooltip."""
         if self._icon:
@@ -107,6 +108,7 @@ class SystrayHandler:
     # --- Callbacks ---
     def _on_open(self, icon, item):
         """Restore window callback."""
+
         def _show():
             try:
                 self._main._page.window.visible = True
@@ -115,7 +117,7 @@ class SystrayHandler:
                 self._main._page.update()
             except Exception as e:
                 logger.debug(f"Systray restore error: {e}")
-        
+
         try:
             self._main._ui_call(_show)
         except Exception as e:
@@ -134,15 +136,16 @@ class SystrayHandler:
         try:
             # This will trigger the full cleanup and exit logic
             icon.stop()
-            
+
             # We use the MainWindow's cleanup or call ProcessUtils
             from src.utils.process_utils import ProcessUtils
+
             try:
                 # First try graceful cleanup
                 self._main.cleanup()
             except Exception:
                 pass
-                
+
             ProcessUtils.kill_process_tree()
             os._exit(0)
         except Exception as e:

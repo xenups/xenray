@@ -13,7 +13,7 @@ class ServerCard(ft.Container):
 
         # Icon Container (Holds Flag or Globe)
         self._globe_icon = ft.Icon(
-            ft.Icons.PUBLIC, size=20, color=ft.Colors.ON_SURFACE_VARIANT
+            ft.Icons.PUBLIC, size=28, color=ft.Colors.ON_SURFACE_VARIANT
         )
         self._icon_container = ft.Container(
             content=self._globe_icon,
@@ -34,8 +34,8 @@ class ServerCard(ft.Container):
             max_lines=1,
         )
         self._address_text = ft.Text(
-            "", 
-            size=11, 
+            "",
+            size=11,
             color=ft.Colors.ON_SURFACE_VARIANT,
             overflow=ft.TextOverflow.ELLIPSIS,
             max_lines=1,
@@ -81,9 +81,10 @@ class ServerCard(ft.Container):
             ]
         )
 
-        # Initialize with glass-like gradient
+        # Initialize with solid gradient + subtle overlay
         super().__init__(
             content=self._content_row,
+            bgcolor="#121212",  # Solid background to prevent transparency issues
             gradient=ft.LinearGradient(
                 begin=ft.alignment.top_left,
                 end=ft.alignment.bottom_right,
@@ -94,18 +95,10 @@ class ServerCard(ft.Container):
                 ],
                 tile_mode=ft.GradientTileMode.CLAMP,
             ),
-            # Removed bgcolor to allow gradient to show through
-            blur=ft.Blur(15, 15, ft.BlurTileMode.MIRROR), # High blur
             border=ft.border.all(1, ft.Colors.with_opacity(0.15, ft.Colors.WHITE)),
             border_radius=20,
             padding=ft.padding.symmetric(horizontal=16, vertical=14),
             margin=ft.margin.only(left=20, right=20, bottom=16),
-            shadow=ft.BoxShadow(
-                spread_radius=0,
-                blur_radius=20,
-                color=ft.Colors.with_opacity(0.2, ft.Colors.BLACK),
-                offset=ft.Offset(0, 4),
-            ),
             on_click=on_click,
             animate=ft.Animation(300, ft.AnimationCurve.EASE_OUT),
         )
@@ -117,23 +110,21 @@ class ServerCard(ft.Container):
 
     def _update_gradient_colors(self):
         """Update gradient with current country colors."""
-        color1, color2 = self._current_colors
-        self.gradient = ft.LinearGradient(
-            begin=ft.alignment.top_left,
-            end=ft.alignment.bottom_right,
-            colors=[
-                ft.Colors.with_opacity(0.35, color1),
-                ft.Colors.with_opacity(0.20, color2),
-                ft.Colors.with_opacity(0.12, color1),
-            ],
-            tile_mode=ft.GradientTileMode.CLAMP,
+        from src.ui.helpers.gradient_helper import GradientHelper
+
+        cc = (
+            self._profile.get("country_code")
+            if hasattr(self, "_profile") and self._profile
+            else None
         )
+        self.gradient = GradientHelper.get_flag_gradient(cc)
 
     def update_server(self, profile):
         """Update server card with profile data."""
         from src.core.city_translator import translate_city
         from src.core.country_translator import translate_country
 
+        self._profile = profile  # CRITICAL: Save profile so gradient helper can find it
         if not profile:
             self._icon_container.content = self._globe_icon
             self._name_text.value = t("server_list.no_server")
@@ -202,14 +193,30 @@ class ServerCard(ft.Container):
             )
             self._globe_icon.color = ft.Colors.ON_SURFACE_VARIANT
             self._list_btn.bgcolor = ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE)
-            self.shadow.color = ft.Colors.with_opacity(0.15, ft.Colors.BLACK)
+            # Safe shadow update
+            if self.shadow:
+                if isinstance(self.shadow, list):
+                    if len(self.shadow) > 0:
+                        self.shadow[0].color = ft.Colors.with_opacity(
+                            0.15, ft.Colors.BLACK
+                        )
+                else:
+                    self.shadow.color = ft.Colors.with_opacity(0.15, ft.Colors.BLACK)
         else:
             self.border = ft.border.all(
                 1, ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE)
             )
             self._globe_icon.color = ft.Colors.ON_SURFACE_VARIANT
             self._list_btn.bgcolor = ft.Colors.with_opacity(0.08, ft.Colors.ON_SURFACE)
-            self.shadow.color = ft.Colors.with_opacity(0.08, ft.Colors.BLACK)
+            # Safe shadow update
+            if self.shadow:
+                if isinstance(self.shadow, list):
+                    if len(self.shadow) > 0:
+                        self.shadow[0].color = ft.Colors.with_opacity(
+                            0.08, ft.Colors.BLACK
+                        )
+                else:
+                    self.shadow.color = ft.Colors.with_opacity(0.08, ft.Colors.BLACK)
 
         self._update_gradient_colors()
         self.update()

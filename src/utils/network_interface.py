@@ -1,5 +1,4 @@
 """Network interface utilities for Windows."""
-import os
 import re
 import subprocess
 from typing import Optional, Tuple

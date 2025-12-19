@@ -170,7 +170,7 @@ class PortInputRow(ft.Container):
         self._field = ft.TextField(
             value=str(initial_value),
             width=100,
-            height=36,
+            height=40,
             text_size=14,
             content_padding=8,
             keyboard_type=ft.KeyboardType.NUMBER,
@@ -183,7 +183,7 @@ class PortInputRow(ft.Container):
             content=ft.Row(
                 [
                     ft.Icon(
-                        ft.Icons.INPUT, size=20, color=ft.Colors.ON_SURFACE_VARIANT
+                        ft.Icons.INPUT, size=24, color=ft.Colors.ON_SURFACE_VARIANT
                     ),
                     ft.Text(
                         t("settings.socks_port"),
@@ -192,19 +192,19 @@ class PortInputRow(ft.Container):
                         width=80,
                     ),
                     self._field,
-                    ft.ElevatedButton(
-                        text=t("settings.save"),
-                        height=30,
-                        style=ft.ButtonStyle(
-                            padding=ft.padding.symmetric(horizontal=10),
-                            shape=ft.RoundedRectangleBorder(radius=4),
-                        ),
+                    ft.IconButton(
+                        icon=ft.Icons.CHECK,
+                        icon_size=20,
+                        icon_color=ft.Colors.PRIMARY,
+                        tooltip=t("settings.save"),
                         on_click=lambda e: on_save(self._field.value),
                     ),
                 ],
                 spacing=5,
+                alignment=ft.MainAxisAlignment.START,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
             ),
-            padding=ft.padding.only(left=5, top=5, right=20, bottom=5),
+            padding=ft.padding.symmetric(horizontal=10, vertical=8),
         )
 
     @property
@@ -221,7 +221,7 @@ class CountryDropdownRow(ft.Container):
 
     def __init__(self, current_value: str, on_change: Callable):
         self._dropdown = ft.Dropdown(
-            width=100,
+            width=120,
             text_size=12,
             content_padding=8,
             value=current_value if current_value else "none",
@@ -240,7 +240,7 @@ class CountryDropdownRow(ft.Container):
             content=ft.Row(
                 [
                     ft.Icon(
-                        ft.Icons.PUBLIC, size=20, color=ft.Colors.ON_SURFACE_VARIANT
+                        ft.Icons.PUBLIC, size=24, color=ft.Colors.ON_SURFACE_VARIANT
                     ),
                     ft.Text(
                         t("settings.direct_country"),
@@ -250,9 +250,11 @@ class CountryDropdownRow(ft.Container):
                     ),
                     self._dropdown,
                 ],
-                spacing=5,
+                spacing=8,
+                alignment=ft.MainAxisAlignment.START,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
             ),
-            padding=ft.padding.symmetric(horizontal=5, vertical=5),
+            padding=ft.padding.symmetric(horizontal=8, vertical=8),
         )
 
     @property
@@ -320,18 +322,30 @@ class LanguageDropdownRow(ft.Container):
         super().__init__(
             content=ft.Row(
                 [
-                    self._flag_image,
-                    ft.Text(
-                        t("settings.language"),
-                        size=12,
-                        weight=ft.FontWeight.W_500,
+                    ft.Column(
+                        [
+                            ft.Container(
+                                content=self._flag_image,
+                                alignment=ft.alignment.center,
+                            ),
+                            ft.Text(
+                                t("settings.language"),
+                                size=11,
+                                weight=ft.FontWeight.W_500,
+                                text_align=ft.TextAlign.CENTER,
+                            ),
+                        ],
+                        spacing=4,
+                        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                         width=60,
                     ),
                     self._dropdown,
                 ],
                 spacing=8,
+                alignment=ft.MainAxisAlignment.START,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
             ),
-            padding=ft.padding.symmetric(horizontal=5, vertical=5),
+            padding=ft.padding.symmetric(horizontal=10, vertical=8),
         )
 
     @property

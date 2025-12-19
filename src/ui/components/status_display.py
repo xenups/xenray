@@ -17,7 +17,9 @@ class StatusDisplay(ft.Container):
         self._is_connected = False
 
         # Status Label (initial instance)
-        self._status_label = self._create_label(t("app.disconnected"), ft.Colors.ORANGE_400)
+        self._status_label = self._create_label(
+            t("app.disconnected"), ft.Colors.ORANGE_400
+        )
 
         # Animated Switcher for Morphism
         self._switcher = ft.AnimatedSwitcher(
@@ -62,10 +64,6 @@ class StatusDisplay(ft.Container):
         self._switcher.content = self._status_label
         self.update()
 
-    def update_country(self, country_data: dict = None):
-        """Country display moved to ServerCard."""
-        pass
-
     def set_step(self, msg: str):
         """Updates the status text during connection steps."""
         self._update_label(msg, ft.Colors.AMBER_400)
@@ -80,12 +78,12 @@ class StatusDisplay(ft.Container):
     def set_connecting(self):
         self._update_label(t("app.connecting"), ft.Colors.AMBER_400)
 
-    def set_connected(self, is_vpn: bool = True, country_data: dict = None):
+    def set_connected(self, country_data: dict = None):
         """Sets status to Connected."""
         self._is_connected = True
         self._update_label(t("app.connected"), "#7c3aed")  # Purple
 
-    def set_disconnected(self, mode_name: str = ""):
+    def set_disconnected(self):
         """Reset to disconnected state."""
         self._is_connected = False
         self._update_label(t("app.disconnected"), ft.Colors.ORANGE_400)
@@ -118,9 +116,3 @@ class StatusDisplay(ft.Container):
                 status_color = ft.Colors.RED_400
 
         self._update_label(status_text, status_color)
-
-    def update_network_stats(self, download_speed: str, upload_speed: str):
-        """Update the network stats display."""
-        # Note: Not currently using stats row in this simplified view, 
-        # but kept for potential future use or to avoid breakage if called.
-        pass
