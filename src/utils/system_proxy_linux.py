@@ -152,7 +152,7 @@ class SystemProxyLinux:
         """
         try:
             # KDE uses kioslaverc configuration file
-            config_file = os.path.expanduser("~/.config/kioslaverc")
+            os.path.expanduser("~/.config/kioslaverc")
 
             # Set proxy mode to manual
             subprocess.run(

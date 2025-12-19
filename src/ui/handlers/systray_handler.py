@@ -11,7 +11,6 @@ from PIL import Image
 from src.core.constants import APPDIR
 from src.core.i18n import t
 from src.core.logger import logger
-from src.utils.platform_utils import PlatformUtils
 
 if TYPE_CHECKING:
     from src.ui.main_window import MainWindow

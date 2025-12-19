@@ -94,7 +94,6 @@ class DrawerManager:
                 if profile.get("id") == last_profile_id:
                     self._main._selected_profile = profile
                     self._main._server_card.update_server(profile)
-                    self._main._status_display.update_country(profile)
                     break
 
     def open_server_drawer(self, e=None):

@@ -299,8 +299,6 @@ class MainWindow:
         self._selected_profile = profile
         self._server_card.update_server(profile)
         self._server_sheet.open = False
-        # Immediately update status display with country info (persistent)
-        self._status_display.update_country(profile)
         self._page.update()  # Update page to close sheet
 
     def _handle_pre_connection_test(self, success, result_str, country_data, profile):
@@ -318,9 +316,6 @@ class MainWindow:
                     profile.get("id"), country_data
                 )
                 # Update display
-                self._ui_call(
-                    lambda: self._status_display.update_country(country_data)
-                )
                 self._ui_call(lambda: self._server_card.update_server(profile))
 
                 if country_data.get("country_code"):
@@ -425,8 +420,7 @@ class MainWindow:
                     # Visual Updates (Pass current profile state)
                     # We use lambda to capture specific values or allow delayed execution,
                     # but here we want to ensure self._selected_profile is read at call time.
-                    self._ui_call(lambda: self._status_display.update_country(profile))
-                    self._ui_call(lambda: self._server_card.update_server(profile))
+                    self._ui_call(self._server_card.update_server, profile)
 
                     if country_data and country_data.get("country_code"):
                         self._ui_call(
@@ -618,8 +612,7 @@ class MainWindow:
         if updated_profile.get("id") == self._selected_profile.get("id"):
             # Update local reference
             self._selected_profile.update(updated_profile)
-            # Update Status Display
-            self._ui_call(lambda: self._status_display.update_country(updated_profile))
+            self._ui_call(self._server_card.update_server, updated_profile)
             # Update Server Card
             self._ui_call(
                 lambda: self._server_card.update_server(self._selected_profile)
@@ -674,9 +667,6 @@ class MainWindow:
                                 self._selected_profile.update(country_data)
                                 self._config_manager.update_profile(
                                     self._selected_profile.get("id"), country_data
-                                )
-                                self._ui_call(
-                                    self._status_display.update_country, country_data
                                 )
 
                     from src.services.connection_tester import ConnectionTester

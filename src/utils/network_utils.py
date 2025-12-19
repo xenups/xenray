@@ -21,7 +21,6 @@ class NetworkUtils:
         except Exception as e:
             logger.warning(f"Internet connection check failed: {e}")
             return False
-            return False
 
     @staticmethod
     def check_proxy_connectivity(port: int, target_url="http://www.gstatic.com/generate_204", timeout=5) -> bool:

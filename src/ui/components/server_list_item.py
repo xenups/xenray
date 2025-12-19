@@ -5,7 +5,6 @@ from typing import Callable, Optional
 
 import json
 import flet as ft
-from src.core.i18n import t
 from src.utils.link_parser import LinkParser
 
 

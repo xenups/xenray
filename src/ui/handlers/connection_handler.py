@@ -132,7 +132,6 @@ class ConnectionHandler:
 
             self._main._ui_call(
                 self._main._status_display.set_connected,
-                True,
                 country_data=self._main._selected_profile,
             )
             self._main._ui_call(self._main._connection_button.set_connected)
@@ -199,14 +198,8 @@ class ConnectionHandler:
         self._main._connecting = False
         try:
             self._main._connection_button.set_disconnected()
-            self._main._status_display.set_disconnected(self._main._current_mode)
+            self._main._status_display.set_disconnected()
             self._main._update_horizon_glow("disconnected")
-
-            # Ensure country info is visible/refreshed
-            if self._main._selected_profile:
-                self._main._status_display.update_country(self._main._selected_profile)
-            else:
-                self._main._status_display.update_country(None)
 
             # Trigger immediate latency check
             if self._main._selected_profile:
@@ -231,9 +224,7 @@ class ConnectionHandler:
                             self._main._config_manager.update_profile(
                                 self._main._selected_profile.get("id"), country_data
                             )
-                            self._main._ui_call(
-                                self._main._status_display.update_country, country_data
-                            )
+                            # Removed: self._main._ui_call(self._main._status_display.update_country, country_data)
                     else:
                         logger.debug("[ConnectionHandler] Skipping ping update: Connection in progress")
 
