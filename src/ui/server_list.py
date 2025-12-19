@@ -26,11 +26,13 @@ class ServerList(ft.Container):
         config_manager: ConfigManager,
         on_server_selected: Callable,
         on_profile_updated: Callable = None,
+        toast_manager = None,
     ):
         self._config_manager = config_manager
         self._subscription_manager = SubscriptionManager(config_manager)
         self._on_server_selected = on_server_selected
         self._on_profile_updated = on_profile_updated
+        self._toast = toast_manager
 
         # Data
         self._profiles: list[dict] = []
@@ -139,7 +141,9 @@ class ServerList(ft.Container):
             cached = self._latency_tester.get_cached_result(pid)
             if cached:
                 return cached[2]  # latency_val
-            return 999999
+            # Fallback to saved latency
+            val = item.get("last_latency_val")
+            return val if val is not None else 999999
 
         if mode == "name_asc":
             return sorted(items, key=lambda x: x.get("name", "").lower())
@@ -183,7 +187,11 @@ class ServerList(ft.Container):
             # Add subscriptions
             for sub in self._subscriptions:
                 new_list_view.controls.append(
-                    SubscriptionListItem(sub, self._enter_subscription_view)
+                    SubscriptionListItem(
+                        sub, 
+                        on_click=self._enter_subscription_view,
+                        on_delete=self._delete_subscription
+                    )
                 )
 
             # Add profiles
@@ -210,6 +218,17 @@ class ServerList(ft.Container):
             else:
                 self._current_list_view = new_list_view
                 self._body_switcher.content = new_list_view
+            
+            # Restart testing if it was in progress (Prioritize new sort order)
+            if self._latency_tester.is_testing:
+                # Filter out already cached profiles to avoid re-testing
+                untested = []
+                for p in self._profiles:
+                    if not self._latency_tester.get_cached_result(p.get("id")):
+                        untested.append(p)
+                
+                if untested:
+                    self._latency_tester.restart_testing(untested)
 
         if update_ui:
             threading.Thread(target=_task, daemon=True).start()
@@ -249,6 +268,17 @@ class ServerList(ft.Container):
         except Exception:
             pass
 
+        # Restart testing if it was in progress (Prioritize new sort order)
+        if self._latency_tester.is_testing:
+           # Filter out already cached profiles
+           untested = []
+           for p in profiles:
+               if not self._latency_tester.get_cached_result(p.get("id")):
+                   untested.append(p)
+           
+           if untested:
+               self._latency_tester.restart_testing(untested)
+
     def _exit_subscription_view(self):
         """Exit subscription view and return to main list."""
         self._latency_tester.cancel()
@@ -274,9 +304,7 @@ class ServerList(ft.Container):
         if not profiles:
             return
 
-        if self._page:
-            self._page.open(ft.SnackBar(content=ft.Text(t("server_list.test_started"))))
-            self._page.update()
+
 
         self._latency_tester.test_profiles(profiles)
 
@@ -328,6 +356,7 @@ class ServerList(ft.Container):
                 else None,
             }
             if self._active_subscription:
+                profile.update(latency_data)  # Update reference inside subscription
                 self._config_manager.save_subscription_data(self._active_subscription)
             else:
                 self._config_manager.update_profile(pid, latency_data)
@@ -356,9 +385,8 @@ class ServerList(ft.Container):
         self._config_manager.delete_profile(profile_id)
         self._load_profiles(update_ui=True)
         if self._page:
-            self._page.open(
-                ft.SnackBar(content=ft.Text(t("server_list.server_deleted")))
-            )
+            if self._toast:
+                self._toast.success(t("server_list.server_deleted"))
             self._page.update()
 
     # --- Subscription Actions ---
@@ -366,27 +394,17 @@ class ServerList(ft.Container):
         """Update a subscription."""
         if not self._page:
             return
-        self._page.open(
-            ft.SnackBar(content=ft.Text(t("server_list.updating_subscription")))
-        )
+        if self._toast:
+            self._toast.info(t("server_list.updating_subscription"))
         self._page.update()
 
         def callback(success, msg):
             def _ui_update():
-                if success:
-                    self._page.open(
-                        ft.SnackBar(content=ft.Text(msg, color=ft.Colors.GREEN_400))
-                    )
-                    self._load_profiles(update_ui=True)
-                else:
-                    self._page.open(
-                        ft.SnackBar(
-                            content=ft.Text(
-                                t("server_list.update_failed", msg=msg),
-                                color=ft.Colors.RED_400,
-                            )
-                        )
-                    )
+                if self._toast:
+                    if success:
+                        self._toast.success(msg)
+                    else:
+                        self._toast.error(t("server_list.update_failed", msg=msg))
                 self._page.update()
 
             self._ui(_ui_update)
@@ -398,9 +416,8 @@ class ServerList(ft.Container):
         self._config_manager.delete_subscription(sub_id)
         self._load_profiles(update_ui=True)
         if self._page:
-            self._page.open(
-                ft.SnackBar(content=ft.Text(t("server_list.subscription_deleted")))
-            )
+            if self._toast:
+                self._toast.success(t("server_list.subscription_deleted"))
             self._page.update()
 
     def _delete_and_exit_subscription(self, sub_id: str):
@@ -425,27 +442,17 @@ class ServerList(ft.Container):
     def _handle_server_added(self, name: str, config: dict):
         """Handle a new server being added."""
         self._config_manager.save_profile(name, config)
-        if self._page:
-            self._page.open(
-                ft.SnackBar(
-                    content=ft.Text(
-                        t("add_dialog.server_added", name=name),
-                        color=ft.Colors.GREEN_400,
-                    )
-                )
+        if self._toast:
+            self._toast.success(
+                t("add_dialog.server_added", name=name)
             )
         self._load_profiles(update_ui=True)
 
     def _handle_subscription_added(self, name: str, url: str):
         """Handle a new subscription being added."""
         self._config_manager.save_subscription(name, url)
-        if self._page:
-            self._page.open(
-                ft.SnackBar(
-                    content=ft.Text(
-                        t("add_dialog.subscription_added", name=name),
-                        color=ft.Colors.GREEN_400,
-                    )
-                )
+        if self._toast:
+            self._toast.success(
+                t("add_dialog.subscription_added", name=name)
             )
         self._load_profiles(update_ui=True)

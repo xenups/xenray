@@ -24,6 +24,7 @@ from src.ui.handlers.connection_handler import ConnectionHandler
 from src.ui.handlers.systray_handler import SystrayHandler
 from src.ui.managers.drawer_manager import DrawerManager
 from src.ui.builders.ui_builder import UIBuilder
+from src.ui.components.toast import ToastManager
 from src.ui.helpers.glow_helper import GlowHelper
 
 
@@ -62,6 +63,9 @@ class MainWindow:
         # --- Services ---
         self._network_stats = NetworkStatsService()
         
+        # --- Toast Manager ---
+        self._toast = None  # Will be initialized after page setup
+        
         # --- Handlers ---
         self._network_stats_handler = NetworkStatsHandler(self)
         self._connection_handler = ConnectionHandler(self)
@@ -73,12 +77,22 @@ class MainWindow:
         # --- Initialization ---
         self._define_callbacks()
         self._setup_page()
+        
+        # Initialize toast manager after page setup
+        self._toast = ToastManager(self._page)
+        # Store in page for components to access
+        self._page._toast_manager = self._toast
+        
         self._ui_builder.build_ui()  # Delegate to builder
         self._drawer_manager.setup_drawers()  # Delegate to manager
         self._systray.setup()  # Initialize system tray
 
         # Start background tasks
         self._page.run_task(self._start_ui_tasks)
+
+        # Initialize UI with selected profile if exists
+        if self._selected_profile:
+            self._update_selected_profile_ui(self._selected_profile)
 
     # -----------------------------
     # Define callbacks
@@ -112,6 +126,16 @@ class MainWindow:
         self._page.theme_mode = (
             ft.ThemeMode.DARK if saved_theme == "dark" else ft.ThemeMode.LIGHT
         )
+
+        # Load last selected profile (from local OR subscriptions)
+        last_profile_id = self._config_manager.get_last_selected_profile_id()
+        if last_profile_id:
+            profile = self._config_manager.get_profile_by_id(last_profile_id)
+            if profile:
+                self._selected_profile = profile
+                # We can't update UI here as it's not built yet, but we set the state
+                # The components (ServerCard, StatusDisplay) will need to be updated after build or in __init__
+
 
     # -----------------------------
     # Helper: Thread-safe UI call
@@ -201,10 +225,10 @@ class MainWindow:
     # -----------------------------
     def _on_connect_clicked_impl(self, e=None):
         if not self._selected_profile:
-            self._show_snackbar("Please select a server first")
+            self._show_toast("Please select a server first", "warning")
             return
         if self._connecting:
-            self._show_snackbar("Connection in progress...")
+            self._show_toast("Connection in progress...")
             return
 
         # Admin Check for VPN Mode
@@ -541,11 +565,10 @@ class MainWindow:
         # Force a page update to ensure theme mode change applies globally
         self._page.update()
 
-    def _show_snackbar(self, message: str):
-        def _set():
-            self._page.open(ft.SnackBar(ft.Text(message)))
-
-        self._ui_call(_set)
+    def _show_toast(self, message: str, message_type: str = "info"):
+        """Show a toast notification."""
+        if self._toast:
+            self._toast.show(message, message_type)
 
     def _run_specific_installer(self, component: str):
         progress = ft.ProgressRing()
@@ -578,9 +601,9 @@ class MainWindow:
                         stop_service_callback=self._connection_manager.disconnect,
                     )
 
-                self._show_snackbar(f"{component} Update Complete!")
+                self._show_toast(f"{component} Update Complete!", "success")
             except Exception as e:
-                self._show_snackbar(f"Error: {e}")
+                self._show_toast(f"Error: {e}", "error")
             finally:
                 self._ui_call(lambda: self._page.close(dialog))
 
@@ -606,7 +629,7 @@ class MainWindow:
         from src.utils.process_utils import ProcessUtils
 
         if mode == ConnectionMode.VPN and not ProcessUtils.is_admin():
-            self._show_snackbar("Admin rights required for VPN mode")
+            self._show_toast("Admin rights required for VPN mode", "warning")
             return
 
         self._current_mode = mode

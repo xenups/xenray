@@ -33,6 +33,7 @@ class DrawerManager:
             self._main._config_manager,
             self._main._on_server_selected,
             on_profile_updated=self._main._on_profile_updated,
+            toast_manager=self._main._toast,
         )
         self._main._server_list.set_page(self._main._page)
 

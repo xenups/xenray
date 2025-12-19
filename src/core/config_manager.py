@@ -382,16 +382,29 @@ class ConfigManager:
         path = os.path.join(self._config_dir, filename)
         return _atomic_write_json(path, data)
 
-    def get_profile_config(self, profile_id: str) -> Optional[dict]:
-        """Get config for a specific profile."""
+    def get_profile_by_id(self, profile_id: str) -> Optional[dict]:
+        """Get a profile by ID, searching both local profiles and subscriptions."""
         if not profile_id:
             return None
 
+        # 1. Search local profiles
         profiles = self.load_profiles()
         for p in profiles:
             if p.get("id") == profile_id:
-                return p.get("config")
+                return p
+
+        # 2. Search subscriptions
+        subs = self.load_subscriptions()
+        for sub in subs:
+            for p in sub.get("profiles", []):
+                if p.get("id") == profile_id:
+                    return p
         return None
+
+    def get_profile_config(self, profile_id: str) -> Optional[dict]:
+        """Get config for a specific profile."""
+        profile = self.get_profile_by_id(profile_id)
+        return profile.get("config") if profile else None
 
     def get_last_selected_profile_id(self) -> Optional[str]:
         """Get last selected profile ID."""

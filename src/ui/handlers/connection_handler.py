@@ -67,6 +67,14 @@ class ConnectionHandler:
     def _perform_connect_task(self):
         """Core connection logic reused by connect_async and reconnect."""
         try:
+            # Check Internet Connectivity (in background thread)
+            from src.utils.network_utils import NetworkUtils
+            if not NetworkUtils.check_internet_connection():
+                 self._main._connecting = False
+                 self._main._ui_call(self.reset_ui_disconnected)
+                 self._main._show_snackbar("No Internet Connection", "error")
+                 return
+
             profile_config = (
                 self._main._selected_profile.get("config") if self._main._selected_profile else {}
             )
@@ -97,10 +105,29 @@ class ConnectionHandler:
             if not success:
                 self._main._connecting = False
                 self._main._ui_call(self.reset_ui_disconnected)
-                self._main._show_snackbar("Connection Failed")
+                self._main._show_snackbar("Connection Failed", "error")
                 return
 
             self._main._is_running = True
+            
+            # --- Post-Connection Internet Check ---
+            # Wait a brief moment for core to stabilize
+            import time
+            time.sleep(1)
+            
+            self._main._ui_call(self._main._status_display.set_step, "Verifying Internet Access...")
+            
+            proxy_port = self._main._config_manager.get_proxy_port()
+            if not NetworkUtils.check_proxy_connectivity(proxy_port):
+                logger.error("Post-connection internet check failed")
+                self._main._connecting = False
+                # Use disconnect to cleanup
+                self._main._connection_manager.disconnect()
+                self._main._ui_call(self.reset_ui_disconnected)
+                self._main._show_snackbar("Connected but No Internet Access", "warning")
+                return
+            # --------------------------------------
+
             self._main._connecting = False
 
             self._main._ui_call(
@@ -117,6 +144,8 @@ class ConnectionHandler:
             # Start network stats service
             if self._main._network_stats:
                 self._main._network_stats.start()
+                if self._main._logs_drawer_component:
+                    self._main._ui_call(self._main._logs_drawer_component.show_stats, True)
 
         except Exception as e:
             logger.error(f"Error in _perform_connect_task: {e}")
@@ -158,7 +187,6 @@ class ConnectionHandler:
             time.sleep(1.0)
             
             self._main._ui_call(self.reset_ui_disconnected)
-            self._main._ui_call(lambda: self._main._show_snackbar("Disconnected"))
 
             # Update system tray state
             self._main._systray.update_state()

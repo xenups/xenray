@@ -7,45 +7,84 @@ import flet as ft
 
 
 class SubscriptionListItem(ft.Container):
-    """A subscription folder item in the server list."""
+    """
+    Subscription item with a simple popup menu.
+    """
 
-    def __init__(self, sub: dict, on_click: Callable[[dict], None]):
+    def __init__(self, sub: dict, on_click: Callable, on_delete: Callable = None):
+        super().__init__()
+        self.height = 65
         self._sub = sub
-        profiles = sub.get("profiles", [])
-        url_display = (
-            sub.get("url", "")[:30] + "..."
-            if len(sub.get("url", "")) > 30
-            else sub.get("url", "")
+        self._on_click = on_click
+        self._on_delete = on_delete
+
+        # --- Menu Items ---
+        menu_items = [
+            ft.PopupMenuItem(
+                text="Copy Link", 
+                icon=ft.Icons.LINK, 
+                on_click=self._copy_link
+            ),
+        ]
+        if on_delete:
+            menu_items.append(
+                ft.PopupMenuItem(
+                    text="Delete", 
+                    icon=ft.Icons.DELETE_OUTLINE_ROUNDED, 
+                    on_click=self._delete_item
+                )
+            )
+
+        self.menu_button = ft.PopupMenuButton(
+            items=menu_items,
+            icon=ft.Icons.MORE_VERT_ROUNDED,
+            icon_color=ft.Colors.GREY_400,
+            icon_size=20,
         )
 
-        super().__init__(
-            content=ft.ListTile(
-                leading=ft.Icon(ft.Icons.FOLDER, color=ft.Colors.PRIMARY, size=24),
-                title=ft.Text(
-                    sub["name"], 
-                    weight=ft.FontWeight.BOLD, 
-                    size=14,
-                    overflow=ft.TextOverflow.ELLIPSIS,
-                    max_lines=1,
+        # Custom Row to match ServerListItem metrics
+        foreground_content = ft.Row(
+            [
+                ft.Container(
+                    content=ft.Icon(ft.Icons.FOLDER_OPEN_ROUNDED, color=ft.Colors.BLUE_400, size=24),
+                    padding=ft.padding.only(left=5, right=10),
                 ),
-                subtitle=ft.Text(
-                    f"{len(profiles)} servers • {url_display}",
-                    size=11,
-                    color=ft.Colors.GREY_500,
-                    overflow=ft.TextOverflow.ELLIPSIS,
-                    max_lines=1,
+                ft.Column(
+                    [
+                        ft.Text(sub.get("name", "Unknown Subscription"), weight=ft.FontWeight.BOLD, size=14, no_wrap=True, overflow=ft.TextOverflow.ELLIPSIS),
+                        ft.Text(sub.get("url", ""), size=11, color=ft.Colors.GREY_500, no_wrap=True, overflow=ft.TextOverflow.ELLIPSIS),
+                    ],
+                    spacing=2,
+                    alignment=ft.MainAxisAlignment.CENTER,
+                    expand=True,
                 ),
-                trailing=ft.Icon(
-                    ft.Icons.ARROW_FORWARD_IOS, size=14, color=ft.Colors.GREY_400
-                ),
-                on_click=lambda e: on_click(sub),
-                dense=True,
-                content_padding=ft.padding.symmetric(horizontal=5, vertical=0),
-            ),
-            padding=0,
-            border_radius=8,
-            bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.PRIMARY),  # More transparent
-            blur=ft.Blur(15, 15, ft.BlurTileMode.MIRROR),  # Glass blur
-            border=ft.border.all(1, ft.Colors.with_opacity(0.15, ft.Colors.PRIMARY)),  # Subtle border
-            margin=ft.margin.only(bottom=2),
+                self.menu_button,
+            ],
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
         )
+
+        from src.ui.helpers.gradient_helper import GradientHelper
+        self.content = foreground_content
+        self.bgcolor = "#121212"
+        self.gradient = GradientHelper.get_flag_gradient(None) # Default gradient
+        self.border = ft.border.all(1, ft.Colors.OUTLINE_VARIANT) if hasattr(ft.Colors, "OUTLINE_VARIANT") else ft.border.all(1, ft.Colors.OUTLINE)
+        self.border_radius = 8
+        self.margin = ft.margin.symmetric(horizontal=10) # Added to reduce width
+        self.padding = ft.padding.symmetric(horizontal=10, vertical=8)
+        self.on_click = lambda _: self._on_click(self._sub)
+
+    def _copy_link(self, e):
+        try:
+            url = self._sub.get("url", "")
+            if self.page:
+                self.page.set_clipboard(url)
+                # Use toast manager if available
+                if hasattr(self.page, '_toast_manager'):
+                    self.page._toast_manager.success("Subscription link copied", 2000)
+                self.page.update()
+        except:
+            pass
+
+    def _delete_item(self, e):
+        if self._on_delete:
+            self._on_delete(self._sub["id"])

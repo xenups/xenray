@@ -3,11 +3,14 @@ from __future__ import annotations
 
 from typing import Callable, Optional
 
+import json
 import flet as ft
+from src.core.i18n import t
+from src.utils.link_parser import LinkParser
 
 
 class ServerListItem(ft.Container):
-    """A single server item in the server list."""
+    """A single server item in the server list with a simple popup menu."""
 
     def __init__(
         self,
@@ -18,187 +21,189 @@ class ServerListItem(ft.Container):
         read_only: bool = False,
         cached_ping: Optional[tuple] = None,  # (text, color, latency_val)
     ):
+        super().__init__()
+        self.height = 65
         self._profile = profile
         self._on_select = on_select
         self._on_delete = on_delete
         self._read_only = read_only
+        self._is_selected = is_selected
 
         # Extract data
         config = profile.get("config", {})
         address, port = self._extract_address_port(config)
-        pid = profile.get("id")
+        name = profile.get("name", "Unknown")
+        
+        # Determine protocol for display
+        protocol = "unknown"
+        for outbound in config.get("outbounds", []):
+            if outbound.get("protocol") in ["vless", "vmess", "trojan", "shadowsocks", "hysteria2"]:
+                protocol = outbound.get("protocol").upper()
+                break
 
-        # Ping state from cache or profile
+        # Ping state
         last_ping = "..."
         last_ping_color = ft.Colors.GREY_500
-
         if cached_ping:
             last_ping, last_ping_color, _ = cached_ping
         elif profile.get("last_latency"):
             last_ping = profile["last_latency"]
             latency_val = profile.get("last_latency_val", 999999)
-            if latency_val < 1000:
-                last_ping_color = ft.Colors.GREEN_400
-            elif latency_val < 2000:
-                last_ping_color = ft.Colors.ORANGE_400
-            else:
-                last_ping_color = ft.Colors.RED_400
+            last_ping_color = self._get_ping_color(latency_val)
 
-        # Selection styling (Glass Theme) - only border changes
-        if is_selected:
-            border_color = ft.Colors.with_opacity(0.9, ft.Colors.PRIMARY)
-            border_width = 2.5  # Thicker border for selected
-            bg_color = ft.Colors.with_opacity(0.15, "#1e293b")  # Same as unselected
-            shadow_color = ft.Colors.TRANSPARENT  # No shadow glow
-        else:
-            border_color = ft.Colors.with_opacity(0.15, ft.Colors.WHITE) if not read_only else ft.Colors.TRANSPARENT
-            border_width = 1
-            bg_color = ft.Colors.with_opacity(0.15, "#1e293b")
-            shadow_color = ft.Colors.TRANSPARENT
-
-        # Ping label (exposed for updates)
-        self.ping_label = ft.Text(
-            last_ping, size=12, color=last_ping_color, weight=ft.FontWeight.BOLD
+        # Latency Widget
+        self.latency_text = ft.Text(
+            last_ping,
+            size=11,
+            color=last_ping_color if last_ping != "..." else ft.Colors.GREY_500,
+            weight=ft.FontWeight.BOLD if last_ping != "..." else ft.FontWeight.NORMAL,
         )
 
-        # Icon container (exposed for flag updates)
-        icon_content = self._create_icon_content(profile)
-        self.icon_container = ft.Container(
-            content=icon_content,
-            width=28,
-            height=28,
-            border_radius=14,
-            clip_behavior=ft.ClipBehavior.HARD_EDGE,
-            bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE),
-            alignment=ft.alignment.center,
-            tooltip=profile.get("country_name") or profile.get("country_code") or "",
-            shadow=ft.BoxShadow(
-                spread_radius=0,
-                blur_radius=3,
-                color=ft.Colors.with_opacity(0.15, ft.Colors.BLACK),
-                offset=ft.Offset(0, 1),
-            ),
-        )
-
-        # Left content
-        left_content = ft.Row(
-            [
-                self.icon_container,
-                ft.Column(
-                    [
-                        ft.Text(
-                            profile["name"],
-                            weight=ft.FontWeight.BOLD,
-                            size=14,
-                            color=ft.Colors.ON_SURFACE,
-                            overflow=ft.TextOverflow.ELLIPSIS,
-                            max_lines=1,
-                        ),
-                        ft.Text(
-                            f"{address}:{port}",
-                            size=11,
-                            color=ft.Colors.ON_SURFACE_VARIANT,
-                            overflow=ft.TextOverflow.ELLIPSIS,
-                            max_lines=1,
-                        ),
-                    ],
-                    spacing=2,
-                    expand=True,
-                ),
-            ],
-            spacing=10,
-            expand=True,
-        )
-
-        # Right content
-        right_controls = [self.ping_label]
-        if not read_only and on_delete:
-            right_controls.append(
-                ft.IconButton(
-                    ft.Icons.DELETE,
-                    icon_color=ft.Colors.RED_400,
-                    tooltip="Delete Server",
-                    on_click=lambda e: on_delete(pid),
-                )
-            )
-        right_content = ft.Row(
-            right_controls, spacing=5, alignment=ft.MainAxisAlignment.END
-        )
-
-        super().__init__(
-            content=ft.Row(
-                [left_content, right_content],
-                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-            ),
-            padding=ft.padding.symmetric(horizontal=10, vertical=8),
-            border_radius=12, # Slightly more rounded
-            bgcolor=bg_color,
-            border=ft.border.all(border_width, border_color),
-            blur=ft.Blur(10, 10, ft.BlurTileMode.MIRROR), # Glass blur
-            on_click=lambda e: on_select(profile),
-            ink=True,
-            shadow=ft.BoxShadow(
-                spread_radius=0,
-                blur_radius=10,
-                color=shadow_color,
-            ) if is_selected else None,
-        )
-
-    def _create_icon_content(self, profile: dict) -> ft.Control:
-        """Create the flag or globe icon."""
-        if profile.get("country_code"):
-            return ft.Image(
-                src=f"/flags/{profile['country_code'].lower()}.svg",
-                width=28,
-                height=28,
+        # Country Flag or Globe Icon
+        country_code = profile.get("country_code")
+        if country_code:
+            flag_content = ft.Image(
+                src=f"/flags/{country_code.lower()}.svg",
+                width=28, height=28,
                 fit=ft.ImageFit.COVER,
                 gapless_playback=True,
                 filter_quality=ft.FilterQuality.HIGH,
-                border_radius=ft.border_radius.all(14),
-                anti_alias=True,
+                error_content=ft.Icon(ft.Icons.PUBLIC, size=28, color=ft.Colors.GREY_400),
             )
-        return ft.Icon(ft.Icons.PUBLIC, size=14, color=ft.Colors.ON_SURFACE_VARIANT)
+        else:
+            flag_content = ft.Icon(ft.Icons.PUBLIC, size=28, color=ft.Colors.GREY_400)
+        
+        self.flag_img = ft.Container(
+            width=28, height=28,
+            border_radius=14,
+            clip_behavior=ft.ClipBehavior.HARD_EDGE,
+            content=flag_content,
+            alignment=ft.alignment.center,
+        )
+
+        # Actions Menu
+        menu_items = [
+            ft.PopupMenuItem(
+                text="Share", 
+                icon=ft.Icons.SHARE_ROUNDED, 
+                on_click=self._copy_config
+            ),
+        ]
+        if not read_only and on_delete:
+            menu_items.append(
+                ft.PopupMenuItem(
+                    text="Delete", 
+                    icon=ft.Icons.DELETE_OUTLINE_ROUNDED, 
+                    on_click=self._delete_item
+                )
+            )
+
+        self.menu_button = ft.PopupMenuButton(
+            items=menu_items,
+            icon=ft.Icons.MORE_VERT_ROUNDED,
+            icon_color=ft.Colors.GREY_400,
+            icon_size=20,
+        )
+
+        # Middle Content
+        middle_content = ft.Column(
+            [
+                ft.Text(name, weight=ft.FontWeight.BOLD, size=14, no_wrap=True, overflow=ft.TextOverflow.ELLIPSIS),
+                ft.Text(f"{protocol} | {address}:{port}", size=11, color=ft.Colors.GREY_500, no_wrap=True, overflow=ft.TextOverflow.ELLIPSIS),
+            ],
+            spacing=2,
+            alignment=ft.MainAxisAlignment.CENTER,
+            expand=True
+        )
+
+        # Selection border logic
+        border_side = ft.BorderSide(2, ft.Colors.BLUE) if is_selected else ft.BorderSide(1, ft.Colors.OUTLINE)
+
+        # Main Layout
+        from src.ui.helpers.gradient_helper import GradientHelper
+        self.content = ft.Row(
+            [
+                ft.Container(content=self.flag_img, padding=ft.padding.only(left=5)),
+                middle_content,
+                ft.Column([self.latency_text], alignment=ft.MainAxisAlignment.CENTER, spacing=0),
+                self.menu_button,
+            ],
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+        )
+        self.padding = ft.padding.symmetric(horizontal=10, vertical=8)
+        self.bgcolor = "#121212"
+        self.gradient = GradientHelper.get_flag_gradient(country_code)
+        self.border = ft.border.all(color=border_side.color, width=border_side.width)
+        self.border_radius = 8
+        self.margin = ft.margin.symmetric(horizontal=10)  # Added to reduce width
+        self.on_click = lambda _: self._on_select(self._profile)
+
+    def _get_ping_color(self, val):
+        if val < 1000: return ft.Colors.GREEN  # Increased threshold to 1000ms
+        if val < 2000: return ft.Colors.ORANGE
+        return ft.Colors.RED
+
+    def _copy_config(self, e):
+        """Share config link."""
+        try:
+            link = LinkParser.generate_link(self._profile.get("config", {}), self._profile.get("name", "server"))
+            if not link:
+                link = json.dumps(self._profile.get("config", {}), indent=2)
+
+            if self.page:
+                self.page.set_clipboard(link)
+                # Use toast manager if available
+                if hasattr(self.page, '_toast_manager'):
+                    self.page._toast_manager.success("Link copied to clipboard", 2000)
+                self.page.update()
+        except: pass
+
+    def _delete_item(self, e):
+        """Delete item."""
+        if self._on_delete:
+            self._on_delete(self._profile["id"])
 
     def _extract_address_port(self, config: dict) -> tuple:
         """Extract server address and port from config."""
         outbounds = config.get("outbounds", [])
         for outbound in outbounds:
-            protocol = outbound.get("protocol")
-            if protocol in ["vless", "vmess", "trojan", "shadowsocks"]:
-                settings = outbound.get("settings", {})
-                if "vnext" in settings and settings["vnext"]:
-                    server = settings["vnext"][0]
-                    return server.get("address", "Unknown"), server.get("port", "N/A")
-                elif "servers" in settings and settings["servers"]:
-                    server = settings["servers"][0]
-                    return server.get("address", "Unknown"), server.get("port", "N/A")
+             protocol = outbound.get("protocol")
+             if protocol in ["vless", "vmess", "trojan", "shadowsocks", "hysteria2"]:
+                 settings = outbound.get("settings", {})
+                 if "vnext" in settings and settings["vnext"]:
+                     server = settings["vnext"][0]
+                     return server.get("address", "Unknown"), server.get("port", "N/A")
+                 elif "servers" in settings and settings["servers"]:
+                     server = settings["servers"][0]
+                     return server.get("address", "Unknown"), server.get("port", "N/A")
         return "Unknown", "N/A"
 
-    def update_ping(self, text: str, color):
-        """Update the ping label."""
-        self.ping_label.value = text
-        self.ping_label.color = color
-        try:
-            self.ping_label.update()
-        except Exception:
-            pass
+    def update_ping(self, latency_str, color):
+        """Update ping with pre-calculated color."""
+        self.latency_text.value = latency_str
+        self.latency_text.color = color 
+        self.latency_text.weight = ft.FontWeight.BOLD
+        self.latency_text.update()
 
-    def update_icon(self, country_code: str, country_name: str = ""):
-        """Update the icon to show a flag."""
-        if not self.page:
-            return
-        self.icon_container.content = ft.Image(
-            src=f"/flags/{country_code.lower()}.svg",
-            width=28,
-            height=28,
-            fit=ft.ImageFit.COVER,
-            gapless_playback=True,
-            filter_quality=ft.FilterQuality.HIGH,
-            border_radius=ft.border_radius.all(14),
-            anti_alias=True,
-        )
-        self.icon_container.tooltip = country_name or country_code
-        try:
-            self.icon_container.update()
-        except Exception:
-            pass
+    def update_icon(self, code, name=""):
+        if code:
+            # Update to flag image
+            self.flag_img.content = ft.Image(
+                src=f"/flags/{code.lower()}.svg",
+                width=28, height=28,
+                fit=ft.ImageFit.COVER,
+                gapless_playback=True,
+                filter_quality=ft.FilterQuality.HIGH,
+                error_content=ft.Icon(ft.Icons.PUBLIC, size=28, color=ft.Colors.GREY_400),
+            )
+            from src.ui.helpers.gradient_helper import GradientHelper
+            self.gradient = GradientHelper.get_flag_gradient(code)
+        else:
+            # Update to globe icon
+            self.flag_img.content = ft.Icon(ft.Icons.PUBLIC, size=28, color=ft.Colors.GREY_400)
+            from src.ui.helpers.gradient_helper import GradientHelper
+            self.gradient = GradientHelper.get_flag_gradient(None)
+        
+        self.flag_img.update()
+        self.update()
+
