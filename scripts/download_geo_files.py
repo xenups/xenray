@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-[DEPRECATED] Download Xray geo files (geoip.dat and geosite.dat).
+Download Xray geo files (geoip.dat and geosite.dat) to bin/ folder.
 
-NOTE: Modern Xray versions (v1.8.0+) include geo data internally.
-This script is kept for legacy purposes only and is no longer used in the build process.
+These files are required for Xray routing rules to work properly.
+They must be placed in the same directory as xray.exe.
 
-For manual downloads (if needed for older Xray versions):
+Usage:
     python scripts/download_geo_files.py
 """
 
@@ -18,8 +18,8 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-# Output directory
-ASSETS_DIR = PROJECT_ROOT / "assets"
+# Output directory - use bin/ folder where xray.exe is located
+BIN_DIR = PROJECT_ROOT / "bin"
 
 # GitHub URLs for geo files
 GEOIP_URL = "https://github.com/v2fly/geoip/releases/latest/download/geoip.dat"
@@ -49,24 +49,24 @@ def download_file(url: str, dest: Path, rename_to: str = None) -> Path:
 
 def main():
     print("=" * 60)
-    print("Downloading Xray Geo Files")
+    print("Downloading Xray Geo Files to bin/")
     print("=" * 60)
     
-    # Create assets directory
-    ASSETS_DIR.mkdir(parents=True, exist_ok=True)
+    # Create bin directory
+    BIN_DIR.mkdir(parents=True, exist_ok=True)
     
     try:
         # Download geoip.dat
         print("\n[STEP 1] Downloading geoip.dat...")
-        download_file(GEOIP_URL, ASSETS_DIR / "geoip.dat")
+        download_file(GEOIP_URL, BIN_DIR / "geoip.dat")
         
         # Download geosite.dat (renamed from dlc.dat)
         print("\n[STEP 2] Downloading geosite.dat...")
-        download_file(GEOSITE_URL, ASSETS_DIR / "dlc.dat", rename_to="geosite.dat")
+        download_file(GEOSITE_URL, BIN_DIR / "dlc.dat", rename_to="geosite.dat")
         
         print("\n" + "=" * 60)
         print("DOWNLOAD COMPLETE!")
-        print(f"Files location: {ASSETS_DIR}")
+        print(f"Files location: {BIN_DIR}")
         print("=" * 60)
         
     except Exception as e:
