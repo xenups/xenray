@@ -11,10 +11,30 @@ A modern, lightweight Xray GUI client for Windows and Linux, focusing on simplic
 - 🔐 **Dual Mode** - VPN (system-wide tun) and Proxy (SOCKS5) modes
 - 🌍 **Server Management** - Import servers via VLESS links or subscription URLs
 - 📊 **Latency Testing** - Batch test all servers with visual feedback
+- 🎨 **Apple Glass UI** - Modern glassmorphism design with dynamic connection status glow
+- 📥 **System Tray** - Background operation with quick taskbar controls
+- 👻 **Stealth Mode** - Fully hidden console windows for all core processes
 - 🎌 **Country Flags** - Auto-detect server location with GeoIP
-- 🎨 **Modern UI** - Dark/light themes with smooth animations
 - 📝 **Real-time Logs** - Monitor connection status and debug issues
-- ⚡ **Auto Updates** - One-click Xray core updates
+- ⚡ **Auto Updates** - One-click Xray core and app updates (GitHub Releases)
+- 🌐 **Internationalization** - Full support for English, Persian (Farsi), Russian, and Chinese
+
+## Gallery
+
+<div align="center">
+  <img src="screenshots/main_window.png" alt="Main Window" width="800"/>
+  <p><em>Modern Glass UI with Server List</em></p>
+</div>
+
+<div align="center">
+  <img src="screenshots/connection.png" alt="Connected State" width="800"/>
+  <p><em>Dynamic Glow Effect when Connected</em></p>
+</div>
+
+<div align="center">
+  <img src="screenshots/settings.png" alt="Settings" width="800"/>
+  <p><em>Comprehensive Settings & Routing</em></p>
+</div>
 
 ## Installation
 
@@ -60,36 +80,45 @@ poetry run xenray --install-policy
 
 ```
 src/
-├── core/                    # Configuration & connection management
-│   ├── config_manager.py    # Profile/settings persistence
-│   ├── connection_manager.py
-│   └── subscription_manager.py
+├── core/                    # Core application logic
+│   ├── config_manager.py    # Configuration persistence
+│   ├── connection_manager.py # Main connection flow logic
+│   ├── subscription_manager.py # Subscription handling
+│   ├── i18n.py              # Internationalization system
+│   ├── flag_colors.py       # Dynamic gradient generation
+│   └── constants.py         # Global constants
 │
-├── services/                # External integrations
-│   ├── xray_service.py      # Xray process management
-│   ├── singbox_service.py   # Sing-box (tun) integration
-│   ├── latency_tester.py    # Batch latency testing
-│   ├── geoip_service.py     # Country detection
-│   └── connection_tester.py
+├── services/                # External service integrations
+│   ├── xray_service.py      # Xray core process management
+│   ├── singbox_service.py   # Sing-box (TUN) integration
+│   ├── latency_tester.py    # Real-time latency checking
+│   ├── geoip_service.py     # IP location resolution
+│   ├── connection_tester.py # Connectivity verification
+│   └── app_update_service.py # GitHub release updater
 │
-├── ui/
-│   ├── components/          # Reusable UI components
-│   │   ├── server_list_header.py
-│   │   ├── server_list_item.py
-│   │   ├── subscription_list_item.py
-│   │   ├── add_server_dialog.py
-│   │   ├── connection_button.py
-│   │   ├── status_display.py
-│   │   ├── server_card.py
-│   │   ├── settings_drawer.py
-│   │   └── settings_sections.py
-│   ├── server_list.py       # Server list orchestration
-│   └── main_window.py       # Main window
+├── ui/                      # Flet-based UI layer
+│   ├── main_window.py       # Main application window
+│   ├── server_list.py       # Virtualized server list view
+│   ├── log_viewer.py        # Real-time log console
+│   │
+│   ├── components/          # Reusable widgets
+│   │   ├── connection_button.py # Animated connect button
+│   │   ├── server_card.py       # Selected server display
+│   │   ├── settings_drawer.py   # Settings slide-out
+│   │   ├── logs_drawer.py       # Logs slide-out
+│   │   ├── toast.py             # Custom notification system
+│   │   ├── timer_display.py     # Connection duration timer
+│   │   └── add_server_dialog.py # Config import dialog
+│   │
+│   └── builders/            # UI composite builders
+│       └── ui_builder.py    # Common UI patterns
 │
-├── utils/                   # Helpers
-│   ├── link_parser.py       # VLESS/VMess link parsing
-│   ├── process_utils.py
-│   └── network_interface.py
+├── utils/                   # Shared utilities
+│   ├── network_utils.py     # MTU/Network detection
+│   ├── process_utils.py     # Process hiding/management
+│   ├── platform_utils.py    # OS-specific helpers
+│   ├── link_parser.py       # VLESS/VMess/Trojan parser
+│   └── file_utils.py        # File I/O helpers
 │
 └── main.py                  # Entry point
 ```
