@@ -582,45 +582,6 @@ class LinkParser:
 
         return {"name": name, "config": LinkParser._build_config(outbound)}
 
-        return {
-            "log": {"loglevel": "warning"},
-            "inbounds": [
-                {
-                    "tag": "socks",
-                    "port": 10805,
-                    "listen": "127.0.0.1",
-                    "protocol": "socks",
-                    "settings": {"udp": True},
-                },
-                {
-                    "tag": "http",
-                    "port": 10809,
-                    "listen": "127.0.0.1",
-                    "protocol": "http",
-                },
-            ],
-            "outbounds": [
-                outbound,
-                {"tag": "direct", "protocol": "freedom", "settings": {}},
-                {"tag": "block", "protocol": "blackhole", "settings": {}},
-            ],
-            "routing": {
-                "domainStrategy": "AsIs",
-                "rules": [
-                    {"type": "field", "outboundTag": "direct", "ip": ["geoip:private"]},
-                    {
-                        "type": "field",
-                        "outboundTag": "direct",
-                        "domain": ["geosite:private"],
-                    },
-                    {
-                        "type": "field",
-                        "outboundTag": "block",
-                        "domain": ["geosite:category-ads-all"],
-                    },
-                ],
-            },
-        }
 
     @staticmethod
     def _build_config(outbound: Dict) -> Dict:

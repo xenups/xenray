@@ -1,4 +1,5 @@
 """Network utilities."""
+import os
 import socket
 import subprocess
 import shutil

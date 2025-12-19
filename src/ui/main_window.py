@@ -420,7 +420,7 @@ class MainWindow:
                     # Visual Updates (Pass current profile state)
                     # We use lambda to capture specific values or allow delayed execution,
                     # but here we want to ensure self._selected_profile is read at call time.
-                    self._ui_call(self._server_card.update_server, profile)
+                    self._ui_call(lambda: self._server_card.update_server(profile))
 
                     if country_data and country_data.get("country_code"):
                         self._ui_call(
