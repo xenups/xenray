@@ -2,6 +2,31 @@
 
 All notable changes to XenRay will be documented in this file.
 
+## [0.1.8-alpha] - 2025-12-20
+
+### Added
+- **Smart MTU Detection**: Automatically detects optional MTU for network stability (Auto/QUIC Safe modes)
+- **Refined QUIC Logic**: Strictly enforces 1420 MTU only for proper QUIC transports (h3, quic, xhttp, splithttp)
+- **Robust ALPN Check**: Detects h3 in TLS/Reality settings regardless of network label
+
+### Fixed
+- **PlatformUtils Error**: Fixed `NameError` preventing connection on some systems
+- **Toast Notifications**: Fixed Z-order issue where toasts appeared behind drawers
+- **Log System**: Reverted experimental log segregation features to restore stability
+
+## [0.1.7-alpha] - 2025-12-20
+
+### Added
+- **Smart MTU Logic**: Initial implementation of MTU auto-detection
+- **Connection Retries**: Added robust retry logic for internet checks and proxy connectivity
+- **Log Segregation**: Added log source switching (Reverted in 0.1.8)
+
+### Fixed
+- **Shell Window Flash**: Fixed Singbox/Xray window flashing or showing briefly during startup
+- **Window Centering**: Fixed application window jumping/flashing on startup by manually calculating center position
+- **Build Issues**: Fixed PyInstaller asset bundling (background images, pycountry) and binary path resolution
+- **Executable Size**: Optimized build size by excluding unused heavy libraries (numpy, pandas, etc.)
+
 ## [0.1.6-alpha] - 2025-12-12
 
 ### Added
