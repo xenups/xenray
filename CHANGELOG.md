@@ -16,16 +16,24 @@ All notable changes to XenRay will be documented in this file.
 
 ## [0.1.7-alpha] - 2025-12-20
 
+
 ### Added
-- **Smart MTU Logic**: Initial implementation of MTU auto-detection
-- **Connection Retries**: Added robust retry logic for internet checks and proxy connectivity
-- **Log Segregation**: Added log source switching (Reverted in 0.1.8)
+- **UI Redesign**: Complete "Apple Glass" overhaul with glassmorphism, dynamic connection status glow, and professional animations
+- **System Tray**: Full integration with background running, taskbar controls, and improved lifecycle
+- **Internationalization**: Complete support for English, Persian, Russian, and Chinese across all menus/toasts
+
+### Changed
+- **Core Updates**: Updated Sing-box to v1.12.13 and Xray to v25.12.8
+- **Startup**: Improved window centering and minimized startup flash
+- **Toasts**: Replaced SnackBars with unified multilingual toast system
+- **Executable**: Optimized build size (reduced by ~30 MB)
+- **Update Logic**: Improved semantic version comparison and avoided redundant downloads
 
 ### Fixed
-- **Shell Window Flash**: Fixed Singbox/Xray window flashing or showing briefly during startup
-- **Window Centering**: Fixed application window jumping/flashing on startup by manually calculating center position
-- **Build Issues**: Fixed PyInstaller asset bundling (background images, pycountry) and binary path resolution
-- **Executable Size**: Optimized build size by excluding unused heavy libraries (numpy, pandas, etc.)
+- **Stealth Mode**: Completely hidden black console windows (CMD/PowerShell) for all subprocesses
+- **Connectivity**: Fixed internet connection/gateway detection and binary path resolution
+- **Build System**: Fixed PyInstaller bundling for PyCountry and GeoIP file locations
+- **Assets**: Restored Geo file downloads and fixed Network Stats opacity error
 
 ## [0.1.6-alpha] - 2025-12-12
 
