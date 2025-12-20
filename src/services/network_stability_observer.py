@@ -269,6 +269,14 @@ class NetworkStabilityObserver:
         # Optimization: Rolling counters to avoid O(N) scans
         self._rolling_counts = {"moderate_errors": 0, "reconnects": 0, "crashes": 0}
 
+        # Initialize extracted components for better SRP compliance
+        from src.services.log_parser import LogParser
+        from src.services.quality_evaluator import QualityEvaluator
+
+        self._log_parser = LogParser()
+        self._quality_evaluator = QualityEvaluator()
+        logger.info("[NetworkObserver] Initialized LogParser and QualityEvaluator")
+
         logger.info(f"[NetworkObserver] Initialized: window={window_size}s, " f"adaptive={adaptive_window}")
 
     def add_callback(self, callback):

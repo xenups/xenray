@@ -117,7 +117,7 @@ class SystrayHandler:
                 logger.debug(f"Systray restore error: {e}")
 
         try:
-            self._main._ui_call(_show)
+            self._main._ui_helper.call(_show)
         except Exception as e:
             logger.debug(f"Systray _on_open error: {e}")
 

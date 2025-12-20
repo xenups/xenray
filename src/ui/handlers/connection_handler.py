@@ -28,9 +28,9 @@ class ConnectionHandler:
         self._main._connecting = True
 
         # Show connecting animation immediately
-        self._main._ui_call(self._main._connection_button.set_connecting)
-        self._main._ui_call(self._main._status_display.set_initializing)
-        self._main._ui_call(lambda: self._main._update_horizon_glow("connecting"))
+        self._main._ui_helper.call(self._main._connection_button.set_connecting)
+        self._main._ui_helper.call(self._main._status_display.set_initializing)
+        self._main._ui_helper.call(lambda: self._main._update_horizon_glow("connecting"))
 
         threading.Thread(target=self._perform_connect_task, daemon=True).start()
 
@@ -43,9 +43,9 @@ class ConnectionHandler:
 
         # Visually switch to "Connecting" (Amber) immediately
         # We DON'T show Disconnecting (Red) or Disconnected (Orange)
-        self._main._ui_call(self._main._connection_button.set_connecting)
-        self._main._ui_call(self._main._status_display.set_initializing)
-        self._main._ui_call(lambda: self._main._update_horizon_glow("connecting"))
+        self._main._ui_helper.call(self._main._connection_button.set_connecting)
+        self._main._ui_helper.call(self._main._status_display.set_initializing)
+        self._main._ui_helper.call(lambda: self._main._update_horizon_glow("connecting"))
 
         def fast_reconnect_task():
             try:
@@ -63,7 +63,7 @@ class ConnectionHandler:
             except Exception as e:
                 logger.error(f"Error in fast_reconnect_task: {e}")
                 self._main._connecting = False
-                self._main._ui_call(self.reset_ui_disconnected)
+                self._main._ui_helper.call(self.reset_ui_disconnected)
 
         threading.Thread(target=fast_reconnect_task, daemon=True).start()
 
@@ -75,7 +75,7 @@ class ConnectionHandler:
 
             if not NetworkUtils.check_internet_connection():
                 self._main._connecting = False
-                self._main._ui_call(self.reset_ui_disconnected)
+                self._main._ui_helper.call(self.reset_ui_disconnected)
                 self._main._toast.error(t("connection.no_internet"), 3000)
                 return
 
@@ -96,14 +96,14 @@ class ConnectionHandler:
                 json.dump(profile_config, f)
 
             def on_step(step_msg: str):
-                self._main._ui_call(self._main._status_display.set_step, step_msg)
+                self._main._ui_helper.call(self._main._status_display.set_step, step_msg)
 
             # Rate limiting is enforced in ConnectionManager.connect()
             success = self._main._connection_manager.connect(temp_config_path, mode_str, step_callback=on_step)
 
             if not success:
                 self._main._connecting = False
-                self._main._ui_call(self.reset_ui_disconnected)
+                self._main._ui_helper.call(self.reset_ui_disconnected)
                 self._main._toast.error(t("status.connection_failed"), 3000)
                 return
 
@@ -117,7 +117,7 @@ class ConnectionHandler:
 
             time.sleep(1)
 
-            self._main._ui_call(self._main._status_display.set_step, t("connection.checking_network"))
+            self._main._ui_helper.call(self._main._status_display.set_step, t("connection.checking_network"))
 
             proxy_port = self._main._config_manager.get_proxy_port()
             if not NetworkUtils.check_proxy_connectivity(proxy_port):
@@ -125,19 +125,19 @@ class ConnectionHandler:
                 self._main._connecting = False
                 # Use disconnect to cleanup
                 self._main._connection_manager.disconnect()
-                self._main._ui_call(self.reset_ui_disconnected)
+                self._main._ui_helper.call(self.reset_ui_disconnected)
                 self._main._toast.warning(t("connection.connected_no_internet"), 3000)
                 return
             # --------------------------------------
 
             self._main._connecting = False
 
-            self._main._ui_call(
+            self._main._ui_helper.call(
                 self._main._status_display.set_connected,
                 country_data=self._main._selected_profile,
             )
-            self._main._ui_call(self._main._connection_button.set_connected)
-            self._main._ui_call(lambda: self._main._update_horizon_glow("connected"))
+            self._main._ui_helper.call(self._main._connection_button.set_connected)
+            self._main._ui_helper.call(lambda: self._main._update_horizon_glow("connected"))
 
             # Update system tray state
             self._main._systray.update_state()
@@ -146,12 +146,12 @@ class ConnectionHandler:
             if self._main._network_stats:
                 self._main._network_stats.start()
                 if self._main._logs_drawer_component:
-                    self._main._ui_call(self._main._logs_drawer_component.show_stats, True)
+                    self._main._ui_helper.call(self._main._logs_drawer_component.show_stats, True)
 
         except Exception as e:
             logger.error(f"Error in _perform_connect_task: {e}")
             self._main._connecting = False
-            self._main._ui_call(self.reset_ui_disconnected)
+            self._main._ui_helper.call(self.reset_ui_disconnected)
 
     def disconnect(self):
         """Disconnect from VPN/Proxy."""
@@ -159,9 +159,9 @@ class ConnectionHandler:
             return
 
         # Show disconnecting UI immediately
-        self._main._ui_call(self._main._connection_button.set_disconnecting)
-        self._main._ui_call(self._main._status_display.set_disconnecting)
-        self._main._ui_call(lambda: self._main._update_horizon_glow("disconnecting"))
+        self._main._ui_helper.call(self._main._connection_button.set_disconnecting)
+        self._main._ui_helper.call(self._main._status_display.set_disconnecting)
+        self._main._ui_helper.call(lambda: self._main._update_horizon_glow("disconnecting"))
 
         def disconnect_task():
             self._main._is_running = False
@@ -172,7 +172,7 @@ class ConnectionHandler:
             try:
                 self._main._network_stats.stop()
                 if self._main._logs_drawer_component:
-                    self._main._ui_call(self._main._logs_drawer_component.show_stats, False)
+                    self._main._ui_helper.call(self._main._logs_drawer_component.show_stats, False)
             except Exception:
                 pass
 
@@ -191,7 +191,7 @@ class ConnectionHandler:
 
             time.sleep(1.0)
 
-            self._main._ui_call(self.reset_ui_disconnected)
+            self._main._ui_helper.call(self.reset_ui_disconnected)
 
             # Update system tray state
             self._main._systray.update_state()
@@ -209,40 +209,8 @@ class ConnectionHandler:
             self._main._status_display.set_disconnected()
             self._main._update_horizon_glow("disconnected")
 
-            # Trigger immediate latency check
-            if self._main._selected_profile:
-                profile_name = self._main._selected_profile.get("name")
-                logger.debug(f"[ConnectionHandler] Starting post-disconnection ping test for: {profile_name}")
-                self._main._ui_call(self._main._status_display.set_pre_connection_ping, "...", False)
+            # Trigger immediate latency check via dedicated handler
+            self._main._latency_monitor_handler.trigger_single_check()
 
-                def on_result(success, result_str, country_data=None):
-                    logger.debug(f"[ConnectionHandler] Ping result received: {result_str} (success={success})")
-
-                    # More relaxed guard: only skip if we started CONNECTING again
-                    if not self._main._connecting:
-                        self._main._ui_call(
-                            self._main._status_display.set_pre_connection_ping,
-                            result_str,
-                            success,
-                        )
-                        # Update country if found
-                        if country_data and self._main._selected_profile:
-                            self._main._selected_profile.update(country_data)
-                            self._main._config_manager.update_profile(
-                                self._main._selected_profile.get("id"), country_data
-                            )
-                            # Removed: self._main._ui_call(self._main._status_display.update_country, country_data)
-                    else:
-                        logger.debug("[ConnectionHandler] Skipping ping update: Connection in progress")
-
-                from src.services.connection_tester import ConnectionTester
-
-                fetch_flag = not self._main._selected_profile.get("country_code")
-                ConnectionTester.test_connection(
-                    self._main._selected_profile.get("config", {}),
-                    on_result,
-                    fetch_country=fetch_flag,
-                )
-
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"[ConnectionHandler] Error in reset_ui_disconnected: {e}")

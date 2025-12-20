@@ -37,7 +37,6 @@ def create_profile_manager(container, connection_handler, ui_updater):
         connection_manager=container.connection_manager(),
         connection_handler=connection_handler,
         ui_updater=ui_updater,
-        config_manager=container.config_manager(),
     )
 
 

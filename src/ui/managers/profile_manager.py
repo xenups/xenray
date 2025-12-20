@@ -14,7 +14,6 @@ class ProfileManager:
         connection_manager,
         connection_handler,
         ui_updater: Callable,
-        config_manager,
     ):
         """
         Initialize ProfileManager with injected dependencies.
@@ -23,12 +22,10 @@ class ProfileManager:
             connection_manager: ConnectionManager instance
             connection_handler: ConnectionHandler instance
             ui_updater: Callable for updating UI
-            config_manager: ConfigManager instance
         """
         self._connection_manager = connection_manager
         self._connection_handler = connection_handler
         self._ui_call = ui_updater
-        self._config_manager = config_manager
         self._selected_profile: Optional[dict] = None
 
         # Callback for UI updates when profile is selected

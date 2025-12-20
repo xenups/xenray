@@ -1,0 +1,244 @@
+"""Connection Orchestrator - Coordinates connection workflow."""
+
+import json
+from typing import Optional
+
+from loguru import logger
+
+from src.core.constants import OUTPUT_CONFIG_PATH
+from src.core.i18n import t
+
+
+class ConnectionOrchestrator:
+    """Orchestrates connection establishment and teardown workflow."""
+
+    def __init__(
+        self,
+        config_manager,
+        config_processor,
+        network_validator,
+        xray_processor,
+        routing_manager,
+        xray_service,
+        singbox_service,
+        observer,
+        log_monitor,
+    ):
+        """
+        Initialize ConnectionOrchestrator with injected dependencies.
+
+        Args:
+            config_manager: ConfigManager instance
+            config_processor: ConfigurationProcessor instance
+            network_validator: NetworkValidator instance
+            xray_processor: XrayConfigProcessor instance
+            routing_manager: RoutingRulesManager instance
+            xray_service: XrayService instance
+            singbox_service: SingboxService instance
+            observer: NetworkStabilityObserver instance
+            log_monitor: PassiveLogMonitor instance
+        """
+        self._config_manager = config_manager
+        self._config_processor = config_processor
+        self._network_validator = network_validator
+        self._xray_processor = xray_processor
+        self._routing_manager = routing_manager
+        self._xray_service = xray_service
+        self._singbox_service = singbox_service
+        self._observer = observer
+        self._log_monitor = log_monitor
+
+    def establish_connection(self, file_path: str, mode: str, step_callback=None) -> tuple[bool, Optional[dict]]:
+        """
+        Orchestrate full connection workflow.
+
+        Args:
+            file_path: Path to configuration file
+            mode: Connection mode ("vpn" or "proxy")
+            step_callback: Optional callback for connection steps
+
+        Returns:
+            (success, connection_info) tuple
+        """
+        try:
+            # 1. Load and validate configuration
+            config = self._load_and_validate_config(file_path, step_callback)
+            if not config:
+                return False, None
+
+            # 2. Pre-connection checks
+            if not self._pre_connection_checks(step_callback):
+                return False, None
+
+            # 3. Process configuration
+            processed_config, socks_port = self._prepare_configuration(config, step_callback)
+            if not processed_config:
+                return False, None
+
+            # 4. Start Xray service
+            xray_pid = self._start_xray(step_callback)
+            if not xray_pid:
+                return False, None
+
+            # 5. Start Sing-box if VPN mode
+            singbox_pid = None
+            if mode == "vpn":
+                singbox_pid = self._start_singbox(processed_config, socks_port, step_callback)
+                if not singbox_pid:
+                    self._xray_service.stop()
+                    return False, None
+
+            # 6. Finalize connection
+            connection_info = self._finalize_connection(file_path, mode, xray_pid, singbox_pid, step_callback)
+            return True, connection_info
+
+        except Exception as e:
+            logger.error(f"Connection orchestration failed: {e}")
+            return False, None
+
+    def teardown_connection(self, connection_info: dict):
+        """
+        Tear down active connection.
+
+        Args:
+            connection_info: Connection information dictionary
+        """
+        # Stop passive log monitoring
+        if self._log_monitor:
+            self._log_monitor.stop_monitoring()
+
+        # Stop Sing-box first
+        if connection_info.get("singbox_pid"):
+            self._singbox_service.stop()
+
+        # Stop Xray
+        if connection_info.get("xray_pid"):
+            self._xray_service.stop()
+
+        logger.info("Connection torn down successfully")
+
+    def _load_and_validate_config(self, file_path: str, step_callback) -> Optional[dict]:
+        """Load and validate configuration file."""
+        if step_callback:
+            step_callback(t("status.loading_config"))
+
+        logger.debug(f"Loading config from {file_path}")
+        config, _ = self._config_manager.load_config(file_path)
+
+        if not config:
+            logger.error("Failed to load config")
+            return None
+
+        if not isinstance(config, dict):
+            logger.error(f"Invalid config format: expected dict, got {type(config).__name__}")
+            if step_callback:
+                step_callback(t("status.invalid_config"))
+            return None
+
+        return config
+
+    def _pre_connection_checks(self, step_callback) -> bool:
+        """Perform pre-connection checks using NetworkValidator."""
+        # Check internet connectivity
+        if step_callback:
+            step_callback(t("connection.checking_network"))
+
+        if not self._network_validator.check_internet_connection():
+            logger.error("No internet connection detected")
+            if step_callback:
+                step_callback(t("connection.no_internet"))
+            return False
+
+        return True
+
+    def _prepare_configuration(self, config: dict, step_callback) -> tuple[Optional[dict], Optional[int]]:
+        """Process and save configuration using XrayConfigProcessor."""
+        if step_callback:
+            step_callback(t("connection.processing_config"))
+
+        # Delegate to XrayConfigProcessor
+        processed_config = self._xray_processor.process_config(config)
+        socks_port = self._xray_processor.get_socks_port(processed_config)
+
+        # Save processed config
+        logger.debug(f"Saving processed config to {OUTPUT_CONFIG_PATH}")
+        try:
+            with open(OUTPUT_CONFIG_PATH, "w", encoding="utf-8") as f:
+                json.dump(processed_config, f, indent=2)
+            logger.debug("Config saved successfully")
+        except Exception as e:
+            logger.error(f"Failed to save Xray config: {e}")
+            return None, None
+
+        return processed_config, socks_port
+
+    def _start_xray(self, step_callback) -> Optional[int]:
+        """Start Xray service."""
+        if step_callback:
+            step_callback(t("connection.starting_xray"))
+
+        logger.debug("Starting Xray service")
+        xray_pid = self._xray_service.start(OUTPUT_CONFIG_PATH)
+
+        if not xray_pid:
+            logger.error("Failed to start Xray")
+            return None
+
+        logger.debug(f"Xray started with PID {xray_pid}")
+        return xray_pid
+
+    def _start_singbox(self, processed_config: dict, socks_port: int, step_callback) -> Optional[int]:
+        """Start Sing-box service for VPN mode using XrayConfigProcessor."""
+        if step_callback:
+            step_callback(t("connection.initializing_vpn"))
+
+        from src.utils.network_utils import NetworkUtils
+
+        # Detect MTU using XrayConfigProcessor
+        is_quic = self._xray_processor.is_quic_transport(processed_config)
+        mtu_mode = "quic_safe" if is_quic else "auto"
+        optimal_mtu = NetworkUtils.detect_optimal_mtu(mtu_mode=mtu_mode)
+        logger.info(f"Using MTU for TUN interface: {optimal_mtu}")
+
+        # Get routing configuration using XrayConfigProcessor
+        routing_country = self._config_manager.get_routing_country()
+        proxy_server_ip = self._xray_processor.get_proxy_server_ip(processed_config)
+        routing_rules = self._config_manager.load_routing_rules()
+
+        # Start Sing-box
+        singbox_pid = self._singbox_service.start(
+            xray_socks_port=socks_port,
+            proxy_server_ip=proxy_server_ip,
+            routing_country=routing_country,
+            routing_rules=routing_rules,
+            mtu=optimal_mtu,
+        )
+
+        if not singbox_pid:
+            logger.error("Failed to start Sing-box")
+            return None
+
+        return singbox_pid
+
+    def _finalize_connection(
+        self, file_path: str, mode: str, xray_pid: int, singbox_pid: Optional[int], step_callback
+    ) -> dict:
+        """Finalize connection and start monitoring."""
+        if step_callback:
+            step_callback(t("connection.finalizing"))
+
+        connection_info = {
+            "mode": mode,
+            "xray_pid": xray_pid,
+            "singbox_pid": singbox_pid,
+            "file": file_path,
+        }
+        logger.info(f"Successfully connected in {mode} mode")
+
+        # Start passive log monitoring (VPN only)
+        if mode == "vpn" and self._log_monitor:
+            from src.core.constants import SINGBOX_LOG_FILE, XRAY_LOG_FILE
+
+            self._log_monitor.start_monitoring([XRAY_LOG_FILE, SINGBOX_LOG_FILE])
+
+        return connection_info
