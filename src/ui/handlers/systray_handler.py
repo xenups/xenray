@@ -68,9 +68,7 @@ class SystrayHandler:
         if self._main._is_running:
             toggle_label = t("tray.disconnect")
             status_text = t("tray.connected_to").format(
-                server=self._main._selected_profile.get("name", "Unknown")
-                if self._main._selected_profile
-                else "..."
+                server=self._main._selected_profile.get("name", "Unknown") if self._main._selected_profile else "..."
             )
         else:
             toggle_label = t("tray.connect")

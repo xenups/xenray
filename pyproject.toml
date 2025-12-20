@@ -21,6 +21,8 @@ msgpack = "^1.1.2"
 zstandard = "^0.25.0"
 python-dotenv = "^1.2.1"
 throttled-py = "^3.0.1"
+dependency-injector = "^4.42.0"
+
 
 
 [tool.poetry.group.dev.dependencies]

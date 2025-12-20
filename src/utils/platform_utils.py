@@ -101,7 +101,7 @@ class PlatformUtils:
     def get_app_dir() -> str:
         """
         Get the application directory for BUNDLED resources (like assets).
-        
+
         Returns:
             - When frozen (PyInstaller): _MEIPASS (temporary extraction directory for bundled files)
             - When running as script: Project root directory
@@ -121,7 +121,7 @@ class PlatformUtils:
     def get_executable_dir() -> str:
         """
         Get the directory containing the executable for EXTERNAL resources (like bin/, scripts/).
-        
+
         Returns:
             - When frozen (PyInstaller): Directory containing the .exe file
             - When running as script: Same as get_app_dir()
@@ -143,11 +143,7 @@ class PlatformUtils:
         """
         import subprocess
 
-        return (
-            subprocess.CREATE_NO_WINDOW
-            if PlatformUtils.get_platform() == "windows"
-            else 0
-        )
+        return subprocess.CREATE_NO_WINDOW if PlatformUtils.get_platform() == "windows" else 0
 
     @staticmethod
     def get_startupinfo():

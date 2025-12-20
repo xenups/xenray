@@ -13,8 +13,7 @@ from typing import Callable, Optional, Tuple
 import requests
 from loguru import logger
 
-from src.core.constants import (APP_VERSION, GITHUB_REPO,
-                                UPDATE_DOWNLOAD_TIMEOUT, UPDATE_MIN_FILE_SIZE)
+from src.core.constants import APP_VERSION, GITHUB_REPO, UPDATE_DOWNLOAD_TIMEOUT, UPDATE_MIN_FILE_SIZE
 from src.utils.platform_utils import PlatformUtils
 
 # API URL constructed from configurable repo
@@ -65,6 +64,7 @@ class AppUpdateService:
 
         try:
             from packaging import version
+
             return version.parse(latest_normalized) > version.parse(current_normalized)
         except Exception:
             # Fallback: simple string comparison (only if versions are different)
@@ -148,9 +148,7 @@ class AppUpdateService:
         return None
 
     @staticmethod
-    def download_update(
-        url: str, progress_callback: Optional[Callable[[int], None]] = None
-    ) -> Optional[str]:
+    def download_update(url: str, progress_callback: Optional[Callable[[int], None]] = None) -> Optional[str]:
         """
         Download update ZIP file.
 
@@ -189,10 +187,7 @@ class AppUpdateService:
                             progress_callback(progress)
 
             # Verify download
-            if (
-                not os.path.exists(zip_path)
-                or os.path.getsize(zip_path) < UPDATE_MIN_FILE_SIZE
-            ):
+            if not os.path.exists(zip_path) or os.path.getsize(zip_path) < UPDATE_MIN_FILE_SIZE:
                 logger.error("Downloaded file validation failed")
                 return None
 
@@ -245,20 +240,12 @@ class AppUpdateService:
             # Find the updater script template
             if is_frozen:
                 # Running as exe - script should be in scripts/ next to exe
-                script_template = os.path.join(
-                    os.path.dirname(sys.executable), "scripts", "xenray_updater.ps1"
-                )
-                logger.info(
-                    f"[AppUpdate] Looking for script in EXE dir: {script_template}"
-                )
+                script_template = os.path.join(os.path.dirname(sys.executable), "scripts", "xenray_updater.ps1")
+                logger.info(f"[AppUpdate] Looking for script in EXE dir: {script_template}")
             else:
                 # Running from source
-                script_template = os.path.join(
-                    Path(__file__).parent.parent.parent, "scripts", "xenray_updater.ps1"
-                )
-                logger.info(
-                    f"[AppUpdate] Looking for script in source dir: {script_template}"
-                )
+                script_template = os.path.join(Path(__file__).parent.parent.parent, "scripts", "xenray_updater.ps1")
+                logger.info(f"[AppUpdate] Looking for script in source dir: {script_template}")
 
             if not os.path.exists(script_template):
                 logger.error(f"[AppUpdate] Updater script NOT FOUND: {script_template}")
@@ -268,9 +255,7 @@ class AppUpdateService:
                     files = os.listdir(scripts_dir)
                     logger.error(f"[AppUpdate] Files in {scripts_dir}: {files}")
                 else:
-                    logger.error(
-                        f"[AppUpdate] Scripts directory does not exist: {scripts_dir}"
-                    )
+                    logger.error(f"[AppUpdate] Scripts directory does not exist: {scripts_dir}")
                 return None
 
             logger.info(f"[AppUpdate] Script template found: {script_template}")
@@ -281,9 +266,7 @@ class AppUpdateService:
             logger.info(f"[AppUpdate] Copied script to: {script_copy}")
 
             # Create wrapper script that calls the main script with parameters
-            wrapper_path = os.path.join(
-                tempfile.gettempdir(), "xenray_update_launcher.ps1"
-            )
+            wrapper_path = os.path.join(tempfile.gettempdir(), "xenray_update_launcher.ps1")
             wrapper_content = f"""
 # XenRay Update Launcher
 & "{script_copy}" -ProcessID {pid} -ZipPath "{zip_path}" -AppDir "{app_dir}" -ExePath "{exe_path}"
@@ -316,9 +299,7 @@ class AppUpdateService:
             if getattr(sys, "frozen", False):
                 app_dir = os.path.dirname(sys.executable)
             else:
-                app_dir = os.path.dirname(
-                    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                )
+                app_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
             logger.info(f"Applying update to: {app_dir}")
 
@@ -329,9 +310,7 @@ class AppUpdateService:
 
             # Launch updater script as detached process
             # Use START command for reliable detached launch on Windows
-            cmd = (
-                f'start "" powershell.exe -ExecutionPolicy Bypass -File "{script_path}"'
-            )
+            cmd = f'start "" powershell.exe -ExecutionPolicy Bypass -File "{script_path}"'
             subprocess.Popen(
                 cmd,
                 shell=True,

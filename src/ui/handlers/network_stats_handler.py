@@ -26,10 +26,7 @@ class NetworkStatsHandler:
             try:
                 # 1. Lifecycle Check (Prevent Race Condition)
                 # Ensure StatusDisplay is fully mounted and ready
-                if (
-                    not self._main._status_display
-                    or not self._main._status_display.page
-                ):
+                if not self._main._status_display or not self._main._status_display.page:
                     await asyncio.sleep(1.0)
                     continue
 

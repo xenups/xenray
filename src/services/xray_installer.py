@@ -82,9 +82,7 @@ class XrayInstallerService:
             return False
 
     @staticmethod
-    def _download_core(
-        progress_callback: Optional[Callable[[str], None]] = None
-    ) -> Optional[str]:
+    def _download_core(progress_callback: Optional[Callable[[str], None]] = None) -> Optional[str]:
         """
         Download Xray core to temp location.
 
@@ -111,9 +109,7 @@ class XrayInstallerService:
                 os_name = "linux"
 
             filename = f"Xray-{os_name}-{arch_str}.zip"
-            url = (
-                f"https://github.com/XTLS/Xray-core/releases/latest/download/{filename}"
-            )
+            url = f"https://github.com/XTLS/Xray-core/releases/latest/download/{filename}"
 
             if progress_callback:
                 progress_callback(f"Downloading {filename}...")
@@ -133,10 +129,7 @@ class XrayInstallerService:
                 shutil.copyfileobj(response.raw, f)
 
             # Verify file exists and has reasonable size
-            if (
-                not os.path.exists(zip_path)
-                or os.path.getsize(zip_path) < MIN_FILE_SIZE
-            ):
+            if not os.path.exists(zip_path) or os.path.getsize(zip_path) < MIN_FILE_SIZE:
                 logger.error("Downloaded file validation failed")
                 return None
 

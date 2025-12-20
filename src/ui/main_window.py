@@ -8,14 +8,11 @@ from typing import Callable, Optional
 import flet as ft
 
 # Local modules
-from src.core.config_manager import ConfigManager
-from src.core.connection_manager import ConnectionManager
 from src.core.constants import APPDIR, FONT_URLS
 from src.core.i18n import t
 from src.core.logger import logger
 from src.core.types import ConnectionMode
 from src.services.connection_tester import ConnectionTester
-from src.services.network_stats import NetworkStatsService
 from src.ui.builders.ui_builder import UIBuilder
 from src.ui.components.toast import ToastManager
 from src.ui.handlers.connection_handler import ConnectionHandler
@@ -32,12 +29,14 @@ class MainWindow:
     def __init__(
         self,
         page: ft.Page,
-        config_manager: ConfigManager,
-        connection_manager: ConnectionManager,
+        container,  # ApplicationContainer
     ):
         self._page = page
-        self._config_manager = config_manager
-        self._connection_manager = connection_manager
+        self.container = container
+
+        # Get singletons from container
+        self._config_manager = container.config_manager()
+        self._connection_manager = container.connection_manager()
 
         # --- State Variables ---
         self._current_mode = ConnectionMode.VPN
@@ -59,7 +58,7 @@ class MainWindow:
         self._main_container = None
 
         # --- Services ---
-        self._network_stats = NetworkStatsService()
+        self._network_stats = container.network_stats()
 
         # --- Toast Manager ---
         self._toast = None  # Will be initialized after page setup
@@ -80,6 +79,23 @@ class MainWindow:
         self._toast = ToastManager(self._page)
         # Store in page for components to access
         self._page._toast_manager = self._toast
+
+        # --- Initialize Managers with DI ---
+        from src.core.container import create_monitoring_service, create_profile_manager
+
+        self._profile_manager = create_profile_manager(
+            container=container,
+            connection_handler=self._connection_handler,
+            ui_updater=self._ui_call,
+        )
+        self._profile_manager.set_ui_update_callback(self._update_selected_profile_ui)
+
+        self._monitoring_service = create_monitoring_service(
+            container=container,
+            connection_handler=self._connection_handler,
+            ui_updater=self._ui_call,
+            toast_manager=self._toast,
+        )
 
         self._ui_builder.build_ui()  # Delegate to builder
         self._drawer_manager.setup_drawers()  # Delegate to manager
@@ -118,12 +134,8 @@ class MainWindow:
         saved_mode = self._config_manager.get_connection_mode()
         saved_theme = self._config_manager.get_theme_mode()
 
-        self._current_mode = (
-            ConnectionMode.VPN if saved_mode == "vpn" else ConnectionMode.PROXY
-        )
-        self._page.theme_mode = (
-            ft.ThemeMode.DARK if saved_theme == "dark" else ft.ThemeMode.LIGHT
-        )
+        self._current_mode = ConnectionMode.VPN if saved_mode == "vpn" else ConnectionMode.PROXY
+        self._page.theme_mode = ft.ThemeMode.DARK if saved_theme == "dark" else ft.ThemeMode.LIGHT
 
         # Load last selected profile (from local OR subscriptions)
         last_profile_id = self._config_manager.get_last_selected_profile_id()
@@ -161,17 +173,13 @@ class MainWindow:
                     except Exception:
                         pass
             except Exception as e:
-                logger.debug(
-                    f"[DEBUG] UI call error in {fn.__name__ if hasattr(fn, '__name__') else 'lambda'}: {e}"
-                )
+                logger.debug(f"[DEBUG] UI call error in {fn.__name__ if hasattr(fn, '__name__') else 'lambda'}: {e}")
 
         try:
             self._page.run_task(_coro)
         except RuntimeError as e:
             if "Event loop is closed" in str(e):
-                logger.debug(
-                    "[DEBUG] RuntimeError caught in _ui_call: Event loop is closed"
-                )
+                logger.debug("[DEBUG] RuntimeError caught in _ui_call: Event loop is closed")
             else:
                 logger.warning(f"[DEBUG] RuntimeError in _ui_call: {e}")
 
@@ -408,9 +416,7 @@ class MainWindow:
                     logger.debug(f"Monitoring loop success. Country: {country_data}")
                     if country_data:
                         profile.update(country_data)
-                        self._config_manager.update_profile(
-                            profile.get("id"), country_data
-                        )
+                        self._config_manager.update_profile(profile.get("id"), country_data)
 
                     # Visual Updates (Pass current profile state)
                     # We use lambda to capture specific values or allow delayed execution,
@@ -582,8 +588,7 @@ class MainWindow:
         def install_task():
             try:
                 if component == "xray":
-                    from src.services.xray_installer import \
-                        XrayInstallerService
+                    from src.services.xray_installer import XrayInstallerService
 
                     XrayInstallerService.install(
                         progress_callback=update_status,
@@ -608,9 +613,7 @@ class MainWindow:
             # Update local reference
             self._selected_profile.update(updated_profile)
             # Update Server Card
-            self._ui_call(
-                lambda: self._server_card.update_server(self._selected_profile)
-            )
+            self._ui_call(lambda: self._server_card.update_server(self._selected_profile))
 
     def _on_mode_changed(self, mode: ConnectionMode):
         from src.utils.process_utils import ProcessUtils
@@ -620,9 +623,7 @@ class MainWindow:
             return
 
         self._current_mode = mode
-        self._config_manager.set_connection_mode(
-            "vpn" if mode == ConnectionMode.VPN else "proxy"
-        )
+        self._config_manager.set_connection_mode("vpn" if mode == ConnectionMode.VPN else "proxy")
         self._status_display.set_status(f"{mode.name} Mode Selected")
         self._ui_call(lambda: None)
 
@@ -642,11 +643,7 @@ class MainWindow:
         async def monitor_latency_loop():
             """Continuously tests connectivity for selected profile when disconnected."""
             while True:
-                if (
-                    not self._is_running
-                    and not self._connecting
-                    and self._selected_profile
-                ):
+                if not self._is_running and not self._connecting and self._selected_profile:
                     config = self._selected_profile.get("config", {})
 
                     def on_result(success, result_str, country_data=None):
@@ -659,16 +656,12 @@ class MainWindow:
                             # Update country if found
                             if country_data and self._selected_profile:
                                 self._selected_profile.update(country_data)
-                                self._config_manager.update_profile(
-                                    self._selected_profile.get("id"), country_data
-                                )
+                                self._config_manager.update_profile(self._selected_profile.get("id"), country_data)
 
                     from src.services.connection_tester import ConnectionTester
 
                     fetch_flag = not self._selected_profile.get("country_code")
-                    ConnectionTester.test_connection(
-                        config, on_result, fetch_country=fetch_flag
-                    )
+                    ConnectionTester.test_connection(config, on_result, fetch_country=fetch_flag)
 
                 # Check every 60s
                 # We check every 1s to be responsive to state changes, but execute test every 60s
@@ -707,9 +700,7 @@ class MainWindow:
         remember_checkbox = ft.Checkbox(
             label=t("close_dialog.remember"),
             value=False,
-            label_style=ft.TextStyle(
-                size=13, color=ft.Colors.with_opacity(0.7, ft.Colors.ON_SURFACE)
-            ),
+            label_style=ft.TextStyle(size=13, color=ft.Colors.with_opacity(0.7, ft.Colors.ON_SURFACE)),
             # White inside when empty, blue accent checkmark
             fill_color={
                 ft.ControlState.SELECTED: ft.Colors.BLUE_ACCENT,
@@ -729,9 +720,7 @@ class MainWindow:
             os._exit(0)
 
         def handle_minimize(e):
-            logger.debug(
-                f"[DEBUG] Close dialog: Minimize clicked (remember={remember_checkbox.value})"
-            )
+            logger.debug(f"[DEBUG] Close dialog: Minimize clicked (remember={remember_checkbox.value})")
             if remember_checkbox.value:
                 self._config_manager.set_remember_close_choice(True)
 

@@ -1,0 +1,11 @@
+src\main.py:83:5: F401 'sys' imported but unused
+src\core\connection_manager.py:17:1: F401 'src.utils.platform_utils.PlatformUtils' imported but unused
+src\services\configuration_processor.py:11:1: F401 'os' imported but unused
+src\services\connection_tester.py:200:21: F841 local variable 'last_exception' is assigned to but never used
+src\services\network_stability_observer.py:185:5: E303 too many blank lines (2)
+src\services\network_stability_observer.py:587:13: E128 continuation line under-indented for visual indent
+src\services\network_stability_observer.py:587:13: E125 continuation line with same indent as next logical line
+src\ui\components\settings_drawer.py:264:13: F821 undefined name 'logger'
+src\ui\components\settings_drawer.py:350:17: F821 undefined name 'logger'
+src\utils\network_utils.py:204:17: E303 too many blank lines (2)
+10

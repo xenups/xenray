@@ -51,6 +51,8 @@ class ConnectionHandler:
             try:
                 # 1. Kill current connection silently (no delays, no UI reset)
                 self._main._is_running = False
+                self._main._profile_manager.is_running = False
+                self._main._monitoring_service.is_running = False
                 try:
                     self._main._connection_manager.disconnect()
                 except Exception:
@@ -77,23 +79,15 @@ class ConnectionHandler:
                 self._main._toast.error(t("connection.no_internet"), 3000)
                 return
 
-            profile_config = (
-                self._main._selected_profile.get("config")
-                if self._main._selected_profile
-                else {}
-            )
-            mode_str = (
-                "vpn" if self._main._current_mode == ConnectionMode.VPN else "proxy"
-            )
+            profile_config = self._main._selected_profile.get("config") if self._main._selected_profile else {}
+            mode_str = "vpn" if self._main._current_mode == ConnectionMode.VPN else "proxy"
 
             os.makedirs(TMPDIR, exist_ok=True)
 
             # Start logging
             app_log = os.path.join(TMPDIR, "xenray.log")
             if self._main._current_mode == ConnectionMode.VPN:
-                self._main._log_viewer.start_tailing(
-                    app_log, XRAY_LOG_FILE, SINGBOX_LOG_FILE
-                )
+                self._main._log_viewer.start_tailing(app_log, XRAY_LOG_FILE, SINGBOX_LOG_FILE)
             else:
                 self._main._log_viewer.start_tailing(app_log, XRAY_LOG_FILE)
 
@@ -105,9 +99,7 @@ class ConnectionHandler:
                 self._main._ui_call(self._main._status_display.set_step, step_msg)
 
             # Rate limiting is enforced in ConnectionManager.connect()
-            success = self._main._connection_manager.connect(
-                temp_config_path, mode_str, step_callback=on_step
-            )
+            success = self._main._connection_manager.connect(temp_config_path, mode_str, step_callback=on_step)
 
             if not success:
                 self._main._connecting = False
@@ -116,6 +108,8 @@ class ConnectionHandler:
                 return
 
             self._main._is_running = True
+            self._main._profile_manager.is_running = True
+            self._main._monitoring_service.is_running = True
 
             # --- Post-Connection Internet Check ---
             # Wait a brief moment for core to stabilize
@@ -123,9 +117,7 @@ class ConnectionHandler:
 
             time.sleep(1)
 
-            self._main._ui_call(
-                self._main._status_display.set_step, t("connection.checking_network")
-            )
+            self._main._ui_call(self._main._status_display.set_step, t("connection.checking_network"))
 
             proxy_port = self._main._config_manager.get_proxy_port()
             if not NetworkUtils.check_proxy_connectivity(proxy_port):
@@ -154,9 +146,7 @@ class ConnectionHandler:
             if self._main._network_stats:
                 self._main._network_stats.start()
                 if self._main._logs_drawer_component:
-                    self._main._ui_call(
-                        self._main._logs_drawer_component.show_stats, True
-                    )
+                    self._main._ui_call(self._main._logs_drawer_component.show_stats, True)
 
         except Exception as e:
             logger.error(f"Error in _perform_connect_task: {e}")
@@ -175,14 +165,14 @@ class ConnectionHandler:
 
         def disconnect_task():
             self._main._is_running = False
+            self._main._profile_manager.is_running = False
+            self._main._monitoring_service.is_running = False
 
             # Stop network stats monitoring
             try:
                 self._main._network_stats.stop()
                 if self._main._logs_drawer_component:
-                    self._main._ui_call(
-                        self._main._logs_drawer_component.show_stats, False
-                    )
+                    self._main._ui_call(self._main._logs_drawer_component.show_stats, False)
             except Exception:
                 pass
 
@@ -212,6 +202,8 @@ class ConnectionHandler:
         """Reset UI to disconnected state."""
         self._main._is_running = False
         self._main._connecting = False
+        self._main._profile_manager.is_running = False
+        self._main._monitoring_service.is_running = False
         try:
             self._main._connection_button.set_disconnected()
             self._main._status_display.set_disconnected()
@@ -220,17 +212,11 @@ class ConnectionHandler:
             # Trigger immediate latency check
             if self._main._selected_profile:
                 profile_name = self._main._selected_profile.get("name")
-                logger.debug(
-                    f"[ConnectionHandler] Starting post-disconnection ping test for: {profile_name}"
-                )
-                self._main._ui_call(
-                    self._main._status_display.set_pre_connection_ping, "...", False
-                )
+                logger.debug(f"[ConnectionHandler] Starting post-disconnection ping test for: {profile_name}")
+                self._main._ui_call(self._main._status_display.set_pre_connection_ping, "...", False)
 
                 def on_result(success, result_str, country_data=None):
-                    logger.debug(
-                        f"[ConnectionHandler] Ping result received: {result_str} (success={success})"
-                    )
+                    logger.debug(f"[ConnectionHandler] Ping result received: {result_str} (success={success})")
 
                     # More relaxed guard: only skip if we started CONNECTING again
                     if not self._main._connecting:
@@ -247,9 +233,7 @@ class ConnectionHandler:
                             )
                             # Removed: self._main._ui_call(self._main._status_display.update_country, country_data)
                     else:
-                        logger.debug(
-                            "[ConnectionHandler] Skipping ping update: Connection in progress"
-                        )
+                        logger.debug("[ConnectionHandler] Skipping ping update: Connection in progress")
 
                 from src.services.connection_tester import ConnectionTester
 

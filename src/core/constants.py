@@ -76,9 +76,7 @@ else:
 
 # Executable paths with platform-specific extensions
 XRAY_EXECUTABLE = os.path.join(BIN_DIR, f"xray{PlatformUtils.get_binary_suffix()}")
-SINGBOX_EXECUTABLE = os.path.join(
-    BIN_DIR, f"sing-box{PlatformUtils.get_binary_suffix()}"
-)
+SINGBOX_EXECUTABLE = os.path.join(BIN_DIR, f"sing-box{PlatformUtils.get_binary_suffix()}")
 
 # Sing-box config and log paths
 SINGBOX_CONFIG_PATH = os.path.join(TMPDIR, "singbox_config.json")
@@ -158,13 +156,7 @@ RATE_LIMIT_DEFAULT_RATE = float(os.getenv("RATE_LIMIT_DEFAULT_RATE", "2.0"))
 RATE_LIMIT_DEFAULT_BURST = int(os.getenv("RATE_LIMIT_DEFAULT_BURST", "5"))
 RATE_LIMIT_MIN_RATE = float(os.getenv("RATE_LIMIT_MIN_RATE", "0.5"))
 RATE_LIMIT_MAX_RATE = float(os.getenv("RATE_LIMIT_MAX_RATE", "5.0"))
-RATE_LIMIT_ADAPTATION_ENABLED = (
-    os.getenv("RATE_LIMIT_ADAPTATION_ENABLED", "true").lower() == "true"
-)
+RATE_LIMIT_ADAPTATION_ENABLED = os.getenv("RATE_LIMIT_ADAPTATION_ENABLED", "true").lower() == "true"
 # AIMD (Additive Increase / Multiplicative Decrease) parameters
-RATE_LIMIT_AIMD_ADDITIVE_INCREASE = float(
-    os.getenv("RATE_LIMIT_AIMD_ADDITIVE_INCREASE", "0.5")
-)
-RATE_LIMIT_AIMD_MULTIPLICATIVE_DECREASE = float(
-    os.getenv("RATE_LIMIT_AIMD_MULTIPLICATIVE_DECREASE", "0.5")
-)
+RATE_LIMIT_AIMD_ADDITIVE_INCREASE = float(os.getenv("RATE_LIMIT_AIMD_ADDITIVE_INCREASE", "0.5"))
+RATE_LIMIT_AIMD_MULTIPLICATIVE_DECREASE = float(os.getenv("RATE_LIMIT_AIMD_MULTIPLICATIVE_DECREASE", "0.5"))

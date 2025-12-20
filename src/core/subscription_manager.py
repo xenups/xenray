@@ -58,11 +58,7 @@ class SubscriptionManager:
 
             json_content = re.sub(pattern, replacer, content)
             json_content = re.sub(r",\s*([\]}])", r"\1", json_content)
-            json_content = "".join(
-                ch
-                for ch in json_content
-                if ch == "\n" or ch == "\r" or ch == "\t" or ord(ch) >= 32
-            )
+            json_content = "".join(ch for ch in json_content if ch == "\n" or ch == "\r" or ch == "\t" or ord(ch) >= 32)
 
             # Detect if it's likely JSON before trying to parse (must start with [ or {)
             stripped_json = json_content.strip()
@@ -75,9 +71,7 @@ class SubscriptionManager:
                             name = item.get("remarks", item.get("tag", "Server"))
                             profile_id = str(uuid.uuid4())
                             if "outbounds" in item or "inbounds" in item:
-                                profiles.append(
-                                    {"id": profile_id, "name": name, "config": item}
-                                )
+                                profiles.append({"id": profile_id, "name": name, "config": item})
                     if profiles:
                         return profiles
         except Exception:
@@ -89,10 +83,7 @@ class SubscriptionManager:
 
         # Check if it's base64 encoded by trying to decode it
         # Real base64 subscriptions usually don't have protocol headers in the encoded blob
-        if not any(
-            content.strip().startswith(p)
-            for p in ["vless://", "vmess://", "trojan://", "hysteria2://"]
-        ):
+        if not any(content.strip().startswith(p) for p in ["vless://", "vmess://", "trojan://", "hysteria2://"]):
             try:
                 # Add padding if needed
                 padded_content = content.strip()
