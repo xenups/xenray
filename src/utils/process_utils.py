@@ -355,7 +355,10 @@ class ProcessUtils:
                 # Running as Python script
                 executable = sys.executable
                 script_path = sys.argv[0]
-                script = f'do shell script "\\"{executable}\\" \\"{script_path}\\"" with administrator privileges'
+                script = (
+                    f'do shell script "\\"{executable}\\" \\"{script_path}\\"" '
+                    'with administrator privileges'
+                )
 
             logger.info("Requesting admin privileges via osascript...")
 

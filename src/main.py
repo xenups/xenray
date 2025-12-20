@@ -11,12 +11,9 @@ if __name__ == "__main__":
 
 import asyncio
 
-from src.core.config_manager import ConfigManager
-from src.core.connection_manager import ConnectionManager
 from src.core.constants import EARLY_LOG_FILE
 from src.core.logger import logger
 from src.core.settings import Settings
-from src.ui.main_window import MainWindow
 
 
 async def main(page: ft.Page):
@@ -37,17 +34,18 @@ async def main(page: ft.Page):
     Settings.create_log_files()
     Settings.setup_logging(EARLY_LOG_FILE)
 
-    # Initialize Core Services
-    config_manager = ConfigManager()
-    connection_manager = ConnectionManager(config_manager)
+    # Initialize DI Container
+    from src.core.container import ApplicationContainer
+
+    container = ApplicationContainer()
 
     # Initialize i18n
     from src.core.i18n import set_language
 
-    set_language(config_manager.get_language())
+    set_language(container.config_manager().get_language())
 
-    # Initialize UI
-    window = MainWindow(page, config_manager, connection_manager)
+    # Initialize UI with DI
+    window = container.main_window(page=page)
 
     # Register window event handler
     def on_window_event(e):
@@ -59,7 +57,7 @@ async def main(page: ft.Page):
             page.update()
 
     page.window.on_event = on_window_event
-    
+
     # NOW show the window - it already has correct size so no flash
     page.window.visible = True
     page.update()
@@ -80,7 +78,6 @@ def run():
     # Singleton Check (Moved here to prevent child processes from starting app)
     import ctypes
     import os
-    import sys
 
     # Import PlatformUtils - works for both script and PyInstaller
     # PyInstaller bundles these as hidden-imports

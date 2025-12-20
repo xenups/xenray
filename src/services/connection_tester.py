@@ -140,11 +140,10 @@ class ConnectionTester:
 
             # Target URL: Use something reliable and fast
             target_url = "http://cp.cloudflare.com/"
-            
+
             # Retry logic for connection test
             max_retries = 3
-            last_exception = None
-            
+
             for attempt in range(max_retries):
                 try:
                     start_time = time.time()
@@ -177,29 +176,38 @@ class ConnectionTester:
                             except Exception:
                                 pass  # Fail silently for geoip
 
-                        return True, t("connection.latency_ms", value=latency), country_data
+                        return (
+                            True,
+                            t("connection.latency_ms", value=latency),
+                            country_data,
+                        )
 
                     # If status code is not 204/2xx, retry
                     if attempt < max_retries - 1:
-                        logger.debug(f"Connection test attempt {attempt + 1}/{max_retries} got status {response.status_code}, retrying...")
+                        logger.debug(
+                            f"Connection test attempt {attempt + 1}/{max_retries} "
+                            f"got status {response.status_code}, retrying..."
+                        )
                         time.sleep(0.5)
                         continue
                     else:
                         return False, t("connection.conn_error"), None
-                        
-                except requests.exceptions.Timeout as e:
-                    last_exception = e
+
+                except requests.exceptions.Timeout:
                     if attempt < max_retries - 1:
-                        logger.debug(f"Connection test attempt {attempt + 1}/{max_retries} timed out, retrying...")
+                        logger.debug(
+                            f"Connection test attempt {attempt + 1}/{max_retries} timed out, retrying..."
+                        )
                         time.sleep(0.5)
                         continue
                     else:
                         return False, t("connection.timeout"), None
-                        
-                except requests.exceptions.RequestException as e:
-                    last_exception = e
+
+                except requests.exceptions.RequestException:
                     if attempt < max_retries - 1:
-                        logger.debug(f"Connection test attempt {attempt + 1}/{max_retries} failed: {e}, retrying...")
+                        logger.debug(
+                            f"Connection test attempt {attempt + 1}/{max_retries} failed, retrying..."
+                        )
                         time.sleep(0.5)
                         continue
                     else:

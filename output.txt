@@ -1,0 +1,5 @@
+Testing new patterns:
+✓ Matched 'ound: failed to process o...': CONNECTION_RESET (MODERATE)
+✓ Matched 'net/websocket: failed to ...': CONNECTION_RESET (MODERATE)
+✓ Matched 'too small...': DNS_FAILURE (MODERATE)
+✓ Matched 'AC...': TLS_FAILURE (SEVERE)

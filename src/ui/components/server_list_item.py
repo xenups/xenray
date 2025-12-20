@@ -95,7 +95,9 @@ class ServerListItem(ft.Container):
         # Actions Menu
         menu_items = [
             ft.PopupMenuItem(
-                text=t("server_list.share"), icon=ft.Icons.SHARE_ROUNDED, on_click=self._copy_config
+                text=t("server_list.share"),
+                icon=ft.Icons.SHARE_ROUNDED,
+                on_click=self._copy_config,
             ),
         ]
         if not read_only and on_delete:

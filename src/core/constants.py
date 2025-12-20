@@ -127,21 +127,21 @@ SINGBOX_RULE_SETS = {
     "ir": [
         os.getenv(
             "SINGBOX_RULESET_IR_GEOIP",
-            "https://raw.githubusercontent.com/Chocolate4U/Iran-sing-box-rules/rule-set/geoip-ir.srs",
+            "https://raw.githubusercontent.com/Chocolate4U/Iran-sing-box-rules/rule-set/geoip-ir.srs",  # noqa: E501
         ),
         os.getenv(
             "SINGBOX_RULESET_IR_GEOSITE",
-            "https://raw.githubusercontent.com/Chocolate4U/Iran-sing-box-rules/rule-set/geosite-ir.srs",
+            "https://raw.githubusercontent.com/Chocolate4U/Iran-sing-box-rules/rule-set/geosite-ir.srs",  # noqa: E501
         ),
     ],
     "cn": [
         os.getenv(
-            "SINGBOX_RULESET_CN_GEOSITE",
-            "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.srs",
+            "SINGBOX_RULESET_ADS_GEOSITE",
+            "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-category-ads-all.srs",  # noqa: E501
         ),
         os.getenv(
             "SINGBOX_RULESET_CN_GEOIP",
-            "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs",
+            "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs",  # noqa: E501
         ),
     ],
     "ru": [

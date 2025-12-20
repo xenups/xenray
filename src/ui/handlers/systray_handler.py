@@ -16,16 +16,32 @@ if TYPE_CHECKING:
     from src.ui.main_window import MainWindow
 
 
+from src.core.config_manager import ConfigManager
+from src.core.connection_manager import ConnectionManager
+
+
 class SystrayHandler:
     """Handles the system tray icon and lifecycle."""
 
-    def __init__(self, main_window: MainWindow):
-        self._main = main_window
+    def __init__(
+        self,
+        connection_manager: ConnectionManager,
+        config_manager: ConfigManager,
+    ):
+        self._connection_manager = connection_manager
+        self._config_manager = config_manager
+        self._main: Optional[MainWindow] = None
         self._icon: Optional[pystray.Icon] = None
         self._tray_thread: Optional[threading.Thread] = None
 
         # Load icon image
         self._icon_image = self._load_icon()
+
+    def setup(self, main_window: MainWindow):
+        """Bind main window to the handler and initialize tray."""
+        self._main = main_window
+        if not self._icon:
+            self._init_tray()
 
     def _load_icon(self) -> Image.Image:
         """Load the application icon using Pillow."""
@@ -41,7 +57,7 @@ class SystrayHandler:
             # Create a blank image as last resort
             return Image.new("RGBA", (64, 64), (0, 0, 0, 0))
 
-    def setup(self):
+    def _init_tray(self):
         """Initialize and start the tray icon."""
         if self._icon:
             return
@@ -54,7 +70,6 @@ class SystrayHandler:
         )
 
         # Start tray in a separate thread or detached
-        # run_detached works well on Windows, but threading.Thread is safer cross-platform
         try:
             self._icon.run_detached()
         except Exception as e:
@@ -119,7 +134,7 @@ class SystrayHandler:
                 logger.debug(f"Systray restore error: {e}")
 
         try:
-            self._main._ui_call(_show)
+            self._main._ui_helper.call(_show)
         except Exception as e:
             logger.debug(f"Systray _on_open error: {e}")
 

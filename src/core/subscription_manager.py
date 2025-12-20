@@ -149,7 +149,9 @@ class SubscriptionManager:
                 self._config_manager.save_subscription_data(sub)
 
                 if callback:
-                    callback(True, t("server_list.subscription_updated", count=len(profiles)))
+                    callback(
+                        True, t("server_list.subscription_updated", count=len(profiles))
+                    )
             except Exception as e:
                 logger.error(f"Subscription update failed: {e}")
                 if callback:

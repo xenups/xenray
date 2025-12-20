@@ -1,58 +1,150 @@
 """Connection Handler - Manages connection lifecycle."""
+
 from __future__ import annotations
 
 import json
 import os
 import threading
-from typing import TYPE_CHECKING
+from typing import Callable, Optional
 
+from src.core.config_manager import ConfigManager
+from src.core.connection_manager import ConnectionManager
 from src.core.constants import SINGBOX_LOG_FILE, TMPDIR, XRAY_LOG_FILE
 from src.core.i18n import t
 from src.core.logger import logger
 from src.core.types import ConnectionMode
-
-if TYPE_CHECKING:
-    from src.ui.main_window import MainWindow
+from src.services.network_stats import NetworkStatsService
 
 
 class ConnectionHandler:
     """Handles connection lifecycle (connect, disconnect, reconnect)."""
 
-    def __init__(self, main_window: MainWindow):
-        self._main = main_window
+    def __init__(
+        self,
+        connection_manager: ConnectionManager,
+        config_manager: ConfigManager,
+        network_stats: NetworkStatsService,
+    ):
+        self._connection_manager = connection_manager
+        self._config_manager = config_manager
+        self._network_stats = network_stats
+
+        self._ui_helper = None
+        self._connection_button = None
+        self._status_display = None
+        self._log_viewer = None
+        self._toast = None
+        self._systray = None
+        self._logs_drawer_component = None
+        self._latency_monitor_handler = None
+
+        # State getters and setters
+        self._is_running_getter: Optional[Callable[[], bool]] = None
+        self._is_running_setter: Optional[Callable[[bool], None]] = None
+        self._connecting_getter: Optional[Callable[[], bool]] = None
+        self._connecting_setter: Optional[Callable[[bool], None]] = None
+        self._selected_profile_getter: Optional[Callable[[], Optional[dict]]] = None
+        self._current_mode_getter: Optional[Callable[[], ConnectionMode]] = None
+        self._update_horizon_glow_callback: Optional[Callable[[str], None]] = None
+
+        # Service state setters
+        self._profile_manager_is_running_setter: Optional[Callable[[bool], None]] = None
+        self._monitoring_service_is_running_setter: Optional[Callable[[bool], None]] = (
+            None
+        )
+
+    def setup(
+        self,
+        ui_helper,
+        connection_button,
+        status_display,
+        log_viewer,
+        toast,
+        systray,
+        logs_drawer_component,
+        latency_monitor_handler,
+        is_running_getter,
+        is_running_setter,
+        connecting_getter,
+        connecting_setter,
+        selected_profile_getter,
+        current_mode_getter,
+        update_horizon_glow_callback,
+        profile_manager_is_running_setter,
+        monitoring_service_is_running_setter,
+    ):
+        """Bind UI components and state callbacks to the handler."""
+        self._ui_helper = ui_helper
+        self._connection_button = connection_button
+        self._status_display = status_display
+        self._log_viewer = log_viewer
+        self._toast = toast
+        self._systray = systray
+        self._logs_drawer_component = logs_drawer_component
+        self._latency_monitor_handler = latency_monitor_handler
+        self._is_running_getter = is_running_getter
+        self._is_running_setter = is_running_setter
+        self._connecting_getter = connecting_getter
+        self._connecting_setter = connecting_setter
+        self._selected_profile_getter = selected_profile_getter
+        self._current_mode_getter = current_mode_getter
+        self._update_horizon_glow_callback = update_horizon_glow_callback
+        self._profile_manager_is_running_setter = profile_manager_is_running_setter
+        self._monitoring_service_is_running_setter = (
+            monitoring_service_is_running_setter
+        )
 
     def connect_async(self):
         """Start connection in background thread."""
-        if self._main._connecting:
+        if self._connecting_getter and self._connecting_getter():
             return
-        self._main._connecting = True
+        if self._connecting_setter:
+            self._connecting_setter(True)
 
         # Show connecting animation immediately
-        self._main._ui_call(self._main._connection_button.set_connecting)
-        self._main._ui_call(self._main._status_display.set_initializing)
-        self._main._ui_call(lambda: self._main._update_horizon_glow("connecting"))
+        if self._ui_helper:
+            if self._connection_button:
+                self._ui_helper.call(self._connection_button.set_connecting)
+            if self._status_display:
+                self._ui_helper.call(self._status_display.set_initializing)
+            if self._update_horizon_glow_callback:
+                self._ui_helper.call(
+                    lambda: self._update_horizon_glow_callback("connecting")
+                )
 
         threading.Thread(target=self._perform_connect_task, daemon=True).start()
 
     def reconnect(self):
         """Fast reconnect for server switching while running."""
-        if self._main._connecting:
+        if self._connecting_getter and self._connecting_getter():
             return
 
-        self._main._connecting = True
+        if self._connecting_setter:
+            self._connecting_setter(True)
 
         # Visually switch to "Connecting" (Amber) immediately
-        # We DON'T show Disconnecting (Red) or Disconnected (Orange)
-        self._main._ui_call(self._main._connection_button.set_connecting)
-        self._main._ui_call(self._main._status_display.set_initializing)
-        self._main._ui_call(lambda: self._main._update_horizon_glow("connecting"))
+        if self._ui_helper:
+            if self._connection_button:
+                self._ui_helper.call(self._connection_button.set_connecting)
+            if self._status_display:
+                self._ui_helper.call(self._status_display.set_initializing)
+            if self._update_horizon_glow_callback:
+                self._ui_helper.call(
+                    lambda: self._update_horizon_glow_callback("connecting")
+                )
 
         def fast_reconnect_task():
             try:
-                # 1. Kill current connection silently (no delays, no UI reset)
-                self._main._is_running = False
+                # 1. Kill current connection silently
+                if self._is_running_setter:
+                    self._is_running_setter(False)
+                if self._profile_manager_is_running_setter:
+                    self._profile_manager_is_running_setter(False)
+                if self._monitoring_service_is_running_setter:
+                    self._monitoring_service_is_running_setter(False)
+
                 try:
-                    self._main._connection_manager.disconnect()
+                    self._connection_manager.disconnect()
                 except Exception:
                     pass
 
@@ -60,204 +152,216 @@ class ConnectionHandler:
                 self._perform_connect_task()
             except Exception as e:
                 logger.error(f"Error in fast_reconnect_task: {e}")
-                self._main._connecting = False
-                self._main._ui_call(self.reset_ui_disconnected)
+                if self._connecting_setter:
+                    self._connecting_setter(False)
+                if self._ui_helper:
+                    self._ui_helper.call(self.reset_ui_disconnected)
 
         threading.Thread(target=fast_reconnect_task, daemon=True).start()
 
     def _perform_connect_task(self):
         """Core connection logic reused by connect_async and reconnect."""
         try:
-            # Check Internet Connectivity (in background thread)
+            # Check Internet Connectivity
             from src.utils.network_utils import NetworkUtils
 
             if not NetworkUtils.check_internet_connection():
-                self._main._connecting = False
-                self._main._ui_call(self.reset_ui_disconnected)
-                self._main._toast.error(t("connection.no_internet"), 3000)
+                if self._connecting_setter:
+                    self._connecting_setter(False)
+                if self._ui_helper:
+                    self._ui_helper.call(self.reset_ui_disconnected)
+                if self._toast:
+                    self._toast.error(t("connection.no_internet"), 3000)
                 return
 
-            profile_config = (
-                self._main._selected_profile.get("config")
-                if self._main._selected_profile
-                else {}
+            selected_profile = (
+                self._selected_profile_getter()
+                if self._selected_profile_getter
+                else None
             )
-            mode_str = (
-                "vpn" if self._main._current_mode == ConnectionMode.VPN else "proxy"
+            profile_config = selected_profile.get("config") if selected_profile else {}
+
+            current_mode = (
+                self._current_mode_getter()
+                if self._current_mode_getter
+                else ConnectionMode.PROXY
             )
+            mode_str = "vpn" if current_mode == ConnectionMode.VPN else "proxy"
 
             os.makedirs(TMPDIR, exist_ok=True)
 
             # Start logging
-            app_log = os.path.join(TMPDIR, "xenray.log")
-            if self._main._current_mode == ConnectionMode.VPN:
-                self._main._log_viewer.start_tailing(
-                    app_log, XRAY_LOG_FILE, SINGBOX_LOG_FILE
-                )
-            else:
-                self._main._log_viewer.start_tailing(app_log, XRAY_LOG_FILE)
+            if self._log_viewer:
+                app_log = os.path.join(TMPDIR, "xenray.log")
+                if current_mode == ConnectionMode.VPN:
+                    self._log_viewer.start_tailing(
+                        app_log, XRAY_LOG_FILE, SINGBOX_LOG_FILE
+                    )
+                else:
+                    self._log_viewer.start_tailing(app_log, XRAY_LOG_FILE)
 
             temp_config_path = os.path.join(TMPDIR, "current_config.json")
             with open(temp_config_path, "w", encoding="utf-8") as f:
                 json.dump(profile_config, f)
 
             def on_step(step_msg: str):
-                self._main._ui_call(self._main._status_display.set_step, step_msg)
+                if self._ui_helper and self._status_display:
+                    self._ui_helper.call(self._status_display.set_step, step_msg)
 
-            success = self._main._connection_manager.connect(
+            success = self._connection_manager.connect(
                 temp_config_path, mode_str, step_callback=on_step
             )
 
             if not success:
-                self._main._connecting = False
-                self._main._ui_call(self.reset_ui_disconnected)
-                self._main._toast.error(t("status.connection_failed"), 3000)
+                if self._connecting_setter:
+                    self._connecting_setter(False)
+                if self._ui_helper:
+                    self._ui_helper.call(self.reset_ui_disconnected)
+                if self._toast:
+                    self._toast.error(t("status.connection_failed"), 3000)
                 return
 
-            self._main._is_running = True
+            if self._is_running_setter:
+                self._is_running_setter(True)
+            if self._profile_manager_is_running_setter:
+                self._profile_manager_is_running_setter(True)
+            if self._monitoring_service_is_running_setter:
+                self._monitoring_service_is_running_setter(True)
 
-            # --- Post-Connection Internet Check ---
-            # Wait a brief moment for core to stabilize
+            # Post-Connection Internet Check
             import time
 
             time.sleep(1)
 
-            self._main._ui_call(
-                self._main._status_display.set_step, t("connection.checking_network")
-            )
+            if self._ui_helper and self._status_display:
+                self._ui_helper.call(
+                    self._status_display.set_step, t("connection.checking_network")
+                )
 
-            proxy_port = self._main._config_manager.get_proxy_port()
+            proxy_port = self._config_manager.get_proxy_port()
             if not NetworkUtils.check_proxy_connectivity(proxy_port):
                 logger.error("Post-connection internet check failed")
-                self._main._connecting = False
-                # Use disconnect to cleanup
-                self._main._connection_manager.disconnect()
-                self._main._ui_call(self.reset_ui_disconnected)
-                self._main._toast.warning(t("connection.connected_no_internet"), 3000)
+                if self._connecting_setter:
+                    self._connecting_setter(False)
+                self._connection_manager.disconnect()
+                if self._ui_helper:
+                    self._ui_helper.call(self.reset_ui_disconnected)
+                if self._toast:
+                    self._toast.warning(t("connection.connected_no_internet"), 3000)
                 return
-            # --------------------------------------
 
-            self._main._connecting = False
+            if self._connecting_setter:
+                self._connecting_setter(False)
 
-            self._main._ui_call(
-                self._main._status_display.set_connected,
-                country_data=self._main._selected_profile,
-            )
-            self._main._ui_call(self._main._connection_button.set_connected)
-            self._main._ui_call(lambda: self._main._update_horizon_glow("connected"))
+            if self._ui_helper:
+                if self._status_display:
+                    self._ui_helper.call(
+                        self._status_display.set_connected,
+                        country_data=selected_profile,
+                    )
+                if self._connection_button:
+                    self._ui_helper.call(self._connection_button.set_connected)
+                if self._update_horizon_glow_callback:
+                    self._ui_helper.call(
+                        lambda: self._update_horizon_glow_callback("connected")
+                    )
 
             # Update system tray state
-            self._main._systray.update_state()
+            if self._systray:
+                self._systray.update_state()
 
             # Start network stats service
-            if self._main._network_stats:
-                self._main._network_stats.start()
-                if self._main._logs_drawer_component:
-                    self._main._ui_call(
-                        self._main._logs_drawer_component.show_stats, True
-                    )
+            if self._network_stats:
+                self._network_stats.start()
+                if self._logs_drawer_component and self._ui_helper:
+                    self._ui_helper.call(self._logs_drawer_component.show_stats, True)
 
         except Exception as e:
             logger.error(f"Error in _perform_connect_task: {e}")
-            self._main._connecting = False
-            self._main._ui_call(self.reset_ui_disconnected)
+            if self._connecting_setter:
+                self._connecting_setter(False)
+            if self._ui_helper:
+                self._ui_helper.call(self.reset_ui_disconnected)
 
     def disconnect(self):
         """Disconnect from VPN/Proxy."""
-        if not self._main._is_running:
+        is_running = self._is_running_getter() if self._is_running_getter else False
+        if not is_running:
             return
 
         # Show disconnecting UI immediately
-        self._main._ui_call(self._main._connection_button.set_disconnecting)
-        self._main._ui_call(self._main._status_display.set_disconnecting)
-        self._main._ui_call(lambda: self._main._update_horizon_glow("disconnecting"))
+        if self._ui_helper:
+            if self._connection_button:
+                self._ui_helper.call(self._connection_button.set_disconnecting)
+            if self._status_display:
+                self._ui_helper.call(self._status_display.set_disconnecting)
+            if self._update_horizon_glow_callback:
+                self._ui_helper.call(
+                    lambda: self._update_horizon_glow_callback("disconnecting")
+                )
 
         def disconnect_task():
-            self._main._is_running = False
+            if self._is_running_setter:
+                self._is_running_setter(False)
+            if self._profile_manager_is_running_setter:
+                self._profile_manager_is_running_setter(False)
+            if self._monitoring_service_is_running_setter:
+                self._monitoring_service_is_running_setter(False)
 
             # Stop network stats monitoring
             try:
-                self._main._network_stats.stop()
-                if self._main._logs_drawer_component:
-                    self._main._ui_call(
-                        self._main._logs_drawer_component.show_stats, False
-                    )
+                self._network_stats.stop()
+                if self._logs_drawer_component and self._ui_helper:
+                    self._ui_helper.call(self._logs_drawer_component.show_stats, False)
             except Exception:
                 pass
 
             try:
-                self._main._connection_manager.disconnect()
+                self._connection_manager.disconnect()
             except Exception:
                 pass
 
             try:
-                self._main._log_viewer.stop_tailing()
+                if self._log_viewer:
+                    self._log_viewer.stop_tailing()
             except Exception:
                 pass
 
-            # Small delay to let user see disconnecting state
             import time
 
             time.sleep(1.0)
 
-            self._main._ui_call(self.reset_ui_disconnected)
+            if self._ui_helper:
+                self._ui_helper.call(self.reset_ui_disconnected)
 
             # Update system tray state
-            self._main._systray.update_state()
+            if self._systray:
+                self._systray.update_state()
 
         threading.Thread(target=disconnect_task, daemon=True).start()
 
     def reset_ui_disconnected(self):
         """Reset UI to disconnected state."""
-        self._main._is_running = False
-        self._main._connecting = False
+        if self._is_running_setter:
+            self._is_running_setter(False)
+        if self._connecting_setter:
+            self._connecting_setter(False)
+        if self._profile_manager_is_running_setter:
+            self._profile_manager_is_running_setter(False)
+        if self._monitoring_service_is_running_setter:
+            self._monitoring_service_is_running_setter(False)
+
         try:
-            self._main._connection_button.set_disconnected()
-            self._main._status_display.set_disconnected()
-            self._main._update_horizon_glow("disconnected")
+            if self._connection_button:
+                self._connection_button.set_disconnected()
+            if self._status_display:
+                self._status_display.set_disconnected()
+            if self._update_horizon_glow_callback:
+                self._update_horizon_glow_callback("disconnected")
 
-            # Trigger immediate latency check
-            if self._main._selected_profile:
-                profile_name = self._main._selected_profile.get("name")
-                logger.debug(
-                    f"[ConnectionHandler] Starting post-disconnection ping test for: {profile_name}"
-                )
-                self._main._ui_call(
-                    self._main._status_display.set_pre_connection_ping, "...", False
-                )
+            # Trigger immediate latency check via dedicated handler
+            if self._latency_monitor_handler:
+                self._latency_monitor_handler.trigger_single_check()
 
-                def on_result(success, result_str, country_data=None):
-                    logger.debug(
-                        f"[ConnectionHandler] Ping result received: {result_str} (success={success})"
-                    )
-
-                    # More relaxed guard: only skip if we started CONNECTING again
-                    if not self._main._connecting:
-                        self._main._ui_call(
-                            self._main._status_display.set_pre_connection_ping,
-                            result_str,
-                            success,
-                        )
-                        # Update country if found
-                        if country_data and self._main._selected_profile:
-                            self._main._selected_profile.update(country_data)
-                            self._main._config_manager.update_profile(
-                                self._main._selected_profile.get("id"), country_data
-                            )
-                            # Removed: self._main._ui_call(self._main._status_display.update_country, country_data)
-                    else:
-                        logger.debug(
-                            "[ConnectionHandler] Skipping ping update: Connection in progress"
-                        )
-
-                from src.services.connection_tester import ConnectionTester
-
-                fetch_flag = not self._main._selected_profile.get("country_code")
-                ConnectionTester.test_connection(
-                    self._main._selected_profile.get("config", {}),
-                    on_result,
-                    fetch_country=fetch_flag,
-                )
-
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"[ConnectionHandler] Error in reset_ui_disconnected: {e}")

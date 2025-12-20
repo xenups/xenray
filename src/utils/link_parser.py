@@ -485,8 +485,8 @@ class LinkParser:
             ss["kcpSettings"] = {"header": {"type": header_type}}
         elif network == "grpc":
             ss["grpcSettings"] = {
-                "serviceName": path  # often path is used for serviceName in vmess json
-            }
+                "serviceName": path
+            }  # often path is used for serviceName in vmess json
             if data.get("authority"):  # custom field sometimes
                 # ss["grpcSettings"]["authority"] = ... # Xray doesn't strictly need authority for client usually
                 pass

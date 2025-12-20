@@ -65,11 +65,14 @@ class AppUpdateService:
 
         try:
             from packaging import version
+
             return version.parse(latest_normalized) > version.parse(current_normalized)
         except Exception:
             # Fallback: simple string comparison (only if versions are different)
             # This is not ideal but prevents false positives
-            logger.warning(f"Failed to compare versions properly: {current} vs {latest}")
+            logger.warning(
+                f"Failed to compare versions properly: {current} vs {latest}"
+            )
             return current_normalized != latest_normalized
 
     @staticmethod

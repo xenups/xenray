@@ -2,19 +2,50 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
+from typing import Callable, Optional
+
+import flet as ft
 
 from src.core.logger import logger
-
-if TYPE_CHECKING:
-    from src.ui.main_window import MainWindow
+from src.services.network_stats import NetworkStatsService
 
 
 class NetworkStatsHandler:
     """Handles network statistics polling and UI updates."""
 
-    def __init__(self, main_window: MainWindow):
-        self._main = main_window
+    def __init__(self, network_stats: NetworkStatsService):
+        self._network_stats = network_stats
+        self._page: Optional[ft.Page] = None
+        self._status_display = None
+        self._connection_button = None
+        self._logs_drawer_component = None
+        self._earth_glow = None
+        self._logs_heartbeat = None
+        self._heartbeat = None
+
+        # State access required for logic
+        self._is_running_getter: Optional[Callable[[], bool]] = None
+
+    def setup(
+        self,
+        page: ft.Page,
+        status_display,
+        connection_button,
+        logs_drawer_component,
+        earth_glow,
+        logs_heartbeat,
+        heartbeat,
+        is_running_getter: Callable[[], bool],
+    ):
+        """Bind UI components and state getters to the handler."""
+        self._page = page
+        self._status_display = status_display
+        self._connection_button = connection_button
+        self._logs_drawer_component = logs_drawer_component
+        self._earth_glow = earth_glow
+        self._logs_heartbeat = logs_heartbeat
+        self._heartbeat = heartbeat
+        self._is_running_getter = is_running_getter
 
     async def run_stats_loop(self):
         """
@@ -22,22 +53,17 @@ class NetworkStatsHandler:
         Polls shared state from service and updates UI.
         Runs on main UI thread (Async), does NOT block.
         """
-        while True:  # Run continuously, not just when connected
+        while True:
             try:
-                # 1. Lifecycle Check (Prevent Race Condition)
-                # Ensure StatusDisplay is fully mounted and ready
-                if (
-                    not self._main._status_display
-                    or not self._main._status_display.page
-                ):
+                # 1. Lifecycle Check
+                if not self._status_display or not self._status_display.page:
                     await asyncio.sleep(1.0)
                     continue
 
                 # 2. Update UI
                 self._update_ui()
 
-                # 3. Timing Control (Frequency Rule: >= 1s, prefer 1.5s)
-                # Moved to end to ensure immediate first update
+                # 3. Timing Control
                 await asyncio.sleep(1.5)
 
             except Exception as e:
@@ -47,25 +73,28 @@ class NetworkStatsHandler:
     def update_ui_immediately(self):
         """Triggers an immediate UI update if possible."""
         try:
-            if self._main._status_display and self._main._status_display.page:
+            if self._status_display and self._status_display.page:
                 self._update_ui()
         except Exception as e:
             logger.debug(f"Immediate stats update skipped: {e}")
 
     def _update_ui(self):
         """Core logic to sync stats with UI components."""
-        if not self._main._is_running:
-            # Reset heartbeat if needed (idempotent check)
-            if self._main._heartbeat and self._main._heartbeat.opacity != 0:
-                self._main._heartbeat.opacity = 0
-                self._main._heartbeat.update()
+        is_running = self._is_running_getter() if self._is_running_getter else False
+
+        if not is_running:
+            # Reset heartbeat if needed
+            if (
+                self._heartbeat
+                and self._heartbeat.page
+                and self._heartbeat.opacity != 0
+            ):
+                self._heartbeat.opacity = 0
+                self._heartbeat.update()
             return
 
-        # Read Shared State (Thread-Safe)
-        if not self._main._network_stats:
-            return
-
-        stats = self._main._network_stats.get_stats()
+        # Read Shared State
+        stats = self._network_stats.get_stats()
 
         # Speeds are pre-formatted strings
         down_str = stats.get("download_speed", "0 B/s")
@@ -77,19 +106,19 @@ class NetworkStatsHandler:
             total_bps = 0.0
 
         # Update Connection Button Glow
-        if self._main._connection_button and self._main._connection_button.page:
-            self._main._connection_button.update_network_activity(total_bps)
+        if self._connection_button and self._connection_button.page:
+            self._connection_button.update_network_activity(total_bps)
 
         # Update LogsDrawer stats if open AND mounted
         if (
-            self._main._logs_drawer_component
-            and self._main._logs_drawer_component.open
-            and self._main._logs_drawer_component.page
+            self._logs_drawer_component
+            and self._logs_drawer_component.open
+            and self._logs_drawer_component.page
         ):
-            self._main._logs_drawer_component.update_network_stats(down_str, up_str)
+            self._logs_drawer_component.update_network_stats(down_str, up_str)
 
         # Earth Glow Animation
-        if self._main._earth_glow and self._main._earth_glow.page:
+        if self._earth_glow and self._earth_glow.page:
             total_mbps = total_bps / (1024 * 1024)
             intensity = min(1.0, total_mbps / 5.0)
 
@@ -98,12 +127,12 @@ class NetworkStatsHandler:
 
             # Clamp opacity to valid range [0.0, 1.0]
             calculated_opacity = base_opacity + (0.5 * intensity)
-            self._main._earth_glow.opacity = min(1.0, max(0.0, calculated_opacity))
-            self._main._earth_glow.scale = base_scale + (0.2 * intensity)
-            self._main._earth_glow.update()
+            self._earth_glow.opacity = min(1.0, max(0.0, calculated_opacity))
+            self._earth_glow.scale = base_scale + (0.2 * intensity)
+            self._earth_glow.update()
 
         # Heartbeat logic
-        if self._main._logs_heartbeat and self._main._logs_heartbeat.page:
-            is_bright = self._main._logs_heartbeat.opacity > 0.5
-            self._main._logs_heartbeat.opacity = 0.3 if is_bright else 1.0
-            self._main._logs_heartbeat.update()
+        if self._logs_heartbeat and self._logs_heartbeat.page:
+            is_bright = self._logs_heartbeat.opacity > 0.5
+            self._logs_heartbeat.opacity = 0.3 if is_bright else 1.0
+            self._logs_heartbeat.update()

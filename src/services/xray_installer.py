@@ -219,10 +219,14 @@ class XrayInstallerService:
 
             # Normalize version strings (remove 'v' prefix from both versions)
             latest_version = tag_name.lstrip("v")
-            current_version_normalized = current_version.lstrip("v") if current_version else None
+            current_version_normalized = (
+                current_version.lstrip("v") if current_version else None
+            )
 
             # Debug logging
-            logger.info(f"Version check - Current (normalized): {current_version_normalized}")
+            logger.info(
+                f"Version check - Current (normalized): {current_version_normalized}"
+            )
             logger.info(f"Version check - Latest (normalized): {latest_version}")
 
             if not current_version_normalized:
@@ -230,7 +234,9 @@ class XrayInstallerService:
                 return True, None, latest_version
 
             if current_version_normalized != latest_version:
-                logger.info(f"Update available: {current_version_normalized} -> {latest_version}")
+                logger.info(
+                    f"Update available: {current_version_normalized} -> {latest_version}"
+                )
                 return True, current_version_normalized, latest_version
 
             logger.info("Already up to date")

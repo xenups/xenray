@@ -6,6 +6,7 @@ import threading
 import time
 
 import flet as ft
+from loguru import logger
 
 from src.core.config_manager import ConfigManager
 from src.core.constants import APP_VERSION
@@ -148,7 +149,9 @@ class SettingsDrawer(ft.NavigationDrawer):
                                             ft.Icons.SYSTEM_UPDATE_ALT,
                                             t("settings.check_updates"),
                                             t("settings.update_xray"),
-                                            on_click=lambda e: self._on_installer_run("xray"),
+                                            on_click=lambda e: self._on_installer_run(
+                                                "xray"
+                                            ),
                                         ),
                                         SettingsListTile(
                                             ft.Icons.INFO_OUTLINE,
@@ -331,13 +334,13 @@ class SettingsDrawer(ft.NavigationDrawer):
 
             try:
                 available, current, latest = XrayInstallerService.check_for_updates()
-                
+
                 # If up to date, show message and return
                 if not available and current:
                     self._show_toast(t("update.up_to_date", version=current), "info")
                     page.update()
                     return
-                
+
                 # If update is available, show update dialog
                 if available and latest:
                     self._show_update_dialog(page, current, latest)
@@ -345,7 +348,7 @@ class SettingsDrawer(ft.NavigationDrawer):
                     # Failed to check or no update info
                     self._show_toast(t("update.check_failed"), "error")
                     page.update()
-                    
+
             except Exception as e:
                 logger.error(f"Update check failed: {e}")
                 self._show_toast(t("update.check_failed"), "error")
