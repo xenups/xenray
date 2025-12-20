@@ -76,13 +76,17 @@ class NetworkValidator:
                             return parts[2]
 
             elif system == "Darwin":  # macOS
-                result = subprocess.run(["route", "-n", "get", "default"], capture_output=True, text=True)
+                result = subprocess.run(
+                    ["route", "-n", "get", "default"], capture_output=True, text=True
+                )
                 for line in result.stdout.splitlines():
                     if "gateway:" in line:
                         return line.split(":")[1].strip()
 
             else:  # Linux
-                result = subprocess.run(["ip", "route", "show", "default"], capture_output=True, text=True)
+                result = subprocess.run(
+                    ["ip", "route", "show", "default"], capture_output=True, text=True
+                )
                 for line in result.stdout.splitlines():
                     if "default" in line:
                         parts = line.split()

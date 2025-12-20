@@ -34,7 +34,9 @@ class I18n:
         if getattr(sys, "frozen", False):
             root = os.path.dirname(sys.executable)
         else:
-            root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            root = os.path.dirname(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            )
         return os.path.join(root, "assets", "locales")
 
     def _load_translations(self):

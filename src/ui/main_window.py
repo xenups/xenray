@@ -2,23 +2,24 @@ from __future__ import annotations
 
 import asyncio
 import os
-import threading
-from typing import Callable, Optional
+from typing import Optional
 
 import flet as ft
 
 # Local modules
+from src.core.config_manager import ConfigManager
+from src.core.connection_manager import ConnectionManager
 from src.core.constants import APPDIR, FONT_URLS
 from src.core.i18n import t
 from src.core.logger import logger
 from src.core.types import ConnectionMode
-from src.services.connection_tester import ConnectionTester
+from src.services.network_stats import NetworkStatsService
 from src.ui.builders.ui_builder import UIBuilder
 from src.ui.components.admin_restart_dialog import AdminRestartDialog
 from src.ui.components.close_dialog import CloseDialog
 from src.ui.components.toast import ToastManager
-from src.ui.handlers.connection_handler import ConnectionHandler
 from src.ui.handlers.background_task_handler import BackgroundTaskHandler
+from src.ui.handlers.connection_handler import ConnectionHandler
 from src.ui.handlers.installer_handler import InstallerHandler
 from src.ui.handlers.latency_monitor_handler import LatencyMonitorHandler
 from src.ui.handlers.network_stats_handler import NetworkStatsHandler
@@ -27,6 +28,8 @@ from src.ui.handlers.theme_handler import ThemeHandler
 from src.ui.helpers.glow_helper import GlowHelper
 from src.ui.helpers.ui_thread_helper import UIThreadHelper
 from src.ui.managers.drawer_manager import DrawerManager
+from src.ui.managers.monitoring_service import MonitoringService
+from src.ui.managers.profile_manager import ProfileManager
 from src.utils.process_utils import ProcessUtils
 
 
@@ -36,14 +39,34 @@ class MainWindow:
     def __init__(
         self,
         page: ft.Page,
-        container,  # ApplicationContainer
+        config_manager: ConfigManager,
+        connection_manager: ConnectionManager,
+        network_stats: NetworkStatsService,
+        network_stats_handler: NetworkStatsHandler,
+        latency_monitor_handler: LatencyMonitorHandler,
+        connection_handler: ConnectionHandler,
+        theme_handler: ThemeHandler,
+        installer_handler: InstallerHandler,
+        background_task_handler: BackgroundTaskHandler,
+        systray_handler: SystrayHandler,
+        profile_manager: ProfileManager,
+        monitoring_service: MonitoringService,
     ):
         self._page = page
-        self.container = container
 
-        # Get singletons from container
-        self._config_manager = container.config_manager()
-        self._connection_manager = container.connection_manager()
+        # Injected Dependencies
+        self._config_manager = config_manager
+        self._connection_manager = connection_manager
+        self._network_stats = network_stats
+
+        # Injected Handlers
+        self._network_stats_handler = network_stats_handler
+        self._latency_monitor_handler = latency_monitor_handler
+        self._connection_handler = connection_handler
+        self._theme_handler = theme_handler
+        self._installer_handler = installer_handler
+        self._background_task_handler = background_task_handler
+        self._systray = systray_handler
 
         # Initialize UI thread helper
         self._ui_helper = UIThreadHelper(page)
@@ -67,28 +90,16 @@ class MainWindow:
         self._header = None
         self._main_container = None
         self._log_viewer = None  # Will be initialized by DrawerManager
+        self._earth_glow = None
+        self._logs_heartbeat = None
 
-        # --- Services ---
-        self._network_stats = container.network_stats()
-
-        # --- Toast Manager ---
-        self._toast = None  # Will be initialized after page setup
-
-        # --- Handlers ---
-        self._network_stats_handler = NetworkStatsHandler(self)
-        self._latency_monitor_handler = LatencyMonitorHandler(self)
-        self._connection_handler = ConnectionHandler(self)
-        self._theme_handler = ThemeHandler(self)
-        self._installer_handler = InstallerHandler(self)
+        # --- Management components ---
         self._drawer_manager = DrawerManager(self)
         self._ui_builder = UIBuilder(self)
         self._glow_helper = GlowHelper(self)
-        self._systray = SystrayHandler(self)
-        self._background_task_handler = BackgroundTaskHandler(
-            self._page,
-            self._network_stats_handler,
-            self._latency_monitor_handler,
-        )
+
+        # --- Toast Manager ---
+        self._toast = None  # Will be initialized after page setup
 
         # --- Initialization ---
         self._define_callbacks()
@@ -99,26 +110,77 @@ class MainWindow:
         # Store in page for components to access
         self._page._toast_manager = self._toast
 
-        # --- Initialize Managers with DI ---
-        from src.core.container import create_monitoring_service, create_profile_manager
-
-        self._profile_manager = create_profile_manager(
-            container=container,
-            connection_handler=self._connection_handler,
-            ui_updater=self._ui_helper.call,
-        )
+        self._profile_manager = profile_manager
+        self._profile_manager.setup(ui_updater=self._ui_helper.call)
         self._profile_manager.set_ui_update_callback(self._update_selected_profile_ui)
 
-        self._monitoring_service = create_monitoring_service(
-            container=container,
-            connection_handler=self._connection_handler,
+        self._monitoring_service = monitoring_service
+        self._monitoring_service.setup(
             ui_updater=self._ui_helper.call,
             toast_manager=self._toast,
         )
 
         self._ui_builder.build_ui()  # Delegate to builder
         self._drawer_manager.setup_drawers()  # Delegate to manager
-        self._systray.setup()  # Initialize system tray
+
+        # --- Bind Handlers (Post-UI Build) ---
+        self._connection_handler.setup(
+            ui_helper=self._ui_helper,
+            connection_button=self._connection_button,
+            status_display=self._status_display,
+            log_viewer=self._log_viewer,
+            toast=self._toast,
+            systray=self._systray,
+            logs_drawer_component=self._logs_drawer_component,
+            latency_monitor_handler=self._latency_monitor_handler,
+            is_running_getter=lambda: self._is_running,
+            is_running_setter=self._set_is_running,
+            connecting_getter=lambda: self._connecting,
+            connecting_setter=self._set_connecting,
+            selected_profile_getter=lambda: self._selected_profile,
+            current_mode_getter=lambda: self._current_mode,
+            update_horizon_glow_callback=self._update_horizon_glow,
+            profile_manager_is_running_setter=self._set_profile_manager_running,
+            monitoring_service_is_running_setter=self._set_monitoring_service_running,
+        )
+
+        self._theme_handler.setup(
+            page=self._page,
+            connection_button=self._connection_button,
+            server_card=self._server_card,
+            header=self._header,
+        )
+
+        self._installer_handler.setup(
+            page=self._page,
+            ui_helper=self._ui_helper,
+            toast=self._toast,
+        )
+
+        self._latency_monitor_handler.setup(
+            page=self._page,
+            status_display=self._status_display,
+            server_card=self._server_card,
+            server_list=self._server_list,
+            ui_helper=self._ui_helper,
+            is_running_getter=lambda: self._is_running,
+            connecting_getter=lambda: self._connecting,
+            selected_profile_getter=lambda: self._selected_profile,
+        )
+
+        self._network_stats_handler.setup(
+            page=self._page,
+            status_display=self._status_display,
+            connection_button=self._connection_button,
+            logs_drawer_component=self._logs_drawer_component,
+            earth_glow=self._earth_glow,
+            logs_heartbeat=self._logs_heartbeat,
+            heartbeat=self._heartbeat,
+            is_running_getter=lambda: self._is_running,
+        )
+
+        self._background_task_handler.setup(page=self._page)
+        self._systray.setup(self)
 
         # Start background tasks
         self._background_task_handler.start()
@@ -126,6 +188,19 @@ class MainWindow:
         # Initialize UI with selected profile if exists
         if self._selected_profile:
             self._update_selected_profile_ui(self._selected_profile)
+
+    # --- State Helpers (for handlers) ---
+    def _set_is_running(self, val: bool):
+        self._is_running = val
+
+    def _set_connecting(self, val: bool):
+        self._connecting = val
+
+    def _set_profile_manager_running(self, val: bool):
+        self._profile_manager.is_running = val
+
+    def _set_monitoring_service_running(self, val: bool):
+        self._monitoring_service.is_running = val
 
     # -----------------------------
     # Define callbacks
@@ -153,8 +228,12 @@ class MainWindow:
         saved_mode = self._config_manager.get_connection_mode()
         saved_theme = self._config_manager.get_theme_mode()
 
-        self._current_mode = ConnectionMode.VPN if saved_mode == "vpn" else ConnectionMode.PROXY
-        self._page.theme_mode = ft.ThemeMode.DARK if saved_theme == "dark" else ft.ThemeMode.LIGHT
+        self._current_mode = (
+            ConnectionMode.VPN if saved_mode == "vpn" else ConnectionMode.PROXY
+        )
+        self._page.theme_mode = (
+            ft.ThemeMode.DARK if saved_theme == "dark" else ft.ThemeMode.LIGHT
+        )
 
         # Load last selected profile (from local OR subscriptions)
         last_profile_id = self._config_manager.get_last_selected_profile_id()
@@ -164,6 +243,7 @@ class MainWindow:
                 self._selected_profile = profile
                 # We can't update UI here as it's not built yet, but we set the state
                 # The components (ServerCard, StatusDisplay) will need to be updated after build or in __init__
+
     # -----------------------------
     # Navigation & UI Building
     # -----------------------------
@@ -254,7 +334,6 @@ class MainWindow:
         self._server_sheet.open = False
         self._page.update()  # Update page to close sheet
 
-
     def _trigger_reconnect(self):
         """Handle transparent reconnection when server changes while running."""
         # Use fast reconnect to avoid Disconnected/Disconnecting flicker
@@ -271,7 +350,9 @@ class MainWindow:
 
         # 2. Trigger immediate latency check via dedicated handler
         if not self._is_running and not self._connecting:
-            self._ui_helper.call(self._status_display.set_pre_connection_ping, "...", False)
+            self._ui_helper.call(
+                self._status_display.set_pre_connection_ping, "...", False
+            )
             self._latency_monitor_handler.trigger_single_check()
 
         # 3. Handle live switch if running
@@ -341,7 +422,9 @@ class MainWindow:
             # Update local reference
             self._selected_profile.update(updated_profile)
             # Update Server Card
-            self._ui_helper.call(lambda: self._server_card.update_server(self._selected_profile))
+            self._ui_helper.call(
+                lambda: self._server_card.update_server(self._selected_profile)
+            )
 
     def _on_mode_changed(self, mode: ConnectionMode):
         from src.utils.process_utils import ProcessUtils
@@ -351,7 +434,9 @@ class MainWindow:
             return
 
         self._current_mode = mode
-        self._config_manager.set_connection_mode("vpn" if mode == ConnectionMode.VPN else "proxy")
+        self._config_manager.set_connection_mode(
+            "vpn" if mode == ConnectionMode.VPN else "proxy"
+        )
         self._status_display.set_status(f"{mode.name} Mode Selected")
         self._ui_helper.call(lambda: None)
 
@@ -399,7 +484,6 @@ class MainWindow:
         self._page.window.visible = False
         self._page.window.skip_task_bar = True
         self._page.update()
-
 
     # -----------------------------
     # Cleanup

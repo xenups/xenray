@@ -107,7 +107,9 @@ class NetworkStatsService:
         self._queue = Queue(maxsize=5)
         self._stop_event = multiprocessing.Event()
 
-        self._process = Process(target=_stats_worker, args=(self._queue, self._stop_event), daemon=True)
+        self._process = Process(
+            target=_stats_worker, args=(self._queue, self._stop_event), daemon=True
+        )
         self._process.start()
         logger.debug("[NetworkStats] Started monitoring (Multiprocessing)")
 

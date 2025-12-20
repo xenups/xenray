@@ -5,12 +5,9 @@ from typing import Optional
 
 from loguru import logger
 
-from src.services.network_stability_observer import (
-    AdaptationConfig,
-    ErrorSeverity,
-    ErrorType,
-    NetworkQuality,
-)
+from src.services.network_stability_observer import (AdaptationConfig,
+                                                     ErrorSeverity, ErrorType,
+                                                     NetworkQuality)
 
 
 class QualityEvaluator:
@@ -58,10 +55,14 @@ class QualityEvaluator:
             bypass_hysteresis = False
 
         # 3. Apply Stability Constraints (Cooldowns, Step Limits)
-        target_quality = self._apply_stability_constraints(target_quality, bypass_hysteresis, now)
+        target_quality = self._apply_stability_constraints(
+            target_quality, bypass_hysteresis, now
+        )
 
         # 4. Apply Hysteresis & Determine if Transition Needed
-        should_transition, reason = self._should_transition(target_quality, bypass_hysteresis, metrics, reason)
+        should_transition, reason = self._should_transition(
+            target_quality, bypass_hysteresis, metrics, reason
+        )
 
         if should_transition:
             self._transition_to(target_quality, now)
@@ -145,7 +146,10 @@ class QualityEvaluator:
         # 1. Critical Cooldown
         if self._current_quality == NetworkQuality.CRITICAL:
             time_in_critical = now - self._critical_entry_time
-            if time_in_critical < AdaptationConfig.CRITICAL_COOLDOWN and target_quality > NetworkQuality.CRITICAL:
+            if (
+                time_in_critical < AdaptationConfig.CRITICAL_COOLDOWN
+                and target_quality > NetworkQuality.CRITICAL
+            ):
                 # Force stay in CRITICAL
                 return NetworkQuality.CRITICAL
 
@@ -159,13 +163,20 @@ class QualityEvaluator:
 
         # 3. Special EXCELLENT Check (Sustained Stability)
         if target_quality == NetworkQuality.EXCELLENT and not bypass_hysteresis:
-            if not (self._current_quality >= NetworkQuality.STABLE and self._stable_duration > 60):
+            if not (
+                self._current_quality >= NetworkQuality.STABLE
+                and self._stable_duration > 60
+            ):
                 return NetworkQuality.STABLE
 
         return target_quality
 
     def _should_transition(
-        self, target_quality: NetworkQuality, bypass: bool, metrics: dict, reason: str = None
+        self,
+        target_quality: NetworkQuality,
+        bypass: bool,
+        metrics: dict,
+        reason: str = None,
     ) -> tuple[bool, Optional[str]]:
         """Determine if quality state should transition based on hysteresis logic."""
         if bypass:
@@ -219,7 +230,9 @@ class QualityEvaluator:
         else:
             self._stable_duration = 0.0
 
-        logger.info(f"[QualityEvaluator] Quality transition: {old_quality.name_str()} → {new_quality.name_str()}")
+        logger.info(
+            f"[QualityEvaluator] Quality transition: {old_quality.name_str()} → {new_quality.name_str()}"
+        )
 
     def _reset_hysteresis(self):
         """Reset hysteresis counters."""

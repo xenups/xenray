@@ -31,7 +31,9 @@ class XrayService:
                     old_pid = int(f.read().strip())
 
                 if ProcessUtils.is_running(old_pid):
-                    logger.info(f"[XrayService] Found orphan process {old_pid}, killing...")
+                    logger.info(
+                        f"[XrayService] Found orphan process {old_pid}, killing..."
+                    )
                     ProcessUtils.kill_process(old_pid, force=True)
 
                 os.remove(XRAY_PID_FILE)
@@ -60,7 +62,9 @@ class XrayService:
         logger.debug(f"[XrayService] Log file: {XRAY_LOG_FILE}")
 
         try:
-            self._process = ProcessUtils.run_command(cmd, stdout_file=XRAY_LOG_FILE, stderr_file=XRAY_LOG_FILE)
+            self._process = ProcessUtils.run_command(
+                cmd, stdout_file=XRAY_LOG_FILE, stderr_file=XRAY_LOG_FILE
+            )
 
             if self._process:
                 self._pid = self._process.pid

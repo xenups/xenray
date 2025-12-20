@@ -17,7 +17,9 @@ class NetworkInterfaceDetector:
     """Detects primary network interface on Windows."""
 
     @staticmethod
-    def get_primary_interface() -> Tuple[Optional[str], Optional[str], Optional[str], Optional[str]]:
+    def get_primary_interface() -> (
+        Tuple[Optional[str], Optional[str], Optional[str], Optional[str]]
+    ):
         """
         Get primary network interface details.
 
@@ -57,17 +59,26 @@ class NetworkInterfaceDetector:
                             continue
 
                         # Get interface name from IP
-                        interface_name = NetworkInterfaceDetector._get_interface_name(interface_ip)
+                        interface_name = NetworkInterfaceDetector._get_interface_name(
+                            interface_ip
+                        )
 
                         # Fix: Ignore Sing-box TUN interface to prevent loops
                         if interface_name:
                             interface_upper = interface_name.upper()
-                            if any(keyword in interface_upper for keyword in TUN_INTERFACE_KEYWORDS):
-                                logger.warning(f"Ignored potential TUN interface: {interface_name}")
+                            if any(
+                                keyword in interface_upper
+                                for keyword in TUN_INTERFACE_KEYWORDS
+                            ):
+                                logger.warning(
+                                    f"Ignored potential TUN interface: {interface_name}"
+                                )
                                 continue
 
                         # Calculate subnet (assume /24 for simplicity)
-                        subnet = NetworkInterfaceDetector._calculate_subnet(interface_ip)
+                        subnet = NetworkInterfaceDetector._calculate_subnet(
+                            interface_ip
+                        )
 
                         logger.info(
                             f"Detected primary interface: {interface_name} ({interface_ip}, {subnet}, {gateway})"

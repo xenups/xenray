@@ -25,7 +25,9 @@ VALID_NETWORKS = {
 }
 VALID_SECURITY = {"none", "tls", "reality"}
 VALID_ENCRYPTION = {"none", "zero"}
-UUID_PATTERN = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE)
+UUID_PATTERN = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE
+)
 
 
 class LinkParser:
@@ -102,7 +104,9 @@ class LinkParser:
         # Parse host and port
         if ":" in host_port:
             try:
-                address, port_str = host_port.rsplit(":", 1)  # Use rsplit to handle IPv6
+                address, port_str = host_port.rsplit(
+                    ":", 1
+                )  # Use rsplit to handle IPv6
                 port = int(port_str)
                 if not (1 <= port <= 65535):
                     raise ValueError(f"Invalid port number: {port}")
@@ -128,7 +132,9 @@ class LinkParser:
             return values[0] if values and len(values) > 0 else default
 
         # Extract name from fragment
-        name = urllib.parse.unquote(parsed.fragment) if parsed.fragment else "VLESS Server"
+        name = (
+            urllib.parse.unquote(parsed.fragment) if parsed.fragment else "VLESS Server"
+        )
 
         # Extract and validate parameters
         encryption = get_param("encryption", DEFAULT_ENCRYPTION)
@@ -154,7 +160,9 @@ class LinkParser:
                     {
                         "address": address,
                         "port": port,
-                        "users": [{"id": user_id, "encryption": encryption, "flow": flow}],
+                        "users": [
+                            {"id": user_id, "encryption": encryption, "flow": flow}
+                        ],
                     }
                 ]
             },
@@ -185,7 +193,9 @@ class LinkParser:
             reality_settings = {
                 "serverName": sni,
                 "publicKey": pbk,
-                "shortIds": [s.strip() for s in sid.split(",") if s.strip()] if sid else [],
+                "shortIds": [s.strip() for s in sid.split(",") if s.strip()]
+                if sid
+                else [],
                 "fingerprint": fp or DEFAULT_FINGERPRINT,
             }
             outbound["streamSettings"]["realitySettings"] = reality_settings
@@ -317,7 +327,11 @@ class LinkParser:
             val = params.get(key)
             return val[0] if val and len(val) > 0 else default
 
-        name = urllib.parse.unquote(parsed.fragment) if parsed.fragment else "Hysteria2 Server"
+        name = (
+            urllib.parse.unquote(parsed.fragment)
+            if parsed.fragment
+            else "Hysteria2 Server"
+        )
 
         sni = get_param("sni") or get_param("peer") or address
         insecure = get_param("insecure") == "1" or get_param("allowInsecure") == "1"
@@ -470,7 +484,9 @@ class LinkParser:
         elif network == "kcp":
             ss["kcpSettings"] = {"header": {"type": header_type}}
         elif network == "grpc":
-            ss["grpcSettings"] = {"serviceName": path}  # often path is used for serviceName in vmess json
+            ss["grpcSettings"] = {
+                "serviceName": path
+            }  # often path is used for serviceName in vmess json
             if data.get("authority"):  # custom field sometimes
                 # ss["grpcSettings"]["authority"] = ... # Xray doesn't strictly need authority for client usually
                 pass
@@ -512,7 +528,11 @@ class LinkParser:
             val = params.get(key)
             return val[0] if val and len(val) > 0 else default
 
-        name = urllib.parse.unquote(parsed.fragment) if parsed.fragment else "Trojan Server"
+        name = (
+            urllib.parse.unquote(parsed.fragment)
+            if parsed.fragment
+            else "Trojan Server"
+        )
 
         sni = get_param("sni") or get_param("peer") or address
         allow_insecure = get_param("allowInsecure", get_param("insecure", "0")) == "1"
@@ -556,7 +576,9 @@ class LinkParser:
                 "headers": {"Host": get_param("host") or address},
             }
         elif network == "grpc":
-            outbound["streamSettings"]["grpcSettings"] = {"serviceName": get_param("serviceName", "")}
+            outbound["streamSettings"]["grpcSettings"] = {
+                "serviceName": get_param("serviceName", "")
+            }
 
         return {"name": name, "config": LinkParser._build_config(outbound)}
 

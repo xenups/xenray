@@ -76,7 +76,9 @@ class ConnectionManager:
             self._current_connection = None
 
         # Delegate to orchestrator
-        success, connection_info = self._orchestrator.establish_connection(file_path, mode, step_callback)
+        success, connection_info = self._orchestrator.establish_connection(
+            file_path, mode, step_callback
+        )
 
         if success:
             self._current_connection = connection_info

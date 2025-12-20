@@ -78,7 +78,9 @@ class AddServerDialog(ft.AlertDialog):
                 continue
 
             # Check if line is a config link
-            if line.startswith(("vless://", "vmess://", "trojan://", "ss://", "hysteria2://")):
+            if line.startswith(
+                ("vless://", "vmess://", "trojan://", "ss://", "hysteria2://")
+            ):
                 try:
                     parsed = LinkParser.parse_link(line)
                     valid_configs.append(parsed)
@@ -102,7 +104,9 @@ class AddServerDialog(ft.AlertDialog):
             return
 
         # If no valid configs found, check if entire content is a single config
-        is_config_link = content.startswith(("vless://", "vmess://", "trojan://", "ss://", "hysteria2://"))
+        is_config_link = content.startswith(
+            ("vless://", "vmess://", "trojan://", "ss://", "hysteria2://")
+        )
 
         if is_config_link:
             # Try to parse as config

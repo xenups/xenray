@@ -41,7 +41,9 @@ class UIBuilder:
 
         # Main components
         self._main._status_display = StatusDisplay()
-        self._main._connection_button = ConnectionButton(on_click=self._main._on_connect_clicked)
+        self._main._connection_button = ConnectionButton(
+            on_click=self._main._on_connect_clicked
+        )
         self._main._server_card = ServerCard(on_click=self._main._open_server_drawer)
 
         # Dashboard view
@@ -84,7 +86,9 @@ class UIBuilder:
             right=0,
             opacity=0.0,
             animate_opacity=500,
-            animate=ft.Animation(800, ft.AnimationCurve.EASE_IN_OUT),  # Smooth gradient transitions
+            animate=ft.Animation(
+                800, ft.AnimationCurve.EASE_IN_OUT
+            ),  # Smooth gradient transitions
         )
 
         # Main content

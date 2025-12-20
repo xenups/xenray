@@ -76,7 +76,9 @@ else:
 
 # Executable paths with platform-specific extensions
 XRAY_EXECUTABLE = os.path.join(BIN_DIR, f"xray{PlatformUtils.get_binary_suffix()}")
-SINGBOX_EXECUTABLE = os.path.join(BIN_DIR, f"sing-box{PlatformUtils.get_binary_suffix()}")
+SINGBOX_EXECUTABLE = os.path.join(
+    BIN_DIR, f"sing-box{PlatformUtils.get_binary_suffix()}"
+)
 
 # Sing-box config and log paths
 SINGBOX_CONFIG_PATH = os.path.join(TMPDIR, "singbox_config.json")
@@ -125,21 +127,21 @@ SINGBOX_RULE_SETS = {
     "ir": [
         os.getenv(
             "SINGBOX_RULESET_IR_GEOIP",
-            "https://raw.githubusercontent.com/Chocolate4U/Iran-sing-box-rules/rule-set/geoip-ir.srs",
+            "https://raw.githubusercontent.com/Chocolate4U/Iran-sing-box-rules/rule-set/geoip-ir.srs",  # noqa: E501
         ),
         os.getenv(
             "SINGBOX_RULESET_IR_GEOSITE",
-            "https://raw.githubusercontent.com/Chocolate4U/Iran-sing-box-rules/rule-set/geosite-ir.srs",
+            "https://raw.githubusercontent.com/Chocolate4U/Iran-sing-box-rules/rule-set/geosite-ir.srs",  # noqa: E501
         ),
     ],
     "cn": [
         os.getenv(
-            "SINGBOX_RULESET_CN_GEOSITE",
-            "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.srs",
+            "SINGBOX_RULESET_ADS_GEOSITE",
+            "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-category-ads-all.srs",  # noqa: E501
         ),
         os.getenv(
             "SINGBOX_RULESET_CN_GEOIP",
-            "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs",
+            "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs",  # noqa: E501
         ),
     ],
     "ru": [
@@ -156,7 +158,13 @@ RATE_LIMIT_DEFAULT_RATE = float(os.getenv("RATE_LIMIT_DEFAULT_RATE", "2.0"))
 RATE_LIMIT_DEFAULT_BURST = int(os.getenv("RATE_LIMIT_DEFAULT_BURST", "5"))
 RATE_LIMIT_MIN_RATE = float(os.getenv("RATE_LIMIT_MIN_RATE", "0.5"))
 RATE_LIMIT_MAX_RATE = float(os.getenv("RATE_LIMIT_MAX_RATE", "5.0"))
-RATE_LIMIT_ADAPTATION_ENABLED = os.getenv("RATE_LIMIT_ADAPTATION_ENABLED", "true").lower() == "true"
+RATE_LIMIT_ADAPTATION_ENABLED = (
+    os.getenv("RATE_LIMIT_ADAPTATION_ENABLED", "true").lower() == "true"
+)
 # AIMD (Additive Increase / Multiplicative Decrease) parameters
-RATE_LIMIT_AIMD_ADDITIVE_INCREASE = float(os.getenv("RATE_LIMIT_AIMD_ADDITIVE_INCREASE", "0.5"))
-RATE_LIMIT_AIMD_MULTIPLICATIVE_DECREASE = float(os.getenv("RATE_LIMIT_AIMD_MULTIPLICATIVE_DECREASE", "0.5"))
+RATE_LIMIT_AIMD_ADDITIVE_INCREASE = float(
+    os.getenv("RATE_LIMIT_AIMD_ADDITIVE_INCREASE", "0.5")
+)
+RATE_LIMIT_AIMD_MULTIPLICATIVE_DECREASE = float(
+    os.getenv("RATE_LIMIT_AIMD_MULTIPLICATIVE_DECREASE", "0.5")
+)

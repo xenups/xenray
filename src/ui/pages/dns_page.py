@@ -89,7 +89,9 @@ class DNSPage(ft.Container):
         )
 
         input_container = ft.Container(
-            content=ft.Row([self._protocol_dd, self._address_input, add_btn], spacing=10),
+            content=ft.Row(
+                [self._protocol_dd, self._address_input, add_btn], spacing=10
+            ),
             padding=ft.padding.symmetric(horizontal=20, vertical=10),
         )
 
@@ -124,7 +126,9 @@ class DNSPage(ft.Container):
             ),
             padding=ft.padding.symmetric(horizontal=20, vertical=8),
             bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.ON_SURFACE),
-            border=ft.border.only(bottom=ft.border.BorderSide(1, ft.Colors.OUTLINE_VARIANT)),
+            border=ft.border.only(
+                bottom=ft.border.BorderSide(1, ft.Colors.OUTLINE_VARIANT)
+            ),
         )
 
         # List
@@ -155,7 +159,9 @@ class DNSPage(ft.Container):
                                 size=48,
                                 color=ft.Colors.OUTLINE_VARIANT,
                             ),
-                            ft.Text(t("dns.no_dns"), color=ft.Colors.ON_SURFACE_VARIANT),
+                            ft.Text(
+                                t("dns.no_dns"), color=ft.Colors.ON_SURFACE_VARIANT
+                            ),
                         ],
                         horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                     ),
@@ -181,7 +187,9 @@ class DNSPage(ft.Container):
                                 if proto in ["UDP", "TCP"]
                                 else ft.Colors.ON_PRIMARY_CONTAINER,
                             ),
-                            bgcolor=ft.Colors.BLUE_200 if proto in ["UDP", "TCP"] else ft.Colors.GREEN_200,
+                            bgcolor=ft.Colors.BLUE_200
+                            if proto in ["UDP", "TCP"]
+                            else ft.Colors.GREEN_200,
                             padding=ft.padding.symmetric(horizontal=6, vertical=2),
                             border_radius=4,
                             width=50,
@@ -218,7 +226,9 @@ class DNSPage(ft.Container):
                     ]
                 ),
                 padding=ft.padding.symmetric(horizontal=20, vertical=12),
-                border=ft.border.only(bottom=ft.border.BorderSide(1, ft.Colors.OUTLINE_VARIANT)),
+                border=ft.border.only(
+                    bottom=ft.border.BorderSide(1, ft.Colors.OUTLINE_VARIANT)
+                ),
                 bgcolor=ft.Colors.with_opacity(0.15, "#1e293b"),
             )
             self._list_view.controls.append(row)

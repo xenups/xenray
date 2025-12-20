@@ -80,7 +80,9 @@ class ProcessUtils:
             return True  # Already dead
         except psutil.AccessDenied:
             # Can't kill due to permissions - log but don't fail
-            logger.warning(f"Access denied when trying to kill process {pid} - it may require admin rights")
+            logger.warning(
+                f"Access denied when trying to kill process {pid} - it may require admin rights"
+            )
             return False
         except Exception as e:
             logger.error(f"Failed to kill process {pid}: {e}")
@@ -155,7 +157,9 @@ class ProcessUtils:
             return None
 
     @staticmethod
-    def run_command_sync(cmd: List[str], timeout: Optional[int] = None) -> Optional[tuple]:
+    def run_command_sync(
+        cmd: List[str], timeout: Optional[int] = None
+    ) -> Optional[tuple]:
         """
         Run a command synchronously and return output.
 
@@ -275,11 +279,15 @@ class ProcessUtils:
                 parent = psutil.Process(current_pid)
                 children = parent.children(recursive=True)
 
-                logger.info(f"Killing {len(children)} child processes before restart...")
+                logger.info(
+                    f"Killing {len(children)} child processes before restart..."
+                )
                 for child in children:
                     try:
                         child_name = child.name().lower()
-                        logger.debug(f"Killing child process: {child.pid} ({child_name})")
+                        logger.debug(
+                            f"Killing child process: {child.pid} ({child_name})"
+                        )
                         child.kill()
                     except psutil.NoSuchProcess:
                         pass
@@ -303,7 +311,9 @@ class ProcessUtils:
 
             # ShellExecuteW returns > 32 on success
             if result > 32:
-                logger.info(f"ShellExecuteW succeeded (code {result}). Terminating current process...")
+                logger.info(
+                    f"ShellExecuteW succeeded (code {result}). Terminating current process..."
+                )
                 # STEP 3: Terminate immediately using ExitProcess
                 # This bypasses PyInstaller's cleanup which can fail on locked files
                 ctypes.windll.kernel32.ExitProcess(0)
@@ -345,12 +355,17 @@ class ProcessUtils:
                 # Running as Python script
                 executable = sys.executable
                 script_path = sys.argv[0]
-                script = f'do shell script "\\"{executable}\\" \\"{script_path}\\"" with administrator privileges'
+                script = (
+                    f'do shell script "\\"{executable}\\" \\"{script_path}\\"" '
+                    'with administrator privileges'
+                )
 
             logger.info("Requesting admin privileges via osascript...")
 
             # Execute AppleScript to request admin privileges
-            result = subprocess.run(["osascript", "-e", script], capture_output=True, text=True)
+            result = subprocess.run(
+                ["osascript", "-e", script], capture_output=True, text=True
+            )
 
             if result.returncode == 0:
                 logger.info("Successfully launched new instance with admin privileges")

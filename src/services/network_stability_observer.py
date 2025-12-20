@@ -58,7 +58,13 @@ class NetworkQuality(Enum):
     @property
     def name_str(self) -> str:
         """Get the quality name as a string."""
-        names = {0: "critical", 1: "unstable", 2: "degraded", 3: "stable", 4: "excellent"}
+        names = {
+            0: "critical",
+            1: "unstable",
+            2: "degraded",
+            3: "stable",
+            4: "excellent",
+        }
         return names[self.value]
 
 
@@ -159,11 +165,15 @@ class AdaptationConfig:
 
     # Fast-Path Detection - LESS AGGRESSIVE
     FAST_PATH_WINDOW = 3.0  # Check for burst errors in last 3 seconds
-    FAST_PATH_THRESHOLD = 10  # Immediate CRITICAL if >= 10 errors in fast window (was 5)
+    FAST_PATH_THRESHOLD = (
+        10  # Immediate CRITICAL if >= 10 errors in fast window (was 5)
+    )
 
     # Silence Detection (Passive Hard Disconnect)
     SILENCE_TIMEOUT = 2.0  # Downgrade if no success symbols for 2s (was 5.0s)
-    SILENCE_WARMUP = 30.0  # Grace period at startup before silence detection activates (was 15s)
+    SILENCE_WARMUP = (
+        30.0  # Grace period at startup before silence detection activates (was 15s)
+    )
 
 
 class NetworkStabilityObserver:
@@ -246,7 +256,9 @@ class NetworkStabilityObserver:
 
         # Event history (sliding window)
         self._error_history: Deque[ErrorSignal] = deque()
-        self._handshake_history: Deque[tuple[float, float]] = deque()  # (timestamp, duration_ms)
+        self._handshake_history: Deque[
+            tuple[float, float]
+        ] = deque()  # (timestamp, duration_ms)
 
         # State transition tracking (hysteresis)
         self._consecutive_bad_windows = 0
@@ -277,7 +289,10 @@ class NetworkStabilityObserver:
         self._quality_evaluator = QualityEvaluator()
         logger.info("[NetworkObserver] Initialized LogParser and QualityEvaluator")
 
-        logger.info(f"[NetworkObserver] Initialized: window={window_size}s, " f"adaptive={adaptive_window}")
+        logger.info(
+            f"[NetworkObserver] Initialized: window={window_size}s, "
+            f"adaptive={adaptive_window}"
+        )
 
     def add_callback(self, callback):
         """Register a callback for quality state changes."""
@@ -294,10 +309,16 @@ class NetworkStabilityObserver:
         with self._lock:
             # Classify severity based on recent history
             recent_timeouts = sum(
-                1 for e in self._error_history if e.type == ErrorType.TIMEOUT and time.time() - e.timestamp < 30
+                1
+                for e in self._error_history
+                if e.type == ErrorType.TIMEOUT and time.time() - e.timestamp < 30
             )
 
-            severity = ErrorSeverity.TRANSIENT if recent_timeouts < 3 else ErrorSeverity.MODERATE
+            severity = (
+                ErrorSeverity.TRANSIENT
+                if recent_timeouts < 3
+                else ErrorSeverity.MODERATE
+            )
 
             self._record_error(ErrorType.TIMEOUT, severity)
             self._evaluate_quality()
@@ -468,7 +489,11 @@ class NetworkStabilityObserver:
             return
 
         # Calculate average and max from recent samples
-        recent_samples = [duration for ts, duration in self._handshake_history if time.time() - ts < self._window_size]
+        recent_samples = [
+            duration
+            for ts, duration in self._handshake_history
+            if time.time() - ts < self._window_size
+        ]
 
         if recent_samples:
             self._metrics.avg_handshake_ms = sum(recent_samples) / len(recent_samples)
@@ -525,7 +550,9 @@ class NetworkStabilityObserver:
             bypass_hysteresis = False
 
         # 4. Apply Stability Constraints (Cooldowns, Step Limits)
-        target_quality = self._apply_stability_constraints(target_quality, bypass_hysteresis)
+        target_quality = self._apply_stability_constraints(
+            target_quality, bypass_hysteresis
+        )
 
         # 5. Apply Hysteresis & Transition
         self._apply_hysteresis(target_quality, bypass_hysteresis, metrics, reason)
@@ -549,7 +576,9 @@ class NetworkStabilityObserver:
             "total_events": len(self._error_history) + len(self._handshake_history),
         }
 
-    def _check_overrides(self, metrics: dict) -> tuple[Optional[NetworkQuality], bool, Optional[str]]:
+    def _check_overrides(
+        self, metrics: dict
+    ) -> tuple[Optional[NetworkQuality], bool, Optional[str]]:
         """
         Check for conditions that override standard logic (Fast-Path, Silence).
         Returns: (TargetQuality, BypassHysteresis, Reason)
@@ -611,12 +640,17 @@ class NetworkStabilityObserver:
         else:
             return NetworkQuality.STABLE
 
-    def _apply_stability_constraints(self, target_quality: NetworkQuality, bypass_hysteresis: bool) -> NetworkQuality:
+    def _apply_stability_constraints(
+        self, target_quality: NetworkQuality, bypass_hysteresis: bool
+    ) -> NetworkQuality:
         """Apply detailed stability constraints (Cooldowns, Limits)."""
         # 1. Critical Cooldown
         if self._current_quality == NetworkQuality.CRITICAL:
             time_in_critical = time.time() - self._critical_entry_time
-            if time_in_critical < AdaptationConfig.CRITICAL_COOLDOWN and target_quality > NetworkQuality.CRITICAL:
+            if (
+                time_in_critical < AdaptationConfig.CRITICAL_COOLDOWN
+                and target_quality > NetworkQuality.CRITICAL
+            ):
                 # Force stay in CRITICAL
                 return NetworkQuality.CRITICAL
 
@@ -630,17 +664,31 @@ class NetworkStabilityObserver:
 
         # 3. Special EXCELLENT Check (Sustained Stability)
         if target_quality == NetworkQuality.EXCELLENT and not bypass_hysteresis:
-            if not (self._current_quality >= NetworkQuality.STABLE and self._stable_duration > 60):
+            if not (
+                self._current_quality >= NetworkQuality.STABLE
+                and self._stable_duration > 60
+            ):
                 return NetworkQuality.STABLE
 
         return target_quality
 
-    def _apply_hysteresis(self, target_quality: NetworkQuality, bypass: bool, metrics: dict, reason: str = None):
+    def _apply_hysteresis(
+        self,
+        target_quality: NetworkQuality,
+        bypass: bool,
+        metrics: dict,
+        reason: str = None,
+    ):
         """Apply hysteresis logic and trigger transition if needed."""
         if bypass:
             # Immediate transition if target different
             if target_quality != self._current_quality:
-                self._transition_to(target_quality, metrics["moderate_errors"], metrics["total_events"], reason)
+                self._transition_to(
+                    target_quality,
+                    metrics["moderate_errors"],
+                    metrics["total_events"],
+                    reason,
+                )
                 self._reset_hysteresis()
             return
 
@@ -650,7 +698,12 @@ class NetworkStabilityObserver:
             self._consecutive_good_windows = 0
 
             if self._consecutive_bad_windows >= AdaptationConfig.DEGRADATION_THRESHOLD:
-                self._transition_to(target_quality, metrics["moderate_errors"], metrics["total_events"], reason)
+                self._transition_to(
+                    target_quality,
+                    metrics["moderate_errors"],
+                    metrics["total_events"],
+                    reason,
+                )
                 self._consecutive_bad_windows = 0
 
         elif target_quality > self._current_quality:
@@ -659,7 +712,12 @@ class NetworkStabilityObserver:
             self._consecutive_bad_windows = 0
 
             if self._consecutive_good_windows >= AdaptationConfig.RECOVERY_THRESHOLD:
-                self._transition_to(target_quality, metrics["moderate_errors"], metrics["total_events"], reason)
+                self._transition_to(
+                    target_quality,
+                    metrics["moderate_errors"],
+                    metrics["total_events"],
+                    reason,
+                )
                 self._consecutive_good_windows = 0
         else:
             # Stable state
@@ -674,7 +732,13 @@ class NetworkStabilityObserver:
         self._consecutive_bad_windows = 0
         self._consecutive_good_windows = 0
 
-    def _transition_to(self, new_quality: NetworkQuality, window_errors: int, window_total: int, reason: str = None):
+    def _transition_to(
+        self,
+        new_quality: NetworkQuality,
+        window_errors: int,
+        window_total: int,
+        reason: str = None,
+    ):
         """
         Transition to a new quality state (must be called under lock).
 

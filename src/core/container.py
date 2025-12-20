@@ -4,8 +4,6 @@ from dependency_injector import containers, providers
 from src.core.config_manager import ConfigManager
 from src.core.connection_manager import ConnectionManager
 from src.services.network_stats import NetworkStatsService
-from src.ui.managers.monitoring_service import MonitoringService
-from src.ui.managers.profile_manager import ProfileManager
 
 
 class ApplicationContainer(containers.DeclarativeContainer):
@@ -29,22 +27,71 @@ class ApplicationContainer(containers.DeclarativeContainer):
 
     network_stats = providers.Singleton(NetworkStatsService)
 
-
-# Factory functions for managers (these need MainWindow dependencies)
-def create_profile_manager(container, connection_handler, ui_updater):
-    """Factory for ProfileManager."""
-    return ProfileManager(
-        connection_manager=container.connection_manager(),
-        connection_handler=connection_handler,
-        ui_updater=ui_updater,
+    # UI Handlers (Singletons to ensure consistent state sharing)
+    connection_handler = providers.Singleton(
+        "src.ui.handlers.connection_handler.ConnectionHandler",
+        connection_manager=connection_manager,
+        config_manager=config_manager,
+        network_stats=network_stats,
     )
 
+    theme_handler = providers.Singleton(
+        "src.ui.handlers.theme_handler.ThemeHandler",
+        config_manager=config_manager,
+    )
 
-def create_monitoring_service(container, connection_handler, ui_updater, toast_manager):
-    """Factory for MonitoringService."""
-    return MonitoringService(
-        connection_manager=container.connection_manager(),
+    installer_handler = providers.Singleton(
+        "src.ui.handlers.installer_handler.InstallerHandler",
+        connection_manager=connection_manager,
+    )
+
+    latency_monitor_handler = providers.Singleton(
+        "src.ui.handlers.latency_monitor_handler.LatencyMonitorHandler",
+        config_manager=config_manager,
+    )
+
+    network_stats_handler = providers.Singleton(
+        "src.ui.handlers.network_stats_handler.NetworkStatsHandler",
+        network_stats=network_stats,
+    )
+
+    background_task_handler = providers.Singleton(
+        "src.ui.handlers.background_task_handler.BackgroundTaskHandler",
+        network_stats_handler=network_stats_handler,
+        latency_monitor_handler=latency_monitor_handler,
+    )
+
+    systray_handler = providers.Singleton(
+        "src.ui.handlers.systray_handler.SystrayHandler",
+        connection_manager=connection_manager,
+        config_manager=config_manager,
+    )
+
+    # Managers
+    profile_manager = providers.Singleton(
+        "src.ui.managers.profile_manager.ProfileManager",
+        connection_manager=connection_manager,
         connection_handler=connection_handler,
-        ui_updater=ui_updater,
-        toast_manager=toast_manager,
+    )
+
+    monitoring_service = providers.Singleton(
+        "src.ui.managers.monitoring_service.MonitoringService",
+        connection_manager=connection_manager,
+        connection_handler=connection_handler,
+    )
+
+    main_window = providers.Factory(
+        "src.ui.main_window.MainWindow",
+        config_manager=config_manager,
+        connection_manager=connection_manager,
+        network_stats=network_stats,
+        network_stats_handler=network_stats_handler,
+        latency_monitor_handler=latency_monitor_handler,
+        connection_handler=connection_handler,
+        theme_handler=theme_handler,
+        installer_handler=installer_handler,
+        background_task_handler=background_task_handler,
+        systray_handler=systray_handler,
+        profile_manager=profile_manager,
+        monitoring_service=monitoring_service,
     )

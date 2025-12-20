@@ -143,7 +143,11 @@ class PlatformUtils:
         """
         import subprocess
 
-        return subprocess.CREATE_NO_WINDOW if PlatformUtils.get_platform() == "windows" else 0
+        return (
+            subprocess.CREATE_NO_WINDOW
+            if PlatformUtils.get_platform() == "windows"
+            else 0
+        )
 
     @staticmethod
     def get_startupinfo():

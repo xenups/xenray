@@ -90,7 +90,9 @@ class XrayConfigProcessor:
                     "destOverride": ["http", "tls", "quic"],
                     "metadataOnly": False,
                 }
-                logger.debug("[XrayConfigProcessor] Injected Sniffing settings into Xray SOCKS inbound.")
+                logger.debug(
+                    "[XrayConfigProcessor] Injected Sniffing settings into Xray SOCKS inbound."
+                )
 
         return user_port
 
@@ -212,7 +214,9 @@ class XrayConfigProcessor:
             if ip:
                 # SUCCESS: Replace address with IP
                 server_obj["address"] = ip
-                logger.info(f"[XrayConfigProcessor] Replaced address {domain} with resolved IP {ip}")
+                logger.info(
+                    f"[XrayConfigProcessor] Replaced address {domain} with resolved IP {ip}"
+                )
             else:
                 # FALLBACK: Keep domain
                 logger.warning(
@@ -225,7 +229,9 @@ class XrayConfigProcessor:
             try:
                 self._patch_stream_settings(outbound, domain)
             except Exception as e:
-                logger.error(f"[XrayConfigProcessor] Failed to patch stream settings for {domain}: {e}")
+                logger.error(
+                    f"[XrayConfigProcessor] Failed to patch stream settings for {domain}: {e}"
+                )
 
     def _resolve_domain_to_ip(self, domain: str, timeout: float = 5.0) -> Optional[str]:
         """
@@ -280,7 +286,9 @@ class XrayConfigProcessor:
 
         # Sanitize network
         if network == "udp":
-            logger.warning("[XrayConfigProcessor] Removed invalid 'udp' network from streamSettings")
+            logger.warning(
+                "[XrayConfigProcessor] Removed invalid 'udp' network from streamSettings"
+            )
             stream_settings.pop("network", None)
             network = ""
 

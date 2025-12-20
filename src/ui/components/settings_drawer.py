@@ -16,14 +16,11 @@ from src.core.types import ConnectionMode
 from src.services.app_update_service import AppUpdateService
 from src.services.singbox_service import SingboxService
 from src.services.xray_installer import XrayInstallerService
-from src.ui.components.settings_sections import (
-    CountryDropdownRow,
-    LanguageDropdownRow,
-    ModeSwitchRow,
-    PortInputRow,
-    SettingsListTile,
-    SettingsSection,
-)
+from src.ui.components.settings_sections import (CountryDropdownRow,
+                                                 LanguageDropdownRow,
+                                                 ModeSwitchRow, PortInputRow,
+                                                 SettingsListTile,
+                                                 SettingsSection)
 from src.utils.process_utils import ProcessUtils
 
 
@@ -152,7 +149,9 @@ class SettingsDrawer(ft.NavigationDrawer):
                                             ft.Icons.SYSTEM_UPDATE_ALT,
                                             t("settings.check_updates"),
                                             t("settings.update_xray"),
-                                            on_click=lambda e: self._on_installer_run("xray"),
+                                            on_click=lambda e: self._on_installer_run(
+                                                "xray"
+                                            ),
                                         ),
                                         SettingsListTile(
                                             ft.Icons.INFO_OUTLINE,
@@ -357,7 +356,11 @@ class SettingsDrawer(ft.NavigationDrawer):
 
     def _show_update_dialog(self, page, current: str, latest: str):
         """Show update confirmation dialog."""
-        msg = t("update.available", current=current, latest=latest) if current else t("update.install", version=latest)
+        msg = (
+            t("update.available", current=current, latest=latest)
+            if current
+            else t("update.install", version=latest)
+        )
 
         def close_dlg(e):
             page.close(dlg)
@@ -467,7 +470,9 @@ class SettingsDrawer(ft.NavigationDrawer):
                 ) = AppUpdateService.check_for_updates()
 
                 if not available and current:
-                    self._show_toast(t("app_update.up_to_date", version=current), "info")
+                    self._show_toast(
+                        t("app_update.up_to_date", version=current), "info"
+                    )
                     page.update()
                     return
 
@@ -482,7 +487,9 @@ class SettingsDrawer(ft.NavigationDrawer):
 
         threading.Thread(target=check_task, daemon=True).start()
 
-    def _show_app_update_dialog(self, page, current: str, latest: str, download_url: str):
+    def _show_app_update_dialog(
+        self, page, current: str, latest: str, download_url: str
+    ):
         """Show app update confirmation dialog."""
         msg = (
             t("app_update.available", current=current, latest=latest)

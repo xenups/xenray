@@ -3,7 +3,9 @@ from typing import Callable, Optional
 
 from loguru import logger
 
+from src.core.connection_manager import ConnectionManager
 from src.services.connection_tester import ConnectionTester
+from src.ui.handlers.connection_handler import ConnectionHandler
 
 
 class ProfileManager:
@@ -11,28 +13,19 @@ class ProfileManager:
 
     def __init__(
         self,
-        connection_manager,
-        connection_handler,
-        ui_updater: Callable,
+        connection_manager: ConnectionManager,
+        connection_handler: ConnectionHandler,
     ):
-        """
-        Initialize ProfileManager with injected dependencies.
-
-        Args:
-            connection_manager: ConnectionManager instance
-            connection_handler: ConnectionHandler instance
-            ui_updater: Callable for updating UI
-        """
         self._connection_manager = connection_manager
         self._connection_handler = connection_handler
-        self._ui_call = ui_updater
+        self._ui_call: Optional[Callable] = None
         self._selected_profile: Optional[dict] = None
-
-        # Callback for UI updates when profile is selected
         self._on_profile_selected_ui: Optional[Callable[[dict], None]] = None
-
-        # Will be set by MainWindow
         self.is_running = False
+
+    def setup(self, ui_updater: Callable):
+        """Bind UI updater to the manager."""
+        self._ui_call = ui_updater
 
     @property
     def selected_profile(self) -> Optional[dict]:

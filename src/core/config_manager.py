@@ -6,7 +6,8 @@ import uuid
 from datetime import datetime
 from typing import List, Optional, Tuple
 
-from src.core.constants import LAST_FILE_PATH, MAX_RECENT_FILES, RECENT_FILES_PATH
+from src.core.constants import (LAST_FILE_PATH, MAX_RECENT_FILES,
+                                RECENT_FILES_PATH)
 from src.core.logger import logger
 
 # Validation constants
@@ -95,7 +96,9 @@ class ConfigManager:
                     if port_str == str(OLD_PORT):
                         # Migrate to new default
                         _atomic_write(port_path, str(DEFAULT_PROXY_PORT))
-                        logger.info(f"Migrated port from {OLD_PORT} to {DEFAULT_PROXY_PORT}")
+                        logger.info(
+                            f"Migrated port from {OLD_PORT} to {DEFAULT_PROXY_PORT}"
+                        )
             except Exception as e:
                 logger.debug(f"Port migration check failed: {e}")
 
@@ -167,7 +170,11 @@ class ConfigManager:
                 files = json.load(f)
                 # Validate that it's a list of strings
                 if isinstance(files, list):
-                    return [f for f in files if isinstance(f, str) and _validate_file_path(f)]
+                    return [
+                        f
+                        for f in files
+                        if isinstance(f, str) and _validate_file_path(f)
+                    ]
                 return []
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
             logger.error(f"Error parsing recent files: {e}")
@@ -447,7 +454,9 @@ class ConfigManager:
                 port = int(port_str)
                 if MIN_PORT <= port <= MAX_PORT:
                     return port
-                logger.warning(f"Invalid port {port}, using default {DEFAULT_PROXY_PORT}")
+                logger.warning(
+                    f"Invalid port {port}, using default {DEFAULT_PROXY_PORT}"
+                )
                 return DEFAULT_PROXY_PORT
         except (ValueError, OSError, IOError) as e:
             logger.error(f"Error reading proxy port: {e}")
@@ -638,7 +647,9 @@ class ConfigManager:
         Each value is a list of strings (domains/IPs).
         """
         defaults = {"direct": [], "proxy": [], "block": []}
-        return self._load_json_list("routing_rules.json", default_type=dict, default_val=defaults)
+        return self._load_json_list(
+            "routing_rules.json", default_type=dict, default_val=defaults
+        )
 
     def save_routing_rules(self, rules: dict):
         """Save routing rules."""
@@ -652,7 +663,9 @@ class ConfigManager:
             "direct_private_ips": True,
             "direct_local_domains": True,
         }
-        return self._load_json_list("routing_toggles.json", default_type=dict, default_val=defaults)
+        return self._load_json_list(
+            "routing_toggles.json", default_type=dict, default_val=defaults
+        )
 
     def set_routing_toggle(self, name: str, value: bool) -> None:
         """Set a single routing toggle."""
@@ -671,7 +684,9 @@ class ConfigManager:
             {"address": "1.1.1.1", "protocol": "udp", "domains": []},
             {"address": "8.8.8.8", "protocol": "udp", "domains": []},
         ]
-        return self._load_json_list("dns_config.json", default_type=list, default_val=defaults)
+        return self._load_json_list(
+            "dns_config.json", default_type=list, default_val=defaults
+        )
 
     def save_dns_config(self, dns_list: list):
         """Save DNS configuration."""

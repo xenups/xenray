@@ -28,7 +28,9 @@ class SystemProxyMacOS:
             lines = result.stdout.strip().split("\n")[1:]
 
             # Filter out disabled services (marked with *)
-            services = [line.strip() for line in lines if line and not line.startswith("*")]
+            services = [
+                line.strip() for line in lines if line and not line.startswith("*")
+            ]
 
             logger.debug(f"Found network services: {services}")
             return services
@@ -221,7 +223,9 @@ class SystemProxyMacOS:
             return False
 
     @staticmethod
-    def set_proxy_for_all_services(host: str, port: int, proxy_type: str = "http") -> bool:
+    def set_proxy_for_all_services(
+        host: str, port: int, proxy_type: str = "http"
+    ) -> bool:
         """
         Set proxy for all active network services.
 

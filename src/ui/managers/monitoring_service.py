@@ -1,12 +1,17 @@
 """Monitoring Service - Handles periodic connection monitoring."""
 import threading
 import time
-from typing import Callable
+from typing import TYPE_CHECKING, Callable, Optional
 
 from loguru import logger
 
+from src.core.connection_manager import ConnectionManager
 from src.core.i18n import t
+from src.ui.handlers.connection_handler import ConnectionHandler
 from src.utils.network_utils import NetworkUtils
+
+if TYPE_CHECKING:
+    from src.ui.components.toast import ToastManager
 
 
 class MonitoringService:
@@ -14,29 +19,21 @@ class MonitoringService:
 
     def __init__(
         self,
-        connection_manager,
-        connection_handler,
-        ui_updater: Callable,
-        toast_manager,
+        connection_manager: ConnectionManager,
+        connection_handler: ConnectionHandler,
     ):
-        """
-        Initialize MonitoringService with injected dependencies.
-
-        Args:
-            connection_manager: ConnectionManager instance
-            connection_handler: ConnectionHandler instance
-            ui_updater: Callable for updating UI
-            toast_manager: ToastManager instance
-        """
         self._connection_manager = connection_manager
         self._connection_handler = connection_handler
-        self._ui_call = ui_updater
-        self._toast = toast_manager
+        self._ui_call: Optional[Callable] = None
+        self._toast: Optional[ToastManager] = None
         self._monitoring_active = False
         self._monitoring_thread: threading.Thread = None
-
-        # Will be set by MainWindow
         self.is_running = False
+
+    def setup(self, ui_updater: Callable, toast_manager):
+        """Bind UI dependencies to the service."""
+        self._ui_call = ui_updater
+        self._toast = toast_manager
 
     def start_monitoring_loop(self):
         """Start the periodic monitoring loop (runs every 60s)."""

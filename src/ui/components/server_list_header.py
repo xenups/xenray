@@ -32,7 +32,9 @@ class ServerListHeader(ft.Container):
         self._current_subscription: Optional[dict] = None
         self._inner_row = ft.Row([], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
 
-        super().__init__(content=self._inner_row, padding=ft.padding.only(left=15, right=5))
+        super().__init__(
+            content=self._inner_row, padding=ft.padding.only(left=15, right=5)
+        )
         self.show_main_header()
 
     def _create_sort_menu(self) -> ft.PopupMenuButton:
@@ -96,7 +98,9 @@ class ServerListHeader(ft.Container):
                 [
                     ft.IconButton(
                         ft.Icons.ARROW_BACK,
-                        on_click=lambda e: self._on_back_click() if self._on_back_click else None,
+                        on_click=lambda e: self._on_back_click()
+                        if self._on_back_click
+                        else None,
                     ),
                     ft.Text(sub["name"], size=17, weight=ft.FontWeight.BOLD),
                 ],

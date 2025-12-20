@@ -21,7 +21,9 @@ class RoutingPage(ft.Container):
         )
         self._setup_ui()
 
-    def _create_toggle_row(self, key: str, title: str, subtitle: str, icon) -> ft.Container:
+    def _create_toggle_row(
+        self, key: str, title: str, subtitle: str, icon
+    ) -> ft.Container:
         """Create a toggle row for quick settings."""
         switch = ft.Switch(
             value=self._toggles.get(key, False),
@@ -34,7 +36,9 @@ class RoutingPage(ft.Container):
                     ft.Column(
                         [
                             ft.Text(title, size=13, weight=ft.FontWeight.W_500),
-                            ft.Text(subtitle, size=11, color=ft.Colors.ON_SURFACE_VARIANT),
+                            ft.Text(
+                                subtitle, size=11, color=ft.Colors.ON_SURFACE_VARIANT
+                            ),
                         ],
                         spacing=2,
                         expand=True,
@@ -44,7 +48,9 @@ class RoutingPage(ft.Container):
                 spacing=12,
             ),
             padding=ft.padding.symmetric(horizontal=15, vertical=12),
-            border=ft.border.only(bottom=ft.border.BorderSide(1, ft.Colors.OUTLINE_VARIANT)),
+            border=ft.border.only(
+                bottom=ft.border.BorderSide(1, ft.Colors.OUTLINE_VARIANT)
+            ),
         )
 
     def _on_toggle_change(self, key: str, value: bool):
@@ -60,7 +66,9 @@ class RoutingPage(ft.Container):
                     ft.IconButton(ft.Icons.ARROW_BACK, on_click=self._on_back),
                     ft.Column(
                         [
-                            ft.Text(t("routing.title"), size=20, weight=ft.FontWeight.BOLD),
+                            ft.Text(
+                                t("routing.title"), size=20, weight=ft.FontWeight.BOLD
+                            ),
                             ft.Text(
                                 t("routing.subtitle"),
                                 size=12,
@@ -249,7 +257,9 @@ class RoutingPage(ft.Container):
                 ft.Container(
                     content=ft.Row(
                         [
-                            ft.Text(item, size=14, weight=ft.FontWeight.W_500, expand=True),
+                            ft.Text(
+                                item, size=14, weight=ft.FontWeight.W_500, expand=True
+                            ),
                             ft.IconButton(
                                 ft.Icons.DELETE_OUTLINE,
                                 icon_size=20,
@@ -261,7 +271,9 @@ class RoutingPage(ft.Container):
                         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                     ),
                     padding=ft.padding.symmetric(horizontal=10, vertical=5),
-                    border=ft.border.only(bottom=ft.border.BorderSide(1, ft.Colors.OUTLINE_VARIANT)),
+                    border=ft.border.only(
+                        bottom=ft.border.BorderSide(1, ft.Colors.OUTLINE_VARIANT)
+                    ),
                 )
             )
 

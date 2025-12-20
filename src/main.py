@@ -14,7 +14,6 @@ import asyncio
 from src.core.constants import EARLY_LOG_FILE
 from src.core.logger import logger
 from src.core.settings import Settings
-from src.ui.main_window import MainWindow
 
 
 async def main(page: ft.Page):
@@ -45,8 +44,8 @@ async def main(page: ft.Page):
 
     set_language(container.config_manager().get_language())
 
-    # Initialize UI with container
-    window = MainWindow(page, container)
+    # Initialize UI with DI
+    window = container.main_window(page=page)
 
     # Register window event handler
     def on_window_event(e):

@@ -49,7 +49,9 @@ class PassiveLogMonitor:
         self._monitoring = True
 
         # Start background thread
-        self._monitor_thread = threading.Thread(target=self._monitor_loop, daemon=True, name="LogMonitor")
+        self._monitor_thread = threading.Thread(
+            target=self._monitor_loop, daemon=True, name="LogMonitor"
+        )
         self._monitor_thread.start()
 
         logger.info(f"[LogMonitor] Started monitoring {len(self._log_files)} log files")

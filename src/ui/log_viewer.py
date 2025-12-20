@@ -79,7 +79,9 @@ class LogViewer:
                         if last_inodes.get(filepath) != stat.st_ino:
                             if filepath in file_handles:
                                 file_handles[filepath].close()
-                            file_handles[filepath] = open(filepath, "r", encoding="utf-8", errors="replace")
+                            file_handles[filepath] = open(
+                                filepath, "r", encoding="utf-8", errors="replace"
+                            )
                             file_handles[filepath].seek(0, os.SEEK_END)
                             last_inodes[filepath] = stat.st_ino
 

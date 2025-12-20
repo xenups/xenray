@@ -12,7 +12,9 @@ class ServerCard(ft.Container):
         self._current_colors = FLAG_COLORS["default"]
 
         # Icon Container (Holds Flag or Globe)
-        self._globe_icon = ft.Icon(ft.Icons.PUBLIC, size=28, color=ft.Colors.ON_SURFACE_VARIANT)
+        self._globe_icon = ft.Icon(
+            ft.Icons.PUBLIC, size=28, color=ft.Colors.ON_SURFACE_VARIANT
+        )
         self._icon_container = ft.Container(
             content=self._globe_icon,
             width=36,
@@ -41,7 +43,9 @@ class ServerCard(ft.Container):
 
         # List icon button
         self._list_btn = ft.Container(
-            content=ft.Icon(ft.Icons.EXPAND_MORE, size=22, color=ft.Colors.ON_SURFACE_VARIANT),
+            content=ft.Icon(
+                ft.Icons.EXPAND_MORE, size=22, color=ft.Colors.ON_SURFACE_VARIANT
+            ),
             width=36,
             height=36,
             alignment=ft.alignment.center,
@@ -108,7 +112,11 @@ class ServerCard(ft.Container):
         """Update gradient with current country colors."""
         from src.ui.helpers.gradient_helper import GradientHelper
 
-        cc = self._profile.get("country_code") if hasattr(self, "_profile") and self._profile else None
+        cc = (
+            self._profile.get("country_code")
+            if hasattr(self, "_profile") and self._profile
+            else None
+        )
         self.gradient = GradientHelper.get_flag_gradient(cc)
 
     def update_server(self, profile):
@@ -180,25 +188,33 @@ class ServerCard(ft.Container):
     def update_theme(self, is_dark: bool):
         """Update card appearance based on theme."""
         if is_dark:
-            self.border = ft.border.all(1, ft.Colors.with_opacity(0.2, ft.Colors.ON_SURFACE))
+            self.border = ft.border.all(
+                1, ft.Colors.with_opacity(0.2, ft.Colors.ON_SURFACE)
+            )
             self._globe_icon.color = ft.Colors.ON_SURFACE_VARIANT
             self._list_btn.bgcolor = ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE)
             # Safe shadow update
             if self.shadow:
                 if isinstance(self.shadow, list):
                     if len(self.shadow) > 0:
-                        self.shadow[0].color = ft.Colors.with_opacity(0.15, ft.Colors.BLACK)
+                        self.shadow[0].color = ft.Colors.with_opacity(
+                            0.15, ft.Colors.BLACK
+                        )
                 else:
                     self.shadow.color = ft.Colors.with_opacity(0.15, ft.Colors.BLACK)
         else:
-            self.border = ft.border.all(1, ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE))
+            self.border = ft.border.all(
+                1, ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE)
+            )
             self._globe_icon.color = ft.Colors.ON_SURFACE_VARIANT
             self._list_btn.bgcolor = ft.Colors.with_opacity(0.08, ft.Colors.ON_SURFACE)
             # Safe shadow update
             if self.shadow:
                 if isinstance(self.shadow, list):
                     if len(self.shadow) > 0:
-                        self.shadow[0].color = ft.Colors.with_opacity(0.08, ft.Colors.BLACK)
+                        self.shadow[0].color = ft.Colors.with_opacity(
+                            0.08, ft.Colors.BLACK
+                        )
                 else:
                     self.shadow.color = ft.Colors.with_opacity(0.08, ft.Colors.BLACK)
 

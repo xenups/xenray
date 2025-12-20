@@ -10,14 +10,9 @@ from typing import List, Optional, Union
 
 from loguru import logger
 
-from src.core.constants import (
-    DNS_PROVIDERS,
-    SINGBOX_CONFIG_PATH,
-    SINGBOX_EXECUTABLE,
-    SINGBOX_LOG_FILE,
-    SINGBOX_RULE_SETS,
-    XRAY_EXECUTABLE,
-)
+from src.core.constants import (DNS_PROVIDERS, SINGBOX_CONFIG_PATH,
+                                SINGBOX_EXECUTABLE, SINGBOX_LOG_FILE,
+                                SINGBOX_RULE_SETS, XRAY_EXECUTABLE)
 from src.utils.network_interface import NetworkInterfaceDetector
 from src.utils.platform_utils import PlatformUtils
 
@@ -46,7 +41,12 @@ class SingboxService:
         if isinstance(value, str):
             value = [value]
         return [
-            item.strip().lower().replace("'", "").replace('"', "").replace("[", "").replace("]", "")
+            item.strip()
+            .lower()
+            .replace("'", "")
+            .replace('"', "")
+            .replace("[", "")
+            .replace("]", "")
             for item in value
             if isinstance(item, str)
         ]
@@ -67,7 +67,10 @@ class SingboxService:
         return [
             item
             for item in lst
-            if not any(item.endswith(f".{x}") or item == x for x in self._filter_real_ips(lst + [item]))
+            if not any(
+                item.endswith(f".{x}") or item == x
+                for x in self._filter_real_ips(lst + [item])
+            )
         ]
 
     def _resolve_ips(self, endpoints: List[str]) -> List[str]:
@@ -190,7 +193,9 @@ class SingboxService:
                 gateway,
             ) = NetworkInterfaceDetector.get_primary_interface()
             if not gateway:
-                logger.warning("[SingboxService] No gateway detected! Route bypass may be incomplete.")
+                logger.warning(
+                    "[SingboxService] No gateway detected! Route bypass may be incomplete."
+                )
 
             # 2. Bypass list: Proxy server + Common DNS servers
             bypass_list = self._normalize_list(proxy_server_ip)
@@ -238,7 +243,9 @@ class SingboxService:
             try:
                 self._process.wait(timeout=3.0)
                 # If we get here, process exited immediately
-                logger.error(f"[SingboxService] Process exited immediately with code {self._process.returncode}")
+                logger.error(
+                    f"[SingboxService] Process exited immediately with code {self._process.returncode}"
+                )
 
                 # Close log handle to ensure flush
                 self._close_log()
@@ -246,10 +253,14 @@ class SingboxService:
                 # Read and log the error details
                 try:
                     if os.path.exists(SINGBOX_LOG_FILE):
-                        with open(SINGBOX_LOG_FILE, "r", encoding="utf-8", errors="ignore") as f:
+                        with open(
+                            SINGBOX_LOG_FILE, "r", encoding="utf-8", errors="ignore"
+                        ) as f:
                             log_content = f.read().strip()
                             if log_content:
-                                logger.error(f"[SingboxService] Fatal Error Log:\n{log_content}")
+                                logger.error(
+                                    f"[SingboxService] Fatal Error Log:\n{log_content}"
+                                )
                 except Exception as e:
                     logger.error(f"[SingboxService] Failed to read log file: {e}")
 
@@ -258,7 +269,9 @@ class SingboxService:
                 # Process is still running, good!
                 pass
 
-            logger.info(f"[SingboxService] sing-box started successfully | PID: {self._pid}")
+            logger.info(
+                f"[SingboxService] sing-box started successfully | PID: {self._pid}"
+            )
             return self._pid
 
         except Exception as e:
@@ -541,9 +554,13 @@ class SingboxService:
                         dns_rules.append({"domain": s_domains, "server": "bootstrap"})
 
                 if s_domain_suffixes:
-                    rules.append({"domain_suffix": s_domain_suffixes, "outbound": outbound_tag})
+                    rules.append(
+                        {"domain_suffix": s_domain_suffixes, "outbound": outbound_tag}
+                    )
                     if outbound_tag == "direct":
-                        dns_rules.append({"domain_suffix": s_domain_suffixes, "server": "bootstrap"})
+                        dns_rules.append(
+                            {"domain_suffix": s_domain_suffixes, "server": "bootstrap"}
+                        )
 
         # 3. Country routing
         if routing_country and routing_country.lower() != "none":

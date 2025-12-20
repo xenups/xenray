@@ -3,7 +3,8 @@
 import re
 from typing import Optional
 
-from src.services.network_stability_observer import ErrorSeverity, ErrorSignal, ErrorType
+from src.services.network_stability_observer import (ErrorSeverity,
+                                                     ErrorSignal, ErrorType)
 
 
 class LogParser:
@@ -60,11 +61,21 @@ class LogParser:
     def __init__(self):
         """Initialize LogParser with compiled regex patterns."""
         # Compile patterns for better performance
-        self._timeout_regexes = [re.compile(p, re.IGNORECASE) for p in self.TIMEOUT_PATTERNS]
-        self._connection_reset_regexes = [re.compile(p, re.IGNORECASE) for p in self.CONNECTION_RESET_PATTERNS]
-        self._dns_failure_regexes = [re.compile(p, re.IGNORECASE) for p in self.DNS_FAILURE_PATTERNS]
-        self._tls_failure_regexes = [re.compile(p, re.IGNORECASE) for p in self.TLS_FAILURE_PATTERNS]
-        self._success_regexes = [re.compile(p, re.IGNORECASE) for p in self.SUCCESS_PATTERNS]
+        self._timeout_regexes = [
+            re.compile(p, re.IGNORECASE) for p in self.TIMEOUT_PATTERNS
+        ]
+        self._connection_reset_regexes = [
+            re.compile(p, re.IGNORECASE) for p in self.CONNECTION_RESET_PATTERNS
+        ]
+        self._dns_failure_regexes = [
+            re.compile(p, re.IGNORECASE) for p in self.DNS_FAILURE_PATTERNS
+        ]
+        self._tls_failure_regexes = [
+            re.compile(p, re.IGNORECASE) for p in self.TLS_FAILURE_PATTERNS
+        ]
+        self._success_regexes = [
+            re.compile(p, re.IGNORECASE) for p in self.SUCCESS_PATTERNS
+        ]
 
     def parse_line(self, line: str) -> Optional[ErrorSignal]:
         """
@@ -85,15 +96,21 @@ class LogParser:
 
         # Check for connection reset errors
         if self._matches_any(line, self._connection_reset_regexes):
-            return ErrorSignal(type=ErrorType.CONNECTION_RESET, severity=ErrorSeverity.MODERATE)
+            return ErrorSignal(
+                type=ErrorType.CONNECTION_RESET, severity=ErrorSeverity.MODERATE
+            )
 
         # Check for DNS failures
         if self._matches_any(line, self._dns_failure_regexes):
-            return ErrorSignal(type=ErrorType.DNS_FAILURE, severity=ErrorSeverity.SEVERE)
+            return ErrorSignal(
+                type=ErrorType.DNS_FAILURE, severity=ErrorSeverity.SEVERE
+            )
 
         # Check for TLS failures
         if self._matches_any(line, self._tls_failure_regexes):
-            return ErrorSignal(type=ErrorType.TLS_FAILURE, severity=ErrorSeverity.SEVERE)
+            return ErrorSignal(
+                type=ErrorType.TLS_FAILURE, severity=ErrorSeverity.SEVERE
+            )
 
         return None
 

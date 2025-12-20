@@ -17,7 +17,9 @@ class StatusDisplay(ft.Container):
         self._is_connected = False
 
         # Status Label (initial instance)
-        self._status_label = self._create_label(t("app.disconnected"), ft.Colors.ORANGE_400)
+        self._status_label = self._create_label(
+            t("app.disconnected"), ft.Colors.ORANGE_400
+        )
 
         # Animated Switcher for Morphism
         self._switcher = ft.AnimatedSwitcher(
@@ -103,7 +105,9 @@ class StatusDisplay(ft.Container):
             status_color = ft.Colors.GREY_500
         else:
             has_number = bool(re.search(r"\d+", latency_text))
-            prefix = f"{t('connection.ping_prefix')} " if is_success and has_number else ""
+            prefix = (
+                f"{t('connection.ping_prefix')} " if is_success and has_number else ""
+            )
             status_text = f"{prefix}{latency_text}"
 
             if is_success:

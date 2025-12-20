@@ -32,7 +32,9 @@ class LogsDrawer(ft.NavigationDrawer):
         )
 
         # Network Stats Row
-        self._download_icon = ft.Icon(ft.Icons.ARROW_DOWNWARD, size=14, color=ft.Colors.GREEN_400)
+        self._download_icon = ft.Icon(
+            ft.Icons.ARROW_DOWNWARD, size=14, color=ft.Colors.GREEN_400
+        )
         self._download_text = ft.Text(
             "0 KB/s",
             size=12,
@@ -40,7 +42,9 @@ class LogsDrawer(ft.NavigationDrawer):
             weight=ft.FontWeight.W_500,
             width=70,
         )
-        self._upload_icon = ft.Icon(ft.Icons.ARROW_UPWARD, size=14, color=ft.Colors.BLUE_400)
+        self._upload_icon = ft.Icon(
+            ft.Icons.ARROW_UPWARD, size=14, color=ft.Colors.BLUE_400
+        )
         self._upload_text = ft.Text(
             "0 KB/s",
             size=12,
@@ -77,7 +81,9 @@ class LogsDrawer(ft.NavigationDrawer):
                 ft.Container(
                     content=ft.Row(
                         [
-                            ft.Text(t("logs.title"), size=22, weight=ft.FontWeight.BOLD),
+                            ft.Text(
+                                t("logs.title"), size=22, weight=ft.FontWeight.BOLD
+                            ),
                             ft.Row([self._pause_button, self._heartbeat], spacing=10),
                         ],
                         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
@@ -119,8 +125,16 @@ class LogsDrawer(ft.NavigationDrawer):
     def update_network_stats(self, download_speed: str, upload_speed: str):
         """Update network stats elements (Idempotent)."""
         # Only update if values changed to prevent unnecessary repaints
-        dl_val = to_persian_numerals(download_speed) if get_language() == "fa" else download_speed
-        ul_val = to_persian_numerals(upload_speed) if get_language() == "fa" else upload_speed
+        dl_val = (
+            to_persian_numerals(download_speed)
+            if get_language() == "fa"
+            else download_speed
+        )
+        ul_val = (
+            to_persian_numerals(upload_speed)
+            if get_language() == "fa"
+            else upload_speed
+        )
 
         changed = False
         if self._download_text.value != dl_val:

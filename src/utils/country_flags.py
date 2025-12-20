@@ -173,7 +173,9 @@ def get_country_from_ip(ip: str) -> str:
     try:
         import requests
 
-        response = requests.get(f"http://ip-api.com/json/{ip}?fields=countryCode", timeout=IP_API_TIMEOUT)
+        response = requests.get(
+            f"http://ip-api.com/json/{ip}?fields=countryCode", timeout=IP_API_TIMEOUT
+        )
         if response.status_code == 200:
             data = response.json()
             country_code = data.get("countryCode", "")
@@ -185,13 +187,15 @@ def get_country_from_ip(ip: str) -> str:
                 # Regional Indicator Symbol Letter A is U+1F1E6
                 # For 'CA': C=0x1F1E8, A=0x1F1E6
                 try:
-                    flag = chr(REGIONAL_INDICATOR_BASE + ord(country_code[0]) - ord("A")) + chr(
-                        REGIONAL_INDICATOR_BASE + ord(country_code[1]) - ord("A")
-                    )
+                    flag = chr(
+                        REGIONAL_INDICATOR_BASE + ord(country_code[0]) - ord("A")
+                    ) + chr(REGIONAL_INDICATOR_BASE + ord(country_code[1]) - ord("A"))
                     logger.debug(f"IP {ip} -> {country_code} {flag}")
                     return flag
                 except (ValueError, IndexError) as e:
-                    logger.warning(f"Failed to convert country code {country_code} to flag: {e}")
+                    logger.warning(
+                        f"Failed to convert country code {country_code} to flag: {e}"
+                    )
             else:
                 logger.warning(f"Invalid country code for IP {ip}: {country_code}")
     except (requests.RequestException, requests.Timeout) as e:

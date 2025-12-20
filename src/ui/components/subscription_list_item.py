@@ -22,7 +22,11 @@ class SubscriptionListItem(ft.Container):
 
         # --- Menu Items ---
         menu_items = [
-            ft.PopupMenuItem(text=t("server_list.copy_link"), icon=ft.Icons.LINK, on_click=self._copy_link),
+            ft.PopupMenuItem(
+                text=t("server_list.copy_link"),
+                icon=ft.Icons.LINK,
+                on_click=self._copy_link,
+            ),
         ]
         if on_delete:
             menu_items.append(
@@ -44,7 +48,9 @@ class SubscriptionListItem(ft.Container):
         foreground_content = ft.Row(
             [
                 ft.Container(
-                    content=ft.Icon(ft.Icons.FOLDER_OPEN_ROUNDED, color=ft.Colors.BLUE_400, size=24),
+                    content=ft.Icon(
+                        ft.Icons.FOLDER_OPEN_ROUNDED, color=ft.Colors.BLUE_400, size=24
+                    ),
                     padding=ft.padding.only(left=5, right=10),
                 ),
                 ft.Column(
@@ -95,7 +101,9 @@ class SubscriptionListItem(ft.Container):
                 self.page.set_clipboard(url)
                 # Use toast manager if available
                 if hasattr(self.page, "_toast_manager"):
-                    self.page._toast_manager.success(t("server_list.subscription_link_copied"), 2000)
+                    self.page._toast_manager.success(
+                        t("server_list.subscription_link_copied"), 2000
+                    )
                 self.page.update()
         except Exception:
             # Silently fail if clipboard operation fails
