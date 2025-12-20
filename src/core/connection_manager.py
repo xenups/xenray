@@ -1,13 +1,9 @@
 """Connection Manager - Facade for connection management."""
 
-from typing import Optional
-
 from loguru import logger
 
 from src.core.config_manager import ConfigManager
 from src.core.connection_orchestrator import ConnectionOrchestrator
-from src.services.network_stability_observer import NetworkStabilityObserver
-from src.services.passive_log_monitor import PassiveLogMonitor
 from src.services.singbox_service import SingboxService
 from src.services.xray_service import XrayService
 
@@ -32,16 +28,6 @@ class ConnectionManager:
         xray_service = XrayService()
         singbox_service = SingboxService()
 
-        # Initialize network stability observer for monitoring
-        observer = NetworkStabilityObserver()
-        logger.info("[ConnectionManager] Network stability observer initialized")
-
-        # Initialize passive log monitor if observer is available
-        log_monitor: Optional[PassiveLogMonitor] = None
-        if observer:
-            log_monitor = PassiveLogMonitor(observer)
-            logger.info("[ConnectionManager] Passive log monitor initialized")
-
         # Create ConnectionOrchestrator with all dependencies
         self._orchestrator = ConnectionOrchestrator(
             config_manager=config_manager,
@@ -51,8 +37,8 @@ class ConnectionManager:
             routing_manager=routing_manager,
             xray_service=xray_service,
             singbox_service=singbox_service,
-            observer=observer,
-            log_monitor=log_monitor,
+            observer=None,
+            log_monitor=None,
         )
 
         self._current_connection = None

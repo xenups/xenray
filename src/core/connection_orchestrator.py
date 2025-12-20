@@ -111,10 +111,6 @@ class ConnectionOrchestrator:
         Args:
             connection_info: Connection information dictionary
         """
-        # Stop passive log monitoring
-        if self._log_monitor:
-            self._log_monitor.stop_monitoring()
-
         # Stop Sing-box first
         if connection_info.get("singbox_pid"):
             self._singbox_service.stop()
@@ -255,11 +251,5 @@ class ConnectionOrchestrator:
             "file": file_path,
         }
         logger.info(f"Successfully connected in {mode} mode")
-
-        # Start passive log monitoring (VPN only)
-        if mode == "vpn" and self._log_monitor:
-            from src.core.constants import SINGBOX_LOG_FILE, XRAY_LOG_FILE
-
-            self._log_monitor.start_monitoring([XRAY_LOG_FILE, SINGBOX_LOG_FILE])
 
         return connection_info
