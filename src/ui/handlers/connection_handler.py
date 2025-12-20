@@ -104,6 +104,7 @@ class ConnectionHandler:
             def on_step(step_msg: str):
                 self._main._ui_call(self._main._status_display.set_step, step_msg)
 
+            # Rate limiting is enforced in ConnectionManager.connect()
             success = self._main._connection_manager.connect(
                 temp_config_path, mode_str, step_callback=on_step
             )

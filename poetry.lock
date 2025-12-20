@@ -1234,6 +1234,25 @@ tomli = {version = ">=1.0.0", markers = "python_version < \"3.11\""}
 testing = ["argcomplete", "attrs (>=19.2.0)", "hypothesis (>=3.56)", "mock", "nose", "pygments (>=2.7.2)", "requests", "setuptools", "xmlschema"]
 
 [[package]]
+name = "pytest-asyncio"
+version = "0.21.2"
+description = "Pytest support for asyncio"
+optional = false
+python-versions = ">=3.7"
+groups = ["dev"]
+files = [
+    {file = "pytest_asyncio-0.21.2-py3-none-any.whl", hash = "sha256:ab664c88bb7998f711d8039cacd4884da6430886ae8bbd4eded552ed2004f16b"},
+    {file = "pytest_asyncio-0.21.2.tar.gz", hash = "sha256:d67738fc232b94b326b9d060750beb16e0074210b98dd8b58a5239fa2a154f45"},
+]
+
+[package.dependencies]
+pytest = ">=7.0.0"
+
+[package.extras]
+docs = ["sphinx (>=5.3)", "sphinx-rtd-theme (>=1.0)"]
+testing = ["coverage (>=6.2)", "flaky (>=3.5.0)", "hypothesis (>=5.7.1)", "mypy (>=0.931)", "pytest-trio (>=0.7.0)"]
+
+[[package]]
 name = "python-dotenv"
 version = "1.2.1"
 description = "Read key-value pairs from a .env file and set them as environment variables"
@@ -1346,6 +1365,21 @@ files = [
     {file = "six-1.17.0-py2.py3-none-any.whl", hash = "sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274"},
     {file = "six-1.17.0.tar.gz", hash = "sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81"},
 ]
+
+[[package]]
+name = "throttled-py"
+version = "3.0.1"
+description = "🔧 High-performance Python rate limiting library with multiple algorithms (Fixed Window, Sliding Window, Token Bucket, Leaky Bucket & GCRA) and storage backends (Redis, In-Memory)."
+optional = false
+python-versions = ">=3.10"
+groups = ["main"]
+files = [
+    {file = "throttled_py-3.0.1-py3-none-any.whl", hash = "sha256:283118d069e4b366bd0e7c6497a3b90b47f5665d0518a7a86daa23c46ff5fe7c"},
+    {file = "throttled_py-3.0.1.tar.gz", hash = "sha256:53d8829163f28a2411c75da48afa1394b6963facfb4f0057bddb31c5e430eb96"},
+]
+
+[package.extras]
+redis = ["redis (>3,!=4.5.2,!=4.5.3,<8.0.0)"]
 
 [[package]]
 name = "tomli"
@@ -1562,4 +1596,4 @@ cffi = ["cffi (>=1.17,<2.0) ; platform_python_implementation != \"PyPy\" and pyt
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<3.14"
-content-hash = "140b6306767ced9a0e82233276589de03aa413d791ae13b63a02e65c7edf9728"
+content-hash = "5d5373c14849dbf57572ce3192c15cc42eca9f5cab742244ce8cf227ec40c88f"
