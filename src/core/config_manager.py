@@ -118,7 +118,7 @@ class ConfigManager:
             Tuple of (config_dict, should_remove_from_recent)
             Returns (None, True) if file doesn't exist or is invalid
         """
-        if not _validate_file_path(file_path):
+        if not file_path or not isinstance(file_path, str):
             logger.warning(f"Invalid file path: {file_path}")
             return None, True
 

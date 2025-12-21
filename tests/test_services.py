@@ -215,10 +215,14 @@ class TestSingboxService:
         mock_proc.stdout = "sing-box version 1.12.12"
         mock_proc.returncode = 0
         mock_run.return_value = mock_proc
-        assert singbox_service.get_version() == "1.12.12"
+        
+        # Need to patch the executable path check
+        with patch("os.path.exists", return_value=True):
+            assert singbox_service.get_version() == "1.12.12"
 
         mock_run.side_effect = Exception("error")
-        assert singbox_service.get_version() is None
+        with patch("os.path.exists", return_value=True):
+            assert singbox_service.get_version() is None
 
     def test_close_log(self, singbox_service):
         """Test log handle cleanup."""

@@ -15,13 +15,13 @@ class TestProcessUtils:
         assert ProcessUtils.is_running(5678) is False
 
     @patch("src.utils.process_utils.os.name", "nt")
-    @patch("ctypes.windll.shell32.IsUserAnAdmin")
-    def test_is_admin_windows(self, mock_is_admin):
+    @patch("src.utils.process_utils.ctypes")
+    def test_is_admin_windows(self, mock_ctypes):
         """Test is_admin on Windows."""
-        mock_is_admin.return_value = 1
+        mock_ctypes.windll.shell32.IsUserAnAdmin.return_value = 1
         assert ProcessUtils.is_admin() is True
 
-        mock_is_admin.return_value = 0
+        mock_ctypes.windll.shell32.IsUserAnAdmin.return_value = 0
         assert ProcessUtils.is_admin() is False
 
     @patch("src.utils.process_utils.os.name", "posix")
