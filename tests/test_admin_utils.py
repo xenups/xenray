@@ -1,7 +1,6 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
-import sys
 import typer
 
 from src.utils.admin_utils import check_and_request_admin
@@ -18,12 +17,12 @@ class TestAdminUtils:
     def test_windows_already_admin(self, mock_plat):
         """Test Windows already admin."""
         mock_plat.return_value = "windows"
-        
+
         # Create a mock ctypes module
         mock_ctypes = MagicMock()
         mock_ctypes.windll.shell32.IsUserAnAdmin.return_value = 1
-        
-        with patch.dict('sys.modules', {'ctypes': mock_ctypes}):
+
+        with patch.dict("sys.modules", {"ctypes": mock_ctypes}):
             check_and_request_admin("vpn")
             # Should return silently
 
@@ -53,12 +52,12 @@ class TestAdminUtils:
         """Test Windows not admin and no TTY (CI/non-interactive)."""
         mock_plat.return_value = "windows"
         mock_tty.return_value = False
-        
+
         # Create a mock ctypes module
         mock_ctypes = MagicMock()
         mock_ctypes.windll.shell32.IsUserAnAdmin.return_value = 0
-        
-        with patch.dict('sys.modules', {'ctypes': mock_ctypes}):
+
+        with patch.dict("sys.modules", {"ctypes": mock_ctypes}):
             with pytest.raises(typer.Exit):
                 check_and_request_admin("vpn")
 
@@ -70,13 +69,13 @@ class TestAdminUtils:
         mock_plat.return_value = "windows"
         mock_tty.return_value = True
         mock_input.return_value = "y"
-        
+
         # Create a mock ctypes module
         mock_ctypes = MagicMock()
         mock_ctypes.windll.shell32.IsUserAnAdmin.return_value = 0
         mock_ctypes.windll.shell32.ShellExecuteW.return_value = 42  # Success code (>32)
-        
-        with patch.dict('sys.modules', {'ctypes': mock_ctypes}):
+
+        with patch.dict("sys.modules", {"ctypes": mock_ctypes}):
             with pytest.raises(typer.Exit) as exc:
                 check_and_request_admin("vpn")
             assert exc.value.exit_code == 0
@@ -89,12 +88,12 @@ class TestAdminUtils:
         mock_plat.return_value = "windows"
         mock_tty.return_value = True
         mock_input.return_value = "n"
-        
+
         # Create a mock ctypes module
         mock_ctypes = MagicMock()
         mock_ctypes.windll.shell32.IsUserAnAdmin.return_value = 0
-        
-        with patch.dict('sys.modules', {'ctypes': mock_ctypes}):
+
+        with patch.dict("sys.modules", {"ctypes": mock_ctypes}):
             with pytest.raises(typer.Exit) as exc:
                 check_and_request_admin("vpn")
             assert exc.value.exit_code == 1
