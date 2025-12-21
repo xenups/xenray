@@ -44,9 +44,7 @@ class RoutingRulesManager:
         """
         routing_country = self._config_manager.get_routing_country()
         if not routing_country or routing_country == "none":
-            logger.info(
-                "[RoutingRulesManager] No routing country selected, skipping routing rules"
-            )
+            logger.info("[RoutingRulesManager] No routing country selected, skipping routing rules")
             return
 
         # Ensure routing section exists
@@ -64,9 +62,7 @@ class RoutingRulesManager:
         }
 
         if routing_country not in country_map:
-            logger.warning(
-                f"[RoutingRulesManager] Unknown routing country: {routing_country}"
-            )
+            logger.warning(f"[RoutingRulesManager] Unknown routing country: {routing_country}")
             return
 
         geosite_tag, geoip_tag = country_map[routing_country]
@@ -91,15 +87,11 @@ class RoutingRulesManager:
 
         def add_user_rule(tag, domain_list):
             if domain_list:
-                ips = [
-                    d for d in domain_list if self._is_ip(d) or d.startswith("geoip:")
-                ]
+                ips = [d for d in domain_list if self._is_ip(d) or d.startswith("geoip:")]
                 domains = [d for d in domain_list if d not in ips]
 
                 if domains:
-                    rules.insert(
-                        0, {"type": "field", "outboundTag": tag, "domain": domains}
-                    )
+                    rules.insert(0, {"type": "field", "outboundTag": tag, "domain": domains})
                 if ips:
                     rules.insert(0, {"type": "field", "outboundTag": tag, "ip": ips})
 
@@ -114,9 +106,7 @@ class RoutingRulesManager:
         proxy_rules = len(user_rules.get("proxy", []))
         block_rules = len(user_rules.get("block", []))
         total_rules = direct_rules + proxy_rules + block_rules
-        logger.info(
-            f"[RoutingRulesManager] Added routing rules. Country: {routing_country}, User Rules: {total_rules}"
-        )
+        logger.info(f"[RoutingRulesManager] Added routing rules. Country: {routing_country}, User Rules: {total_rules}")
 
     def get_bypass_ips(self, config: dict) -> list:
         """
@@ -170,9 +160,7 @@ class RoutingRulesManager:
                             if line and not line.startswith("#"):
                                 bypass_list.append(line)
                 except Exception as e:
-                    logger.error(
-                        f"[RoutingRulesManager] Failed to load bypass file: {e}"
-                    )
+                    logger.error(f"[RoutingRulesManager] Failed to load bypass file: {e}")
 
         return bypass_list
 
@@ -195,9 +183,7 @@ class RoutingRulesManager:
             ) = NetworkInterfaceDetector.get_primary_interface()
 
             if not interface_ip:
-                logger.warning(
-                    "[RoutingRulesManager] Could not detect primary interface for TUN bypass."
-                )
+                logger.warning("[RoutingRulesManager] Could not detect primary interface for TUN bypass.")
                 return
 
             logger.info(

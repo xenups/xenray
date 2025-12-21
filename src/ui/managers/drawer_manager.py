@@ -65,9 +65,7 @@ class DrawerManager:
         )
 
         # Logs drawer
-        self._main._logs_drawer_component = LogsDrawer(
-            self._main._log_viewer, self._main._logs_heartbeat
-        )
+        self._main._logs_drawer_component = LogsDrawer(self._main._log_viewer, self._main._logs_heartbeat)
 
         # Server bottom sheet
         self._main._server_sheet = ft.BottomSheet(

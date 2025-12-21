@@ -24,8 +24,36 @@ class I18n:
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
-            cls._instance._load_translations()
+            # Initialization is deferred to avoid early side effects (logs)
+            cls._instance._initialized = False
         return cls._instance
+
+    def _ensure_initialized(self):
+        """Ensure translations are loaded before use."""
+        if getattr(self, "_initialized", False):
+            return
+
+        import os
+
+        if os.getenv("XENRAY_SKIP_I18N"):
+            # In CLI mode, we don't load anything to keep it clean and fast
+            self._translations = {}
+        else:
+            self._load_translations()
+
+        self._initialized = True
+
+    def _load_lang(self, lang: str):
+        """Load specific language translation."""
+        locales_dir = self._get_locales_dir()
+        path = os.path.join(locales_dir, f"{lang}.json")
+        try:
+            if os.path.exists(path):
+                with open(path, "r", encoding="utf-8") as f:
+                    self._translations[lang] = json.load(f)
+                logger.debug(f"Loaded {lang} translations")
+        except Exception as e:
+            logger.error(f"Error loading {lang} translations: {e}")
 
     def _get_locales_dir(self) -> str:
         """Get the locales directory path."""
@@ -34,28 +62,13 @@ class I18n:
         if getattr(sys, "frozen", False):
             root = os.path.dirname(sys.executable)
         else:
-            root = os.path.dirname(
-                os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            )
+            root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         return os.path.join(root, "assets", "locales")
 
     def _load_translations(self):
         """Load all translation files."""
-        locales_dir = self._get_locales_dir()
-
         for lang in self._available_languages.keys():
-            path = os.path.join(locales_dir, f"{lang}.json")
-            try:
-                if os.path.exists(path):
-                    with open(path, "r", encoding="utf-8") as f:
-                        self._translations[lang] = json.load(f)
-                    logger.debug(f"Loaded {lang} translations")
-                else:
-                    logger.warning(f"Translation file not found: {path}")
-                    self._translations[lang] = {}
-            except Exception as e:
-                logger.error(f"Error loading {lang} translations: {e}")
-                self._translations[lang] = {}
+            self._load_lang(lang)
 
     def set_language(self, lang: str):
         """Set the current language."""
@@ -124,30 +137,36 @@ class I18n:
         return value
 
 
-# Global instance
+# Global instance (initially uninitialized)
 _i18n = I18n()
+
+
+def _get_i18n():
+    """Get the initialized i18n instance."""
+    _i18n._ensure_initialized()
+    return _i18n
 
 
 def t(key: str, **kwargs) -> str:
     """Shortcut function for translation."""
-    return _i18n.t(key, **kwargs)
+    return _get_i18n().t(key, **kwargs)
 
 
 def set_language(lang: str):
     """Set the application language."""
-    _i18n.set_language(lang)
+    _get_i18n().set_language(lang)
 
 
 def get_language() -> str:
     """Get current language code."""
-    return _i18n.current_language
+    return _get_i18n().current_language
 
 
 def is_rtl() -> bool:
     """Check if current language is RTL."""
-    return _i18n.is_rtl
+    return _get_i18n().is_rtl
 
 
 def get_available_languages() -> dict:
     """Get available languages."""
-    return _i18n.available_languages
+    return _get_i18n().available_languages

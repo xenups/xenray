@@ -5,9 +5,7 @@ class ConnectionButton(ft.Container):
     """Connection button with animated glow based on network activity."""
 
     def __init__(self, on_click):
-        self._icon = ft.Icon(
-            ft.Icons.POWER_SETTINGS_NEW, size=55, color=ft.Colors.WHITE
-        )
+        self._icon = ft.Icon(ft.Icons.POWER_SETTINGS_NEW, size=55, color=ft.Colors.WHITE)
         self._is_connected = False
         self._is_connecting = False
         self._current_activity = 0
@@ -28,12 +26,8 @@ class ConnectionButton(ft.Container):
             ),
             opacity=1.0,  # Animated opacity for network activity visibility
             animate_opacity=800,  # Smooth fade for network changes
-            animate_scale=ft.Animation(
-                800, ft.AnimationCurve.EASE_IN_OUT
-            ),  # Smooth scaling
-            animate=ft.Animation(
-                600, ft.AnimationCurve.EASE_IN_OUT
-            ),  # Smooth shadow/color changes
+            animate_scale=ft.Animation(800, ft.AnimationCurve.EASE_IN_OUT),  # Smooth scaling
+            animate=ft.Animation(600, ft.AnimationCurve.EASE_IN_OUT),  # Smooth shadow/color changes
         )
 
         # Inner button (the actual clickable glass button)
@@ -72,14 +66,10 @@ class ConnectionButton(ft.Container):
         # Keep it glassy regardless of theme, just adjust tint
         if is_dark:
             self._button.bgcolor = ft.Colors.with_opacity(0.15, "#1e293b")
-            self._button.border = ft.border.all(
-                1.5, ft.Colors.with_opacity(0.2, ft.Colors.WHITE)
-            )
+            self._button.border = ft.border.all(1.5, ft.Colors.with_opacity(0.2, ft.Colors.WHITE))
         else:
             self._button.bgcolor = ft.Colors.with_opacity(0.15, ft.Colors.WHITE)
-            self._button.border = ft.border.all(
-                1.5, ft.Colors.with_opacity(0.3, ft.Colors.BLACK12)
-            )
+            self._button.border = ft.border.all(1.5, ft.Colors.with_opacity(0.3, ft.Colors.BLACK12))
 
         self._button.update()
 
@@ -129,9 +119,7 @@ class ConnectionButton(ft.Container):
                             self._glow_layer.update()
 
                         grow = not grow
-                        await asyncio.sleep(
-                            1.2
-                        )  # Slower, calmer breath for connected idle
+                        await asyncio.sleep(1.2)  # Slower, calmer breath for connected idle
                     except Exception:
                         break
 
@@ -146,9 +134,7 @@ class ConnectionButton(ft.Container):
 
         # Revert button to standard glass
         self._button.bgcolor = ft.Colors.with_opacity(0.15, "#1e293b")
-        self._button.border = ft.border.all(
-            1.5, ft.Colors.with_opacity(0.2, ft.Colors.WHITE)
-        )
+        self._button.border = ft.border.all(1.5, ft.Colors.with_opacity(0.2, ft.Colors.WHITE))
         self._icon.color = ft.Colors.WHITE
         self._button.update()
 
@@ -217,9 +203,7 @@ class ConnectionButton(ft.Container):
 
         # Red Glass Style for button
         self._button.bgcolor = ft.Colors.with_opacity(0.25, ft.Colors.RED_700)
-        self._button.border = ft.border.all(
-            2.5, ft.Colors.with_opacity(0.5, ft.Colors.RED_400)
-        )
+        self._button.border = ft.border.all(2.5, ft.Colors.with_opacity(0.5, ft.Colors.RED_400))
         self._icon.color = ft.Colors.WHITE
         self._button.update()
 

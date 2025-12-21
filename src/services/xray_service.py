@@ -21,7 +21,19 @@ class XrayService:
         """Initialize Xray service."""
         self._process = None
         self._pid: Optional[int] = None
-        self._cleanup_previous_instance()
+        self._check_and_restore_pid()
+
+    def _check_and_restore_pid(self):
+        """Restore PID from file if it's still running (CLI state adoption)."""
+        if os.path.exists(XRAY_PID_FILE):
+            try:
+                with open(XRAY_PID_FILE, "r") as f:
+                    old_pid = int(f.read().strip())
+                if ProcessUtils.is_running(old_pid):
+                    self._pid = old_pid
+                    logger.debug(f"[XrayService] Restored PID {self._pid} from file")
+            except Exception:
+                pass
 
     def _cleanup_previous_instance(self):
         """Check for and kill any previous instance using PID file."""
@@ -31,9 +43,7 @@ class XrayService:
                     old_pid = int(f.read().strip())
 
                 if ProcessUtils.is_running(old_pid):
-                    logger.info(
-                        f"[XrayService] Found orphan process {old_pid}, killing..."
-                    )
+                    logger.info(f"[XrayService] Found orphan process {old_pid}, killing...")
                     ProcessUtils.kill_process(old_pid, force=True)
 
                 os.remove(XRAY_PID_FILE)
@@ -62,9 +72,7 @@ class XrayService:
         logger.debug(f"[XrayService] Log file: {XRAY_LOG_FILE}")
 
         try:
-            self._process = ProcessUtils.run_command(
-                cmd, stdout_file=XRAY_LOG_FILE, stderr_file=XRAY_LOG_FILE
-            )
+            self._process = ProcessUtils.run_command(cmd, stdout_file=XRAY_LOG_FILE, stderr_file=XRAY_LOG_FILE)
 
             if self._process:
                 self._pid = self._process.pid

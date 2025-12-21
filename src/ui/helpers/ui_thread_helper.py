@@ -36,9 +36,7 @@ class UIThreadHelper:
                 loop = getattr(self._page, "loop", None)
                 if loop and loop.is_closed():
                     fn_name = fn.__name__ if hasattr(fn, "__name__") else "lambda"
-                    logger.debug(
-                        f"[DEBUG] Skipping UI call ({fn_name}): Event loop is closed"
-                    )
+                    logger.debug(f"[DEBUG] Skipping UI call ({fn_name}): Event loop is closed")
                     return
             except Exception:
                 pass
@@ -51,16 +49,12 @@ class UIThreadHelper:
                     except Exception:
                         pass
             except Exception as e:
-                logger.debug(
-                    f"[DEBUG] UI call error in {fn.__name__ if hasattr(fn, '__name__') else 'lambda'}: {e}"
-                )
+                logger.debug(f"[DEBUG] UI call error in {fn.__name__ if hasattr(fn, '__name__') else 'lambda'}: {e}")
 
         try:
             self._page.run_task(_coro)
         except RuntimeError as e:
             if "Event loop is closed" in str(e):
-                logger.debug(
-                    "[DEBUG] RuntimeError caught in ui_call: Event loop is closed"
-                )
+                logger.debug("[DEBUG] RuntimeError caught in ui_call: Event loop is closed")
             else:
                 logger.warning(f"[DEBUG] RuntimeError in ui_call: {e}")

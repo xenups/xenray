@@ -1,0 +1,67 @@
+name: Code Quality
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  code-quality:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.13'
+    
+    - name: Install Poetry
+      uses: snok/install-poetry@v1
+      with:
+        version: latest
+        virtualenvs-create: true
+        virtualenvs-in-project: true
+    
+    - name: Load cached venv
+      id: cached-poetry-dependencies
+      uses: actions/cache@v3
+      with:
+        path: .venv
+        key: venv-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
+    
+    - name: Install dependencies
+      if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
+      run: poetry install --no-interaction --no-root
+    
+    - name: Install project
+      run: poetry install --no-interaction
+    
+    - name: Check code formatting with Black
+      run: |
+        poetry run black --check src tests
+        if [ $? -ne 0 ]; then
+          echo "❌ Code formatting issues found. Run 'black src tests' locally to fix."
+          exit 1
+        fi
+    
+    - name: Check import sorting with isort
+      run: |
+        poetry run isort --check-only src tests
+        if [ $? -ne 0 ]; then
+          echo "❌ Import sorting issues found. Run 'isort src tests' locally to fix."
+          exit 1
+        fi
+    
+    - name: Lint with Flake8
+      run: |
+        poetry run flake8 src tests --count --max-line-length=120 --statistics
+        if [ $? -ne 0 ]; then
+          echo "❌ Linting issues found. Fix the issues reported above."
+          exit 1
+        fi
+    
+    - name: ✅ Code quality checks passed
+      run: echo "All code quality checks passed successfully!"

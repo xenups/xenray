@@ -76,9 +76,7 @@ class ConnectionTester:
             return ""
 
     @staticmethod
-    def test_connection_sync(
-        profile_config: dict, fetch_country: bool = False
-    ) -> Tuple[bool, str, Optional[dict]]:
+    def test_connection_sync(profile_config: dict, fetch_country: bool = False) -> Tuple[bool, str, Optional[dict]]:
         """
         Test connection for a profile synchronously.
         Returns (success, latency_ms_str, country_data).
@@ -147,9 +145,7 @@ class ConnectionTester:
             for attempt in range(max_retries):
                 try:
                     start_time = time.time()
-                    response = requests.get(
-                        target_url, proxies=proxies, timeout=CONNECT_TIMEOUT
-                    )
+                    response = requests.get(target_url, proxies=proxies, timeout=CONNECT_TIMEOUT)
 
                     latency = int((time.time() - start_time) * 1000)
 
@@ -162,9 +158,7 @@ class ConnectionTester:
                         if fetch_country:
                             try:
                                 # Use ip-api via the same proxy
-                                geo_resp = requests.get(
-                                    "http://ip-api.com/json", proxies=proxies, timeout=3
-                                )
+                                geo_resp = requests.get("http://ip-api.com/json", proxies=proxies, timeout=3)
                                 if geo_resp.status_code == 200:
                                     gdata = geo_resp.json()
                                     if gdata.get("status") == "success":
@@ -195,9 +189,7 @@ class ConnectionTester:
 
                 except requests.exceptions.Timeout:
                     if attempt < max_retries - 1:
-                        logger.debug(
-                            f"Connection test attempt {attempt + 1}/{max_retries} timed out, retrying..."
-                        )
+                        logger.debug(f"Connection test attempt {attempt + 1}/{max_retries} timed out, retrying...")
                         time.sleep(0.5)
                         continue
                     else:
@@ -205,9 +197,7 @@ class ConnectionTester:
 
                 except requests.exceptions.RequestException:
                     if attempt < max_retries - 1:
-                        logger.debug(
-                            f"Connection test attempt {attempt + 1}/{max_retries} failed, retrying..."
-                        )
+                        logger.debug(f"Connection test attempt {attempt + 1}/{max_retries} failed, retrying...")
                         time.sleep(0.5)
                         continue
                     else:
@@ -239,9 +229,7 @@ class ConnectionTester:
         """Run test in a dedicated thread and invoke callback(success, result_str, country_data)."""
 
         def _wrapper():
-            success, result, country_data = ConnectionTester.test_connection_sync(
-                profile_config, fetch_country
-            )
+            success, result, country_data = ConnectionTester.test_connection_sync(profile_config, fetch_country)
             if callback:
                 callback(success, result, country_data)
 

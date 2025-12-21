@@ -1,156 +1,197 @@
-# XenRay
+# 🌌 XenRay
 
-A modern, lightweight Xray GUI client for Windows and Linux, focusing on simplicity and enhancing VPN experience.
+A modern, high-performance Xray GUI & CLI client for Windows and Linux. XenRay focuses on visual excellence, simplicity, and a premium VPN experience.
 
 ![License](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.10+-green.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)
+![Coverage](https://img.shields.io/badge/coverage-80%25-yellowgreen.svg)
+![RAM](https://img.shields.io/badge/RAM-~130MB%20(GUI)%20%7C%20~30MB%20(CLI)-blueviolet)
 
-## Features
+---
 
-- 🔐 **Dual Mode** - VPN (system-wide tun) and Proxy (SOCKS5) modes
-- 🌍 **Server Management** - Import servers via VLESS links or subscription URLs
-- 📊 **Latency Testing** - Batch test all servers with visual feedback
-- 🎨 **Apple Glass UI** - Modern glassmorphism design with dynamic connection status glow
-- 📥 **System Tray** - Background operation with quick taskbar controls
-- 👻 **Stealth Mode** - Fully hidden console windows for all core processes
-- 🎌 **Country Flags** - Auto-detect server location with GeoIP
-- 📝 **Real-time Logs** - Monitor connection status and debug issues
-- ⚡ **Auto Updates** - One-click Xray core and app updates (GitHub Releases)
-- 🌐 **Internationalization** - Full support for English, Persian (Farsi), Russian, and Chinese
+## ✨ Features
 
-## Gallery
+### 🚀 Performance & Architecture
+- **Unified Engine**: Single executable for both **GUI** and **Headless CLI** modes.
+- **Extreme RAM Optimization**: GUI footprint reduced to ~130MB; CLI mode runs at a lean **~30MB**.
+- **Lazy Load Architecture**: Core frameworks (like Flet) are only loaded when the UI is requested.
+- **DI Lifecycle Management**: Production-grade dependency injection with zero memory leaks.
 
-<table>
-  <tr>
-    <td><img src="https://raw.githubusercontent.com/xenups/xenray/refs/heads/main/screenshots/main.png" alt="Main Window" width="300"/></td>
-    <td><img src="https://raw.githubusercontent.com/xenups/xenray/refs/heads/main/screenshots/settings.png" alt="Settings" width="300"/></td>
-  </tr>
-</table>
+### 🌍 Connection & Visuals
+- **🚩 Global Flags**: Automatic country flag emojis for all servers.
+- **📍 Smart GeoIP**: Real-time detection of server **Country** and **City**.
+- **⚡ Unified Ping**: Concurrent batch testing with visual latency feedback.
+- **🎨 Apple Glass UI**: Modern glassmorphism design with dynamic connection status glow.
+- **🔐 Dual Mode**: Intelligent switching between **VPN** (TUN) and **Proxy** (SOCKS5/HTTP) modes.
 
-## Installation
+### 🛠️ Management
+- **📥 One-Click Import**: Support for VLESS, VMess, Trojan, ShadowSocks, and Hysteria2.
+- **🔄 State Adoption**: CLI automatically detects and manages connections started by the GUI (and vice versa).
+- **📝 Real-time Diagnostics**: Live log streaming with automatic console hiding for core processes.
+- **⚡ Auto-Updates**: Seamless GitHub integration for updating Xray core and the app.
 
-### Using Poetry (Recommended)
+---
+
+## 📸 Gallery
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/xenups/xenray/refs/heads/main/screenshots/main.png" width="400" alt="Main UI">
+  <img src="https://raw.githubusercontent.com/xenups/xenray/refs/heads/main/screenshots/settings.png" width="400" alt="Settings">
+</p>
+
+---
+
+## 🚀 Getting Started
+
+### Installation (Poetry)
 
 ```bash
-# Install Poetry
-curl -sSL https://install.python-poetry.org | python3 -
-
-# Clone and install
+# Clone the repository
 git clone https://github.com/xenups/xenray.git
 cd xenray
-poetry install
 
-# Run
-poetry run xenray
-```
+# Install all dependencies (including CLI)
+poetry install --with cli
 
-### Using pip
-
-```bash
-pip install flet-desktop requests psutil loguru pystray Pillow
-python src/main.py
-```
-
-## Usage
-
-```bash
-# Standard run
+# Run the GUI
 poetry run xenray
 
-# Linux: Install polkit for passwordless VPN mode
-poetry run xenray --install-policy
+# Run the CLI
+poetry run xenray list
 ```
 
-### Quick Start
-1. Open XenRay
-2. Click the server list icon (bottom card)
-3. Click **+** to add a server (paste VLESS link) or subscription URL
-4. Select a server and click the power button to connect
+---
 
-## Architecture
+## 💻 CLI Usage
 
-```
+XenRay features a powerful, colorized CLI for headless environments.
+
+| Command | Description |
+| :--- | :--- |
+| `xenray list` | List all profiles with flags and location info |
+| `xenray connect [N]` | Connect to profile #N or the default one |
+| `xenray ping [N]` | Batch test all profiles or a specific one |
+| `xenray disconnect` | Safely terminate the connection |
+| `xenray status` | Show real-time connection status |
+| `xenray add "LINK"` | Add a server from a share link |
+
+---
+
+## 🛠️ Architecture
+
+XenRay is built with a modular, service-oriented architecture designed for efficiency and cross-platform flexibility.
+
+```text
 src/
-├── core/                    # Core application logic
-│   ├── config_manager.py    # Configuration persistence
-│   ├── connection_manager.py # Main connection flow logic
-│   ├── subscription_manager.py # Subscription handling
-│   ├── i18n.py              # Internationalization system
-│   ├── flag_colors.py       # Dynamic gradient generation
-│   └── constants.py         # Global constants
+├── core/
+│   ├── container.py         # Dependency Injection (DI) Root
+│   ├── config_manager.py    # Profile & settings persistence
+│   ├── connection_manager.py# High-level connection facade
+│   ├── i18n.py              # Lazy-loaded internationalization
+│   └── logger.py            # Unified logging system
 │
-├── services/                # External service integrations
-│   ├── xray_service.py      # Xray core process management
-│   ├── singbox_service.py   # Sing-box (TUN) integration
-│   ├── latency_tester.py    # Real-time latency checking
-│   ├── geoip_service.py     # IP location resolution
-│   ├── connection_tester.py # Connectivity verification
-│   └── app_update_service.py # GitHub release updater
+├── services/
+│   ├── xray_service.py      # Xray core lifecycle management
+│   ├── singbox_service.py   # TUN-based VPN integration
+│   ├── latency_tester.py    # Multi-threaded ping engine
+│   └── connection_tester.py # Real-world connectivity validation
 │
-├── ui/                      # Flet-based UI layer
-│   ├── main_window.py       # Main application window
-│   ├── server_list.py       # Virtualized server list view
-│   ├── log_viewer.py        # Real-time log console
-│   │
-│   ├── components/          # Reusable widgets
-│   │   ├── connection_button.py # Animated connect button
-│   │   ├── server_card.py       # Selected server display
-│   │   ├── settings_drawer.py   # Settings slide-out
-│   │   ├── logs_drawer.py       # Logs slide-out
-│   │   ├── toast.py             # Custom notification system
-│   │   ├── timer_display.py     # Connection duration timer
-│   │   └── add_server_dialog.py # Config import dialog
-│   │
-│   └── builders/            # UI composite builders
-│       └── ui_builder.py    # Common UI patterns
+├── ui/
+│   ├── main_window.py       # GUI entry point (Glassmorphism)
+│   ├── components/          # Custom Flet widgets (Cards, Buttons, etc.)
+│   └── handlers/            # UI-to-Service event handling
 │
-├── utils/                   # Shared utilities
-│   ├── network_utils.py     # MTU/Network detection
-│   ├── process_utils.py     # Process hiding/management
-│   ├── platform_utils.py    # OS-specific helpers
-│   ├── link_parser.py       # VLESS/VMess/Trojan parser
-│   └── file_utils.py        # File I/O helpers
+├── utils/
+│   ├── admin_utils.py       # UAC & Root elevation management
+│   ├── link_parser.py       # VLESS/VMess/Trojan/Hysteria parser
+│   └── platform_utils.py    # OS-specific behavior logic
 │
-└── main.py                  # Entry point
+└── cli.py                   # High-performance Typer CLI interface
 ```
 
-## Development
+### Core Principles
+- **Dependency Injection**: Centralized lifecycle management via `dependency-injector`.
+- **Hybrid Entry Point**: Smart routing between GUI and CLI modes based on runtime arguments.
+- **Background Persistence**: State adoption logic allows the CLI and GUI to seamlessly share active background connections.
+- **Resource Management**: Background threads and core processes are strictly lifecycle-bound to prevent zombie processes.
+
+---
+
+## 🧪 Development
+
+### Testing
+
+XenRay maintains high test coverage for core components:
 
 ```bash
-# Install dev dependencies
-poetry install --with dev
-
-# Format code
-poetry run black src/
-
-# Type checking
-poetry run mypy src/
-
-# Run tests
+# Run all tests with coverage
 poetry run pytest
+
+# Run specific test file
+poetry run pytest tests/test_link_parser.py -v
+
+# Generate HTML coverage report
+poetry run pytest --cov=src --cov-report=html
 ```
 
-### Building
+**Current Coverage:**
+- `LinkParser`: 88%
+- `SingboxService`: 83%
+- `ConfigManager`: 73%
+
+### Code Quality
+
+We use automated tools to maintain code quality:
 
 ```bash
-# Build standalone executable
-python build_pyinstaller.py
+# Format code with Black
+poetry run black src tests
 
-# Or directly with PyInstaller
-pyinstaller XenRay.spec
+# Sort imports with isort
+poetry run isort src tests
+
+# Lint with Flake8
+poetry run flake8 src tests --max-line-length=120
 ```
 
-## Requirements
+**Pre-commit Hooks** (Recommended):
+```bash
+poetry run pre-commit install
+poetry run pre-commit run --all-files
+```
 
-- Python 3.10+
-- Windows 10+ or Linux
-- Admin/root for VPN mode (uses tun interface)
+See [`docs/CODE_QUALITY.md`](docs/CODE_QUALITY.md) for detailed information.
 
-## License
+### CI/CD
+
+GitHub Actions automatically runs code quality checks on all PRs:
+- ✅ Black formatting
+- ✅ isort import sorting
+- ✅ Flake8 linting
+- ✅ Pytest test suite
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please:
+
+1. Fork the repository
+2. Create a feature branch
+3. Run tests and code quality checks
+4. Submit a pull request
+
+See [`docs/CODE_QUALITY.md`](docs/CODE_QUALITY.md) for development setup.
+
+---
+
+## ⚖️ License
 
 [AGPL-3.0-or-later](LICENSE)
 
 ---
 
-Made with ❤️ by [Xenups](https://github.com/xenups)
+<p align="center">
+  Made with ❤️ by <a href="https://github.com/xenups">Xenups</a>
+</p>

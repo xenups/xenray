@@ -53,17 +53,9 @@ class LatencyMonitorHandler:
         """Continuously tests connectivity for selected profile when disconnected."""
         while True:
             try:
-                is_running = (
-                    self._is_running_getter() if self._is_running_getter else False
-                )
-                connecting = (
-                    self._connecting_getter() if self._connecting_getter else False
-                )
-                selected_profile = (
-                    self._selected_profile_getter()
-                    if self._selected_profile_getter
-                    else None
-                )
+                is_running = self._is_running_getter() if self._is_running_getter else False
+                connecting = self._connecting_getter() if self._connecting_getter else False
+                selected_profile = self._selected_profile_getter() if self._selected_profile_getter else None
 
                 if not is_running and not connecting and selected_profile:
                     self.trigger_single_check()
@@ -78,9 +70,7 @@ class LatencyMonitorHandler:
 
     def trigger_single_check(self):
         """Perform a single latency/connectivity check for the current profile."""
-        profile = (
-            self._selected_profile_getter() if self._selected_profile_getter else None
-        )
+        profile = self._selected_profile_getter() if self._selected_profile_getter else None
         if not profile:
             return
 
@@ -105,9 +95,7 @@ class LatencyMonitorHandler:
                     # Update display
                     if self._ui_helper:
                         if self._server_card:
-                            self._ui_helper.call(
-                                lambda: self._server_card.update_server(profile)
-                            )
+                            self._ui_helper.call(lambda: self._server_card.update_server(profile))
 
                         if country_data.get("country_code") and self._server_list:
                             self._ui_helper.call(

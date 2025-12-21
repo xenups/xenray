@@ -1,0 +1,6 @@
+tests\test_admin_utils.py:43:14: F821 undefined name 'pytest'
+tests\test_admin_utils.py:55:14: F821 undefined name 'pytest'
+tests\test_admin_utils.py:73:14: F821 undefined name 'pytest'
+tests\test_admin_utils.py:90:14: F821 undefined name 'pytest'
+tests\test_config_manager.py:317:9: F841 local variable '_sub_id' is assigned to but never used
+tests\test_services.py:141:121: E501 line too long (131 > 120 characters)

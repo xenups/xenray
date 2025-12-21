@@ -48,9 +48,7 @@ class ConnectionOrchestrator:
         self._observer = observer
         self._log_monitor = log_monitor
 
-    def establish_connection(
-        self, file_path: str, mode: str, step_callback=None
-    ) -> tuple[bool, Optional[dict]]:
+    def establish_connection(self, file_path: str, mode: str, step_callback=None) -> tuple[bool, Optional[dict]]:
         """
         Orchestrate full connection workflow.
 
@@ -73,9 +71,7 @@ class ConnectionOrchestrator:
                 return False, None
 
             # 3. Process configuration
-            processed_config, socks_port = self._prepare_configuration(
-                config, step_callback
-            )
+            processed_config, socks_port = self._prepare_configuration(config, step_callback)
             if not processed_config:
                 return False, None
 
@@ -87,17 +83,13 @@ class ConnectionOrchestrator:
             # 5. Start Sing-box if VPN mode
             singbox_pid = None
             if mode == "vpn":
-                singbox_pid = self._start_singbox(
-                    processed_config, socks_port, step_callback
-                )
+                singbox_pid = self._start_singbox(processed_config, socks_port, step_callback)
                 if not singbox_pid:
                     self._xray_service.stop()
                     return False, None
 
             # 6. Finalize connection
-            connection_info = self._finalize_connection(
-                file_path, mode, xray_pid, singbox_pid, step_callback
-            )
+            connection_info = self._finalize_connection(file_path, mode, xray_pid, singbox_pid, step_callback)
             return True, connection_info
 
         except Exception as e:
@@ -121,9 +113,7 @@ class ConnectionOrchestrator:
 
         logger.info("Connection torn down successfully")
 
-    def _load_and_validate_config(
-        self, file_path: str, step_callback
-    ) -> Optional[dict]:
+    def _load_and_validate_config(self, file_path: str, step_callback) -> Optional[dict]:
         """Load and validate configuration file."""
         if step_callback:
             step_callback(t("status.loading_config"))
@@ -136,9 +126,7 @@ class ConnectionOrchestrator:
             return None
 
         if not isinstance(config, dict):
-            logger.error(
-                f"Invalid config format: expected dict, got {type(config).__name__}"
-            )
+            logger.error(f"Invalid config format: expected dict, got {type(config).__name__}")
             if step_callback:
                 step_callback(t("status.invalid_config"))
             return None
@@ -159,9 +147,7 @@ class ConnectionOrchestrator:
 
         return True
 
-    def _prepare_configuration(
-        self, config: dict, step_callback
-    ) -> tuple[Optional[dict], Optional[int]]:
+    def _prepare_configuration(self, config: dict, step_callback) -> tuple[Optional[dict], Optional[int]]:
         """Process and save configuration using XrayConfigProcessor."""
         if step_callback:
             step_callback(t("connection.processing_config"))
@@ -197,9 +183,7 @@ class ConnectionOrchestrator:
         logger.debug(f"Xray started with PID {xray_pid}")
         return xray_pid
 
-    def _start_singbox(
-        self, processed_config: dict, socks_port: int, step_callback
-    ) -> Optional[int]:
+    def _start_singbox(self, processed_config: dict, socks_port: int, step_callback) -> Optional[int]:
         """Start Sing-box service for VPN mode using XrayConfigProcessor."""
         if step_callback:
             step_callback(t("connection.initializing_vpn"))

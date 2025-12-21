@@ -20,9 +20,7 @@ class ThemeHandler:
         self._server_card = None
         self._header = None
 
-    def setup(
-        self, page: ft.Page, connection_button=None, server_card=None, header=None
-    ):
+    def setup(self, page: ft.Page, connection_button=None, server_card=None, header=None):
         """Bind UI components to the handler."""
         self._page = page
         self._connection_button = connection_button

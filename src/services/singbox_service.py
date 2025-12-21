@@ -10,11 +10,18 @@ from typing import List, Optional, Union
 
 from loguru import logger
 
-from src.core.constants import (DNS_PROVIDERS, SINGBOX_CONFIG_PATH,
-                                SINGBOX_EXECUTABLE, SINGBOX_LOG_FILE,
-                                SINGBOX_RULE_SETS, XRAY_EXECUTABLE)
+from src.core.constants import (
+    DNS_PROVIDERS,
+    SINGBOX_CONFIG_PATH,
+    SINGBOX_EXECUTABLE,
+    SINGBOX_LOG_FILE,
+    SINGBOX_PID_FILE,
+    SINGBOX_RULE_SETS,
+    XRAY_EXECUTABLE,
+)
 from src.utils.network_interface import NetworkInterfaceDetector
 from src.utils.platform_utils import PlatformUtils
+from src.utils.process_utils import ProcessUtils
 
 # Constants
 XRAY_READY_RETRY_COUNT = 20
@@ -33,6 +40,20 @@ class SingboxService:
         self._pid: Optional[int] = None
         self._log_handle = None
         self._added_routes: List[str] = []
+        # Support PID adoption for CLI
+        self._check_and_restore_pid()
+
+    def _check_and_restore_pid(self):
+        """Restore PID from file if it's still running."""
+        if os.path.exists(SINGBOX_PID_FILE):
+            try:
+                with open(SINGBOX_PID_FILE, "r") as f:
+                    old_pid = int(f.read().strip())
+                if ProcessUtils.is_running(old_pid):
+                    self._pid = old_pid
+                    logger.debug(f"[SingboxService] Restored PID {self._pid} from file")
+            except Exception:
+                pass
 
     def _normalize_list(self, value: Union[str, List[str], None]) -> List[str]:
         """Normalize input to list of strings."""
@@ -41,12 +62,7 @@ class SingboxService:
         if isinstance(value, str):
             value = [value]
         return [
-            item.strip()
-            .lower()
-            .replace("'", "")
-            .replace('"', "")
-            .replace("[", "")
-            .replace("]", "")
+            item.strip().lower().replace("'", "").replace('"', "").replace("[", "").replace("]", "")
             for item in value
             if isinstance(item, str)
         ]
@@ -67,10 +83,7 @@ class SingboxService:
         return [
             item
             for item in lst
-            if not any(
-                item.endswith(f".{x}") or item == x
-                for x in self._filter_real_ips(lst + [item])
-            )
+            if not any(item.endswith(f".{x}") or item == x for x in self._filter_real_ips(lst + [item]))
         ]
 
     def _resolve_ips(self, endpoints: List[str]) -> List[str]:
@@ -155,7 +168,7 @@ class SingboxService:
 
         for ip in self._added_routes[:]:
             try:
-                logger.info(f"[SingboxService] Removing static route: {ip}")
+                logger.debug(f"[SingboxService] Removing static route: {ip}")
 
                 # Platform-specific route delete commands
                 if platform == "windows":
@@ -172,8 +185,10 @@ class SingboxService:
                     startupinfo=PlatformUtils.get_startupinfo(),
                 )
             except (OSError, subprocess.SubprocessError) as e:
-                logger.error(f"[SingboxService] Failed to remove route for {ip}: {e}")
-        self._added_routes.clear()
+                logger.warning(f"[SingboxService] Failed to remove route for {ip}: {e}")
+            finally:
+                if ip in self._added_routes:
+                    self._added_routes.remove(ip)
 
     def start(
         self,
@@ -193,9 +208,7 @@ class SingboxService:
                 gateway,
             ) = NetworkInterfaceDetector.get_primary_interface()
             if not gateway:
-                logger.warning(
-                    "[SingboxService] No gateway detected! Route bypass may be incomplete."
-                )
+                logger.warning("[SingboxService] No gateway detected! Route bypass may be incomplete.")
 
             # 2. Bypass list: Proxy server + Common DNS servers
             bypass_list = self._normalize_list(proxy_server_ip)
@@ -238,40 +251,14 @@ class SingboxService:
 
             self._pid = self._process.pid
 
-            # 7. Check if process is still running after 3 seconds
-            # This catches immediate failures like config errors or download 404s
+            # Write PID file
             try:
-                self._process.wait(timeout=3.0)
-                # If we get here, process exited immediately
-                logger.error(
-                    f"[SingboxService] Process exited immediately with code {self._process.returncode}"
-                )
+                with open(SINGBOX_PID_FILE, "w") as f:
+                    f.write(str(self._pid))
+            except Exception as e:
+                logger.error(f"[SingboxService] Failed to write PID file: {e}")
 
-                # Close log handle to ensure flush
-                self._close_log()
-
-                # Read and log the error details
-                try:
-                    if os.path.exists(SINGBOX_LOG_FILE):
-                        with open(
-                            SINGBOX_LOG_FILE, "r", encoding="utf-8", errors="ignore"
-                        ) as f:
-                            log_content = f.read().strip()
-                            if log_content:
-                                logger.error(
-                                    f"[SingboxService] Fatal Error Log:\n{log_content}"
-                                )
-                except Exception as e:
-                    logger.error(f"[SingboxService] Failed to read log file: {e}")
-
-                return None
-            except subprocess.TimeoutExpired:
-                # Process is still running, good!
-                pass
-
-            logger.info(
-                f"[SingboxService] sing-box started successfully | PID: {self._pid}"
-            )
+            logger.info(f"[SingboxService] sing-box started successfully | PID: {self._pid}")
             return self._pid
 
         except Exception as e:
@@ -331,21 +318,57 @@ class SingboxService:
 
     def stop(self):
         """Stop the Sing-box service."""
-        if self._process:
-            try:
-                self._process.terminate()
+        if self._process or self._pid:
+            pid_to_kill = self._pid or (self._process.pid if self._process else None)
+            if pid_to_kill:
                 try:
-                    self._process.wait(timeout=PROCESS_TERMINATE_TIMEOUT)
-                except subprocess.TimeoutExpired:
-                    self._process.kill()
-            except Exception as e:
-                logger.error(f"[SingboxService] Error stopping process: {e}")
+                    ProcessUtils.kill_process(pid_to_kill, force=False)
+                    # wait briefly
+                    time.sleep(0.5)
+                    if ProcessUtils.is_running(pid_to_kill):
+                        ProcessUtils.kill_process(pid_to_kill, force=True)
+                except Exception as e:
+                    logger.error(f"[SingboxService] Error stopping process: {e}")
+
             self._process = None
             self._pid = None
+
+        # Remove PID file
+        if os.path.exists(SINGBOX_PID_FILE):
+            try:
+                os.remove(SINGBOX_PID_FILE)
+            except Exception:
+                pass
 
         self._cleanup_routes()
         self._close_log()
         logger.info("[SingboxService] Stopped.")
+
+    def is_running(self) -> bool:
+        """Check if sing-box is running."""
+        if self._pid and ProcessUtils.is_running(self._pid):
+            return True
+
+        # Fallback to PID file
+        if os.path.exists(SINGBOX_PID_FILE):
+            try:
+                with open(SINGBOX_PID_FILE, "r") as f:
+                    old_pid = int(f.read().strip())
+                if ProcessUtils.is_running(old_pid):
+                    self._pid = old_pid
+                    return True
+            except Exception:
+                pass
+
+        # Clear stale state
+        self._pid = None
+        self._process = None
+        return False
+
+    @property
+    def pid(self) -> Optional[int]:
+        """Get sing-box process ID."""
+        return self._pid
 
     def get_version(self) -> Optional[str]:
         """Get installed Sing-box version."""
@@ -554,13 +577,9 @@ class SingboxService:
                         dns_rules.append({"domain": s_domains, "server": "bootstrap"})
 
                 if s_domain_suffixes:
-                    rules.append(
-                        {"domain_suffix": s_domain_suffixes, "outbound": outbound_tag}
-                    )
+                    rules.append({"domain_suffix": s_domain_suffixes, "outbound": outbound_tag})
                     if outbound_tag == "direct":
-                        dns_rules.append(
-                            {"domain_suffix": s_domain_suffixes, "server": "bootstrap"}
-                        )
+                        dns_rules.append({"domain_suffix": s_domain_suffixes, "server": "bootstrap"})
 
         # 3. Country routing
         if routing_country and routing_country.lower() != "none":

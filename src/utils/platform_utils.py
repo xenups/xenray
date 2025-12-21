@@ -143,11 +143,10 @@ class PlatformUtils:
         """
         import subprocess
 
-        return (
-            subprocess.CREATE_NO_WINDOW
-            if PlatformUtils.get_platform() == "windows"
-            else 0
-        )
+        if PlatformUtils.get_platform() == "windows":
+            # CREATE_NO_WINDOW only exists on Windows
+            return getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+        return 0
 
     @staticmethod
     def get_startupinfo():
@@ -160,10 +159,13 @@ class PlatformUtils:
         import subprocess
 
         if PlatformUtils.get_platform() == "windows":
-            startupinfo = subprocess.STARTUPINFO()
-            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-            startupinfo.wShowWindow = subprocess.SW_HIDE
-            return startupinfo
+            # STARTUPINFO and related constants only exist on Windows
+            STARTUPINFO = getattr(subprocess, "STARTUPINFO", None)
+            if STARTUPINFO:
+                startupinfo = STARTUPINFO()
+                startupinfo.dwFlags |= getattr(subprocess, "STARTF_USESHOWWINDOW", 0x00000001)
+                startupinfo.wShowWindow = getattr(subprocess, "SW_HIDE", 0)
+                return startupinfo
         return None
 
     @staticmethod
