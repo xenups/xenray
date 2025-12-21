@@ -72,7 +72,7 @@ jobs:
           Copy-Item "dist/XenRay.exe" "package/"
           
           # Copy assets
-          Copy-Item -Recurse "dist/assets" "package/"
+          Copy-Item -Recurse "assets" "package/"
           
           # Copy bin
           Copy-Item -Recurse "dist/bin" "package/"
