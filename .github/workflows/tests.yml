@@ -50,34 +50,3 @@ jobs:
         flags: unittests
         name: codecov-umbrella
         fail_ci_if_error: false
-    
-    - name: Generate coverage badge
-      run: |
-        COVERAGE=$(poetry run coverage report | grep TOTAL | awk '{print $4}' | sed 's/%//')
-        echo "Coverage: $COVERAGE%"
-        
-        # Determine badge color
-        if [ $(echo "$COVERAGE >= 90" | bc) -eq 1 ]; then
-          COLOR="brightgreen"
-        elif [ $(echo "$COVERAGE >= 80" | bc) -eq 1 ]; then
-          COLOR="green"
-        elif [ $(echo "$COVERAGE >= 70" | bc) -eq 1 ]; then
-          COLOR="yellowgreen"
-        elif [ $(echo "$COVERAGE >= 60" | bc) -eq 1 ]; then
-          COLOR="yellow"
-        else
-          COLOR="red"
-        fi
-        
-        echo "COVERAGE=$COVERAGE" >> $GITHUB_ENV
-        echo "BADGE_COLOR=$COLOR" >> $GITHUB_ENV
-    
-    - name: Create coverage badge
-      uses: schneegans/dynamic-badges-action@v1.6.0
-      with:
-        auth: ${{ secrets.GIST_SECRET }}
-        gistID: YOUR_GIST_ID_HERE
-        filename: xenray-coverage.json
-        label: coverage
-        message: ${{ env.COVERAGE }}%
-        color: ${{ env.BADGE_COLOR }}
