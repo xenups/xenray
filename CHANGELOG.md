@@ -4,6 +4,8 @@ All notable changes to XenRay will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.9-alpha] - 2025-12-21
+
 ### Added
 - **CI/CD Code Quality Pipeline**: Automated GitHub Actions workflow for code quality enforcement
   - Black formatting checks
