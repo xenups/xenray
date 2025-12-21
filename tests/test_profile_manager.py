@@ -1,6 +1,7 @@
 """Unit tests for ProfileManager."""
+from unittest.mock import Mock
+
 import pytest
-from unittest.mock import Mock, call, patch
 
 from src.ui.managers.profile_manager import ProfileManager
 
@@ -21,7 +22,12 @@ class TestProfileManager:
     @pytest.fixture
     def profile_manager(self, mock_dependencies):
         """Create ProfileManager instance with mocked dependencies."""
-        return ProfileManager(**mock_dependencies)
+        manager = ProfileManager(
+            connection_manager=mock_dependencies["connection_manager"],
+            connection_handler=mock_dependencies["connection_handler"],
+        )
+        manager.setup(ui_updater=mock_dependencies["ui_updater"])
+        return manager
 
     def test_initialization(self, profile_manager):
         """Test ProfileManager initializes correctly."""
@@ -96,7 +102,6 @@ class TestProfileManager:
         mock_dependencies["connection_manager"].disconnect.assert_called_once()
         mock_dependencies["ui_updater"].assert_called()
         mock_dependencies["connection_handler"].connect_async.assert_called_once()
-
 
     def test_selected_profile_property(self, profile_manager):
         """Test selected_profile property getter."""

@@ -76,9 +76,7 @@ else:
 
 # Executable paths with platform-specific extensions
 XRAY_EXECUTABLE = os.path.join(BIN_DIR, f"xray{PlatformUtils.get_binary_suffix()}")
-SINGBOX_EXECUTABLE = os.path.join(
-    BIN_DIR, f"sing-box{PlatformUtils.get_binary_suffix()}"
-)
+SINGBOX_EXECUTABLE = os.path.join(BIN_DIR, f"sing-box{PlatformUtils.get_binary_suffix()}")
 
 # Sing-box config and log paths
 SINGBOX_CONFIG_PATH = os.path.join(TMPDIR, "singbox_config.json")

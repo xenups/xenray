@@ -6,8 +6,7 @@ import uuid
 from datetime import datetime
 from typing import List, Optional, Tuple
 
-from src.core.constants import (LAST_FILE_PATH, MAX_RECENT_FILES,
-                                RECENT_FILES_PATH)
+from src.core.constants import LAST_FILE_PATH, MAX_RECENT_FILES, RECENT_FILES_PATH
 from src.core.logger import logger
 
 # Validation constants
@@ -27,8 +26,8 @@ def _validate_file_path(file_path: str) -> bool:
         return False
     # Normalize path and check for path traversal
     normalized = os.path.normpath(file_path)
-    # Check for dangerous patterns
-    if ".." in normalized or normalized.startswith("/"):
+    # Check for dangerous patterns (absolute paths or traversal)
+    if ".." in normalized or normalized.startswith("/") or normalized.startswith("\\"):
         return False
     return True
 
@@ -96,9 +95,7 @@ class ConfigManager:
                     if port_str == str(OLD_PORT):
                         # Migrate to new default
                         _atomic_write(port_path, str(DEFAULT_PROXY_PORT))
-                        logger.info(
-                            f"Migrated port from {OLD_PORT} to {DEFAULT_PROXY_PORT}"
-                        )
+                        logger.info(f"Migrated port from {OLD_PORT} to {DEFAULT_PROXY_PORT}")
             except Exception as e:
                 logger.debug(f"Port migration check failed: {e}")
 
@@ -170,11 +167,7 @@ class ConfigManager:
                 files = json.load(f)
                 # Validate that it's a list of strings
                 if isinstance(files, list):
-                    return [
-                        f
-                        for f in files
-                        if isinstance(f, str) and _validate_file_path(f)
-                    ]
+                    return [f for f in files if isinstance(f, str) and _validate_file_path(f)]
                 return []
         except (json.JSONDecodeError, UnicodeDecodeError) as e:
             logger.error(f"Error parsing recent files: {e}")
@@ -261,19 +254,20 @@ class ConfigManager:
             logger.error(f"Error reading profiles: {e}")
             return []
 
-    def save_profile(self, name: str, config: dict) -> None:
+    def save_profile(self, name: str, config: dict) -> Optional[str]:
         """Save a new profile."""
         if not name or not isinstance(name, str):
             logger.warning("Invalid profile name")
-            return
+            return None
         if not isinstance(config, dict):
             logger.warning("Invalid profile config")
-            return
+            return None
 
         profiles = self.load_profiles()
+        profile_id = str(uuid.uuid4())
         profiles.append(
             {
-                "id": str(uuid.uuid4()),
+                "id": profile_id,
                 "name": name,
                 "config": config,
                 "created_at": str(datetime.now()),
@@ -281,8 +275,10 @@ class ConfigManager:
         )
 
         profiles_path = os.path.join(self._config_dir, "profiles.json")
-        if not _atomic_write_json(profiles_path, profiles):
-            logger.error("Failed to save profile")
+        if _atomic_write_json(profiles_path, profiles):
+            return profile_id
+        logger.error("Failed to save profile")
+        return None
 
     def update_profile(self, profile_id: str, updates: dict) -> bool:
         """Update an existing profile with new data."""
@@ -340,19 +336,22 @@ class ConfigManager:
 
         return subs
 
-    def save_subscription(self, name: str, url: str) -> None:
+    def save_subscription(self, name: str, url: str) -> Optional[str]:
         """Save a new subscription."""
         subs = self.load_subscriptions()
+        sub_id = str(uuid.uuid4())
         subs.append(
             {
-                "id": str(uuid.uuid4()),
+                "id": sub_id,
                 "name": name,
                 "url": url,
                 "profiles": [],
                 "created_at": str(datetime.now()),
             }
         )
-        self._save_json_list("subscriptions.json", subs)
+        if self._save_json_list("subscriptions.json", subs):
+            return sub_id
+        return None
 
     def save_subscription_data(self, subscription: dict) -> None:
         """Update an existing subscription."""
@@ -387,14 +386,14 @@ class ConfigManager:
             logger.error(f"Failed to load {filename}: {e}")
             return default_val
 
-    def _save_json_list(self, filename: str, data):
-        # We use atomic write via _atomic_write_json but we need to pass full path?
-        # No, _atomic_write_json takes full path. Use helper logic here.
+    def _save_json_list(self, filename: str, data) -> bool:
+        """Atomically save a list of data to a JSON file."""
         path = os.path.join(self._config_dir, filename)
         try:
-            _atomic_write_json(path, data)
+            return _atomic_write_json(path, data)
         except Exception as e:
             logger.error(f"Failed to save {filename}: {e}")
+            return False
 
     def get_profile_by_id(self, profile_id: str) -> Optional[dict]:
         """Get a profile by ID, searching both local profiles and subscriptions."""
@@ -454,9 +453,7 @@ class ConfigManager:
                 port = int(port_str)
                 if MIN_PORT <= port <= MAX_PORT:
                     return port
-                logger.warning(
-                    f"Invalid port {port}, using default {DEFAULT_PROXY_PORT}"
-                )
+                logger.warning(f"Invalid port {port}, using default {DEFAULT_PROXY_PORT}")
                 return DEFAULT_PROXY_PORT
         except (ValueError, OSError, IOError) as e:
             logger.error(f"Error reading proxy port: {e}")
@@ -647,9 +644,7 @@ class ConfigManager:
         Each value is a list of strings (domains/IPs).
         """
         defaults = {"direct": [], "proxy": [], "block": []}
-        return self._load_json_list(
-            "routing_rules.json", default_type=dict, default_val=defaults
-        )
+        return self._load_json_list("routing_rules.json", default_type=dict, default_val=defaults)
 
     def save_routing_rules(self, rules: dict):
         """Save routing rules."""
@@ -663,9 +658,7 @@ class ConfigManager:
             "direct_private_ips": True,
             "direct_local_domains": True,
         }
-        return self._load_json_list(
-            "routing_toggles.json", default_type=dict, default_val=defaults
-        )
+        return self._load_json_list("routing_toggles.json", default_type=dict, default_val=defaults)
 
     def set_routing_toggle(self, name: str, value: bool) -> None:
         """Set a single routing toggle."""
@@ -684,9 +677,7 @@ class ConfigManager:
             {"address": "1.1.1.1", "protocol": "udp", "domains": []},
             {"address": "8.8.8.8", "protocol": "udp", "domains": []},
         ]
-        return self._load_json_list(
-            "dns_config.json", default_type=list, default_val=defaults
-        )
+        return self._load_json_list("dns_config.json", default_type=list, default_val=defaults)
 
     def save_dns_config(self, dns_list: list):
         """Save DNS configuration."""

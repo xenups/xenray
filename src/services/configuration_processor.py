@@ -50,16 +50,12 @@ class ConfigurationProcessor:
             return None
 
         if not isinstance(config, dict):
-            logger.error(
-                f"Invalid config format: expected dict, got {type(config).__name__}"
-            )
+            logger.error(f"Invalid config format: expected dict, got {type(config).__name__}")
             return None
 
         return config
 
-    def process_and_save(
-        self, config: dict, process_func, get_socks_port_func
-    ) -> tuple[Optional[dict], Optional[int]]:
+    def process_and_save(self, config: dict, process_func, get_socks_port_func) -> tuple[Optional[dict], Optional[int]]:
         """
         Process configuration and save to output path.
 

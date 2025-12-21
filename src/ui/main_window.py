@@ -228,12 +228,8 @@ class MainWindow:
         saved_mode = self._config_manager.get_connection_mode()
         saved_theme = self._config_manager.get_theme_mode()
 
-        self._current_mode = (
-            ConnectionMode.VPN if saved_mode == "vpn" else ConnectionMode.PROXY
-        )
-        self._page.theme_mode = (
-            ft.ThemeMode.DARK if saved_theme == "dark" else ft.ThemeMode.LIGHT
-        )
+        self._current_mode = ConnectionMode.VPN if saved_mode == "vpn" else ConnectionMode.PROXY
+        self._page.theme_mode = ft.ThemeMode.DARK if saved_theme == "dark" else ft.ThemeMode.LIGHT
 
         # Load last selected profile (from local OR subscriptions)
         last_profile_id = self._config_manager.get_last_selected_profile_id()
@@ -350,9 +346,7 @@ class MainWindow:
 
         # 2. Trigger immediate latency check via dedicated handler
         if not self._is_running and not self._connecting:
-            self._ui_helper.call(
-                self._status_display.set_pre_connection_ping, "...", False
-            )
+            self._ui_helper.call(self._status_display.set_pre_connection_ping, "...", False)
             self._latency_monitor_handler.trigger_single_check()
 
         # 3. Handle live switch if running
@@ -422,9 +416,7 @@ class MainWindow:
             # Update local reference
             self._selected_profile.update(updated_profile)
             # Update Server Card
-            self._ui_helper.call(
-                lambda: self._server_card.update_server(self._selected_profile)
-            )
+            self._ui_helper.call(lambda: self._server_card.update_server(self._selected_profile))
 
     def _on_mode_changed(self, mode: ConnectionMode):
         from src.utils.process_utils import ProcessUtils
@@ -434,9 +426,7 @@ class MainWindow:
             return
 
         self._current_mode = mode
-        self._config_manager.set_connection_mode(
-            "vpn" if mode == ConnectionMode.VPN else "proxy"
-        )
+        self._config_manager.set_connection_mode("vpn" if mode == ConnectionMode.VPN else "proxy")
         self._status_display.set_status(f"{mode.name} Mode Selected")
         self._ui_helper.call(lambda: None)
 

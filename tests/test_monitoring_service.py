@@ -1,6 +1,7 @@
 """Unit tests for MonitoringService."""
-import pytest
 from unittest.mock import Mock
+
+import pytest
 
 from src.ui.managers.monitoring_service import MonitoringService
 
@@ -21,7 +22,15 @@ class TestMonitoringService:
     @pytest.fixture
     def monitoring_service(self, mock_dependencies):
         """Create MonitoringService instance with mocked dependencies."""
-        return MonitoringService(**mock_dependencies)
+        service = MonitoringService(
+            connection_manager=mock_dependencies["connection_manager"],
+            connection_handler=mock_dependencies["connection_handler"],
+        )
+        service.setup(
+            ui_updater=mock_dependencies["ui_updater"],
+            toast_manager=mock_dependencies["toast_manager"],
+        )
+        return service
 
     def test_initialization(self, monitoring_service):
         """Test MonitoringService initializes correctly."""

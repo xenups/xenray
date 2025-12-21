@@ -40,8 +40,26 @@ class ConnectionManager:
             observer=None,
             log_monitor=None,
         )
-
         self._current_connection = None
+
+        # Connection Adoption: Check if services are already running (CLI persistence)
+        self._adopt_existing_connection()
+
+    def _adopt_existing_connection(self):
+        """Adopt an already running connection (from PID files)."""
+        xray_pid = self._orchestrator._xray_service.pid
+        singbox_pid = self._orchestrator._singbox_service.pid
+
+        if xray_pid:
+            # We have at least Xray running
+            mode = "vpn" if singbox_pid else "proxy"
+            self._current_connection = {
+                "mode": mode,
+                "xray_pid": xray_pid,
+                "singbox_pid": singbox_pid,
+                "file": "Adopted Connection",
+            }
+            logger.debug(f"[ConnectionManager] Adopted existing {mode} connection")
 
     def connect(self, file_path: str, mode: str, step_callback=None) -> bool:
         """
@@ -62,9 +80,7 @@ class ConnectionManager:
             self._current_connection = None
 
         # Delegate to orchestrator
-        success, connection_info = self._orchestrator.establish_connection(
-            file_path, mode, step_callback
-        )
+        success, connection_info = self._orchestrator.establish_connection(file_path, mode, step_callback)
 
         if success:
             self._current_connection = connection_info

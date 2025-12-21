@@ -2,6 +2,37 @@
 
 All notable changes to XenRay will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- **CI/CD Code Quality Pipeline**: Automated GitHub Actions workflow for code quality enforcement
+  - Black formatting checks
+  - isort import sorting validation
+  - Flake8 linting with max line length 120
+- **Pre-commit Hooks**: Local git hooks for automatic code quality checks before commits
+- **Code Quality Documentation**: Comprehensive guide in `docs/CODE_QUALITY.md`
+- **Setup Scripts**: PowerShell and Bash scripts for easy code quality tools setup
+
+### Changed
+- **Test Coverage Expansion**: Significantly improved test coverage for core modules
+  - `LinkParser`: 88% coverage (25 tests)
+  - `SingboxService`: 83% coverage (15 tests)
+  - `ConfigManager`: 73% coverage (22 tests)
+- **Code Formatting**: All source and test files formatted with Black and isort
+- **Import Organization**: Consistent import ordering across the entire codebase
+
+### Fixed
+- **Path Traversal Vulnerability**: Fixed security issue in ConfigManager path validation
+- **Route Cleanup Robustness**: Enhanced SingboxService route cleanup with proper exception handling
+- **CLI Bug**: Fixed incorrect LinkParser method call in CLI connect command
+- **Missing Imports**: Added missing i18n translation imports in connection modules
+
+### Technical
+- Added `pytest-cov`, `isort`, `flake8`, and `pre-commit` to dev dependencies
+- Configured Black, isort, and pytest in `pyproject.toml`
+- Created `.flake8` configuration file
+- All 62 tests passing with 0 linting errors
+
 ## [0.1.8-alpha] - 2025-12-20
 
 ### Added

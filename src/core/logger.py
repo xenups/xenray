@@ -24,10 +24,7 @@ logger.add(
     log_file,
     rotation="1 MB",
     retention="10 days",
-    format=(
-        "{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | "
-        "{name}:{function}:{line} - {message}"
-    ),
+    format=("{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | " "{name}:{function}:{line} - {message}"),
     level="DEBUG",
 )
 

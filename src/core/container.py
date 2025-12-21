@@ -17,48 +17,15 @@ class ApplicationContainer(containers.DeclarativeContainer):
         ]
     )
 
-    # Core services (singletons)
+    # ═══════════════════════════════════════════════════════════
+    # SINGLETONS - Application-lifetime core services only
+    # ═══════════════════════════════════════════════════════════
+
     config_manager = providers.Singleton(ConfigManager)
 
     connection_manager = providers.Singleton(
         ConnectionManager,
         config_manager=config_manager,
-    )
-
-    network_stats = providers.Singleton(NetworkStatsService)
-
-    # UI Handlers (Singletons to ensure consistent state sharing)
-    connection_handler = providers.Singleton(
-        "src.ui.handlers.connection_handler.ConnectionHandler",
-        connection_manager=connection_manager,
-        config_manager=config_manager,
-        network_stats=network_stats,
-    )
-
-    theme_handler = providers.Singleton(
-        "src.ui.handlers.theme_handler.ThemeHandler",
-        config_manager=config_manager,
-    )
-
-    installer_handler = providers.Singleton(
-        "src.ui.handlers.installer_handler.InstallerHandler",
-        connection_manager=connection_manager,
-    )
-
-    latency_monitor_handler = providers.Singleton(
-        "src.ui.handlers.latency_monitor_handler.LatencyMonitorHandler",
-        config_manager=config_manager,
-    )
-
-    network_stats_handler = providers.Singleton(
-        "src.ui.handlers.network_stats_handler.NetworkStatsHandler",
-        network_stats=network_stats,
-    )
-
-    background_task_handler = providers.Singleton(
-        "src.ui.handlers.background_task_handler.BackgroundTaskHandler",
-        network_stats_handler=network_stats_handler,
-        latency_monitor_handler=latency_monitor_handler,
     )
 
     systray_handler = providers.Singleton(
@@ -67,18 +34,77 @@ class ApplicationContainer(containers.DeclarativeContainer):
         config_manager=config_manager,
     )
 
-    # Managers
+    # ═══════════════════════════════════════════════════════════
+    # RESOURCES - Network services (no dependencies on factories)
+    # ═══════════════════════════════════════════════════════════
+
+    network_stats = providers.Resource(
+        NetworkStatsService,
+    )
+
+    network_stats_handler = providers.Resource(
+        "src.ui.handlers.network_stats_handler.NetworkStatsHandler",
+        network_stats=network_stats,
+    )
+
+    # ═══════════════════════════════════════════════════════════
+    # FACTORIES - UI-bound, event-driven, no persistent state
+    # ═══════════════════════════════════════════════════════════
+
+    connection_handler = providers.Factory(
+        "src.ui.handlers.connection_handler.ConnectionHandler",
+        connection_manager=connection_manager,
+        config_manager=config_manager,
+        network_stats=network_stats,
+    )
+
+    theme_handler = providers.Factory(
+        "src.ui.handlers.theme_handler.ThemeHandler",
+        config_manager=config_manager,
+    )
+
+    installer_handler = providers.Factory(
+        "src.ui.handlers.installer_handler.InstallerHandler",
+        connection_manager=connection_manager,
+    )
+
+    latency_monitor_handler = providers.Factory(
+        "src.ui.handlers.latency_monitor_handler.LatencyMonitorHandler",
+        config_manager=config_manager,
+    )
+
+    # ═══════════════════════════════════════════════════════════
+    # RESOURCES - Defined after factories they depend on
+    # ═══════════════════════════════════════════════════════════
+
+    # Background task handler depends on latency_monitor_handler
+    background_task_handler = providers.Resource(
+        "src.ui.handlers.background_task_handler.BackgroundTaskHandler",
+        network_stats_handler=network_stats_handler,
+        latency_monitor_handler=latency_monitor_handler,
+    )
+
+    # Monitoring service depends on connection_handler
+    monitoring_service = providers.Resource(
+        "src.ui.managers.monitoring_service.MonitoringService",
+        connection_manager=connection_manager,
+        connection_handler=connection_handler,
+    )
+
+    # ═══════════════════════════════════════════════════════════
+    # Additional Singletons (depend on Factories)
+    # ═══════════════════════════════════════════════════════════
+
+    # Profile manager depends on connection_handler
     profile_manager = providers.Singleton(
         "src.ui.managers.profile_manager.ProfileManager",
         connection_manager=connection_manager,
         connection_handler=connection_handler,
     )
 
-    monitoring_service = providers.Singleton(
-        "src.ui.managers.monitoring_service.MonitoringService",
-        connection_manager=connection_manager,
-        connection_handler=connection_handler,
-    )
+    # ═══════════════════════════════════════════════════════════
+    # FACTORY - Main window (UI root, always factory)
+    # ═══════════════════════════════════════════════════════════
 
     main_window = providers.Factory(
         "src.ui.main_window.MainWindow",

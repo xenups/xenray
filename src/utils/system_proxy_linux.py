@@ -28,9 +28,7 @@ class SystemProxyLinux:
 
         # Fallback: check running processes
         try:
-            result = subprocess.run(
-                ["ps", "-A"], capture_output=True, text=True, timeout=2
-            )
+            result = subprocess.run(["ps", "-A"], capture_output=True, text=True, timeout=2)
 
             output = result.stdout.lower()
             if "gnome-session" in output:
@@ -364,9 +362,7 @@ class SystemProxyLinux:
         elif de == "kde":
             return SystemProxyLinux.set_kde_proxy(host, port, proxy_type)
         else:
-            logger.warning(
-                f"Unknown desktop environment '{de}', using environment variables"
-            )
+            logger.warning(f"Unknown desktop environment '{de}', using environment variables")
             return SystemProxyLinux.set_environment_proxy(host, port)
 
     @staticmethod

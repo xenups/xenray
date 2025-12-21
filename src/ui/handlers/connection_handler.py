@@ -49,9 +49,7 @@ class ConnectionHandler:
 
         # Service state setters
         self._profile_manager_is_running_setter: Optional[Callable[[bool], None]] = None
-        self._monitoring_service_is_running_setter: Optional[Callable[[bool], None]] = (
-            None
-        )
+        self._monitoring_service_is_running_setter: Optional[Callable[[bool], None]] = None
 
     def setup(
         self,
@@ -90,9 +88,7 @@ class ConnectionHandler:
         self._current_mode_getter = current_mode_getter
         self._update_horizon_glow_callback = update_horizon_glow_callback
         self._profile_manager_is_running_setter = profile_manager_is_running_setter
-        self._monitoring_service_is_running_setter = (
-            monitoring_service_is_running_setter
-        )
+        self._monitoring_service_is_running_setter = monitoring_service_is_running_setter
 
     def connect_async(self):
         """Start connection in background thread."""
@@ -108,9 +104,7 @@ class ConnectionHandler:
             if self._status_display:
                 self._ui_helper.call(self._status_display.set_initializing)
             if self._update_horizon_glow_callback:
-                self._ui_helper.call(
-                    lambda: self._update_horizon_glow_callback("connecting")
-                )
+                self._ui_helper.call(lambda: self._update_horizon_glow_callback("connecting"))
 
         threading.Thread(target=self._perform_connect_task, daemon=True).start()
 
@@ -129,9 +123,7 @@ class ConnectionHandler:
             if self._status_display:
                 self._ui_helper.call(self._status_display.set_initializing)
             if self._update_horizon_glow_callback:
-                self._ui_helper.call(
-                    lambda: self._update_horizon_glow_callback("connecting")
-                )
+                self._ui_helper.call(lambda: self._update_horizon_glow_callback("connecting"))
 
         def fast_reconnect_task():
             try:
@@ -174,18 +166,10 @@ class ConnectionHandler:
                     self._toast.error(t("connection.no_internet"), 3000)
                 return
 
-            selected_profile = (
-                self._selected_profile_getter()
-                if self._selected_profile_getter
-                else None
-            )
+            selected_profile = self._selected_profile_getter() if self._selected_profile_getter else None
             profile_config = selected_profile.get("config") if selected_profile else {}
 
-            current_mode = (
-                self._current_mode_getter()
-                if self._current_mode_getter
-                else ConnectionMode.PROXY
-            )
+            current_mode = self._current_mode_getter() if self._current_mode_getter else ConnectionMode.PROXY
             mode_str = "vpn" if current_mode == ConnectionMode.VPN else "proxy"
 
             os.makedirs(TMPDIR, exist_ok=True)
@@ -194,9 +178,7 @@ class ConnectionHandler:
             if self._log_viewer:
                 app_log = os.path.join(TMPDIR, "xenray.log")
                 if current_mode == ConnectionMode.VPN:
-                    self._log_viewer.start_tailing(
-                        app_log, XRAY_LOG_FILE, SINGBOX_LOG_FILE
-                    )
+                    self._log_viewer.start_tailing(app_log, XRAY_LOG_FILE, SINGBOX_LOG_FILE)
                 else:
                     self._log_viewer.start_tailing(app_log, XRAY_LOG_FILE)
 
@@ -208,9 +190,7 @@ class ConnectionHandler:
                 if self._ui_helper and self._status_display:
                     self._ui_helper.call(self._status_display.set_step, step_msg)
 
-            success = self._connection_manager.connect(
-                temp_config_path, mode_str, step_callback=on_step
-            )
+            success = self._connection_manager.connect(temp_config_path, mode_str, step_callback=on_step)
 
             if not success:
                 if self._connecting_setter:
@@ -234,9 +214,7 @@ class ConnectionHandler:
             time.sleep(1)
 
             if self._ui_helper and self._status_display:
-                self._ui_helper.call(
-                    self._status_display.set_step, t("connection.checking_network")
-                )
+                self._ui_helper.call(self._status_display.set_step, t("connection.checking_network"))
 
             proxy_port = self._config_manager.get_proxy_port()
             if not NetworkUtils.check_proxy_connectivity(proxy_port):
@@ -262,9 +240,7 @@ class ConnectionHandler:
                 if self._connection_button:
                     self._ui_helper.call(self._connection_button.set_connected)
                 if self._update_horizon_glow_callback:
-                    self._ui_helper.call(
-                        lambda: self._update_horizon_glow_callback("connected")
-                    )
+                    self._ui_helper.call(lambda: self._update_horizon_glow_callback("connected"))
 
             # Update system tray state
             if self._systray:
@@ -296,9 +272,7 @@ class ConnectionHandler:
             if self._status_display:
                 self._ui_helper.call(self._status_display.set_disconnecting)
             if self._update_horizon_glow_callback:
-                self._ui_helper.call(
-                    lambda: self._update_horizon_glow_callback("disconnecting")
-                )
+                self._ui_helper.call(lambda: self._update_horizon_glow_callback("disconnecting"))
 
         def disconnect_task():
             if self._is_running_setter:

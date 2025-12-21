@@ -18,9 +18,7 @@ class CloseDialog(ft.AlertDialog):
         self.remember_checkbox = ft.Checkbox(
             label=t("close_dialog.remember"),
             value=False,
-            label_style=ft.TextStyle(
-                size=13, color=ft.Colors.with_opacity(0.7, ft.Colors.ON_SURFACE)
-            ),
+            label_style=ft.TextStyle(size=13, color=ft.Colors.with_opacity(0.7, ft.Colors.ON_SURFACE)),
             # White inside when empty, blue accent checkmark
             fill_color={
                 ft.ControlState.SELECTED: ft.Colors.BLUE_ACCENT,
@@ -109,9 +107,7 @@ class CloseDialog(ft.AlertDialog):
         self._on_exit_callback()
 
     def _handle_minimize(self, e):
-        logger.debug(
-            f"[DEBUG] Close dialog: Minimize clicked (remember={self.remember_checkbox.value})"
-        )
+        logger.debug(f"[DEBUG] Close dialog: Minimize clicked (remember={self.remember_checkbox.value})")
         if self.remember_checkbox.value:
             self._config_manager.set_remember_close_choice(True)
 

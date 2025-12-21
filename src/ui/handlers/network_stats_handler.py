@@ -84,11 +84,7 @@ class NetworkStatsHandler:
 
         if not is_running:
             # Reset heartbeat if needed
-            if (
-                self._heartbeat
-                and self._heartbeat.page
-                and self._heartbeat.opacity != 0
-            ):
+            if self._heartbeat and self._heartbeat.page and self._heartbeat.opacity != 0:
                 self._heartbeat.opacity = 0
                 self._heartbeat.update()
             return
@@ -110,11 +106,7 @@ class NetworkStatsHandler:
             self._connection_button.update_network_activity(total_bps)
 
         # Update LogsDrawer stats if open AND mounted
-        if (
-            self._logs_drawer_component
-            and self._logs_drawer_component.open
-            and self._logs_drawer_component.page
-        ):
+        if self._logs_drawer_component and self._logs_drawer_component.open and self._logs_drawer_component.page:
             self._logs_drawer_component.update_network_stats(down_str, up_str)
 
         # Earth Glow Animation

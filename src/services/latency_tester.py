@@ -15,9 +15,7 @@ class LatencyTester:
     def __init__(
         self,
         on_test_start: Optional[Callable[[dict], None]] = None,
-        on_test_complete: Optional[
-            Callable[[dict, bool, str, Optional[dict]], None]
-        ] = None,
+        on_test_complete: Optional[Callable[[dict, bool, str, Optional[dict]], None]] = None,
         on_all_complete: Optional[Callable] = None,
     ):
         """

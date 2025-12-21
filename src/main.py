@@ -3,8 +3,6 @@
 import os
 import sys
 
-import flet as ft
-
 # Add project root to path
 if __name__ == "__main__":
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -16,8 +14,10 @@ from src.core.logger import logger
 from src.core.settings import Settings
 
 
-async def main(page: ft.Page):
+async def main(page):
     """Main entry point."""
+    # Lazy-import Flet here (type hints available in function scope)
+
     logger.debug("[DEBUG] Starting Flet session (async main)")
     page.window.width = 420
     page.window.height = 550
@@ -74,10 +74,31 @@ async def main(page: ft.Page):
 
 
 def run():
-    """Entry point for poetry script."""
+    """Entry point for poetry script - routes to GUI or CLI."""
+
+    # Import logger early so it's available for both modes
+    from src.core.logger import logger
+
+    # Check if CLI mode is requested (any command-line arguments)
+    if len(sys.argv) > 1:
+        # CLI mode - delegate to CLI handler (no Flet import!)
+        import os
+
+        os.environ["XENRAY_SKIP_I18N"] = "1"
+
+        from src.cli import main as cli_main
+
+        cli_main()
+        return
+
+    # GUI mode - continue with normal GUI startup
+    # Lazy-import Flet here (only when GUI is actually needed)
+    # This defers 115MB of framework overhead until this point
     # Singleton Check (Moved here to prevent child processes from starting app)
     import ctypes
     import os
+
+    import flet as ft
 
     # Import PlatformUtils - works for both script and PyInstaller
     # PyInstaller bundles these as hidden-imports
