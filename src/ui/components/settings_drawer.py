@@ -22,8 +22,10 @@ from src.ui.components.settings_sections import (
     ModeSwitchRow,
     PortInputRow,
     SettingsListTile,
+    SettingsRow,
     SettingsSection,
 )
+from src.services.startup_service import StartupService
 from src.utils.process_utils import ProcessUtils
 
 
@@ -63,6 +65,20 @@ class SettingsDrawer(ft.NavigationDrawer):
         self._language_row = LanguageDropdownRow(
             self._config_manager.get_language(),
             self._save_language,
+        )
+
+        # Startup toggle (if supported)
+        self._startup_switch = ft.Switch(
+            value=StartupService.is_enabled(),
+            active_color=ft.Colors.PRIMARY,
+            on_change=self._handle_startup_toggle,
+            disabled=not StartupService.is_supported(),
+        )
+        self._startup_row = SettingsRow(
+            icon=ft.Icons.ROCKET_LAUNCH,
+            label=t("settings.add_to_startup"),
+            control=self._startup_switch,
+            sublabel=t("settings.add_to_startup_desc"),
         )
 
         # Build UI
@@ -130,6 +146,7 @@ class SettingsDrawer(ft.NavigationDrawer):
                                             t("settings.reset_close_choice_desc"),
                                             on_click=self._reset_close_preference,
                                         ),
+                                        self._startup_row,
                                     ],
                                 ),
                                 ft.Divider(
@@ -322,6 +339,30 @@ class SettingsDrawer(ft.NavigationDrawer):
 
         self._config_manager.set_remember_close_choice(False)
         self._show_toast(t("settings.reset_close_success"), "success")
+        page.update()
+
+    def _handle_startup_toggle(self, e):
+        """Handle add to startup toggle."""
+        page = self.page
+        if not page:
+            return
+
+        enabled = self._startup_switch.value
+
+        if enabled:
+            success = StartupService.enable()
+        else:
+            success = StartupService.disable()
+
+        if success:
+            self._config_manager.set_startup_enabled(enabled)
+            self._show_toast(t("settings.startup_saved"), "success")
+        else:
+            # Revert toggle on failure
+            self._startup_switch.value = not enabled
+            self._startup_switch.update()
+            self._show_toast(t("settings.startup_error"), "error")
+
         page.update()
 
     def _on_installer_run(self, component: str):

@@ -682,3 +682,21 @@ class ConfigManager:
     def save_dns_config(self, dns_list: list):
         """Save DNS configuration."""
         self._save_json_list("dns_config.json", dns_list)
+
+    # --- Startup Preference ---
+    def get_startup_enabled(self) -> bool:
+        """Get startup preference (UI state only, not source of truth)."""
+        path = os.path.join(self._config_dir, "startup_enabled.txt")
+        if not os.path.exists(path):
+            return False
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return f.read().strip().lower() == "true"
+        except Exception:
+            return False
+
+    def set_startup_enabled(self, enabled: bool) -> None:
+        """Set startup preference (UI state only)."""
+        path = os.path.join(self._config_dir, "startup_enabled.txt")
+        if not _atomic_write(path, "true" if enabled else "false"):
+            logger.error("Failed to save startup preference")

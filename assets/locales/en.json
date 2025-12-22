@@ -87,7 +87,11 @@
     "language_description": "Select application language",
     "reset_close_choice": "Reset Close Preference",
     "reset_close_choice_desc": "Show confirmation dialog again when closing",
-    "reset_close_success": "Close preference reset! 🔄"
+    "reset_close_success": "Close preference reset! 🔄",
+    "add_to_startup": "Add to Startup",
+    "add_to_startup_desc": "Launch XenRay automatically on system login",
+    "startup_saved": "Startup setting updated",
+    "startup_error": "Failed to update startup setting"
   },
   "admin": {
     "title": "Admin Rights Required",
