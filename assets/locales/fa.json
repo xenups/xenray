@@ -157,7 +157,9 @@
     "error": "خطا",
     "checking_network": "در حال بررسی اتصال شبکه...",
     "no_internet": "اتصال اینترنت برقرار نیست!",
-    "connected_no_internet": "متصل شد اما اینترنت در دسترس نیست"
+    "connected_no_internet": "متصل شد اما اینترنت در دسترس نیست",
+    "verifying_latency": "در حال تأیید تأخیر اتصال...",
+    "falling_back": "در حال بازگشت به تنظیمات اصلی..."
   },
   "routing": {
     "title": "قوانین مسیریابی",

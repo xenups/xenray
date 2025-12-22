@@ -157,7 +157,9 @@
     "error": "Error",
     "checking_network": "Checking network connection...",
     "no_internet": "No Internet Connection!",
-    "connected_no_internet": "Connected but No Internet Access"
+    "connected_no_internet": "Connected but No Internet Access",
+    "verifying_latency": "Verifying connection latency...",
+    "falling_back": "Falling back to original configuration..."
   },
   "routing": {
     "title": "Routing Rules",

@@ -157,7 +157,9 @@
     "error": "错误",
     "checking_network": "正在检查网络连接...",
     "no_internet": "无网络连接！",
-    "connected_no_internet": "已连接但无网络访问"
+    "connected_no_internet": "已连接但无网络访问",
+    "verifying_latency": "正在验证连接延迟...",
+    "falling_back": "正在回退到原始配置..."
   },
   "routing": {
     "title": "路由规则",
