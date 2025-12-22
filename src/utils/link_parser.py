@@ -1,4 +1,5 @@
 """VLESS Link Parser — xhttp/splithttp-ready, routing untouched"""
+
 import re
 import urllib.parse
 from typing import Dict, Optional
@@ -139,7 +140,7 @@ class LinkParser:
             logger.warning(f"Unknown security: {security}, using default")
             security = DEFAULT_SECURITY
 
-        sni = get_param("sni") or address
+        sni = get_param("sni")
         fp = get_param("fp")
         alpn_raw = get_param("alpn")
         flow = get_param("flow", "")
@@ -196,42 +197,85 @@ class LinkParser:
             logger.warning(f"Unknown network type: {network}, using default")
             network = DEFAULT_NETWORK
 
-        # Handle splithttp/xhttp (new in Xray 1.8.0+)
+        # Handle splithttp/xhttp (Xray 1.8.0+)
         if network in ("xhttp", "splithttp"):
-            outbound["streamSettings"]["network"] = "splithttp"
-            host_param = get_param("host") or address
-            splithttp_settings = {
+            outbound["streamSettings"]["network"] = "xhttp"
+
+            # Host derivation: specific logic for xhttp/ws/httpupgrade
+            # If host param is missing, prefer SNI if it differs from address
+            host_param = get_param("host")
+            if not host_param:
+                if sni and address != sni:
+                    host_param = sni
+                else:
+                    host_param = address
+
+            xhttp_settings = {
                 "path": get_param("path", DEFAULT_PATH),
                 "host": host_param,
             }
 
-            # Optional parameters
-            sc_max_each = get_param("scMaxEachPostBytes")
-            sc_max_concurrent = get_param("scMaxConcurrentPosts")
+            # Optional parameters (Extended xhttp/SplitHTTP support)
+            # mode: "auto" (default), "stream-one", "stream-up", "packet-up"
+            if mode := get_param("mode"):
+                xhttp_settings["mode"] = mode
 
+            # noSSEHeader: bool
+            if no_sse := get_param("noSSEHeader"):
+                xhttp_settings["noSSEHeader"] = no_sse.lower() == "true" or no_sse == "1"
+
+            # xPaddingBytes: string/int
+            if padding := get_param("xPaddingBytes"):
+                xhttp_settings["xPaddingBytes"] = padding
+
+            # scStreamUpServerSecs: string/int
+            if stream_up_secs := get_param("scStreamUpServerSecs"):
+                xhttp_settings["scStreamUpServerSecs"] = stream_up_secs
+
+            # scMaxBufferedPosts: int
+            if max_buffered := get_param("scMaxBufferedPosts"):
+                try:
+                    value = int(max_buffered)
+                    if value > 0:
+                        xhttp_settings["scMaxBufferedPosts"] = value
+                except ValueError:
+                    logger.warning(f"Invalid scMaxBufferedPosts: {max_buffered}")
+
+            # scMaxEachPostBytes: int
+            sc_max_each = get_param("scMaxEachPostBytes")
             if sc_max_each:
                 try:
                     value = int(sc_max_each)
                     if value > 0:
-                        splithttp_settings["scMaxEachPostBytes"] = value
+                        xhttp_settings["scMaxEachPostBytes"] = value
                 except ValueError:
                     logger.warning(f"Invalid scMaxEachPostBytes: {sc_max_each}")
 
+            # scMaxConcurrentPosts: int
+            sc_max_concurrent = get_param("scMaxConcurrentPosts")
             if sc_max_concurrent:
                 try:
                     value = int(sc_max_concurrent)
                     if value > 0:
-                        splithttp_settings["scMaxConcurrentPosts"] = value
+                        xhttp_settings["scMaxConcurrentPosts"] = value
                 except ValueError:
                     logger.warning(f"Invalid scMaxConcurrentPosts: {sc_max_concurrent}")
 
-            outbound["streamSettings"]["splithttpSettings"] = splithttp_settings
+            outbound["streamSettings"]["xhttpSettings"] = xhttp_settings
 
         # WebSocket transport
         elif network == "ws":
+            # Host derivation
+            host_param = get_param("host")
+            if not host_param:
+                if sni and address != sni:
+                    host_param = sni
+                else:
+                    host_param = address
+
             ws_settings = {
                 "path": get_param("path", DEFAULT_PATH),
-                "headers": {"Host": get_param("host") or address},
+                "headers": {"Host": host_param},
             }
             outbound["streamSettings"]["wsSettings"] = ws_settings
 
@@ -244,9 +288,18 @@ class LinkParser:
         # HTTPUpgrade transport (new in Xray 1.8.0+)
         elif network == "httpupgrade":
             outbound["streamSettings"]["network"] = "httpupgrade"
+
+            # Host derivation
+            host_param = get_param("host")
+            if not host_param:
+                if sni and address != sni:
+                    host_param = sni
+                else:
+                    host_param = address
+
             httpupgrade_settings = {
                 "path": get_param("path", DEFAULT_PATH),
-                "host": get_param("host") or address,
+                "host": host_param,
             }
             outbound["streamSettings"]["httpupgradeSettings"] = httpupgrade_settings
 
@@ -562,24 +615,15 @@ class LinkParser:
 
     @staticmethod
     def _build_config(outbound: Dict) -> Dict:
-        """Helper to wrap outbound in full config structure."""
+        """
+        Helper to wrap outbound in minimal config structure.
+
+        Note: Inbounds, DNS, and detailed routing are added by XrayConfigProcessor
+        based on user settings. This only provides the parsed outbound.
+        """
         return {
             "log": {"loglevel": "warning"},
-            "inbounds": [
-                {
-                    "tag": "socks",
-                    "port": 10805,
-                    "listen": "127.0.0.1",
-                    "protocol": "socks",
-                    "settings": {"udp": True},
-                },
-                {
-                    "tag": "http",
-                    "port": 10809,
-                    "listen": "127.0.0.1",
-                    "protocol": "http",
-                },
-            ],
+            "inbounds": [],  # Will be populated by XrayConfigProcessor with user's port settings
             "outbounds": [
                 outbound,
                 {"tag": "direct", "protocol": "freedom", "settings": {}},

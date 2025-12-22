@@ -16,6 +16,7 @@ class ConnectionManager:
 
         # Initialize services (Dependency Injection)
         from src.services.configuration_processor import ConfigurationProcessor
+        from src.services.legacy_config_service import LegacyConfigService
         from src.services.network_validator import NetworkValidator
         from src.services.routing_rules_manager import RoutingRulesManager
         from src.services.xray_config_processor import XrayConfigProcessor
@@ -24,6 +25,7 @@ class ConnectionManager:
         network_validator = NetworkValidator()
         xray_processor = XrayConfigProcessor(config_manager)
         routing_manager = RoutingRulesManager(config_manager)
+        legacy_config_service = LegacyConfigService(xray_processor)
 
         xray_service = XrayService()
         singbox_service = SingboxService()
@@ -37,6 +39,7 @@ class ConnectionManager:
             routing_manager=routing_manager,
             xray_service=xray_service,
             singbox_service=singbox_service,
+            legacy_config_service=legacy_config_service,
             observer=None,
             log_monitor=None,
         )

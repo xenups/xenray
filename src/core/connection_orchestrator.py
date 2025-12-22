@@ -21,6 +21,7 @@ class ConnectionOrchestrator:
         routing_manager,
         xray_service,
         singbox_service,
+        legacy_config_service,
         observer,
         log_monitor,
     ):
@@ -35,6 +36,7 @@ class ConnectionOrchestrator:
             routing_manager: RoutingRulesManager instance
             xray_service: XrayService instance
             singbox_service: SingboxService instance
+            legacy_config_service: LegacyConfigService instance
             observer: NetworkStabilityObserver instance
             log_monitor: PassiveLogMonitor instance
         """
@@ -45,12 +47,13 @@ class ConnectionOrchestrator:
         self._routing_manager = routing_manager
         self._xray_service = xray_service
         self._singbox_service = singbox_service
+        self._legacy_config_service = legacy_config_service
         self._observer = observer
         self._log_monitor = log_monitor
 
     def establish_connection(self, file_path: str, mode: str, step_callback=None) -> tuple[bool, Optional[dict]]:
         """
-        Orchestrate full connection workflow.
+        Orchestrate full connection workflow with legacy migration and fallback.
 
         Args:
             file_path: Path to configuration file
@@ -62,39 +65,83 @@ class ConnectionOrchestrator:
         """
         try:
             # 1. Load and validate configuration
-            config = self._load_and_validate_config(file_path, step_callback)
-            if not config:
+            original_config = self._load_and_validate_config(file_path, step_callback)
+            if not original_config:
                 return False, None
 
-            # 2. Pre-connection checks
+            # 2. Check if migration is needed and prepare migrated config
+            is_legacy = self._legacy_config_service.is_legacy(original_config)
+            configs_to_try = []
+
+            if is_legacy:
+                logger.info("[ConnectionOrchestrator] Legacy config detected, preparing migration")
+                migrated_config = self._legacy_config_service.migrate_config(original_config)
+                configs_to_try.append(("migrated", migrated_config))
+                configs_to_try.append(("original", original_config))
+            else:
+                configs_to_try.append(("standard", original_config))
+
+            # 3. Pre-connection checks
             if not self._pre_connection_checks(step_callback):
                 return False, None
 
-            # 3. Process configuration
-            processed_config, socks_port = self._prepare_configuration(config, step_callback)
-            if not processed_config:
-                return False, None
+            # 4. Attempt connection with retry/fallback
+            for label, config in configs_to_try:
+                if label == "original":
+                    logger.warning("[ConnectionOrchestrator] Falling back to original legacy configuration")
+                    if step_callback:
+                        step_callback(t("connection.falling_back"))
 
-            # 4. Start Xray service
-            xray_pid = self._start_xray(step_callback)
-            if not xray_pid:
-                return False, None
+                # Process configuration
+                processed_config, socks_port = self._prepare_configuration(config, step_callback)
+                if not processed_config:
+                    continue
 
-            # 5. Start Sing-box if VPN mode
-            singbox_pid = None
-            if mode == "vpn":
-                singbox_pid = self._start_singbox(processed_config, socks_port, step_callback)
-                if not singbox_pid:
-                    self._xray_service.stop()
-                    return False, None
+                # Start Xray service
+                xray_pid = self._start_xray(step_callback)
+                if not xray_pid:
+                    continue
 
-            # 6. Finalize connection
-            connection_info = self._finalize_connection(file_path, mode, xray_pid, singbox_pid, step_callback)
-            return True, connection_info
+                # Start Sing-box if VPN mode
+                singbox_pid = None
+                if mode == "vpn":
+                    singbox_pid = self._start_singbox(processed_config, socks_port, step_callback)
+                    if not singbox_pid:
+                        self._xray_service.stop()
+                        continue
+
+                # Verify connection health
+                if self._verify_connection_health(processed_config, step_callback):
+                    # Finalize connection
+                    connection_info = self._finalize_connection(file_path, mode, xray_pid, singbox_pid, step_callback)
+                    return True, connection_info
+                else:
+                    logger.error(f"[ConnectionOrchestrator] {label.capitalize()} config failed health check")
+                    self.teardown_connection({"xray_pid": xray_pid, "singbox_pid": singbox_pid})
+
+            logger.error("[ConnectionOrchestrator] All connection attempts failed")
+            return False, None
 
         except Exception as e:
             logger.error(f"Connection orchestration failed: {e}")
             return False, None
+
+    def _verify_connection_health(self, config: dict, step_callback) -> bool:
+        """Verify the connection is actually working before declaring success."""
+        if step_callback:
+            step_callback(t("connection.verifying_latency"))
+
+        from src.services.connection_tester import ConnectionTester
+
+        # Run a quick sync test (since we are already in the orchestrator thread)
+        success, latency, _ = ConnectionTester.test_connection_sync(config)
+
+        if success:
+            logger.info(f"[ConnectionOrchestrator] Connection verified: {latency}")
+            return True
+
+        logger.warning(f"[ConnectionOrchestrator] Connection verification failed: {latency}")
+        return False
 
     def teardown_connection(self, connection_info: dict):
         """
