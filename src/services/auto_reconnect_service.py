@@ -74,6 +74,7 @@ class AutoReconnectService:
             if file_path and file_path != "Adopted Connection":
                 if self._check_xray_recovered(file_path):
                     logger.info("[AutoReconnectService] Xray recovered, aborting reconnect")
+                    self._emit("reconnected")  # Notify UI connection is restored
                     return True
 
         # 4. Attempt reconnect

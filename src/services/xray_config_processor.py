@@ -402,6 +402,24 @@ class XrayConfigProcessor:
                 logger.info(f"[XrayConfigProcessor] Fallback: Set xhttpSettings.host = {domain}")
                 applied = True
 
+            # XHTTP Stability: Set mode to packet-up for best CDN compatibility if not specified
+            # packet-up = "packetized uplink, streaming downlink" - most reliable for CDNs
+            if not xhttp_settings.get("mode"):
+                xhttp_settings["mode"] = "packet-up"
+                logger.info("[XrayConfigProcessor] Set xhttpSettings.mode = packet-up for stability")
+                applied = True
+
+            # XMUX: Add connection cycling to prevent stalls (if not configured)
+            # These defaults prevent connection timeouts and Nginx request limits
+            if "xmux" not in xhttp_settings:
+                xhttp_settings["xmux"] = {
+                    "maxConcurrency": "16-32",       # Default from Xray docs - random range
+                    "hMaxReusableSecs": "1800-3000",  # Cycle connections every 30-50 min
+                    "hMaxRequestTimes": "600-900",    # Stay under Nginx's 1000 limit
+                }
+                logger.info("[XrayConfigProcessor] Added XMUX settings for connection stability")
+                applied = True
+
         return applied
 
     def _get_server_object(self, settings: dict) -> Optional[dict]:

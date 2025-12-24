@@ -71,6 +71,23 @@ class LegacyConfigService:
                 if "splithttpSettings" in stream_settings:
                     stream_settings["xhttpSettings"] = stream_settings.pop("splithttpSettings")
 
+                # Apply XHTTP stability settings during migration
+                xhttp_settings = stream_settings.setdefault("xhttpSettings", {})
+
+                # Set mode to packet-up for best CDN compatibility
+                if not xhttp_settings.get("mode"):
+                    xhttp_settings["mode"] = "packet-up"
+                    logger.info("[LegacyConfigService] Set xhttpSettings.mode = packet-up for stability")
+
+                # Add XMUX connection cycling settings
+                if "xmux" not in xhttp_settings:
+                    xhttp_settings["xmux"] = {
+                        "maxConcurrency": "16-32",
+                        "hMaxReusableSecs": "1800-3000",
+                        "hMaxRequestTimes": "600-900",
+                    }
+                    logger.info("[LegacyConfigService] Added XMUX settings for connection stability")
+
     def _ensure_outbound_parameters(self, config: Dict[str, Any]):
         """Ensure critical parameters are present or have safe defaults."""
         for outbound in config.get("outbounds", []):
@@ -122,6 +139,20 @@ class LegacyConfigService:
             # Default host if missing and not an IP (best effort)
             if "host" not in t_settings and address:
                 t_settings["host"] = address
+
+            # XHTTP-specific: Add stability settings (mode + XMUX)
+            if network == "xhttp":
+                # Set mode to packet-up for best CDN compatibility
+                if not t_settings.get("mode"):
+                    t_settings["mode"] = "packet-up"
+
+                # Add XMUX connection cycling settings
+                if "xmux" not in t_settings:
+                    t_settings["xmux"] = {
+                        "maxConcurrency": "16-32",
+                        "hMaxReusableSecs": "1800-3000",
+                        "hMaxRequestTimes": "600-900",
+                    }
 
         # Default SNI if security is TLS/Reality and SNI is missing
         security = stream_settings.get("security")

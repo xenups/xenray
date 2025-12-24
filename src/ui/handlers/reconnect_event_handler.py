@@ -75,6 +75,9 @@ class ReconnectEventHandler:
         
         handlers = {
             "failure_detected": self._handle_failure_detected,
+            "connectivity_lost": self._handle_connectivity_lost,
+            "connectivity_degraded": self._handle_connectivity_degraded,
+            "connectivity_restored": self._handle_connectivity_restored,
             "reconnecting": self._handle_reconnecting,
             "reconnected": self._handle_reconnected,
             "reconnect_failed": self._handle_reconnect_failed,
@@ -95,6 +98,44 @@ class ReconnectEventHandler:
             self._ui_call(lambda: self._toast.warning(t("connection.failure_detected"), 3000))
         if self._status_display:
             self._ui_call(lambda: self._status_display.set_step(t("connection.checking_network")))
+
+    def _handle_connectivity_lost(self, data: dict):
+        """Handle connectivity_lost event from ActiveConnectivityMonitor."""
+        logger.info("[ReconnectEventHandler] Handling connectivity_lost event")
+        if self._toast:
+            self._ui_call(lambda: self._toast.warning(t("connection.failure_detected"), 3000))
+        if self._status_display:
+            self._ui_call(lambda: self._status_display.set_step(t("connection.checking_network")))
+
+    def _handle_connectivity_degraded(self, data: dict):
+        """Handle connectivity_degraded event - soft warning, connection may be unstable."""
+        logger.info("[ReconnectEventHandler] Handling connectivity_degraded event")
+        if self._status_display:
+            self._ui_call(lambda: self._status_display.set_step(t("connection.checking_network")))
+
+    def _handle_connectivity_restored(self, data: dict):
+        """Handle connectivity_restored event from ActiveConnectivityMonitor."""
+        logger.info("[ReconnectEventHandler] Handling connectivity_restored - updating UI to Connected")
+        
+        # Update state
+        if self._is_running_setter:
+            self._is_running_setter(True)
+        if self._profile_manager_is_running_setter:
+            self._profile_manager_is_running_setter(True)
+        if self._monitoring_service_is_running_setter:
+            self._monitoring_service_is_running_setter(True)
+        
+        # Update UI to Connected
+        if self._connection_button:
+            self._ui_call(self._connection_button.set_connected)
+        if self._status_display:
+            self._ui_call(self._status_display.set_connected)
+        if self._update_horizon_glow_callback:
+            self._ui_call(lambda: self._update_horizon_glow_callback("connected"))
+        if self._toast:
+            self._ui_call(lambda: self._toast.success(t("connection.reconnected"), 3000))
+        if self._systray:
+            self._systray.update_state()
 
     def _handle_reconnecting(self, data: dict):
         """Handle reconnecting event."""

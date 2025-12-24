@@ -261,6 +261,21 @@ class LinkParser:
                 except ValueError:
                     logger.warning(f"Invalid scMaxConcurrentPosts: {sc_max_concurrent}")
 
+            # XMUX parameters for connection multiplexing/cycling
+            xmux_settings = {}
+            if xmux_max_conc := get_param("xmuxMaxConcurrency"):
+                xmux_settings["maxConcurrency"] = xmux_max_conc
+            if xmux_max_conn := get_param("xmuxMaxConnections"):
+                xmux_settings["maxConnections"] = xmux_max_conn
+            if xmux_reuse_times := get_param("xmuxCMaxReuseTimes"):
+                xmux_settings["cMaxReuseTimes"] = xmux_reuse_times
+            if xmux_reuse_secs := get_param("xmuxHMaxReusableSecs"):
+                xmux_settings["hMaxReusableSecs"] = xmux_reuse_secs
+            if xmux_req_times := get_param("xmuxHMaxRequestTimes"):
+                xmux_settings["hMaxRequestTimes"] = xmux_req_times
+            if xmux_settings:
+                xhttp_settings["xmux"] = xmux_settings
+
             outbound["streamSettings"]["xhttpSettings"] = xhttp_settings
 
         # WebSocket transport

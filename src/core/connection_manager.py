@@ -58,11 +58,14 @@ class ConnectionManager:
         )
         
         # Initialize Active Connectivity Monitor (metrics-based, VPN mode only)
+        # Uses hybrid detection: traffic stall + Xray error cross-validation
         self._metrics_provider = ClashAPIProvider(port=9090)
         self._active_monitor = ActiveConnectivityMonitor(
             metrics_provider=self._metrics_provider,
             on_connectivity_lost=self._handle_active_connectivity_lost,
             on_connectivity_restored=self._handle_active_connectivity_restored,
+            on_connectivity_degraded=self._handle_active_connectivity_degraded,
+            xray_error_checker=self._log_monitor.has_recent_error,
         )
 
         # Create ConnectionOrchestrator with all dependencies
@@ -189,4 +192,9 @@ class ConnectionManager:
         """Callback triggered when ActiveConnectivityMonitor detects connectivity restored."""
         logger.info("[ConnectionManager] Active monitor: connectivity restored")
         self._emit_reconnect_event("connectivity_restored")
+
+    def _handle_active_connectivity_degraded(self):
+        """Callback triggered when ActiveConnectivityMonitor detects connection issues (soft warning)."""
+        logger.info("[ConnectionManager] Active monitor: connectivity degraded (warning)")
+        self._emit_reconnect_event("connectivity_degraded")
 

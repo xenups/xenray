@@ -128,6 +128,7 @@ class SettingsDrawer(ft.NavigationDrawer):
                                     t("settings.application"),
                                     [
                                         self._language_row,
+                                        self._startup_row,  # Startup toggle under language
                                         SettingsListTile(
                                             ft.Icons.ROUTE,
                                             t("settings.routing_rules"),
@@ -146,7 +147,6 @@ class SettingsDrawer(ft.NavigationDrawer):
                                             t("settings.reset_close_choice_desc"),
                                             on_click=self._reset_close_preference,
                                         ),
-                                        self._startup_row,
                                     ],
                                 ),
                                 ft.Divider(

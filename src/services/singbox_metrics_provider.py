@@ -32,8 +32,8 @@ class ClashAPIProvider:
     """
     Metrics provider using Clash API (experimental.clash_api).
     
-    Endpoint: http://127.0.0.1:{port}/traffic
-    Returns: {"up": bytes, "down": bytes}
+    Uses /connections endpoint to get active connections count.
+    The /traffic endpoint is streaming and not suitable for polling.
     """
     
     DEFAULT_PORT = 9090
@@ -42,25 +42,37 @@ class ClashAPIProvider:
     def __init__(self, port: int = None):
         self._port = port or self.DEFAULT_PORT
         self._base_url = f"http://127.0.0.1:{self._port}"
+        self._total_upload = 0
+        self._total_download = 0
+        self._failure_count = 0
     
     def fetch_snapshot(self) -> Optional[MetricsSnapshot]:
         """Fetch metrics from Clash API."""
         try:
-            # Get traffic stats
-            url = f"{self._base_url}/traffic"
+            # Use /connections endpoint - returns JSON with active connections
+            url = f"{self._base_url}/connections"
             with urlopen(url, timeout=self.TIMEOUT) as resp:
                 data = json.loads(resp.read().decode())
             
-            uplink = data.get("up", 0)
-            downlink = data.get("down", 0)
+            # Parse connections data
+            # Format: {"downloadTotal": int, "uploadTotal": int, "connections": [...]}
+            upload = data.get("uploadTotal", 0)
+            download = data.get("downloadTotal", 0)
+            connections = data.get("connections", [])
             
-            # Clash API doesn't expose failure counters directly
-            # We infer process alive from successful response
+            # Count failed/closed connections as failures
+            closed_count = sum(1 for c in connections if c.get("closed", False))
+            
+            logger.debug(
+                f"[ClashAPIProvider] up={upload} down={download} "
+                f"conns={len(connections)} closed={closed_count}"
+            )
+            
             return MetricsSnapshot(
                 timestamp=time.time(),
-                uplink_bytes=uplink,
-                downlink_bytes=downlink,
-                outbound_failures=0,  # Not available in Clash API
+                uplink_bytes=upload,
+                downlink_bytes=download,
+                outbound_failures=closed_count,
                 process_alive=True,
             )
             

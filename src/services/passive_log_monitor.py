@@ -79,6 +79,23 @@ class PassiveLogMonitor:
         self._paused = False
         self._paused_until = 0.0
         self._consecutive_failures = 0
+        self._last_error_time = 0.0  # For cross-signal validation
+    
+    def has_recent_error(self, window_seconds: float = 30.0) -> bool:
+        """
+        Check if an Xray error was detected within the time window.
+        
+        Used by ActiveConnectivityMonitor for cross-signal validation.
+        
+        Args:
+            window_seconds: Time window to check for recent errors
+            
+        Returns:
+            True if an error was detected within the window
+        """
+        if self._last_error_time == 0.0:
+            return False
+        return (time.time() - self._last_error_time) < window_seconds
 
     def start(self):
         """Start the monitoring thread."""
@@ -235,6 +252,7 @@ class PassiveLogMonitor:
 
         logger.warning(f"[PassiveLogMonitor] Connection failure detected: {log_line}")
         self._last_alert_time = now
+        self._last_error_time = now  # For cross-signal validation
         self._consecutive_failures += 1
         
         # Calculate exponential backoff

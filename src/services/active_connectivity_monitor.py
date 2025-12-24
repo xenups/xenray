@@ -1,4 +1,4 @@
-"""Active Connectivity Monitor - Metrics-based connectivity detection."""
+"""Active Connectivity Monitor - Metrics-based connectivity detection with smart stall detection."""
 
 import threading
 import time
@@ -11,25 +11,31 @@ from src.services.singbox_metrics_provider import MetricsSnapshot, SingBoxMetric
 
 class ActiveConnectivityMonitor:
     """
-    Monitors connectivity using sing-box metrics.
+    Monitors connectivity using sing-box metrics with smart stall detection.
     
-    Detects connectivity LOST when ALL conditions are true:
+    Detection Logic (ALL must be true):
     1. sing-box process is running
-    2. outbound failure counter is increasing
-    3. uplink + downlink bytes show no delta
-    4. conditions hold for ≥ 2 consecutive samples
+    2. Traffic delta < MIN_TRAFFIC_THRESHOLD for ≥ N samples (~6-9 seconds)
     
-    Emits events via callback, does NOT trigger reconnect directly.
+    Key Insight: "Traffic is not truly flowing — it is only retry noise."
+    Small deltas (< 500 bytes) are TCP retries, not real traffic.
+    
+    Xray confirmation is optional/confirmatory, not blocking.
     """
     
-    SAMPLE_INTERVAL = 3.0  # seconds between samples
-    REQUIRED_SAMPLES = 2   # consecutive samples for detection
+    SAMPLE_INTERVAL = 3.0         # seconds between samples
+    REQUIRED_SAMPLES = 2          # consecutive samples for fast detection (~6s)
+    WARNING_SAMPLES = 3           # show warning in UI after this many stalls (~9s)
+    MAX_STALL_SAMPLES = 6         # failsafe: trigger after this many (~18s)
+    MIN_TRAFFIC_THRESHOLD = 500   # bytes - below this is considered "stalled"
     
     def __init__(
         self,
         metrics_provider: SingBoxMetricsProvider,
         on_connectivity_lost: Optional[Callable[[], None]] = None,
         on_connectivity_restored: Optional[Callable[[], None]] = None,
+        on_connectivity_degraded: Optional[Callable[[], None]] = None,
+        xray_error_checker: Optional[Callable[[], bool]] = None,
     ):
         """
         Initialize the monitor.
@@ -38,10 +44,14 @@ class ActiveConnectivityMonitor:
             metrics_provider: Provider implementing SingBoxMetricsProvider protocol
             on_connectivity_lost: Callback when connectivity is lost
             on_connectivity_restored: Callback when connectivity is restored
+            on_connectivity_degraded: Callback when connection shows issues (soft warning)
+            xray_error_checker: Optional callback for Xray error confirmation
         """
         self._provider = metrics_provider
         self._on_lost = on_connectivity_lost
         self._on_restored = on_connectivity_restored
+        self._on_degraded = on_connectivity_degraded
+        self._xray_error_checker = xray_error_checker
         
         self._running = False
         self._thread: Optional[threading.Thread] = None
@@ -50,8 +60,9 @@ class ActiveConnectivityMonitor:
         
         # State
         self._last_snapshot: Optional[MetricsSnapshot] = None
-        self._consecutive_failure_samples = 0
-        self._is_connected = True  # Assume connected at start
+        self._stall_samples = 0
+        self._is_connected = True
+        self._warning_emitted = False  # Track if warning already shown
     
     def start(self):
         """Start the monitoring thread."""
@@ -60,7 +71,7 @@ class ActiveConnectivityMonitor:
                 return
             
             self._running = True
-            self._consecutive_failure_samples = 0
+            self._stall_samples = 0
             self._is_connected = True
             self._stop_event.clear()
             
@@ -70,7 +81,10 @@ class ActiveConnectivityMonitor:
                 name="ActiveConnectivityMonitor"
             )
             self._thread.start()
-            logger.info("[ActiveConnectivityMonitor] Started")
+            logger.info(
+                f"[ActiveConnectivityMonitor] Started (threshold={self.MIN_TRAFFIC_THRESHOLD}b, "
+                f"fast={self.REQUIRED_SAMPLES}, failsafe={self.MAX_STALL_SAMPLES})"
+            )
     
     def stop(self):
         """Stop the monitoring thread."""
@@ -97,31 +111,58 @@ class ActiveConnectivityMonitor:
             logger.error(f"[ActiveConnectivityMonitor] Error in monitor loop: {e}")
     
     def _check_connectivity(self):
-        """Check connectivity based on metrics snapshot."""
+        """Check connectivity using hybrid escalation."""
         snapshot = self._provider.fetch_snapshot()
         
         if snapshot is None:
             logger.warning("[ActiveConnectivityMonitor] Failed to fetch snapshot")
             return
         
-        is_failure_condition = self._evaluate_failure_condition(snapshot)
+        # Evaluate stall condition
+        is_stalled = self._evaluate_stall_condition(snapshot)
         
-        if is_failure_condition:
-            self._consecutive_failure_samples += 1
+        if is_stalled:
+            self._stall_samples += 1
+            
+            # Check Xray confirmation
+            has_xray_errors = False
+            if self._xray_error_checker:
+                has_xray_errors = self._xray_error_checker()
+            
             logger.debug(
-                f"[ActiveConnectivityMonitor] Failure condition detected "
-                f"({self._consecutive_failure_samples}/{self.REQUIRED_SAMPLES})"
+                f"[ActiveConnectivityMonitor] Stall detected "
+                f"({self._stall_samples}/{self.REQUIRED_SAMPLES}) "
+                f"[Xray: {'confirmed' if has_xray_errors else 'waiting'}]"
             )
             
-            if self._consecutive_failure_samples >= self.REQUIRED_SAMPLES:
-                if self._is_connected:
-                    self._is_connected = False
-                    logger.warning("[ActiveConnectivityMonitor] Connectivity LOST")
-                    self._emit_lost()
+            # Soft warning: show UI feedback after WARNING_SAMPLES
+            if self._stall_samples == self.WARNING_SAMPLES and not self._warning_emitted:
+                self._warning_emitted = True
+                logger.info("[ActiveConnectivityMonitor] Connection degraded - showing warning")
+                self._emit_degraded()
+            
+            # HYBRID ESCALATION:
+            # 1. Fast path: stall + Xray confirmation → immediate trigger
+            # 2. Failsafe: extended stall without traffic → trigger anyway
+            should_trigger = False
+            trigger_reason = ""
+            
+            if self._stall_samples >= self.REQUIRED_SAMPLES and has_xray_errors:
+                should_trigger = True
+                trigger_reason = "confirmed by Xray"
+            elif self._stall_samples >= self.MAX_STALL_SAMPLES:
+                should_trigger = True
+                trigger_reason = f"failsafe after {self.MAX_STALL_SAMPLES} samples"
+            
+            if should_trigger and self._is_connected:
+                self._is_connected = False
+                logger.warning(f"[ActiveConnectivityMonitor] Connectivity LOST ({trigger_reason})")
+                self._emit_lost()
         else:
-            if self._consecutive_failure_samples > 0:
-                logger.debug("[ActiveConnectivityMonitor] Failure condition cleared")
-            self._consecutive_failure_samples = 0
+            if self._stall_samples > 0:
+                logger.debug("[ActiveConnectivityMonitor] Traffic resumed, resetting stall counter")
+            self._stall_samples = 0
+            self._warning_emitted = False
             
             if not self._is_connected:
                 self._is_connected = True
@@ -130,36 +171,39 @@ class ActiveConnectivityMonitor:
         
         self._last_snapshot = snapshot
     
-    def _evaluate_failure_condition(self, snapshot: MetricsSnapshot) -> bool:
+    def _evaluate_stall_condition(self, snapshot: MetricsSnapshot) -> bool:
         """
-        Evaluate if failure conditions are met.
+        Evaluate if traffic is stalled using MIN_TRAFFIC_THRESHOLD.
         
-        ALL conditions must be true:
-        1. Process is running
-        2. Failure counter is increasing (compared to last snapshot)
-        3. No traffic delta (uplink + downlink unchanged)
+        Traffic is considered STALLED if:
+        - Process is alive
+        - Δ(uplink + downlink) < MIN_TRAFFIC_THRESHOLD
+        
+        This ignores TCP retries, buffer flushes, and noise.
         """
+        # Process must be running
         if not snapshot.process_alive:
-            # Process dead is a different issue - don't trigger via this path
             return False
         
+        # First sample - can't compare
         if self._last_snapshot is None:
-            # First sample, cannot compare
             return False
         
-        # Condition 1: Process running
-        # Already checked above
-        
-        # Condition 2: Failure counter increasing
-        failures_increased = snapshot.outbound_failures > self._last_snapshot.outbound_failures
-        
-        # Condition 3: No traffic delta
+        # Calculate traffic delta
         last_traffic = self._last_snapshot.uplink_bytes + self._last_snapshot.downlink_bytes
         current_traffic = snapshot.uplink_bytes + snapshot.downlink_bytes
-        no_traffic_delta = current_traffic == last_traffic
+        delta = current_traffic - last_traffic
         
-        # All conditions must be true
-        return failures_increased and no_traffic_delta
+        # Stalled if delta is below threshold (retry noise level)
+        is_stalled = delta < self.MIN_TRAFFIC_THRESHOLD
+        
+        if is_stalled:
+            logger.debug(
+                f"[ActiveConnectivityMonitor] Traffic delta: {delta}b "
+                f"(< {self.MIN_TRAFFIC_THRESHOLD}b threshold)"
+            )
+        
+        return is_stalled
     
     def _emit_lost(self):
         """Emit connectivity lost event."""
@@ -184,3 +228,15 @@ class ActiveConnectivityMonitor:
                 ).start()
             except Exception as e:
                 logger.error(f"[ActiveConnectivityMonitor] Error in restored callback: {e}")
+    
+    def _emit_degraded(self):
+        """Emit connectivity degraded (soft warning) event."""
+        if self._on_degraded:
+            try:
+                threading.Thread(
+                    target=self._on_degraded,
+                    daemon=True,
+                    name="ActiveConnectivityMonitor-DegradedCallback"
+                ).start()
+            except Exception as e:
+                logger.error(f"[ActiveConnectivityMonitor] Error in degraded callback: {e}")
