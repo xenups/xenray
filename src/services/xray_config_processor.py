@@ -90,18 +90,20 @@ class XrayConfigProcessor:
         # Add SOCKS inbound if not present
         socks_exists = any(ib.get("protocol") == "socks" for ib in config["inbounds"])
         if not socks_exists:
-            config["inbounds"].append({
-                "tag": "socks",
-                "port": user_port,
-                "listen": "127.0.0.1",
-                "protocol": "socks",
-                "settings": {"udp": True},
-                "sniffing": {
-                    "enabled": True,
-                    "destOverride": ["http", "tls", "quic"],
-                    "metadataOnly": False,
-                },
-            })
+            config["inbounds"].append(
+                {
+                    "tag": "socks",
+                    "port": user_port,
+                    "listen": "127.0.0.1",
+                    "protocol": "socks",
+                    "settings": {"udp": True},
+                    "sniffing": {
+                        "enabled": True,
+                        "destOverride": ["http", "tls", "quic"],
+                        "metadataOnly": False,
+                    },
+                }
+            )
             logger.info(f"[XrayConfigProcessor] Added SOCKS inbound on port {user_port}")
         else:
             # Update existing SOCKS port and add sniffing
@@ -116,12 +118,14 @@ class XrayConfigProcessor:
         # Add HTTP inbound if not present
         http_exists = any(ib.get("protocol") == "http" for ib in config["inbounds"])
         if not http_exists:
-            config["inbounds"].append({
-                "tag": "http",
-                "port": user_port + 4,  # Default: 10809 if SOCKS is 10805
-                "listen": "127.0.0.1",
-                "protocol": "http",
-            })
+            config["inbounds"].append(
+                {
+                    "tag": "http",
+                    "port": user_port + 4,  # Default: 10809 if SOCKS is 10805
+                    "listen": "127.0.0.1",
+                    "protocol": "http",
+                }
+            )
             logger.info(f"[XrayConfigProcessor] Added HTTP inbound on port {user_port + 4}")
 
     def _resolve_outbound_addresses(self, config: dict):
@@ -133,6 +137,7 @@ class XrayConfigProcessor:
             config: Configuration dict (modified in-place)
         """
         import socket
+
         for outbound in config.get("outbounds", []):
             protocol = outbound.get("protocol")
             if protocol not in self.SUPPORTED_PROTOCOLS:
@@ -413,9 +418,9 @@ class XrayConfigProcessor:
             # These defaults prevent connection timeouts and Nginx request limits
             if "xmux" not in xhttp_settings:
                 xhttp_settings["xmux"] = {
-                    "maxConcurrency": "16-32",       # Default from Xray docs - random range
+                    "maxConcurrency": "16-32",  # Default from Xray docs - random range
                     "hMaxReusableSecs": "1800-3000",  # Cycle connections every 30-50 min
-                    "hMaxRequestTimes": "600-900",    # Stay under Nginx's 1000 limit
+                    "hMaxRequestTimes": "600-900",  # Stay under Nginx's 1000 limit
                 }
                 logger.info("[XrayConfigProcessor] Added XMUX settings for connection stability")
                 applied = True
@@ -433,6 +438,7 @@ class XrayConfigProcessor:
     def _is_ip(self, address: str) -> bool:
         """Check if address is an IP (IPv4 or IPv6)."""
         import ipaddress
+
         try:
             ipaddress.ip_address(address)
             return True

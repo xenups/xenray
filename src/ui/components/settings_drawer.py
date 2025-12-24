@@ -25,7 +25,7 @@ from src.ui.components.settings_sections import (
     SettingsRow,
     SettingsSection,
 )
-from src.services.startup_service import StartupService
+from src.services import task_scheduler
 from src.utils.process_utils import ProcessUtils
 
 
@@ -67,18 +67,22 @@ class SettingsDrawer(ft.NavigationDrawer):
             self._save_language,
         )
 
-        # Startup toggle (if supported)
+        # Startup toggle (if supported - uses Windows Task Scheduler)
+        startup_enabled = task_scheduler.is_task_registered()
         self._startup_switch = ft.Switch(
-            value=StartupService.is_enabled(),
+            value=startup_enabled,
             active_color=ft.Colors.PRIMARY,
             on_change=self._handle_startup_toggle,
-            disabled=not StartupService.is_supported(),
+            disabled=not task_scheduler.is_supported(),
         )
+        # Show On/Off status in sublabel
+        startup_status = t("settings.startup_on") if startup_enabled else t("settings.startup_off")
+        self._startup_sublabel = ft.Text(startup_status, size=12, color=ft.Colors.ON_SURFACE_VARIANT)
         self._startup_row = SettingsRow(
             icon=ft.Icons.ROCKET_LAUNCH,
             label=t("settings.add_to_startup"),
             control=self._startup_switch,
-            sublabel=t("settings.add_to_startup_desc"),
+            sublabel_control=self._startup_sublabel,
         )
 
         # Build UI
@@ -350,12 +354,15 @@ class SettingsDrawer(ft.NavigationDrawer):
         enabled = self._startup_switch.value
 
         if enabled:
-            success = StartupService.enable()
+            success, msg = task_scheduler.register_task()
         else:
-            success = StartupService.disable()
+            success, msg = task_scheduler.unregister_task()
 
         if success:
             self._config_manager.set_startup_enabled(enabled)
+            # Update sublabel to show new status
+            self._startup_sublabel.value = t("settings.startup_on") if enabled else t("settings.startup_off")
+            self._startup_sublabel.update()
             self._show_toast(t("settings.startup_saved"), "success")
         else:
             # Revert toggle on failure

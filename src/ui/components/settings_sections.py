@@ -38,6 +38,7 @@ class SettingsRow(ft.Container):
         label: str,
         control: ft.Control,
         sublabel: Optional[str] = None,
+        sublabel_control: Optional[ft.Control] = None,
     ):
         label_column = ft.Column(
             [
@@ -47,7 +48,10 @@ class SettingsRow(ft.Container):
             expand=True,
         )
 
-        if sublabel:
+        # Support either static sublabel text or dynamic sublabel control
+        if sublabel_control:
+            label_column.controls.append(sublabel_control)
+        elif sublabel:
             label_column.controls.append(ft.Text(sublabel, size=11, color=ft.Colors.ON_SURFACE_VARIANT))
 
         super().__init__(
