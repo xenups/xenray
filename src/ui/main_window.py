@@ -20,6 +20,7 @@ from src.ui.components.close_dialog import CloseDialog
 from src.ui.components.toast import ToastManager
 from src.ui.handlers.background_task_handler import BackgroundTaskHandler
 from src.ui.handlers.connection_handler import ConnectionHandler
+from src.ui.handlers.reconnect_event_handler import ReconnectEventHandler
 from src.ui.handlers.installer_handler import InstallerHandler
 from src.ui.handlers.latency_monitor_handler import LatencyMonitorHandler
 from src.ui.handlers.network_stats_handler import NetworkStatsHandler
@@ -45,6 +46,7 @@ class MainWindow:
         network_stats_handler: NetworkStatsHandler,
         latency_monitor_handler: LatencyMonitorHandler,
         connection_handler: ConnectionHandler,
+        reconnect_event_handler: ReconnectEventHandler,
         theme_handler: ThemeHandler,
         installer_handler: InstallerHandler,
         background_task_handler: BackgroundTaskHandler,
@@ -67,6 +69,7 @@ class MainWindow:
         self._installer_handler = installer_handler
         self._background_task_handler = background_task_handler
         self._systray = systray_handler
+        self._reconnect_event_handler = reconnect_event_handler
 
         # Initialize UI thread helper
         self._ui_helper = UIThreadHelper(page)
@@ -142,6 +145,20 @@ class MainWindow:
             update_horizon_glow_callback=self._update_horizon_glow,
             profile_manager_is_running_setter=self._set_profile_manager_running,
             monitoring_service_is_running_setter=self._set_monitoring_service_running,
+        )
+
+        # Setup reconnect event handler (for passive reconnect UI)
+        self._reconnect_event_handler.setup(
+            ui_helper=self._ui_helper,
+            toast=self._toast,
+            status_display=self._status_display,
+            connection_button=self._connection_button,
+            systray=self._systray,
+            update_horizon_glow_callback=self._update_horizon_glow,
+            is_running_setter=self._set_is_running,
+            profile_manager_is_running_setter=self._set_profile_manager_running,
+            monitoring_service_is_running_setter=self._set_monitoring_service_running,
+            reset_ui_callback=self._reset_ui_disconnected,
         )
 
         self._theme_handler.setup(
@@ -491,5 +508,9 @@ class MainWindow:
             pass
         try:
             self._systray.stop()
+        except Exception:
+            pass
+        try:
+            self._reconnect_event_handler.cleanup()
         except Exception:
             pass

@@ -163,7 +163,11 @@
     "no_internet": "No Internet Connection!",
     "connected_no_internet": "Connected but No Internet Access",
     "verifying_latency": "Verifying connection latency...",
-    "falling_back": "Falling back to original configuration..."
+    "falling_back": "Falling back to original configuration...",
+    "failure_detected": "Connection issue detected. Checking...",
+    "reconnecting": "Reconnecting...",
+    "reconnected": "Connection restored! ✅",
+    "reconnect_failed": "Auto-reconnect failed"
   },
   "routing": {
     "title": "Routing Rules",

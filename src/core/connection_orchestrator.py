@@ -150,6 +150,10 @@ class ConnectionOrchestrator:
         Args:
             connection_info: Connection information dictionary
         """
+        # Stop monitoring first
+        if self._log_monitor:
+            self._log_monitor.stop()
+
         # Stop Sing-box first
         if connection_info.get("singbox_pid"):
             self._singbox_service.stop()
@@ -281,6 +285,11 @@ class ConnectionOrchestrator:
             "singbox_pid": singbox_pid,
             "file": file_path,
         }
+        
+        # Start passive monitoring
+        if self._log_monitor:
+            self._log_monitor.start()
+            
         logger.info(f"Successfully connected in {mode} mode")
 
         return connection_info
