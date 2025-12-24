@@ -17,6 +17,7 @@ A modern, high-performance Xray GUI & CLI client for Windows and Linux. XenRay f
 - **Extreme RAM Optimization**: GUI footprint reduced to ~130MB; CLI mode runs at a lean **~30MB**.
 - **Lazy Load Architecture**: Core frameworks (like Flet) are only loaded when the UI is requested.
 - **DI Lifecycle Management**: Production-grade dependency injection with zero memory leaks.
+- **Signal-Based Monitoring**: Clean separation - monitors emit facts, ConnectionManager decides actions.
 
 ### 🌍 Connection & Visuals
 - **🚩 Global Flags**: Automatic country flag emojis for all servers.
@@ -24,12 +25,15 @@ A modern, high-performance Xray GUI & CLI client for Windows and Linux. XenRay f
 - **⚡ Unified Ping**: Concurrent batch testing with visual latency feedback.
 - **🎨 Apple Glass UI**: Modern glassmorphism design with dynamic connection status glow.
 - **🔐 Dual Mode**: Intelligent switching between **VPN** (TUN) and **Proxy** (SOCKS5/HTTP) modes.
+- **🔄 Auto-Reconnect**: Automatic connection recovery with hybrid detection (log + traffic analysis).
+- **🔋 Battery Saver**: Optional monitoring toggle to disable auto-reconnect and save resources.
 
 ### 🛠️ Management
 - **📥 One-Click Import**: Support for VLESS, VMess, Trojan, ShadowSocks, and Hysteria2.
 - **🔄 State Adoption**: CLI automatically detects and manages connections started by the GUI (and vice versa).
 - **📝 Real-time Diagnostics**: Live log streaming with automatic console hiding for core processes.
 - **⚡ Auto-Updates**: Seamless GitHub integration for updating Xray core and the app.
+- **🚀 Startup on Boot**: Optional Windows Task Scheduler integration for auto-start.
 
 ---
 
@@ -85,33 +89,42 @@ XenRay is built with a modular, service-oriented architecture designed for effic
 ```text
 src/
 ├── core/
-│   ├── container.py         # Dependency Injection (DI) Root
-│   ├── config_manager.py    # Profile & settings persistence
-│   ├── connection_manager.py# High-level connection facade
-│   ├── i18n.py              # Lazy-loaded internationalization
-│   └── logger.py            # Unified logging system
+│   ├── container.py           # Dependency Injection (DI) Root
+│   ├── config_manager.py      # Profile & settings persistence
+│   ├── connection_manager.py  # High-level connection facade (event authority)
+│   ├── connection_orchestrator.py # Service coordination
+│   ├── i18n.py                # Lazy-loaded internationalization
+│   └── logger.py              # Unified logging system
 │
 ├── services/
-│   ├── xray_service.py      # Xray core lifecycle management
-│   ├── singbox_service.py   # TUN-based VPN integration
-│   ├── latency_tester.py    # Multi-threaded ping engine
-│   └── connection_tester.py # Real-world connectivity validation
+│   ├── xray_service.py        # Xray core lifecycle management
+│   ├── singbox_service.py     # TUN-based VPN integration
+│   ├── latency_tester.py      # Multi-threaded ping engine
+│   ├── connection_tester.py   # Real-world connectivity validation
+│   └── monitoring/            # Signal-based monitoring subsystem
+│       ├── signals.py         # MonitorSignal enum (facts, not events)
+│       ├── service.py         # ConnectionMonitoringService facade
+│       ├── passive_log_monitor.py    # Log-based failure detection
+│       ├── active_connectivity_monitor.py # Traffic stall detection
+│       └── auto_reconnect_service.py # Automatic reconnection
 │
 ├── ui/
-│   ├── main_window.py       # GUI entry point (Glassmorphism)
-│   ├── components/          # Custom Flet widgets (Cards, Buttons, etc.)
-│   └── handlers/            # UI-to-Service event handling
+│   ├── main_window.py         # GUI entry point (Glassmorphism)
+│   ├── components/            # Custom Flet widgets (Cards, Buttons, etc.)
+│   └── handlers/              # UI-to-Service event handling
 │
 ├── utils/
-│   ├── admin_utils.py       # UAC & Root elevation management
-│   ├── link_parser.py       # VLESS/VMess/Trojan/Hysteria parser
-│   └── platform_utils.py    # OS-specific behavior logic
+│   ├── admin_utils.py         # UAC & Root elevation management
+│   ├── link_parser.py         # VLESS/VMess/Trojan/Hysteria parser
+│   └── platform_utils.py      # OS-specific behavior logic
 │
-└── cli.py                   # High-performance Typer CLI interface
+└── cli.py                     # High-performance Typer CLI interface
 ```
 
 ### Core Principles
 - **Dependency Injection**: Centralized lifecycle management via `dependency-injector`.
+- **Signal-Based Architecture**: Monitors emit signals (facts), ConnectionManager is the single event authority.
+- **Session-Scoped Lifecycle**: All monitoring tied to connection sessions - no stale events after disconnect.
 - **Hybrid Entry Point**: Smart routing between GUI and CLI modes based on runtime arguments.
 - **Background Persistence**: State adoption logic allows the CLI and GUI to seamlessly share active background connections.
 - **Resource Management**: Background threads and core processes are strictly lifecycle-bound to prevent zombie processes.

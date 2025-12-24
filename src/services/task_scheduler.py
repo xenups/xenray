@@ -92,7 +92,7 @@ def _disable_via_registry() -> tuple[bool, str]:
 def _is_task_scheduler_enabled() -> bool:
     """Check if scheduled task is registered."""
     try:
-        cmd = f"Get-ScheduledTask -TaskName '{TASK_NAME}' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty TaskName"
+        cmd = f"Get-ScheduledTask -TaskName '{TASK_NAME}' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty TaskName"  # noqa: E501
         result = subprocess.run(
             ["powershell", "-Command", cmd],
             capture_output=True,

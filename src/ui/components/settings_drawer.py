@@ -17,13 +17,14 @@ from src.services.app_update_service import AppUpdateService
 from src.services.singbox_service import SingboxService
 from src.services.xray_installer import XrayInstallerService
 from src.ui.components.settings_sections import (
+    AutoReconnectToggleRow,
     CountryDropdownRow,
     LanguageDropdownRow,
     ModeSwitchRow,
     PortInputRow,
     SettingsListTile,
-    SettingsRow,
     SettingsSection,
+    StartupToggleRow,
 )
 from src.services import task_scheduler
 from src.utils.process_utils import ProcessUtils
@@ -67,22 +68,20 @@ class SettingsDrawer(ft.NavigationDrawer):
             self._save_language,
         )
 
-        # Startup toggle (if supported - uses Windows Task Scheduler)
-        startup_enabled = task_scheduler.is_task_registered()
-        self._startup_switch = ft.Switch(
-            value=startup_enabled,
-            active_color=ft.Colors.PRIMARY,
-            on_change=self._handle_startup_toggle,
-            disabled=not task_scheduler.is_supported(),
+        # Startup toggle (self-contained component)
+        self._startup_row = StartupToggleRow(
+            config_manager=self._config_manager,
+            is_registered=task_scheduler.is_task_registered(),
+            is_supported=task_scheduler.is_supported(),
+            on_register=task_scheduler.register_task,
+            on_unregister=task_scheduler.unregister_task,
+            toast_callback=self._show_toast,
         )
-        # Show On/Off status in sublabel
-        startup_status = t("settings.startup_on") if startup_enabled else t("settings.startup_off")
-        self._startup_sublabel = ft.Text(startup_status, size=12, color=ft.Colors.ON_SURFACE_VARIANT)
-        self._startup_row = SettingsRow(
-            icon=ft.Icons.ROCKET_LAUNCH,
-            label=t("settings.add_to_startup"),
-            control=self._startup_switch,
-            sublabel_control=self._startup_sublabel,
+
+        # Auto-reconnect toggle (self-contained component)
+        self._auto_reconnect_row = AutoReconnectToggleRow(
+            config_manager=self._config_manager,
+            toast_callback=self._show_toast,
         )
 
         # Build UI
@@ -131,8 +130,8 @@ class SettingsDrawer(ft.NavigationDrawer):
                                 SettingsSection(
                                     t("settings.application"),
                                     [
-                                        self._language_row,
-                                        self._startup_row,  # Startup toggle under language
+                                        self._startup_row,
+                                        self._auto_reconnect_row,
                                         SettingsListTile(
                                             ft.Icons.ROUTE,
                                             t("settings.routing_rules"),
@@ -181,6 +180,7 @@ class SettingsDrawer(ft.NavigationDrawer):
                                             f"v{APP_VERSION} by Xenups",
                                             show_chevron=False,
                                         ),
+                                        self._language_row,
                                     ],
                                 ),
                             ],
@@ -331,7 +331,7 @@ class SettingsDrawer(ft.NavigationDrawer):
         set_app_language(lang)
 
         # Notify user - app needs restart for full effect
-        msg = "Language changed! Restart app for full effect. / زبان تغییر کرد! برنامه را ریستارت کنید."
+        msg = t("settings.language_restart_msg")
         self._show_toast(msg, "success")
         page.update()
 
@@ -343,33 +343,6 @@ class SettingsDrawer(ft.NavigationDrawer):
 
         self._config_manager.set_remember_close_choice(False)
         self._show_toast(t("settings.reset_close_success"), "success")
-        page.update()
-
-    def _handle_startup_toggle(self, e):
-        """Handle add to startup toggle."""
-        page = self.page
-        if not page:
-            return
-
-        enabled = self._startup_switch.value
-
-        if enabled:
-            success, msg = task_scheduler.register_task()
-        else:
-            success, msg = task_scheduler.unregister_task()
-
-        if success:
-            self._config_manager.set_startup_enabled(enabled)
-            # Update sublabel to show new status
-            self._startup_sublabel.value = t("settings.startup_on") if enabled else t("settings.startup_off")
-            self._startup_sublabel.update()
-            self._show_toast(t("settings.startup_saved"), "success")
-        else:
-            # Revert toggle on failure
-            self._startup_switch.value = not enabled
-            self._startup_switch.update()
-            self._show_toast(t("settings.startup_error"), "error")
-
         page.update()
 
     def _on_installer_run(self, component: str):

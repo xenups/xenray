@@ -107,12 +107,10 @@ class LegacyConfigService:
                 logger.warning(f"[LegacyConfigService] Invalid network '{network}', defaulting to '{DEFAULT_NETWORK}'")
                 stream_settings["network"] = DEFAULT_NETWORK
 
-            # 2. Validate and Default Security
+            # 2. Validate Security (log warning, but don't override - preserve existing behavior)
             security = stream_settings.get("security")
-            if not security or security not in VALID_SECURITY:
-                # Default "none" is safest. TLS needs certificates/SNI.
-                logger.warning(f"[LegacyConfigService] Invalid security '{security}', defaulting to 'none'")
-                stream_settings["security"] = "none"
+            if security and security not in VALID_SECURITY:
+                logger.warning(f"[LegacyConfigService] Unknown security '{security}', preserving as-is")
 
             # 3. Transport Specific Defaults (Shared Logic)
             self._fill_transport_defaults(outbound)
@@ -166,22 +164,22 @@ class LegacyConfigService:
         """
         Detect if a configuration is in a legacy format.
 
+        Only detects configs that require actual migration (e.g., splithttp -> xhttp).
+        Missing/unknown security values are NOT considered legacy - they should be
+        preserved to avoid breaking working configs.
+
         Args:
             config: Configuration dictionary
 
         Returns:
-            True if it's considered legacy
+            True if it's considered legacy and needs migration
         """
         for outbound in config.get("outbounds", []):
             stream_settings = outbound.get("streamSettings", {})
-            # Detect splithttp
+            # Detect splithttp (deprecated, needs migration to xhttp)
             if stream_settings.get("network") == "splithttp":
                 return True
             if "splithttpSettings" in stream_settings:
-                return True
-
-            # Detect missing mandatory security field or invalid one
-            if "security" not in stream_settings or stream_settings["security"] not in VALID_SECURITY:
                 return True
 
         return False

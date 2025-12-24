@@ -7,7 +7,7 @@ from src.core.logger import logger
 class ReconnectEventHandler:
     """
     Handles UI updates for passive reconnect events.
-    
+
     Subscribes to ConnectionManager events and updates UI components.
     Follows SRP by separating reconnect UI logic from connection lifecycle.
     """
@@ -15,7 +15,7 @@ class ReconnectEventHandler:
     def __init__(self, connection_manager):
         """
         Initialize ReconnectEventHandler.
-        
+
         Args:
             connection_manager: ConnectionManager instance to subscribe to events
         """
@@ -26,7 +26,7 @@ class ReconnectEventHandler:
         self._connection_button = None
         self._systray = None
         self._update_horizon_glow_callback = None
-        
+
         # State setters
         self._is_running_setter = None
         self._profile_manager_is_running_setter = None
@@ -57,7 +57,7 @@ class ReconnectEventHandler:
         self._profile_manager_is_running_setter = profile_manager_is_running_setter
         self._monitoring_service_is_running_setter = monitoring_service_is_running_setter
         self._reset_ui_callback = reset_ui_callback
-        
+
         # Subscribe to events
         self._connection_manager.set_reconnect_event_listener(self._on_event)
 
@@ -72,7 +72,7 @@ class ReconnectEventHandler:
     def _on_event(self, event_type: str, data: dict):
         """Dispatch event to appropriate handler."""
         logger.debug(f"[ReconnectEventHandler] Event: {event_type}")
-        
+
         handlers = {
             "failure_detected": self._handle_failure_detected,
             "connectivity_lost": self._handle_connectivity_lost,
@@ -82,7 +82,7 @@ class ReconnectEventHandler:
             "reconnected": self._handle_reconnected,
             "reconnect_failed": self._handle_reconnect_failed,
         }
-        
+
         handler = handlers.get(event_type)
         if handler:
             handler(data)
@@ -116,7 +116,7 @@ class ReconnectEventHandler:
     def _handle_connectivity_restored(self, data: dict):
         """Handle connectivity_restored event from ActiveConnectivityMonitor."""
         logger.info("[ReconnectEventHandler] Handling connectivity_restored - updating UI to Connected")
-        
+
         # Update state
         if self._is_running_setter:
             self._is_running_setter(True)
@@ -124,7 +124,7 @@ class ReconnectEventHandler:
             self._profile_manager_is_running_setter(True)
         if self._monitoring_service_is_running_setter:
             self._monitoring_service_is_running_setter(True)
-        
+
         # Update UI to Connected
         if self._connection_button:
             self._ui_call(self._connection_button.set_connected)
@@ -149,7 +149,7 @@ class ReconnectEventHandler:
     def _handle_reconnected(self, data: dict):
         """Handle reconnected event."""
         logger.info("[ReconnectEventHandler] Handling reconnected event - updating UI")
-        
+
         # Update state
         if self._is_running_setter:
             self._is_running_setter(True)
@@ -174,10 +174,10 @@ class ReconnectEventHandler:
     def _handle_reconnect_failed(self, data: dict):
         """Handle reconnect_failed event."""
         reason = data.get("reason", "unknown")
-        
+
         if self._toast:
             msg_key = "connection.no_internet" if reason == "no_internet" else "connection.reconnect_failed"
             self._ui_call(lambda: self._toast.error(t(msg_key), 3000))
-        
+
         if self._reset_ui_callback:
             self._ui_call(self._reset_ui_callback)

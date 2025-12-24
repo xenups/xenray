@@ -20,7 +20,7 @@ from src.services.network_stats import NetworkStatsService
 class ConnectionHandler:
     """
     Handles user-initiated connection lifecycle (connect, disconnect, reconnect).
-    
+
     Responsibilities:
     - Coordinate connection/disconnection flows
     - Delegate to ConnectionManager for core logic
@@ -106,7 +106,7 @@ class ConnectionHandler:
         """Start connection in background thread."""
         if self._is_connecting():
             return
-        
+
         self._set_connecting(True)
         self._show_connecting_ui()
         threading.Thread(target=self._perform_connect_task, daemon=True).start()
@@ -115,7 +115,7 @@ class ConnectionHandler:
         """Fast reconnect for server switching while already connected."""
         if self._is_connecting():
             return
-        
+
         self._set_connecting(True)
         self._show_connecting_ui()
         threading.Thread(target=self._fast_reconnect_task, daemon=True).start()
@@ -125,7 +125,7 @@ class ConnectionHandler:
         is_running = self._is_running_getter() if self._is_running_getter else False
         if not is_running:
             return
-        
+
         self._show_disconnecting_ui()
         threading.Thread(target=self._disconnect_task, daemon=True).start()
 
@@ -224,24 +224,24 @@ class ConnectionHandler:
         try:
             if not self._check_internet():
                 return
-            
+
             profile, mode_str = self._prepare_connection()
             if profile is None:
                 return
-            
+
             self._start_log_tailing(mode_str)
             config_path = self._write_temp_config(profile)
-            
+
             if not self._establish_connection(config_path, mode_str):
                 return
-            
+
             self._set_running_state(True)
-            
+
             if not self._verify_post_connection():
                 return
-            
+
             self._finalize_connection(profile)
-            
+
         except Exception as e:
             logger.error(f"[ConnectionHandler] Connection error: {e}")
             self._handle_connection_failure()
@@ -249,7 +249,7 @@ class ConnectionHandler:
     def _check_internet(self) -> bool:
         """Check internet connectivity before connecting."""
         from src.utils.network_utils import NetworkUtils
-        
+
         if not NetworkUtils.check_internet_connection():
             self._set_connecting(False)
             self._ui_call(self.reset_ui_disconnected)
@@ -262,7 +262,7 @@ class ConnectionHandler:
         profile = self._selected_profile_getter() if self._selected_profile_getter else None
         mode = self._current_mode_getter() if self._current_mode_getter else ConnectionMode.PROXY
         mode_str = "vpn" if mode == ConnectionMode.VPN else "proxy"
-        
+
         os.makedirs(TMPDIR, exist_ok=True)
         return profile, mode_str
 
@@ -270,7 +270,7 @@ class ConnectionHandler:
         """Start log viewer tailing."""
         if not self._log_viewer:
             return
-        
+
         try:
             app_log = os.path.join(TMPDIR, "xenray.log")
             if mode_str == "vpn":
@@ -284,36 +284,37 @@ class ConnectionHandler:
         """Write temporary config file."""
         config_path = os.path.join(TMPDIR, "current_config.json")
         profile_config = profile.get("config") if profile else {}
-        
+
         with open(config_path, "w", encoding="utf-8") as f:
             json.dump(profile_config, f)
-        
+
         return config_path
 
     def _establish_connection(self, config_path: str, mode_str: str) -> bool:
         """Establish connection via ConnectionManager."""
+
         def on_step(msg: str):
             if self._status_display:
                 self._ui_call(lambda: self._status_display.set_step(msg))
-        
+
         success = self._connection_manager.connect(config_path, mode_str, step_callback=on_step)
-        
+
         if not success:
             self._set_connecting(False)
             self._ui_call(self.reset_ui_disconnected)
             self._show_toast("status.connection_failed")
-        
+
         return success
 
     def _verify_post_connection(self) -> bool:
         """Verify connection is working after establishment."""
         from src.utils.network_utils import NetworkUtils
-        
+
         time.sleep(1)  # Allow connection to stabilize
-        
+
         if self._status_display:
             self._ui_call(lambda: self._status_display.set_step(t("connection.checking_network")))
-        
+
         proxy_port = self._config_manager.get_proxy_port()
         if not NetworkUtils.check_proxy_connectivity(proxy_port):
             logger.error("[ConnectionHandler] Post-connection check failed")
@@ -322,7 +323,7 @@ class ConnectionHandler:
             self._ui_call(self.reset_ui_disconnected)
             self._show_toast("connection.connected_no_internet", "warning")
             return False
-        
+
         return True
 
     def _finalize_connection(self, profile: dict):
@@ -335,7 +336,7 @@ class ConnectionHandler:
         """Start network stats monitoring."""
         if not self._network_stats:
             return
-        
+
         try:
             self._network_stats.start()
             if self._logs_drawer_component:
@@ -356,14 +357,14 @@ class ConnectionHandler:
         """Fast reconnect task - disconnect and reconnect immediately."""
         try:
             self._set_running_state(False)
-            
+
             try:
                 self._connection_manager.disconnect()
             except Exception as e:
                 logger.warning(f"[ConnectionHandler] Disconnect during reconnect: {e}")
-            
+
             self._perform_connect_task()
-            
+
         except Exception as e:
             logger.error(f"[ConnectionHandler] Reconnect error: {e}")
             self._handle_connection_failure()
@@ -376,18 +377,18 @@ class ConnectionHandler:
         """Disconnect task - runs in background thread."""
         self._set_running_state(False)
         self._stop_network_stats()
-        
+
         try:
             self._connection_manager.disconnect()
         except Exception as e:
             logger.warning(f"[ConnectionHandler] Disconnect error: {e}")
-        
+
         self._stop_log_tailing()
-        
+
         time.sleep(1.0)  # Allow UI to show disconnecting state
-        
+
         self._ui_call(self.reset_ui_disconnected)
-        
+
         if self._systray:
             self._systray.update_state()
 
@@ -395,7 +396,7 @@ class ConnectionHandler:
         """Stop network stats monitoring."""
         if not self._network_stats:
             return
-        
+
         try:
             self._network_stats.stop()
             if self._logs_drawer_component:
@@ -407,7 +408,7 @@ class ConnectionHandler:
         """Stop log viewer tailing."""
         if not self._log_viewer:
             return
-        
+
         try:
             self._log_viewer.stop_tailing()
         except Exception as e:

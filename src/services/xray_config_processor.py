@@ -286,6 +286,23 @@ class XrayConfigProcessor:
                 return True
         return False
 
+    def get_transport_type(self, config: dict) -> str:
+        """
+        Get the transport network type from config.
+
+        Args:
+            config: Configuration dict
+
+        Returns:
+            Transport type string (e.g., 'xhttp', 'ws', 'tcp') or empty string
+        """
+        for outbound in config.get("outbounds", []):
+            protocol = outbound.get("protocol")
+            if protocol in self.SUPPORTED_PROTOCOLS:
+                stream_settings = outbound.get("streamSettings", {})
+                return stream_settings.get("network", "tcp")
+        return ""
+
     def configure_dns(self, config: dict):
         """
         Configure DNS based on user settings.

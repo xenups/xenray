@@ -1,0 +1,3 @@
+[1m.\build_pyinstaller.py[m[36m:[m191[36m:[m19[36m:[m [1m[31mF541[m f-string is missing placeholders
+[1m.\scripts\download_binaries.py[m[36m:[m123[36m:[m11[36m:[m [1m[31mF541[m f-string is missing placeholders
+[1m.\src\services\task_scheduler.py[m[36m:[m95[36m:[m121[36m:[m [1m[31mE501[m line too long (129 > 120 characters)

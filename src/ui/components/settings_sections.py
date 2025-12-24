@@ -338,3 +338,154 @@ class LanguageDropdownRow(ft.Container):
     @property
     def value(self) -> str:
         return self._dropdown.value
+
+
+class StartupToggleRow(ft.Container):
+    """
+    Self-contained startup toggle component.
+
+    Handles its own state, persistence, and UI updates.
+    """
+
+    def __init__(
+        self,
+        config_manager,
+        is_registered: bool,
+        is_supported: bool,
+        on_register: Callable[[], tuple],
+        on_unregister: Callable[[], tuple],
+        toast_callback: Callable[[str, str], None],
+    ):
+        """
+        Initialize the startup toggle.
+
+        Args:
+            config_manager: ConfigManager instance for persistence
+            is_registered: Whether startup task is currently registered
+            is_supported: Whether startup feature is supported on this OS
+            on_register: Callable that registers the startup task, returns (success, msg)
+            on_unregister: Callable that unregisters the startup task, returns (success, msg)
+            toast_callback: Callable to show toast messages (message, type)
+        """
+        self._config_manager = config_manager
+        self._on_register = on_register
+        self._on_unregister = on_unregister
+        self._toast_callback = toast_callback
+
+        self._switch = ft.Switch(
+            value=is_registered,
+            active_color=ft.Colors.PRIMARY,
+            on_change=self._handle_toggle,
+            disabled=not is_supported,
+        )
+
+        self._sublabel = ft.Text(t("settings.add_to_startup_desc"), size=11, color=ft.Colors.ON_SURFACE_VARIANT)
+
+        super().__init__(
+            content=ft.Row(
+                [
+                    ft.Icon(ft.Icons.ROCKET_LAUNCH, color=ft.Colors.ON_SURFACE_VARIANT),
+                    ft.Column(
+                        [
+                            ft.Text(t("settings.add_to_startup"), weight=ft.FontWeight.W_500),
+                            self._sublabel,
+                        ],
+                        spacing=2,
+                        expand=True,
+                    ),
+                    self._switch,
+                ],
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            ),
+            padding=10,
+            border_radius=8,
+            bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE),
+        )
+
+    def _handle_toggle(self, e):
+        """Handle toggle change - coordinates registration and UI update."""
+        enabled = self._switch.value
+
+        if enabled:
+            success, msg = self._on_register()
+        else:
+            success, msg = self._on_unregister()
+
+        if success:
+            self._config_manager.set_startup_enabled(enabled)
+            self._toast_callback(t("settings.startup_saved"), "success")
+        else:
+            # Revert on failure
+            self._switch.value = not enabled
+            self._switch.update()
+            self._toast_callback(t("settings.startup_error"), "error")
+
+        if self.page:
+            self.page.update()
+
+
+class AutoReconnectToggleRow(ft.Container):
+    """
+    Self-contained auto-reconnect toggle component.
+
+    Handles its own state, persistence, and UI updates.
+    When disabled, saves battery by not running monitoring services.
+    """
+
+    def __init__(
+        self,
+        config_manager,
+        toast_callback: Callable[[str, str], None],
+    ):
+        """
+        Initialize the auto-reconnect toggle.
+
+        Args:
+            config_manager: ConfigManager instance for state
+            toast_callback: Callable to show toast messages (message, type)
+        """
+        self._config_manager = config_manager
+        self._toast_callback = toast_callback
+
+        is_enabled = config_manager.get_auto_reconnect_enabled()
+        self._switch = ft.Switch(
+            value=is_enabled,
+            active_color=ft.Colors.PRIMARY,
+            on_change=self._handle_toggle,
+        )
+
+        self._sublabel = ft.Text(t("settings.experimental"), size=11, color=ft.Colors.ON_SURFACE_VARIANT)
+
+        super().__init__(
+            content=ft.Row(
+                [
+                    ft.Icon(ft.Icons.AUTORENEW, color=ft.Colors.ON_SURFACE_VARIANT),
+                    ft.Column(
+                        [
+                            ft.Text(t("settings.auto_reconnect"), weight=ft.FontWeight.W_500),
+                            self._sublabel,
+                        ],
+                        spacing=2,
+                        expand=True,
+                    ),
+                    self._switch,
+                ],
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            ),
+            padding=10,
+            border_radius=8,
+            bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE),
+        )
+
+    def _handle_toggle(self, e):
+        """Handle toggle change - coordinates persistence and UI update."""
+        enabled = self._switch.value
+        self._config_manager.set_auto_reconnect_enabled(enabled)
+
+        if enabled:
+            self._toast_callback(t("settings.auto_reconnect_enabled"), "success")
+        else:
+            self._toast_callback(t("settings.auto_reconnect_disabled"), "info")
+
+        if self.page:
+            self.page.update()

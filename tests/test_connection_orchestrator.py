@@ -16,8 +16,10 @@ class TestConnectionOrchestrator:
         self.mock_routing_mgr = MagicMock()
         self.mock_xray_svc = MagicMock()
         self.mock_singbox_svc = MagicMock()
-        self.mock_obs = MagicMock()
-        self.mock_log_mon = MagicMock()
+        self.mock_legacy_config_svc = MagicMock()
+
+        # Configure legacy config service mock to return non-legacy by default
+        self.mock_legacy_config_svc.is_legacy.return_value = False
 
         return ConnectionOrchestrator(
             self.mock_config_mgr,
@@ -27,12 +29,12 @@ class TestConnectionOrchestrator:
             self.mock_routing_mgr,
             self.mock_xray_svc,
             self.mock_singbox_svc,
-            self.mock_obs,
-            self.mock_log_mon,
+            self.mock_legacy_config_svc,
         )
 
+    @patch("src.services.connection_tester.ConnectionTester.test_connection_sync")
     @patch("builtins.open", new_callable=mock_open)
-    def test_establish_proxy_connection_success(self, mock_file, orchestrator):
+    def test_establish_proxy_connection_success(self, mock_file, mock_conn_test, orchestrator):
         """Test successful proxy connection."""
         # Setup mocks
         orchestrator._config_manager.load_config.return_value = (
@@ -43,6 +45,7 @@ class TestConnectionOrchestrator:
         orchestrator._xray_processor.process_config.return_value = {"processed": True}
         orchestrator._xray_processor.get_socks_port.return_value = 1080
         orchestrator._xray_service.start.return_value = 1234
+        mock_conn_test.return_value = (True, "50ms", None)  # Health check passes
 
         success, info = orchestrator.establish_connection("config.json", mode="proxy")
 
@@ -55,8 +58,9 @@ class TestConnectionOrchestrator:
         orchestrator._xray_service.start.assert_called_once()
         orchestrator._singbox_service.start.assert_not_called()
 
+    @patch("src.services.connection_tester.ConnectionTester.test_connection_sync")
     @patch("builtins.open", new_callable=mock_open)
-    def test_establish_vpn_connection_success(self, mock_file, orchestrator):
+    def test_establish_vpn_connection_success(self, mock_file, mock_conn_test, orchestrator):
         """Test successful VPN connection."""
         # Setup mocks
         orchestrator._config_manager.load_config.return_value = (
@@ -68,6 +72,7 @@ class TestConnectionOrchestrator:
         orchestrator._xray_processor.get_socks_port.return_value = 1080
         orchestrator._xray_service.start.return_value = 1234
         orchestrator._singbox_service.start.return_value = 5678
+        mock_conn_test.return_value = (True, "50ms", None)  # Health check passes
 
         with patch("src.utils.network_utils.NetworkUtils.detect_optimal_mtu", return_value=1420):
             success, info = orchestrator.establish_connection("config.json", mode="vpn")

@@ -13,22 +13,17 @@ class TestLegacyConfigService(unittest.TestCase):
         self.service = LegacyConfigService(self.mock_processor)
 
     def test_detect_legacy_splithttp(self):
-        config = {
-            "outbounds": [{
-                "streamSettings": {"network": "splithttp"}
-            }]
-        }
+        config = {"outbounds": [{"streamSettings": {"network": "splithttp"}}]}
         self.assertTrue(self.service.is_legacy(config))
 
     def test_migrate_splithttp_to_xhttp(self):
         config = {
-            "outbounds": [{
-                "protocol": "vless",
-                "streamSettings": {
-                    "network": "splithttp",
-                    "splithttpSettings": {"host": "example.com"}
+            "outbounds": [
+                {
+                    "protocol": "vless",
+                    "streamSettings": {"network": "splithttp", "splithttpSettings": {"host": "example.com"}},
                 }
-            }]
+            ]
         }
         migrated = self.service.migrate_config(config)
         stream = migrated["outbounds"][0]["streamSettings"]
@@ -38,30 +33,26 @@ class TestLegacyConfigService(unittest.TestCase):
         self.assertNotIn("splithttpSettings", stream)
 
     def test_migrate_invalid_security_and_network(self):
+        """Test that invalid network is fixed but security is preserved (non-destructive migration)."""
         config = {
-            "outbounds": [{
-                "protocol": "vless",
-                "streamSettings": {
-                    "network": "invalid_net",
-                    "security": "invalid_sec"
-                }
-            }]
+            "outbounds": [
+                {"protocol": "vless", "streamSettings": {"network": "invalid_net", "security": "invalid_sec"}}
+            ]
         }
         migrated = self.service.migrate_config(config)
         stream = migrated["outbounds"][0]["streamSettings"]
-        self.assertEqual(stream["network"], "tcp")
-        self.assertEqual(stream["security"], "none")
+        self.assertEqual(stream["network"], "tcp")  # Invalid network gets fixed
+        self.assertEqual(stream["security"], "invalid_sec")  # Security preserved to avoid breaking configs
 
     def test_fill_transport_defaults(self):
         config = {
-            "outbounds": [{
-                "protocol": "vless",
-                "settings": {"vnext": [{"address": "server.com", "port": 443}]},
-                "streamSettings": {
-                    "network": "ws",
-                    "security": "tls"
+            "outbounds": [
+                {
+                    "protocol": "vless",
+                    "settings": {"vnext": [{"address": "server.com", "port": 443}]},
+                    "streamSettings": {"network": "ws", "security": "tls"},
                 }
-            }]
+            ]
         }
         # Mock _get_server_object since it's used in _fill_transport_defaults
         self.mock_processor._get_server_object.return_value = {"address": "server.com"}
@@ -74,12 +65,7 @@ class TestLegacyConfigService(unittest.TestCase):
         self.assertEqual(stream["tlsSettings"]["serverName"], "server.com")
 
     def test_non_legacy_ensures_tag(self):
-        config = {
-            "outbounds": [{
-                "protocol": "vless",
-                "streamSettings": {"network": "ws", "security": "tls"}
-            }]
-        }
+        config = {"outbounds": [{"protocol": "vless", "streamSettings": {"network": "ws", "security": "tls"}}]}
         migrated = self.service.migrate_config(config)
         self.assertEqual(migrated["outbounds"][0]["tag"], "proxy")
         self.assertEqual(migrated["outbounds"][0]["streamSettings"]["network"], "ws")
@@ -110,8 +96,6 @@ class TestOrchestratorFallback(unittest.TestCase):
             self.mock_xray_service,
             self.mock_singbox_service,
             self.mock_legacy_service,
-            None,
-            None
         )
 
     @patch("builtins.open", new_callable=unittest.mock.mock_open)
@@ -129,7 +113,7 @@ class TestOrchestratorFallback(unittest.TestCase):
         # First attempt (migrated) fails, second (original) succeeds
         mock_test.side_effect = [
             (False, "fail", None),  # Migrated config test
-            (True, "100ms", None)   # Original config test
+            (True, "100ms", None),  # Original config test
         ]
 
         self.mock_xray_service.start.return_value = 1234  # PID

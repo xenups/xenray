@@ -5,7 +5,6 @@ It is UI-agnostic and acts as the single source of truth for startup state.
 """
 
 import sys
-from typing import Optional
 
 from loguru import logger
 

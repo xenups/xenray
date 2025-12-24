@@ -91,7 +91,15 @@
     "add_to_startup": "Add to Startup",
     "add_to_startup_desc": "Launch XenRay automatically on system login",
     "startup_saved": "Startup setting updated",
-    "startup_error": "Failed to update startup setting"
+    "startup_error": "Failed to update startup setting",
+    "startup_on": "On",
+    "startup_off": "Off",
+    "auto_reconnect": "Auto-Reconnect",
+    "auto_reconnect_desc": "Automatically reconnect on connection loss",
+    "auto_reconnect_enabled": "Auto-reconnect enabled",
+    "auto_reconnect_disabled": "Auto-reconnect disabled (saves battery)",
+    "language_restart_msg": "Language changed! Restart app for full effect.",
+    "experimental": "Experimental"
   },
   "admin": {
     "title": "Admin Rights Required",
@@ -167,7 +175,8 @@
     "failure_detected": "Connection issue detected. Checking...",
     "reconnecting": "Reconnecting...",
     "reconnected": "Connection restored! ✅",
-    "reconnect_failed": "Auto-reconnect failed"
+    "reconnect_failed": "Auto-reconnect failed",
+    "adopted_connection": "Adopted Connection"
   },
   "routing": {
     "title": "Routing Rules",

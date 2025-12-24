@@ -17,7 +17,7 @@ from src.core.constants import XRAY_LOG_FILE
 class PassiveLogMonitor:
     """
     Monitors Xray log file for determining connection health.
-    
+
     Features:
     - Tails the log file (handling rotation/recreation)
     - Detects specific error keywords
@@ -73,23 +73,23 @@ class PassiveLogMonitor:
         self._thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()
         self._lock = threading.Lock()
-        
+
         # State
         self._last_alert_time = 0.0
         self._paused = False
         self._paused_until = 0.0
         self._consecutive_failures = 0
         self._last_error_time = 0.0  # For cross-signal validation
-    
+
     def has_recent_error(self, window_seconds: float = 30.0) -> bool:
         """
         Check if an Xray error was detected within the time window.
-        
+
         Used by ActiveConnectivityMonitor for cross-signal validation.
-        
+
         Args:
             window_seconds: Time window to check for recent errors
-            
+
         Returns:
             True if an error was detected within the window
         """
@@ -102,15 +102,11 @@ class PassiveLogMonitor:
         with self._lock:
             if self._running:
                 return
-            
+
             self._running = True
             self._consecutive_failures = 0
             self._stop_event.clear()
-            self._thread = threading.Thread(
-                target=self._monitor_loop,
-                daemon=True,
-                name="PassiveLogMonitor"
-            )
+            self._thread = threading.Thread(target=self._monitor_loop, daemon=True, name="PassiveLogMonitor")
             self._thread.start()
             logger.info(f"[PassiveLogMonitor] Started monitoring: {self._log_file_path}")
 
@@ -119,20 +115,20 @@ class PassiveLogMonitor:
         with self._lock:
             if not self._running:
                 return
-            
+
             self._running = False
             self._stop_event.set()
-            
+
             if self._thread and self._thread.is_alive():
                 self._thread.join(timeout=2.0)
-            
+
             self._thread = None
             logger.info("[PassiveLogMonitor] Stopped monitoring")
 
     def pause(self, duration: float = 0):
         """
         Pause monitoring.
-        
+
         Args:
             duration: If > 0, pause for this many seconds. If 0, pause indefinitely until resume().
         """
@@ -163,7 +159,7 @@ class PassiveLogMonitor:
                 if self._paused:
                     time.sleep(self.CHECK_INTERVAL)
                     continue
-                
+
                 if self._paused_until > 0:
                     if time.time() < self._paused_until:
                         time.sleep(self.CHECK_INTERVAL)
@@ -182,23 +178,25 @@ class PassiveLogMonitor:
                         continue
 
                     stat = os.stat(file_path)
-                    current_inode = stat.st_ino if os.name != 'nt' else 0
+                    current_inode = stat.st_ino if os.name != "nt" else 0
                     current_size = stat.st_size
-                    current_ctime = stat.st_ctime if os.name == 'nt' else 0
+                    current_ctime = stat.st_ctime if os.name == "nt" else 0
 
                     # First time opening
                     if file_obj is None:
-                        file_obj = open(file_path, 'r', encoding='utf-8', errors='ignore')
+                        file_obj = open(file_path, "r", encoding="utf-8", errors="ignore")
                         file_obj.seek(0, os.SEEK_END)
                         inode = current_inode
                         last_ctime = current_ctime
                         logger.debug(f"[PassiveLogMonitor] Opened log file: {file_path}")
-                    
+
                     # Check rotation (inode changed, size shrunk, or ctime changed on Windows)
-                    elif self._is_file_rotated(inode, current_inode, file_obj.tell(), current_size, last_ctime, current_ctime):
+                    elif self._is_file_rotated(
+                        inode, current_inode, file_obj.tell(), current_size, last_ctime, current_ctime
+                    ):
                         logger.debug("[PassiveLogMonitor] Log rotation detected, reopening")
                         file_obj.close()
-                        file_obj = open(file_path, 'r', encoding='utf-8', errors='ignore')
+                        file_obj = open(file_path, "r", encoding="utf-8", errors="ignore")
                         file_obj.seek(0, os.SEEK_SET)
                         inode = current_inode
                         last_ctime = current_ctime
@@ -222,20 +220,20 @@ class PassiveLogMonitor:
     def _is_file_rotated(self, old_inode, new_inode, old_pos, new_size, old_ctime, new_ctime) -> bool:
         """Check if the log file has been rotated."""
         # Unix: inode changed
-        if os.name != 'nt' and old_inode != new_inode:
+        if os.name != "nt" and old_inode != new_inode:
             return True
         # Size shrunk (file was recreated)
         if new_size < old_pos:
             return True
         # Windows: creation time changed
-        if os.name == 'nt' and old_ctime and new_ctime and old_ctime != new_ctime:
+        if os.name == "nt" and old_ctime and new_ctime and old_ctime != new_ctime:
             return True
         return False
 
     def _process_line(self, line: str):
         """Process a single log line."""
         lower_line = line.lower()
-        
+
         for keyword in self.ERROR_KEYWORDS:
             if keyword in lower_line:
                 logger.debug(f"[PassiveLogMonitor] Keyword '{keyword}' matched in line")
@@ -245,7 +243,7 @@ class PassiveLogMonitor:
     def _trigger_alert(self, log_line: str):
         """Trigger an alert if debounce/cooldown allows."""
         now = time.time()
-        
+
         # Debounce check
         if now - self._last_alert_time < self.DEBOUNCE_SECONDS:
             return
@@ -254,27 +252,26 @@ class PassiveLogMonitor:
         self._last_alert_time = now
         self._last_error_time = now  # For cross-signal validation
         self._consecutive_failures += 1
-        
+
         # Calculate exponential backoff
-        backoff = min(
-            self.BASE_COOLDOWN_SECONDS * (2 ** (self._consecutive_failures - 1)),
-            self.MAX_COOLDOWN_SECONDS
-        )
-        
+        backoff = min(self.BASE_COOLDOWN_SECONDS * (2 ** (self._consecutive_failures - 1)), self.MAX_COOLDOWN_SECONDS)
+
         # Auto-pause (Cooldown)
         logger.info(f"[PassiveLogMonitor] Backing off for {backoff}s (Attempt {self._consecutive_failures})")
         self.pause(backoff)
 
         # Run callback in separate thread to avoid blocking monitor loop
         if self._on_failure:
-            threading.Thread(
-                target=self._run_callback_safe,
-                daemon=True,
-                name="PassiveLogMonitor-Callback"
-            ).start()
+            threading.Thread(target=self._run_callback_safe, daemon=True, name="PassiveLogMonitor-Callback").start()
 
     def _run_callback_safe(self):
         """Run the failure callback safely in a separate thread."""
+        # Check if still running before executing callback
+        # This prevents late callbacks after stop()
+        with self._lock:
+            if not self._running:
+                logger.debug("[PassiveLogMonitor] Suppressed callback (stopped)")
+                return
         try:
             self._on_failure()
         except Exception as e:

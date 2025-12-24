@@ -90,8 +90,13 @@
     "reset_close_success": "关闭偏好已重置! 🔄",
     "add_to_startup": "开机自启",
     "add_to_startup_desc": "登录系统时自动启动 XenRay",
-    "startup_saved": "启动设置已更新",
-    "startup_error": "更新启动设置失败"
+    "startup_error": "更新启动设置失败",
+    "auto_reconnect": "自动重连",
+    "auto_reconnect_desc": "连接丢失时自动重新连接",
+    "auto_reconnect_enabled": "自动重连已开启",
+    "auto_reconnect_disabled": "自动重连已关闭 (省电模式)",
+    "language_restart_msg": "语言已更改！重启应用以完全生效。",
+    "experimental": "实验性"
   },
   "admin": {
     "title": "需要管理员权限",
@@ -163,7 +168,12 @@
     "no_internet": "无网络连接！",
     "connected_no_internet": "已连接但无网络访问",
     "verifying_latency": "正在验证连接延迟...",
-    "falling_back": "正在回退到原始配置..."
+    "falling_back": "正在回退到原始配置...",
+    "failure_detected": "检测到连接问题，正在检查...",
+    "reconnecting": "正在重新连接...",
+    "reconnected": "连接已恢复！✅",
+    "reconnect_failed": "自动重连失败",
+    "adopted_connection": "已接管的连接"
   },
   "routing": {
     "title": "路由规则",

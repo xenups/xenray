@@ -22,8 +22,6 @@ class ConnectionOrchestrator:
         xray_service,
         singbox_service,
         legacy_config_service,
-        observer,
-        log_monitor,
     ):
         """
         Initialize ConnectionOrchestrator with injected dependencies.
@@ -37,8 +35,9 @@ class ConnectionOrchestrator:
             xray_service: XrayService instance
             singbox_service: SingboxService instance
             legacy_config_service: LegacyConfigService instance
-            observer: NetworkStabilityObserver instance
-            log_monitor: PassiveLogMonitor instance
+
+        NOTE: Monitoring (log_monitor, active_monitor, auto_reconnect) is handled
+              by ConnectionMonitoringService in ConnectionManager.
         """
         self._config_manager = config_manager
         self._config_processor = config_processor
@@ -48,8 +47,6 @@ class ConnectionOrchestrator:
         self._xray_service = xray_service
         self._singbox_service = singbox_service
         self._legacy_config_service = legacy_config_service
-        self._observer = observer
-        self._log_monitor = log_monitor
 
     def establish_connection(self, file_path: str, mode: str, step_callback=None) -> tuple[bool, Optional[dict]]:
         """
@@ -149,11 +146,10 @@ class ConnectionOrchestrator:
 
         Args:
             connection_info: Connection information dictionary
-        """
-        # Stop monitoring first
-        if self._log_monitor:
-            self._log_monitor.stop()
 
+        NOTE: Monitoring is stopped by ConnectionManager via ConnectionMonitoringService
+              before this method is called.
+        """
         # Stop Sing-box first
         if connection_info.get("singbox_pid"):
             self._singbox_service.stop()
@@ -275,7 +271,7 @@ class ConnectionOrchestrator:
         singbox_pid: Optional[int],
         step_callback,
     ) -> dict:
-        """Finalize connection and start monitoring."""
+        """Finalize connection and return connection info."""
         if step_callback:
             step_callback(t("connection.finalizing"))
 
@@ -285,11 +281,10 @@ class ConnectionOrchestrator:
             "singbox_pid": singbox_pid,
             "file": file_path,
         }
-        
-        # Start passive monitoring
-        if self._log_monitor:
-            self._log_monitor.start()
-            
+
+        # NOTE: Monitoring is now started by ConnectionManager via ConnectionMonitoringService
+        # after this method returns. This ensures single decision point for monitoring.
+
         logger.info(f"Successfully connected in {mode} mode")
 
         return connection_info

@@ -444,7 +444,7 @@ class MainWindow:
 
         self._current_mode = mode
         self._config_manager.set_connection_mode("vpn" if mode == ConnectionMode.VPN else "proxy")
-        self._status_display.set_status(f"{mode.name} Mode Selected")
+        self._status_display.set_status(t("status.mode_selected", mode=mode.name.title()))
         self._ui_helper.call(lambda: None)
 
         if self._is_running:
