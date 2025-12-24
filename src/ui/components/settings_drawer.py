@@ -13,6 +13,7 @@ from src.core.constants import APP_VERSION
 from src.core.i18n import set_language as set_app_language
 from src.core.i18n import t
 from src.core.types import ConnectionMode
+from src.services import task_scheduler
 from src.services.app_update_service import AppUpdateService
 from src.services.singbox_service import SingboxService
 from src.services.xray_installer import XrayInstallerService
@@ -26,7 +27,6 @@ from src.ui.components.settings_sections import (
     SettingsSection,
     StartupToggleRow,
 )
-from src.services import task_scheduler
 from src.utils.process_utils import ProcessUtils
 
 

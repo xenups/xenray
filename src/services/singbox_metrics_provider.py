@@ -4,8 +4,8 @@ import json
 import time
 from dataclasses import dataclass
 from typing import Optional, Protocol
-from urllib.request import urlopen
 from urllib.error import URLError
+from urllib.request import urlopen
 
 from loguru import logger
 

@@ -9,9 +9,9 @@ This package consolidates all monitoring-related functionality:
 - MonitorSignal: Signal types emitted by monitors (facts, not events)
 """
 
-from src.services.monitoring.passive_log_monitor import PassiveLogMonitor
 from src.services.monitoring.active_connectivity_monitor import ActiveConnectivityMonitor
 from src.services.monitoring.auto_reconnect_service import AutoReconnectService
+from src.services.monitoring.passive_log_monitor import PassiveLogMonitor
 from src.services.monitoring.service import ConnectionMonitoringService
 from src.services.monitoring.signals import MonitorSignal
 

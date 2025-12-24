@@ -20,10 +20,10 @@ from src.ui.components.close_dialog import CloseDialog
 from src.ui.components.toast import ToastManager
 from src.ui.handlers.background_task_handler import BackgroundTaskHandler
 from src.ui.handlers.connection_handler import ConnectionHandler
-from src.ui.handlers.reconnect_event_handler import ReconnectEventHandler
 from src.ui.handlers.installer_handler import InstallerHandler
 from src.ui.handlers.latency_monitor_handler import LatencyMonitorHandler
 from src.ui.handlers.network_stats_handler import NetworkStatsHandler
+from src.ui.handlers.reconnect_event_handler import ReconnectEventHandler
 from src.ui.handlers.systray_handler import SystrayHandler
 from src.ui.handlers.theme_handler import ThemeHandler
 from src.ui.helpers.glow_helper import GlowHelper

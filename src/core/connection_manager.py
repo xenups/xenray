@@ -5,8 +5,8 @@ import threading
 from loguru import logger
 
 from src.core.config_manager import ConfigManager
-from src.core.i18n import t
 from src.core.connection_orchestrator import ConnectionOrchestrator
+from src.core.i18n import t
 from src.services.singbox_service import SingboxService
 from src.services.xray_service import XrayService
 
@@ -35,9 +35,9 @@ class ConnectionManager:
         # Initialize services (Dependency Injection)
         from src.services.configuration_processor import ConfigurationProcessor
         from src.services.legacy_config_service import LegacyConfigService
+        from src.services.monitoring import ConnectionMonitoringService, MonitorSignal
         from src.services.routing_rules_manager import RoutingRulesManager
         from src.services.xray_config_processor import XrayConfigProcessor
-        from src.services.monitoring import ConnectionMonitoringService, MonitorSignal
 
         # Store MonitorSignal for use in signal handler
         self._MonitorSignal = MonitorSignal

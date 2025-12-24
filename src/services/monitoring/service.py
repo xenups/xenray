@@ -19,9 +19,10 @@ from typing import Callable, Optional
 from loguru import logger
 
 from src.core.config_manager import ConfigManager
-from src.services.network_validator import NetworkValidator
 from src.services.connection_tester import ConnectionTester
+from src.services.network_validator import NetworkValidator
 from src.services.singbox_metrics_provider import ClashAPIProvider
+
 from .active_connectivity_monitor import ActiveConnectivityMonitor
 from .auto_reconnect_service import AutoReconnectService
 from .passive_log_monitor import PassiveLogMonitor
