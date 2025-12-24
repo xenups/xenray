@@ -27,6 +27,9 @@ class ReconnectEventHandler:
         self._systray = None
         self._update_horizon_glow_callback = None
 
+        # State tracking
+        self._is_reconnecting = False  # Track if we're in reconnect flow
+
         # State setters
         self._is_running_setter = None
         self._profile_manager_is_running_setter = None
@@ -80,7 +83,7 @@ class ReconnectEventHandler:
             "connectivity_restored": self._handle_connectivity_restored,
             "reconnecting": self._handle_reconnecting,
             "reconnected": self._handle_reconnected,
-            "connected": self._handle_reconnected,  # Reconnect via connect() emits "connected"
+            "connected": self._handle_connected,  # Handle both normal and reconnect connects
             "reconnect_failed": self._handle_reconnect_failed,
         }
 
@@ -140,12 +143,21 @@ class ReconnectEventHandler:
 
     def _handle_reconnecting(self, data: dict):
         """Handle reconnecting event."""
+        self._is_reconnecting = True  # Mark that we're in reconnect flow
         if self._connection_button:
             self._ui_call(self._connection_button.set_connecting)
         if self._status_display:
             self._ui_call(lambda: self._status_display.set_step(t("connection.reconnecting")))
         if self._update_horizon_glow_callback:
             self._ui_call(lambda: self._update_horizon_glow_callback("connecting"))
+
+    def _handle_connected(self, data: dict):
+        """Handle connected event - could be normal connect or reconnect completion."""
+        if self._is_reconnecting:
+            # This is a reconnect completion - treat as reconnected
+            self._is_reconnecting = False  # Reset flag
+            self._handle_reconnected(data)
+        # else: Normal connect - let the regular connection flow handle it (don't interfere)
 
     def _handle_reconnected(self, data: dict):
         """Handle reconnected event."""
