@@ -80,6 +80,7 @@ class ReconnectEventHandler:
             "connectivity_restored": self._handle_connectivity_restored,
             "reconnecting": self._handle_reconnecting,
             "reconnected": self._handle_reconnected,
+            "connected": self._handle_reconnected,  # Reconnect via connect() emits "connected"
             "reconnect_failed": self._handle_reconnect_failed,
         }
 

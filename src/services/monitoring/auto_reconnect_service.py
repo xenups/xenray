@@ -54,19 +54,18 @@ class AutoReconnectService:
         self._cancel_event = threading.Event()
         self._cancelled = False
 
-    def start_session(self) -> int:
+    def start_session(self, session_id: int):
         """
-        Start a new connection session.
+        Start a new connection session with the provided session ID.
 
-        Returns:
-            New session ID
+        Args:
+            session_id: Session ID from ConnectionManager
         """
         with self._lock:
-            self._session_id += 1
+            self._session_id = session_id
             self._cancelled = False
             self._cancel_event.clear()
             logger.debug(f"[AutoReconnectService] Started session {self._session_id}")
-            return self._session_id
 
     def cancel(self):
         """
@@ -133,8 +132,9 @@ class AutoReconnectService:
                 if not self._validate_session(session_id, "recovery_check"):
                     return False
                 if self._check_xray_recovered(file_path):
-                    logger.info("[AutoReconnectService] Xray recovered, aborting reconnect")
-                    self._emit_safe("reconnected", session_id)
+                    logger.info("[AutoReconnectService] Xray recovered, connection is healthy - no reconnect needed")
+                    # Connection is already working - no event needed
+                    # UI stays on current "connected" state
                     return True
 
         # CHECKPOINT 6: Attempt reconnect
@@ -210,9 +210,11 @@ class AutoReconnectService:
         if not self._validate_session(session_id, "post_connect"):
             return False
 
+        # Note: connect() creates a NEW session and emits "connected" event automatically
+        # The "reconnecting" → "connected" transition happens via that event
         if success:
             logger.info("[AutoReconnectService] Reconnect successful")
-            self._emit_safe("reconnected", session_id)
+            # Don't emit "reconnected" - it would use stale session_id and get dropped
         else:
             logger.error("[AutoReconnectService] Reconnect failed")
             self._emit_safe("reconnect_failed", session_id, {"reason": "connect_failed"})

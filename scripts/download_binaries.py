@@ -120,7 +120,7 @@ def main():
     # Get configuration
     config = get_config(args.arch)
 
-    print(f"\nConfiguration:")
+    print(f"\nConfiguration:")  # noqa: F541
     print(f"  Xray Version: {config['xray_version']}")
     print(f"  Singbox Version: {config['singbox_version']}")
     print(f"  Architecture: {config['arch']}-bit")

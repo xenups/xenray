@@ -143,7 +143,7 @@ class ConnectionMonitoringService:
         self._log_monitor.start()
 
         # Start auto-reconnect session
-        self._auto_reconnect.start_session()
+        self._auto_reconnect.start_session(session_id)
 
         # Start active monitor (VPN mode only - uses Clash API metrics)
         if mode == "vpn":
