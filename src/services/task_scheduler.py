@@ -2,16 +2,18 @@
 Windows Task Scheduler integration for XenRay.
 
 Registers the application to run on user logon using PowerShell.
-Falls back to Registry-based startup if Task Scheduler fails (no admin).
+Prioritizes Task Scheduler (supports Admin privileges) over Registry.
 """
 
 import subprocess
 import sys
+import os
 from pathlib import Path
 
 from loguru import logger
 
 from src.utils.platform_utils import PlatformUtils
+from src.utils.process_utils import ProcessUtils
 
 TASK_NAME = "XenRayStartup"
 REGISTRY_PATH = r"Software\Microsoft\Windows\CurrentVersion\Run"
@@ -28,14 +30,20 @@ def _get_startupinfo():
     return None
 
 
-def _get_launch_command() -> str:
-    """Get the correct launch command for the current execution mode."""
+def _get_launch_details() -> tuple[str, str, str]:
+    """
+    Get launch details for the current execution mode.
+
+    Returns:
+        Tuple of (executable_path, arguments, single_string_command)
+    """
     if PlatformUtils.is_frozen():
-        return f'"{sys.executable}"'
+        exe = sys.executable
+        return exe, "", f'"{exe}"'
     else:
         python_exe = sys.executable
         main_script = str(Path(__file__).parent.parent / "main.py")
-        return f'"{python_exe}" "{main_script}"'
+        return python_exe, f'"{main_script}"', f'"{python_exe}" "{main_script}"'
 
 
 def _is_registry_enabled() -> bool:
@@ -56,12 +64,14 @@ def _is_registry_enabled() -> bool:
 
 
 def _enable_via_registry() -> tuple[bool, str]:
-    """Enable startup via Windows Registry (no admin required)."""
+    """Enable startup via Windows Registry (standard privileges)."""
     try:
         import winreg
 
-        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, REGISTRY_PATH, 0, winreg.KEY_SET_VALUE)
-        launch_command = _get_launch_command()
+        key = winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER, REGISTRY_PATH, 0, winreg.KEY_SET_VALUE
+        )
+        _, _, launch_command = _get_launch_details()
         winreg.SetValueEx(key, APP_NAME, 0, winreg.REG_SZ, launch_command)
         winreg.CloseKey(key)
         logger.info(f"[TaskScheduler] Enabled startup via Registry: {launch_command}")
@@ -76,7 +86,9 @@ def _disable_via_registry() -> tuple[bool, str]:
     try:
         import winreg
 
-        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, REGISTRY_PATH, 0, winreg.KEY_SET_VALUE)
+        key = winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER, REGISTRY_PATH, 0, winreg.KEY_SET_VALUE
+        )
         try:
             winreg.DeleteValue(key, APP_NAME)
         except FileNotFoundError:
@@ -92,16 +104,70 @@ def _disable_via_registry() -> tuple[bool, str]:
 def _is_task_scheduler_enabled() -> bool:
     """Check if scheduled task is registered."""
     try:
-        cmd = f"Get-ScheduledTask -TaskName '{TASK_NAME}' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty TaskName"  # noqa: E501
+        # Check if task exists using powershell
+        cmd = f"Get-ScheduledTask -TaskName '{TASK_NAME}' -ErrorAction SilentlyContinue"
         result = subprocess.run(
             ["powershell", "-Command", cmd],
             capture_output=True,
             text=True,
             startupinfo=_get_startupinfo(),
         )
-        return TASK_NAME.lower() in result.stdout.lower()
+        return result.returncode == 0
     except Exception:
         return False
+
+
+def _enable_via_task_scheduler() -> tuple[bool, str]:
+    """
+    Enable startup via Windows Task Scheduler.
+    Requires Admin privileges for 'Highest' run level.
+    """
+    try:
+        exe, args, _ = _get_launch_details()
+
+        # Determine working directory
+        if getattr(sys, "frozen", False):
+            # In frozen mode, sys.executable is the exe
+            cwd = str(Path(sys.executable).parent)
+        else:
+            # In script mode, we want the project root
+            cwd = str(Path(__file__).parent.parent.parent)
+
+        # Get current user in DOMAIN\User format from environment
+        username = os.environ.get("USERNAME", "")
+        userdomain = os.environ.get("USERDOMAIN", "")
+        user_id = f"{userdomain}\\{username}" if userdomain and username else username
+
+        # Handle empty arguments for frozen builds
+        argument_param = f"-Argument '{args}'" if args else ""
+
+        # Construct PowerShell command
+        # UserId is required for Interactive LogonType
+        ps_script = f"""
+        $Action = New-ScheduledTaskAction -Execute '{exe}' {argument_param} -WorkingDirectory '{cwd}'
+        $Trigger = New-ScheduledTaskTrigger -AtLogOn
+        $Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -ExecutionTimeLimit 0
+        $Principal = New-ScheduledTaskPrincipal -UserId '{user_id}' -RunLevel Highest -LogonType Interactive
+        Register-ScheduledTask -TaskName '{TASK_NAME}' -Action $Action -Trigger $Trigger -Principal $Principal -Settings $Settings -Force
+        """
+
+        result = subprocess.run(
+            ["powershell", "-Command", ps_script],
+            capture_output=True,
+            text=True,
+            startupinfo=_get_startupinfo(),
+        )
+
+        if result.returncode == 0:
+            logger.info(f"[TaskScheduler] Enabled startup via Task Scheduler (CWD: {cwd}, User: {user_id})")
+            return True, "Startup enabled via Task Scheduler"
+        else:
+            logger.error(f"[TaskScheduler] Task Scheduler failed: {result.stderr}")
+            return False, f"Task Scheduler failed: {result.stderr}"
+
+    except Exception as e:
+        logger.error(f"[TaskScheduler] Failed to enable via Task Scheduler: {e}")
+        return False, str(e)
 
 
 def is_task_registered() -> bool:
@@ -109,13 +175,14 @@ def is_task_registered() -> bool:
     if PlatformUtils.get_platform() != "windows":
         return False
 
-    # Check both methods
     return _is_task_scheduler_enabled() or _is_registry_enabled()
 
 
 def register_task() -> tuple[bool, str]:
     """
-    Enable startup - uses Registry (doesn't require admin).
+    Enable startup.
+    Tries Task Scheduler if Admin (for elevation support),
+    otherwise falls back to Registry.
 
     Returns:
         Tuple of (success, message)
@@ -123,7 +190,16 @@ def register_task() -> tuple[bool, str]:
     if PlatformUtils.get_platform() != "windows":
         return False, "Only supported on Windows"
 
-    # Use Registry approach (no admin needed)
+    # If running as Admin, prefer Task Scheduler to support elevated startup
+    if ProcessUtils.is_admin():
+        success, msg = _enable_via_task_scheduler()
+        if success:
+            return True, msg
+        logger.warning(
+            "[TaskScheduler] Admin Task Scheduler failed, falling back to Registry"
+        )
+
+    # Fallback to Registry (or default for non-admin)
     return _enable_via_registry()
 
 
@@ -137,22 +213,26 @@ def unregister_task() -> tuple[bool, str]:
     if PlatformUtils.get_platform() != "windows":
         return False, "Only supported on Windows"
 
-    # Remove from Registry
-    success, msg = _disable_via_registry()
+    # Always try to remove both to be clean
+    reg_success, reg_msg = _disable_via_registry()
 
-    # Also try to remove any existing Task Scheduler task (silently)
+    task_success = False
     try:
         ps_command = f"Unregister-ScheduledTask -TaskName '{TASK_NAME}' -Confirm:$false -ErrorAction SilentlyContinue"
-        subprocess.run(
+        result = subprocess.run(
             ["powershell", "-Command", ps_command],
             capture_output=True,
             text=True,
             startupinfo=_get_startupinfo(),
         )
+        task_success = result.returncode == 0
     except Exception:
-        pass  # Ignore Task Scheduler errors
+        pass
 
-    return success, msg
+    if reg_success or task_success:
+        return True, "Startup disabled"
+    
+    return False, "Failed to disable startup"
 
 
 def is_supported() -> bool:
