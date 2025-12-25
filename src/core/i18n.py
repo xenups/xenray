@@ -91,16 +91,17 @@ class I18n:
     def available_languages(self) -> dict:
         return self._available_languages
 
-    def t(self, key: str, **kwargs) -> str:
+    def t(self, key: str, default: Optional[str] = None, **kwargs) -> str:
         """
         Translate a key to the current language.
 
         Args:
             key: Dot-separated key path (e.g., "settings.general")
+            default: Default value if key not found (useful for CLI/English fallback)
             **kwargs: Format arguments for the string
 
         Returns:
-            Translated string or the key itself if not found
+            Translated string, default value, or the key itself as fallback
         """
         translations = self._translations.get(self._current_lang, {})
 
@@ -125,13 +126,13 @@ class I18n:
                     break
 
         if value is None:
-            return key  # Return key as fallback
+            return default if default is not None else key  # Return default or key as fallback
 
         # Support string formatting
         if kwargs and isinstance(value, str):
             try:
                 return value.format(**kwargs)
-            except KeyError:
+            except (KeyError, ValueError):
                 return value
 
         return value
@@ -147,9 +148,9 @@ def _get_i18n():
     return _i18n
 
 
-def t(key: str, **kwargs) -> str:
-    """Shortcut function for translation."""
-    return _get_i18n().t(key, **kwargs)
+def t(key: str, default: Optional[str] = None, **kwargs) -> str:
+    """Shortcut function for translation with optional default."""
+    return _get_i18n().t(key, default=default, **kwargs)
 
 
 def set_language(lang: str):

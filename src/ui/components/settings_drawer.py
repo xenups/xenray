@@ -13,16 +13,19 @@ from src.core.constants import APP_VERSION
 from src.core.i18n import set_language as set_app_language
 from src.core.i18n import t
 from src.core.types import ConnectionMode
+from src.services import task_scheduler
 from src.services.app_update_service import AppUpdateService
 from src.services.singbox_service import SingboxService
 from src.services.xray_installer import XrayInstallerService
 from src.ui.components.settings_sections import (
+    AutoReconnectToggleRow,
     CountryDropdownRow,
     LanguageDropdownRow,
     ModeSwitchRow,
     PortInputRow,
     SettingsListTile,
     SettingsSection,
+    StartupToggleRow,
 )
 from src.utils.process_utils import ProcessUtils
 
@@ -63,6 +66,22 @@ class SettingsDrawer(ft.NavigationDrawer):
         self._language_row = LanguageDropdownRow(
             self._config_manager.get_language(),
             self._save_language,
+        )
+
+        # Startup toggle (self-contained component)
+        self._startup_row = StartupToggleRow(
+            config_manager=self._config_manager,
+            is_registered=task_scheduler.is_task_registered(),
+            is_supported=task_scheduler.is_supported(),
+            on_register=task_scheduler.register_task,
+            on_unregister=task_scheduler.unregister_task,
+            toast_callback=self._show_toast,
+        )
+
+        # Auto-reconnect toggle (self-contained component)
+        self._auto_reconnect_row = AutoReconnectToggleRow(
+            config_manager=self._config_manager,
+            toast_callback=self._show_toast,
         )
 
         # Build UI
@@ -111,7 +130,8 @@ class SettingsDrawer(ft.NavigationDrawer):
                                 SettingsSection(
                                     t("settings.application"),
                                     [
-                                        self._language_row,
+                                        self._startup_row,
+                                        self._auto_reconnect_row,
                                         SettingsListTile(
                                             ft.Icons.ROUTE,
                                             t("settings.routing_rules"),
@@ -160,6 +180,7 @@ class SettingsDrawer(ft.NavigationDrawer):
                                             f"v{APP_VERSION} by Xenups",
                                             show_chevron=False,
                                         ),
+                                        self._language_row,
                                     ],
                                 ),
                             ],
@@ -310,7 +331,7 @@ class SettingsDrawer(ft.NavigationDrawer):
         set_app_language(lang)
 
         # Notify user - app needs restart for full effect
-        msg = "Language changed! Restart app for full effect. / زبان تغییر کرد! برنامه را ریستارت کنید."
+        msg = t("settings.language_restart_msg")
         self._show_toast(msg, "success")
         page.update()
 

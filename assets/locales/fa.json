@@ -87,7 +87,16 @@
     "language_description": "انتخاب زبان برنامه",
     "reset_close_choice": "بازنشانی تنظیمات خروج",
     "reset_close_choice_desc": "نمایش دوباره پیام تأیید هنگام خروج",
-    "reset_close_success": "تنظیمات خروج بازنشانی شد! 🔄"
+    "reset_close_success": "تنظیمات خروج بازنشانی شد! 🔄",
+    "add_to_startup": "اجرا هنگام شروع سیستم",
+    "add_to_startup_desc": "زن‌ری هنگام ورود به سیستم به صورت خودکار اجرا شود",
+    "startup_error": "خطا در به‌روزرسانی تنظیمات شروع",
+    "auto_reconnect": "اتصال مجدد خودکار",
+    "auto_reconnect_desc": "اتصال مجدد خودکار هنگام قطع شدن ارتباط",
+    "auto_reconnect_enabled": "اتصال مجدد خودکار فعال شد",
+    "auto_reconnect_disabled": "اتصال مجدد خودکار غیرفعال شد (به منظور کاهش مصرف باتری)",
+    "language_restart_msg": "زبان تغییر کرد! برای اعمال کامل تغییرات، برنامه را ریستارت کنید.",
+    "experimental": "آزمایشی"
   },
   "admin": {
     "title": "نیاز به دسترسی مدیر",
@@ -157,7 +166,14 @@
     "error": "خطا",
     "checking_network": "در حال بررسی اتصال شبکه...",
     "no_internet": "اتصال اینترنت برقرار نیست!",
-    "connected_no_internet": "متصل شد اما اینترنت در دسترس نیست"
+    "connected_no_internet": "متصل شد اما اینترنت در دسترس نیست",
+    "verifying_latency": "در حال تأیید تأخیر اتصال...",
+    "falling_back": "در حال بازگشت به تنظیمات اصلی...",
+    "failure_detected": "مشکل اتصال شناسایی شد. در حال بررسی...",
+    "reconnecting": "در حال اتصال مجدد...",
+    "reconnected": "اتصال بازیابی شد! ✅",
+    "reconnect_failed": "اتصال مجدد خودکار ناموفق بود",
+    "adopted_connection": "اتصال شناسایی شده"
   },
   "routing": {
     "title": "قوانین مسیریابی",

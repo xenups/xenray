@@ -54,7 +54,8 @@ class TestLinkParser:
         """Test splithttp with scMax parameters."""
         link = "vless://uuid@host:443?type=splithttp&scMaxEachPostBytes=1000000&scMaxConcurrentPosts=5"
         result = LinkParser.parse_link(link)
-        ss = result["config"]["outbounds"][0]["streamSettings"]["splithttpSettings"]
+        # Link parser normalizes splithttp to xhttp and uses xhttpSettings
+        ss = result["config"]["outbounds"][0]["streamSettings"]["xhttpSettings"]
         assert ss["scMaxEachPostBytes"] == 1000000
         assert ss["scMaxConcurrentPosts"] == 5
 
@@ -423,6 +424,7 @@ class TestLinkParser:
         """Test error handling in splithttp parameters."""
         link = "vless://uuid@host:443?type=splithttp&scMaxEachPostBytes=abc&scMaxConcurrentPosts=-1"
         res = LinkParser.parse_link(link)
-        ss = res["config"]["outbounds"][0]["streamSettings"]["splithttpSettings"]
+        # Link parser normalizes splithttp to xhttp and uses xhttpSettings
+        ss = res["config"]["outbounds"][0]["streamSettings"]["xhttpSettings"]
         assert "scMaxEachPostBytes" not in ss
         assert "scMaxConcurrentPosts" not in ss

@@ -58,6 +58,11 @@ class ApplicationContainer(containers.DeclarativeContainer):
         network_stats=network_stats,
     )
 
+    reconnect_event_handler = providers.Factory(
+        "src.ui.handlers.reconnect_event_handler.ReconnectEventHandler",
+        connection_manager=connection_manager,
+    )
+
     theme_handler = providers.Factory(
         "src.ui.handlers.theme_handler.ThemeHandler",
         config_manager=config_manager,
@@ -114,6 +119,7 @@ class ApplicationContainer(containers.DeclarativeContainer):
         network_stats_handler=network_stats_handler,
         latency_monitor_handler=latency_monitor_handler,
         connection_handler=connection_handler,
+        reconnect_event_handler=reconnect_event_handler,
         theme_handler=theme_handler,
         installer_handler=installer_handler,
         background_task_handler=background_task_handler,
