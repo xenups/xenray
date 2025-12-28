@@ -30,10 +30,11 @@ class TestXrayService:
         # Verify PID file was written
         mock_file().write.assert_called_with("1234")
 
+    @patch("src.utils.process_utils.ProcessUtils.is_running", return_value=False)
     @patch("src.utils.process_utils.ProcessUtils.kill_process")
     @patch("os.path.exists", return_value=True)
     @patch("builtins.open", mock_open(read_data="1234"))
-    def test_stop_success(self, mock_exists, mock_kill, xray_service):
+    def test_stop_success(self, mock_exists, mock_kill, mock_is_running, xray_service):
         """Test stopping Xray."""
         xray_service._pid = 1234
         mock_kill.return_value = True

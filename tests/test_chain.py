@@ -1,7 +1,6 @@
 """Unit tests for Chain functionality."""
 from unittest.mock import patch
 
-
 import pytest
 
 from src.core.app_context import AppContext
