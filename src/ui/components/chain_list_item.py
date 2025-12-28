@@ -69,7 +69,7 @@ class ChainListItem(ft.Container):
             if profile:
                 names.append(profile.get("name", "Unknown"))
             else:
-                names.append(f"⚠️ Missing")
+                names.append("⚠️ Missing")
         return names
 
     def _build_ui(self):

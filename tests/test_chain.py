@@ -1,7 +1,6 @@
 """Unit tests for Chain functionality."""
-import json
-import os
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
+
 
 import pytest
 
@@ -248,7 +247,7 @@ class TestChainCRUD:
         p1 = self._create_profile(ctx, "Server1")
         p2 = self._create_profile(ctx, "Server2")
 
-        chain_id = ctx.save_chain("My Chain", [p1, p2])
+        ctx.save_chain("My Chain", [p1, p2])  # chain_id unused, saved for side effect
 
         # Verify chain is valid initially
         chains = ctx.load_chains()

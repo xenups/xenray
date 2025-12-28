@@ -142,9 +142,12 @@ def _enable_via_task_scheduler() -> tuple[bool, str]:
         ps_script = f"""
         $Action = New-ScheduledTaskAction -Execute '{exe}' {argument_param} -WorkingDirectory '{cwd}'
         $Trigger = New-ScheduledTaskTrigger -AtLogOn
-        $Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -ExecutionTimeLimit 0
-        $Principal = New-ScheduledTaskPrincipal -UserId '{user_id}' -RunLevel Highest -LogonType Interactive
-        Register-ScheduledTask -TaskName '{TASK_NAME}' -Action $Action -Trigger $Trigger -Principal $Principal -Settings $Settings -Force
+        $Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
+            -StartWhenAvailable -ExecutionTimeLimit 0
+        $Principal = New-ScheduledTaskPrincipal -UserId '{user_id}' -RunLevel Highest `
+            -LogonType Interactive
+        Register-ScheduledTask -TaskName '{TASK_NAME}' -Action $Action -Trigger $Trigger `
+            -Principal $Principal -Settings $Settings -Force
         """
 
         result = subprocess.run(
