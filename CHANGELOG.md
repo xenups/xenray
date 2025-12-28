@@ -4,6 +4,8 @@ All notable changes to XenRay will be documented in this file.
 
 ## [Unreleased]
 
+## [0.1.10-alpha] - 2025-12-28
+
 ### Added
 - **Signal-Based Monitoring Architecture**: Complete refactor of connection monitoring
   - `MonitorSignal` enum - monitors emit facts, not events
