@@ -14,11 +14,11 @@ Usage:
     python scripts/download_binaries.py --arch 32
 """
 
+import argparse
 import os
 import sys
-import zipfile
 import urllib.request
-import argparse
+import zipfile
 from pathlib import Path
 
 from dotenv import load_dotenv

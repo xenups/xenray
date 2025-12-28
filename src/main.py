@@ -42,7 +42,7 @@ async def main(page):
     # Initialize i18n
     from src.core.i18n import set_language
 
-    set_language(container.config_manager().get_language())
+    set_language(container.app_context().settings.get_language())
 
     # Initialize UI with DI
     window = container.main_window(page=page)

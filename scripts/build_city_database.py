@@ -15,10 +15,10 @@ Usage:
 """
 
 import sys
-import zipfile
 import urllib.request
-from pathlib import Path
+import zipfile
 from collections import defaultdict
+from pathlib import Path
 
 # Add project root to path
 PROJECT_ROOT = Path(__file__).parent.parent

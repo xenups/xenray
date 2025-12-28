@@ -1,9 +1,9 @@
-
+import ctypes
+import os
 import subprocess
 import sys
-import os
-import ctypes
 from pathlib import Path
+
 
 def is_admin():
     try:
@@ -11,13 +11,14 @@ def is_admin():
     except:
         return False
 
+
 def debug_task_creation():
     print(f"Is Admin: {is_admin()}")
-    
+
     # Simulate the path of the distributed EXE
     exe_path = r"C:\Users\Xenups\Desktop\gorzer\pub\xenray\dist\XenRay.exe"
     cwd = r"C:\Users\Xenups\Desktop\gorzer\pub\xenray\dist"
-    
+
     print(f"Target Exe: {exe_path}")
     print(f"Target CWD: {cwd}")
 
@@ -36,17 +37,14 @@ def debug_task_creation():
         Write-Error $_
     }}
     """
-    
+
     print("Running PowerShell...")
-    result = subprocess.run(
-        ["powershell", "-Command", ps_script],
-        capture_output=True,
-        text=True
-    )
-    
+    result = subprocess.run(["powershell", "-Command", ps_script], capture_output=True, text=True)
+
     print("STDOUT:", result.stdout)
     print("STDERR:", result.stderr)
     print("Return Code:", result.returncode)
+
 
 if __name__ == "__main__":
     debug_task_creation()

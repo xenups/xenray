@@ -14,11 +14,9 @@ class ConnectionOrchestrator:
 
     def __init__(
         self,
-        config_manager,
-        config_processor,
+        app_context,
         network_validator,
         xray_processor,
-        routing_manager,
         xray_service,
         singbox_service,
         legacy_config_service,
@@ -27,11 +25,9 @@ class ConnectionOrchestrator:
         Initialize ConnectionOrchestrator with injected dependencies.
 
         Args:
-            config_manager: ConfigManager instance
-            config_processor: ConfigurationProcessor instance
+            app_context: AppContext instance
             network_validator: NetworkValidator instance
             xray_processor: XrayConfigProcessor instance
-            routing_manager: RoutingRulesManager instance
             xray_service: XrayService instance
             singbox_service: SingboxService instance
             legacy_config_service: LegacyConfigService instance
@@ -39,11 +35,9 @@ class ConnectionOrchestrator:
         NOTE: Monitoring (log_monitor, active_monitor, auto_reconnect) is handled
               by ConnectionMonitoringService in ConnectionManager.
         """
-        self._config_manager = config_manager
-        self._config_processor = config_processor
+        self._app_context = app_context
         self._network_validator = network_validator
         self._xray_processor = xray_processor
-        self._routing_manager = routing_manager
         self._xray_service = xray_service
         self._singbox_service = singbox_service
         self._legacy_config_service = legacy_config_service
@@ -166,7 +160,7 @@ class ConnectionOrchestrator:
             step_callback(t("status.loading_config"))
 
         logger.debug(f"Loading config from {file_path}")
-        config, _ = self._config_manager.load_config(file_path)
+        config, _ = self._app_context.load_config(file_path)
 
         if not config:
             logger.error("Failed to load config")
@@ -244,9 +238,9 @@ class ConnectionOrchestrator:
         logger.info(f"Using MTU for TUN interface: {optimal_mtu}")
 
         # Get routing configuration using XrayConfigProcessor
-        routing_country = self._config_manager.get_routing_country()
+        routing_country = self._app_context.settings.get_routing_country()
         proxy_server_ip = self._xray_processor.get_proxy_server_ip(processed_config)
-        routing_rules = self._config_manager.load_routing_rules()
+        routing_rules = self._app_context.routing.load_rules()
 
         # Start Sing-box
         singbox_pid = self._singbox_service.start(

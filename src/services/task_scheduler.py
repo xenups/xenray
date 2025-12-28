@@ -5,9 +5,9 @@ Registers the application to run on user logon using PowerShell.
 Prioritizes Task Scheduler (supports Admin privileges) over Registry.
 """
 
+import os
 import subprocess
 import sys
-import os
 from pathlib import Path
 
 from loguru import logger
@@ -68,9 +68,7 @@ def _enable_via_registry() -> tuple[bool, str]:
     try:
         import winreg
 
-        key = winreg.OpenKey(
-            winreg.HKEY_CURRENT_USER, REGISTRY_PATH, 0, winreg.KEY_SET_VALUE
-        )
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, REGISTRY_PATH, 0, winreg.KEY_SET_VALUE)
         _, _, launch_command = _get_launch_details()
         winreg.SetValueEx(key, APP_NAME, 0, winreg.REG_SZ, launch_command)
         winreg.CloseKey(key)
@@ -86,9 +84,7 @@ def _disable_via_registry() -> tuple[bool, str]:
     try:
         import winreg
 
-        key = winreg.OpenKey(
-            winreg.HKEY_CURRENT_USER, REGISTRY_PATH, 0, winreg.KEY_SET_VALUE
-        )
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, REGISTRY_PATH, 0, winreg.KEY_SET_VALUE)
         try:
             winreg.DeleteValue(key, APP_NAME)
         except FileNotFoundError:
@@ -195,9 +191,7 @@ def register_task() -> tuple[bool, str]:
         success, msg = _enable_via_task_scheduler()
         if success:
             return True, msg
-        logger.warning(
-            "[TaskScheduler] Admin Task Scheduler failed, falling back to Registry"
-        )
+        logger.warning("[TaskScheduler] Admin Task Scheduler failed, falling back to Registry")
 
     # Fallback to Registry (or default for non-admin)
     return _enable_via_registry()
@@ -231,7 +225,7 @@ def unregister_task() -> tuple[bool, str]:
 
     if reg_success or task_success:
         return True, "Startup disabled"
-    
+
     return False, "Failed to disable startup"
 
 

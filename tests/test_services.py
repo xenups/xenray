@@ -124,29 +124,20 @@ class TestSingboxService:
             "proxy": ["proxy.com", "1.1.1.1/32"],
             "block": ["block.com", "geoip:ir", "geosite:category-ads-all"],
         }
-        # Injects default toggles for coverage
-        with patch(
-            "src.core.config_manager.ConfigManager.get_routing_toggles",
-            return_value={
-                "block_udp_443": True,
-                "block_ads": True,
-                "direct_private_ips": True,
-                "direct_local_domains": True,
-            },
-        ):
-            # Signature: (self, socks_port, proxy_server_ip, routing_country="",
-            #            interface_name=None, routing_rules=None, mtu=1420)
-            config = singbox_service._generate_config(10805, "1.2.3.4", "ir", "eth0", routing_rules, 1500)
 
-            # Check for block rule (it should be a suffix since no prefix)
-            assert any(r.get("domain_suffix") == ["block.com"] for r in config["route"]["rules"])
-            # Check for exact domain (full: prefix)
-            assert any(r.get("domain") == ["exact.com"] for r in config["route"]["rules"])
-            # Check for IP CIDR
-            assert any(r.get("ip_cidr") == ["1.1.1.1/32"] for r in config["route"]["rules"])
-            # Check for country rule (ir)
-            assert any("ir" in str(r.get("rule_set")) for r in config["route"]["rules"] if "rule_set" in r)
-            assert config["inbounds"][0]["mtu"] == 1500
+        # Signature: (self, socks_port, proxy_server_ip, routing_country="",
+        #            interface_name=None, routing_rules=None, mtu=1420)
+        config = singbox_service._generate_config(10805, "1.2.3.4", "ir", "eth0", routing_rules, 1500)
+
+        # Check for block rule (it should be a suffix since no prefix)
+        assert any(r.get("domain_suffix") == ["block.com"] for r in config["route"]["rules"])
+        # Check for exact domain (full: prefix)
+        assert any(r.get("domain") == ["exact.com"] for r in config["route"]["rules"])
+        # Check for IP CIDR
+        assert any(r.get("ip_cidr") == ["1.1.1.1/32"] for r in config["route"]["rules"])
+        # Check for country rule (ir)
+        assert any("ir" in str(r.get("rule_set")) for r in config["route"]["rules"] if "rule_set" in r)
+        assert config["inbounds"][0]["mtu"] == 1500
 
     @patch("src.services.singbox_service.socket.getaddrinfo")
     def test_resolve_ips(self, mock_getaddr, singbox_service):

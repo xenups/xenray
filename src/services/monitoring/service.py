@@ -18,7 +18,7 @@ from typing import Callable, Optional
 
 from loguru import logger
 
-from src.core.config_manager import ConfigManager
+from src.core.app_context import AppContext
 from src.services.connection_tester import ConnectionTester
 from src.services.network_validator import NetworkValidator
 from src.services.singbox_metrics_provider import ClashAPIProvider
@@ -43,7 +43,7 @@ class ConnectionMonitoringService:
 
     def __init__(
         self,
-        config_manager: ConfigManager,
+        app_context: AppContext,
         on_signal: Callable[[MonitorSignal], None],
         on_reconnect: Callable[[str, str], bool],
         on_reconnect_event: Callable[[str, dict], None],
@@ -52,12 +52,12 @@ class ConnectionMonitoringService:
         Initialize the monitoring service with signal callback.
 
         Args:
-            config_manager: For checking auto-reconnect enabled setting
+            app_context: For checking auto-reconnect enabled setting
             on_signal: Single callback for ALL monitor signals (session-validated)
             on_reconnect: Called to attempt reconnection (file_path, mode) -> success
             on_reconnect_event: Called by AutoReconnectService for reconnect-specific events
         """
-        self._config_manager = config_manager
+        self._app_context = app_context
         self._on_signal = on_signal
 
         self._lock = threading.Lock()
@@ -77,7 +77,7 @@ class ConnectionMonitoringService:
         # Only emits reconnect-flow events, not monitor signals
         self._auto_reconnect = AutoReconnectService(
             network_validator=self._network_validator,
-            config_loader=config_manager.load_config,
+            config_loader=app_context.load_config,
             connection_tester=ConnectionTester,
             connect_fn=on_reconnect,
             event_emitter=on_reconnect_event,
@@ -132,7 +132,7 @@ class ConnectionMonitoringService:
         """
         with self._lock:
             # Check if monitoring is enabled (single decision point)
-            if not self._config_manager.get_auto_reconnect_enabled():
+            if not self._app_context.settings.get_auto_reconnect_enabled():
                 logger.info(f"[MonitoringService] Disabled (battery saver mode) - session {session_id}")
                 self._is_running = False
                 return False
@@ -206,7 +206,7 @@ class ConnectionMonitoringService:
 
     def is_enabled(self) -> bool:
         """Check if auto-reconnect is enabled in settings."""
-        return self._config_manager.get_auto_reconnect_enabled()
+        return self._app_context.settings.get_auto_reconnect_enabled()
 
     @property
     def session_id(self) -> int:

@@ -18,10 +18,12 @@ class AddServerDialog(ft.AlertDialog):
         on_server_added: Callable[[str, dict], None],
         on_subscription_added: Callable[[str, str], None],
         on_close: Callable,
+        on_create_chain: Callable = None,
     ):
         self._on_server_added = on_server_added
         self._on_subscription_added = on_subscription_added
         self._on_close = on_close
+        self._on_create_chain = on_create_chain
 
         self._name_input = ft.TextField(
             label=t("add_dialog.name_label"),
@@ -48,11 +50,29 @@ class AddServerDialog(ft.AlertDialog):
                 width=450,
             ),
             actions=[
-                ft.TextButton(t("add_dialog.cancel"), on_click=self._handle_close),
-                ft.TextButton(t("add_dialog.add"), on_click=self._handle_add),
+                ft.Row(
+                    [
+                        ft.TextButton(
+                            t("chain.title"),
+                            icon=ft.Icons.LINK,
+                            on_click=self._handle_create_chain,
+                            visible=bool(on_create_chain),
+                        ),
+                        ft.Container(expand=True),  # Spacer pushes right buttons
+                        ft.TextButton(t("add_dialog.cancel"), on_click=self._handle_close),
+                        ft.TextButton(t("add_dialog.add"), on_click=self._handle_add),
+                    ],
+                    expand=True,
+                ),
             ],
-            actions_alignment=ft.MainAxisAlignment.END,
+            actions_alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
         )
+
+    def _handle_create_chain(self, e):
+        """Handle create chain button click."""
+        if self._on_create_chain:
+            self._on_close()
+            self._on_create_chain()
 
     def _handle_add(self, e):
         """Handle the add button click. Supports multiple configs separated by newlines."""

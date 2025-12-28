@@ -15,7 +15,7 @@ from typing import Optional
 
 from loguru import logger
 
-from src.core.config_manager import ConfigManager
+from src.core.app_context import AppContext
 from src.core.constants import XRAY_LOCATION_ASSET
 
 
@@ -27,16 +27,115 @@ class XrayConfigProcessor:
     """
 
     SUPPORTED_PROTOCOLS = ["vless", "vmess", "trojan", "shadowsocks", "hysteria2"]
+    # Protocols that can be part of a chain (as intermediate or exit nodes)
+    CHAINABLE_PROTOCOLS = {
+        "vless",
+        "vmess",
+        "trojan",
+        "shadowsocks",
+        "socks",
+        "http",
+        "hysteria2",
+        "tuic",
+        "wireguard",
+    }
     DNS_TIMEOUT = 5.0  # seconds
 
-    def __init__(self, config_manager: ConfigManager):
+    def __init__(self, app_context: AppContext):
         """
         Initialize Xray config processor.
 
         Args:
             config_manager: Configuration manager instance
         """
-        self._config_manager = config_manager
+        self._app_context = app_context
+
+    def build_chain_config(self, chain_profile: dict) -> tuple[bool, Optional[dict], str]:
+        """
+        Build a complete Xray configuration for a chain of servers.
+
+        Args:
+            chain_profile: The chain profile object (containing 'items' list of profiles)
+
+        Returns:
+            Tuple (success, config_dict, error_message)
+        """
+        try:
+            items = chain_profile.get("items", [])
+            if not items or len(items) < 2:
+                return False, None, "Chain must have at least 2 servers"
+
+            # Resolve items if they are just IDs
+            resolved_items = []
+            for item in items:
+                if isinstance(item, str):
+                    profile = self._app_context.get_profile_by_id(item)
+                    if profile:
+                        resolved_items.append(profile)
+                    else:
+                        logger.warning(f"Chain item not found: {item}")
+                elif isinstance(item, dict):
+                    resolved_items.append(item)
+
+            if len(resolved_items) < 2:
+                return False, None, "Chain has insufficient valid servers"
+
+            # 1. Validate all nodes are chainable
+            chain_outbounds = []
+            for i, node in enumerate(resolved_items):
+                # Extract the outbound config from the node
+                node_config = node.get("config", {})
+                outbounds = node_config.get("outbounds", [])
+
+                # Find the proxy outbound
+                proxy_out = next((o for o in outbounds if o.get("protocol") in self.CHAINABLE_PROTOCOLS), None)
+
+                if not proxy_out:
+                    return False, None, f"Node {i+1} ({node.get('name')}) has no valid proxy outbound"
+
+                # Deep copy to avoid modifying original
+                outbound = copy.deepcopy(proxy_out)
+                outbound["tag"] = f"proxy_{i}"
+                chain_outbounds.append(outbound)
+
+            # 2. Link the chain: Exit -> Middle -> Entry
+            # In Xray, we define dependency in REVERSE order of traffic flow.
+            # If traffic flow is: Entry -> Middle -> Exit -> Target
+            # Then:
+            # Exit outbound needs dialerProxy = Middle
+            # Middle outbound needs dialerProxy = Entry
+            # Entry outbound connects directly (no dialerProxy)
+
+            # Iterate from 1 to N-1 (linking current to previous)
+            for i in range(1, len(chain_outbounds)):
+                current = chain_outbounds[i]  # e.g. Middle (index 1)
+                prev_tag = chain_outbounds[i - 1]["tag"]  # e.g. Entry (index 0)
+
+                if "streamSettings" not in current:
+                    current["streamSettings"] = {}
+
+                # sockopt.dialerProxy is the modern way to chain
+                if "sockopt" not in current["streamSettings"]:
+                    current["streamSettings"]["sockopt"] = {}
+
+                current["streamSettings"]["sockopt"]["dialerProxy"] = prev_tag
+
+            # 3. Construct final config
+            # We return the list as-is (Entry, Middle, Exit)
+            # ConnectionTester will route to the LAST item (Exit)
+            # which correctly pulls in Middle -> Entry via dialerProxy.
+
+            config = {
+                "log": {"loglevel": "info"},
+                "inbounds": [],
+                "outbounds": chain_outbounds,
+                "routing": {"domainStrategy": "AsIs", "rules": []},
+            }
+
+            return True, config, ""
+
+        except Exception as e:
+            return False, None, str(e)
 
     def process_config(self, config: dict) -> dict:
         """
@@ -81,7 +180,7 @@ class XrayConfigProcessor:
             config: Configuration dict (modified in-place)
         """
         # Get user configured port
-        user_port = self._config_manager.get_proxy_port()
+        user_port = self._app_context.settings.get_proxy_port()
 
         # Check if inbounds already exist
         if not config.get("inbounds"):
@@ -226,7 +325,7 @@ class XrayConfigProcessor:
             SOCKS port number
         """
         # Get user configured port
-        user_port = self._config_manager.get_proxy_port()
+        user_port = self._app_context.settings.get_proxy_port()
 
         # Update the config to listen on this port and inject Sniffing
         for inbound in config.get("inbounds", []):
@@ -310,7 +409,7 @@ class XrayConfigProcessor:
         Args:
             config: Configuration dict (modified in-place)
         """
-        dns_config = self._config_manager.load_dns_config()
+        dns_config = self._app_context.dns.load()
 
         servers = []
         for item in dns_config:

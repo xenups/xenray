@@ -36,7 +36,8 @@
     "share": "اشتراک‌گذاری",
     "delete": "حذف",
     "copy_link": "کپی لینک",
-    "subscription_updated": "{count} سرور به‌روزرسانی شد"
+    "subscription_updated": "{count} سرور به‌روز شد",
+    "servers": "سرور"
   },
   "add_dialog": {
     "title": "افزودن سرور یا اشتراک",
@@ -233,5 +234,43 @@
     "minimize": "کوچک‌نمایی",
     "cancel": "انصراف",
     "remember": "همیشه به منوی سیستم انتقال بده"
+  },
+  "chain": {
+    "title": "ایجاد زنجیره",
+    "edit_title": "ویرایش زنجیره",
+    "subtitle": "زنجیره‌سازی چند سرور",
+    "name_label": "نام زنجیره",
+    "name_hint": "مثال: WireGuard → Reality",
+    "order_label": "ترتیب زنجیره (ورود → خروج)",
+    "add_item": "افزودن به زنجیره",
+    "remove_item": "حذف",
+    "save": "ذخیره زنجیره",
+    "cancel": "انصراف",
+    "entry_label": "ورودی",
+    "exit_label": "→ اینترنت",
+    "select_outbound": "انتخاب سرور",
+    "info_hint": "اول = ورودی، آخر = اینترنت",
+    "validation": {
+      "min_items": "زنجیره باید حداقل ۲ آیتم داشته باشد",
+      "circular": "سرور تکراری در زنجیره",
+      "invalid_protocol": "{protocol} نمی‌تواند در زنجیره استفاده شود",
+      "missing_profile": "سرور یافت نشد",
+      "no_nesting": "زنجیره‌ها نمی‌توانند شامل زنجیره دیگر باشند",
+      "has_dialer_proxy": "آخرین سرور از قبل dialerProxy دارد"
+    },
+    "list_item": {
+      "chain_label": "زنجیره",
+      "servers_count": "{count} سرور",
+      "expand": "نمایش جزئیات",
+      "collapse": "پنهان کردن جزئیات",
+      "invalid": "پروفایل‌های گم‌شده",
+      "broken_tooltip": "برخی سرورهای این زنجیره حذف شده‌اند"
+    },
+    "toast": {
+      "created": "زنجیره '{name}' ایجاد شد! 🔗",
+      "updated": "زنجیره به‌روزرسانی شد",
+      "deleted": "زنجیره حذف شد",
+      "invalid_chain": "اتصال ممکن نیست: زنجیره سرورهای گم‌شده دارد"
+    }
   }
 }

@@ -7,7 +7,7 @@ from typing import Optional
 import flet as ft
 
 # Local modules
-from src.core.config_manager import ConfigManager
+from src.core.app_context import AppContext
 from src.core.connection_manager import ConnectionManager
 from src.core.constants import APPDIR, FONT_URLS
 from src.core.i18n import t
@@ -40,7 +40,7 @@ class MainWindow:
     def __init__(
         self,
         page: ft.Page,
-        config_manager: ConfigManager,
+        app_context: AppContext,
         connection_manager: ConnectionManager,
         network_stats: NetworkStatsService,
         network_stats_handler: NetworkStatsHandler,
@@ -57,7 +57,7 @@ class MainWindow:
         self._page = page
 
         # Injected Dependencies
-        self._config_manager = config_manager
+        self._app_context = app_context
         self._connection_manager = connection_manager
         self._network_stats = network_stats
 
@@ -242,16 +242,16 @@ class MainWindow:
         if os.path.exists(icon_path):
             self._page.window.icon = icon_path
 
-        saved_mode = self._config_manager.get_connection_mode()
-        saved_theme = self._config_manager.get_theme_mode()
+        saved_mode = self._app_context.settings.get_connection_mode()
+        saved_theme = self._app_context.settings.get_theme_mode()
 
         self._current_mode = ConnectionMode.VPN if saved_mode == "vpn" else ConnectionMode.PROXY
         self._page.theme_mode = ft.ThemeMode.DARK if saved_theme == "dark" else ft.ThemeMode.LIGHT
 
         # Load last selected profile (from local OR subscriptions)
-        last_profile_id = self._config_manager.get_last_selected_profile_id()
+        last_profile_id = self._app_context.settings.get_last_selected_profile_id()
         if last_profile_id:
-            profile = self._config_manager.get_profile_by_id(last_profile_id)
+            profile = self._app_context.get_profile_by_id(last_profile_id)
             if profile:
                 self._selected_profile = profile
                 # We can't update UI here as it's not built yet, but we set the state
@@ -322,7 +322,7 @@ class MainWindow:
     def _on_admin_restart_confirmed(self):
         """Callback from AdminRestartDialog."""
         # Save "VPN" mode so the app starts in VPN mode after restart
-        self._config_manager.set_connection_mode(ConnectionMode.VPN.value)
+        self._app_context.settings.set_connection_mode(ConnectionMode.VPN.value)
         ProcessUtils.restart_as_admin()
 
     def _open_server_drawer_impl(self, e=None):
@@ -357,7 +357,7 @@ class MainWindow:
         self._ui_helper.call(lambda: self._update_selected_profile_ui(profile))
 
         try:
-            self._config_manager.set_last_selected_profile_id(profile.get("id"))
+            self._app_context.settings.set_last_selected_profile_id(profile.get("id"))
         except Exception:
             pass
 
@@ -443,7 +443,7 @@ class MainWindow:
             return
 
         self._current_mode = mode
-        self._config_manager.set_connection_mode("vpn" if mode == ConnectionMode.VPN else "proxy")
+        self._app_context.settings.set_connection_mode("vpn" if mode == ConnectionMode.VPN else "proxy")
         self._status_display.set_status(t("status.mode_selected", mode=mode.name.title()))
         self._ui_helper.call(lambda: None)
 
@@ -463,7 +463,7 @@ class MainWindow:
         logger.debug("[DEBUG] MainWindow.show_close_dialog() called")
 
         # Check if user already chose to always minimize
-        if self._config_manager.get_remember_close_choice():
+        if self._app_context.settings.get_remember_close_choice():
             logger.debug("[DEBUG] Remembered choice found: Always minimize")
             self._handle_minimize_action()
             return
@@ -471,7 +471,7 @@ class MainWindow:
         dialog = CloseDialog(
             on_exit=self._on_close_dialog_exit,
             on_minimize=self._handle_minimize_action,
-            config_manager=self._config_manager,
+            app_context=self._app_context,
         )
         self._page.overlay.append(dialog)
         dialog.open = True

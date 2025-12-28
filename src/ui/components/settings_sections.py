@@ -349,7 +349,7 @@ class StartupToggleRow(ft.Container):
 
     def __init__(
         self,
-        config_manager,
+        app_context,
         is_registered: bool,
         is_supported: bool,
         on_register: Callable[[], tuple],
@@ -360,14 +360,14 @@ class StartupToggleRow(ft.Container):
         Initialize the startup toggle.
 
         Args:
-            config_manager: ConfigManager instance for persistence
+            app_context: AppContext instance for persistence
             is_registered: Whether startup task is currently registered
             is_supported: Whether startup feature is supported on this OS
             on_register: Callable that registers the startup task, returns (success, msg)
             on_unregister: Callable that unregisters the startup task, returns (success, msg)
             toast_callback: Callable to show toast messages (message, type)
         """
-        self._config_manager = config_manager
+        self._app_context = app_context
         self._on_register = on_register
         self._on_unregister = on_unregister
         self._toast_callback = toast_callback
@@ -412,7 +412,7 @@ class StartupToggleRow(ft.Container):
             success, msg = self._on_unregister()
 
         if success:
-            self._config_manager.set_startup_enabled(enabled)
+            self._app_context.settings.set_startup_enabled(enabled)
             self._toast_callback(t("settings.startup_saved"), "success")
         else:
             # Revert on failure
@@ -434,20 +434,20 @@ class AutoReconnectToggleRow(ft.Container):
 
     def __init__(
         self,
-        config_manager,
+        app_context,
         toast_callback: Callable[[str, str], None],
     ):
         """
         Initialize the auto-reconnect toggle.
 
         Args:
-            config_manager: ConfigManager instance for state
+            app_context: AppContext instance for state
             toast_callback: Callable to show toast messages (message, type)
         """
-        self._config_manager = config_manager
+        self._app_context = app_context
         self._toast_callback = toast_callback
 
-        is_enabled = config_manager.get_auto_reconnect_enabled()
+        is_enabled = app_context.settings.get_auto_reconnect_enabled()
         self._switch = ft.Switch(
             value=is_enabled,
             active_color=ft.Colors.PRIMARY,
@@ -480,7 +480,7 @@ class AutoReconnectToggleRow(ft.Container):
     def _handle_toggle(self, e):
         """Handle toggle change - coordinates persistence and UI update."""
         enabled = self._switch.value
-        self._config_manager.set_auto_reconnect_enabled(enabled)
+        self._app_context.settings.set_auto_reconnect_enabled(enabled)
 
         if enabled:
             self._toast_callback(t("settings.auto_reconnect_enabled"), "success")

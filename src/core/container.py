@@ -1,7 +1,7 @@
 """Dependency Injection Container for XenRay application."""
 from dependency_injector import containers, providers
 
-from src.core.config_manager import ConfigManager
+from src.core.app_context import AppContext
 from src.core.connection_manager import ConnectionManager
 from src.services.network_stats import NetworkStatsService
 
@@ -21,17 +21,17 @@ class ApplicationContainer(containers.DeclarativeContainer):
     # SINGLETONS - Application-lifetime core services only
     # ═══════════════════════════════════════════════════════════
 
-    config_manager = providers.Singleton(ConfigManager)
+    app_context = providers.Singleton(AppContext.create)
 
     connection_manager = providers.Singleton(
         ConnectionManager,
-        config_manager=config_manager,
+        app_context=app_context,
     )
 
     systray_handler = providers.Singleton(
         "src.ui.handlers.systray_handler.SystrayHandler",
         connection_manager=connection_manager,
-        config_manager=config_manager,
+        app_context=app_context,
     )
 
     # ═══════════════════════════════════════════════════════════
@@ -54,7 +54,7 @@ class ApplicationContainer(containers.DeclarativeContainer):
     connection_handler = providers.Factory(
         "src.ui.handlers.connection_handler.ConnectionHandler",
         connection_manager=connection_manager,
-        config_manager=config_manager,
+        app_context=app_context,
         network_stats=network_stats,
     )
 
@@ -65,7 +65,7 @@ class ApplicationContainer(containers.DeclarativeContainer):
 
     theme_handler = providers.Factory(
         "src.ui.handlers.theme_handler.ThemeHandler",
-        config_manager=config_manager,
+        app_context=app_context,
     )
 
     installer_handler = providers.Factory(
@@ -75,7 +75,7 @@ class ApplicationContainer(containers.DeclarativeContainer):
 
     latency_monitor_handler = providers.Factory(
         "src.ui.handlers.latency_monitor_handler.LatencyMonitorHandler",
-        config_manager=config_manager,
+        app_context=app_context,
     )
 
     # ═══════════════════════════════════════════════════════════
@@ -113,7 +113,7 @@ class ApplicationContainer(containers.DeclarativeContainer):
 
     main_window = providers.Factory(
         "src.ui.main_window.MainWindow",
-        config_manager=config_manager,
+        app_context=app_context,
         connection_manager=connection_manager,
         network_stats=network_stats,
         network_stats_handler=network_stats_handler,

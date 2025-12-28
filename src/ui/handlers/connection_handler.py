@@ -8,7 +8,7 @@ import threading
 import time
 from typing import Callable, Optional
 
-from src.core.config_manager import ConfigManager
+from src.core.app_context import AppContext
 from src.core.connection_manager import ConnectionManager
 from src.core.constants import SINGBOX_LOG_FILE, TMPDIR, XRAY_LOG_FILE
 from src.core.i18n import t
@@ -30,11 +30,11 @@ class ConnectionHandler:
     def __init__(
         self,
         connection_manager: ConnectionManager,
-        config_manager: ConfigManager,
+        app_context: AppContext,
         network_stats: NetworkStatsService,
     ):
         self._connection_manager = connection_manager
-        self._config_manager = config_manager
+        self._app_context = app_context
         self._network_stats = network_stats
         self._state_lock = threading.Lock()  # Thread safety for shared state
 
@@ -283,7 +283,24 @@ class ConnectionHandler:
     def _write_temp_config(self, profile: dict) -> str:
         """Write temporary config file."""
         config_path = os.path.join(TMPDIR, "current_config.json")
-        profile_config = profile.get("config") if profile else {}
+
+        # Check if this is a chain
+        is_chain = profile.get("_is_chain") or profile.get("items") is not None
+
+        if is_chain:
+            # Generate chain config using XrayConfigProcessor
+            from src.services.xray_config_processor import XrayConfigProcessor
+
+            processor = XrayConfigProcessor(self._app_context)
+            success, chain_config, error_or_tag = processor.build_chain_config(profile)
+            if not success:
+                logger.error(f"[ConnectionHandler] Failed to build chain config: {error_or_tag}")
+                profile_config = {}
+            else:
+                profile_config = chain_config
+                logger.info(f"[ConnectionHandler] Generated chain config with {len(profile.get('items', []))} items")
+        else:
+            profile_config = profile.get("config") if profile else {}
 
         with open(config_path, "w", encoding="utf-8") as f:
             json.dump(profile_config, f)
@@ -315,7 +332,7 @@ class ConnectionHandler:
         if self._status_display:
             self._ui_call(lambda: self._status_display.set_step(t("connection.checking_network")))
 
-        proxy_port = self._config_manager.get_proxy_port()
+        proxy_port = self._app_context.settings.get_proxy_port()
         if not NetworkUtils.check_proxy_connectivity(proxy_port):
             logger.error("[ConnectionHandler] Post-connection check failed")
             self._set_connecting(False)

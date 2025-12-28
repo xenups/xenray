@@ -1,7 +1,7 @@
-
+import ctypes
 import subprocess
 import sys
-import ctypes
+
 
 def is_admin():
     try:
@@ -9,12 +9,13 @@ def is_admin():
     except:
         return False
 
+
 def debug_no_userid():
     print(f"Is Admin: {is_admin()}")
-    
+
     exe_path = r"C:\Windows\System32\cmd.exe"
     cwd = r"C:\Windows\System32"
-    
+
     # EXACTLY the same structure as task_scheduler.py (no UserId)
     ps_script = f"""
     $ErrorActionPreference = 'Stop'
@@ -29,20 +30,20 @@ def debug_no_userid():
         Write-Error $_
     }}
     """
-    
+
     print("Running PowerShell...")
-    result = subprocess.run(
-        ["powershell", "-Command", ps_script],
-        capture_output=True,
-        text=True
-    )
-    
+    result = subprocess.run(["powershell", "-Command", ps_script], capture_output=True, text=True)
+
     print("STDOUT:", result.stdout)
     print("STDERR:", result.stderr)
     print("Return Code:", result.returncode)
 
     if result.returncode == 0:
-         subprocess.run(["powershell", "-Command", "Unregister-ScheduledTask -TaskName 'XenRay_Debug_NoUser' -Confirm:$false"], capture_output=True)
+        subprocess.run(
+            ["powershell", "-Command", "Unregister-ScheduledTask -TaskName 'XenRay_Debug_NoUser' -Confirm:$false"],
+            capture_output=True,
+        )
+
 
 if __name__ == "__main__":
     debug_no_userid()

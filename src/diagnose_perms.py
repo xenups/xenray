@@ -1,8 +1,8 @@
-
 import ctypes
+import os
 import subprocess
 import sys
-import os
+
 
 def is_admin():
     try:
@@ -10,12 +10,16 @@ def is_admin():
     except:
         return False
 
+
 def diagnose():
     admin = is_admin()
     print(f"Is Admin: {admin}")
-    
+
     print("Getting User Info via PowerShell...")
-    subprocess.run(["powershell", "-Command", "whoami; [System.Security.Principal.WindowsIdentity]::GetCurrent().Name"], check=False)
+    subprocess.run(
+        ["powershell", "-Command", "whoami; [System.Security.Principal.WindowsIdentity]::GetCurrent().Name"],
+        check=False,
+    )
 
     if not admin:
         print("WARNING: Script not running as Admin. Task creation WILL fail.")
@@ -43,8 +47,15 @@ def diagnose():
     print("STDERR:", res2.stderr)
 
     # Cleanup
-    subprocess.run(["powershell", "-Command", "Unregister-ScheduledTask -TaskName 'Test_Simple_Admin' -Confirm:$false"], capture_output=True)
-    subprocess.run(["powershell", "-Command", "Unregister-ScheduledTask -TaskName 'Test_Explicit_Admin' -Confirm:$false"], capture_output=True)
+    subprocess.run(
+        ["powershell", "-Command", "Unregister-ScheduledTask -TaskName 'Test_Simple_Admin' -Confirm:$false"],
+        capture_output=True,
+    )
+    subprocess.run(
+        ["powershell", "-Command", "Unregister-ScheduledTask -TaskName 'Test_Explicit_Admin' -Confirm:$false"],
+        capture_output=True,
+    )
+
 
 if __name__ == "__main__":
     diagnose()

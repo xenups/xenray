@@ -1,9 +1,9 @@
 """Cross-platform build script for creating executables with PyInstaller."""
+import os
+import platform
+import shutil
 import subprocess
 import sys
-import os
-import shutil
-import platform
 
 # Ensure we're in the project root
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))

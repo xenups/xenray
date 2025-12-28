@@ -4,7 +4,7 @@ import threading
 
 from loguru import logger
 
-from src.core.config_manager import ConfigManager
+from src.core.app_context import AppContext
 from src.core.connection_orchestrator import ConnectionOrchestrator
 from src.core.i18n import t
 from src.services.singbox_service import SingboxService
@@ -29,23 +29,20 @@ class ConnectionManager:
     State Machine: IDLE → CONNECTING → CONNECTED → (RECONNECTING) → DISCONNECTING → IDLE
     """
 
-    def __init__(self, config_manager: ConfigManager):
+    def __init__(self, app_context: AppContext):
         """Initialize ConnectionManager with injected dependencies (DIP)."""
 
         # Initialize services (Dependency Injection)
-        from src.services.configuration_processor import ConfigurationProcessor
         from src.services.legacy_config_service import LegacyConfigService
         from src.services.monitoring import ConnectionMonitoringService, MonitorSignal
-        from src.services.routing_rules_manager import RoutingRulesManager
         from src.services.xray_config_processor import XrayConfigProcessor
 
         # Store MonitorSignal for use in signal handler
         self._MonitorSignal = MonitorSignal
 
-        self._config_manager = config_manager
-        config_processor = ConfigurationProcessor(config_manager)
-        self._xray_processor = XrayConfigProcessor(config_manager)
-        routing_manager = RoutingRulesManager(config_manager)
+        self._app_context = app_context
+        self._app_context = app_context
+        self._xray_processor = XrayConfigProcessor(app_context)
         legacy_config_service = LegacyConfigService(self._xray_processor)
 
         xray_service = XrayService()
@@ -63,7 +60,7 @@ class ConnectionManager:
         # - on_reconnect: Called when reconnect attempt is needed
         # - on_reconnect_event: For reconnect-specific events (reconnecting, reconnected, etc.)
         self._monitoring = ConnectionMonitoringService(
-            config_manager=config_manager,
+            app_context=app_context,
             on_signal=self._handle_signal,
             on_reconnect=self._reconnect_internal,
             on_reconnect_event=self._emit_event,
@@ -71,11 +68,9 @@ class ConnectionManager:
 
         # Create ConnectionOrchestrator with all dependencies
         self._orchestrator = ConnectionOrchestrator(
-            config_manager=config_manager,
-            config_processor=config_processor,
+            app_context=app_context,
             network_validator=self._monitoring.network_validator,
             xray_processor=self._xray_processor,
-            routing_manager=routing_manager,
             xray_service=xray_service,
             singbox_service=singbox_service,
             legacy_config_service=legacy_config_service,
@@ -187,7 +182,7 @@ class ConnectionManager:
                 logger.info(f"[ConnectionManager] Connection established in {mode} mode (session {current_session})")
 
                 # Start monitoring via facade (single decision point)
-                config, _ = self._config_manager.load_config(file_path)
+                config, _ = self._app_context.load_config(file_path)
                 transport_type = self._xray_processor.get_transport_type(config) if config else None
                 self._monitoring.start(current_session, mode=mode, transport_type=transport_type)
 

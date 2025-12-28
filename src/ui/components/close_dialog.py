@@ -9,10 +9,10 @@ from src.core.i18n import t
 class CloseDialog(ft.AlertDialog):
     """Redesigned premium dialog asking user to minimize or exit."""
 
-    def __init__(self, on_exit: callable, on_minimize: callable, config_manager):
+    def __init__(self, on_exit: callable, on_minimize: callable, app_context):
         self._on_exit_callback = on_exit
         self._on_minimize_callback = on_minimize
-        self._config_manager = config_manager
+        self._app_context = app_context
 
         # Define checkbox early so the handlers can reference it
         self.remember_checkbox = ft.Checkbox(
@@ -109,7 +109,7 @@ class CloseDialog(ft.AlertDialog):
     def _handle_minimize(self, e):
         logger.debug(f"[DEBUG] Close dialog: Minimize clicked (remember={self.remember_checkbox.value})")
         if self.remember_checkbox.value:
-            self._config_manager.set_remember_close_choice(True)
+            self._app_context.settings.set_remember_close_choice(True)
 
         self.open = False
         if self.page:

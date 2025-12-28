@@ -9,7 +9,7 @@ class TestConnectionOrchestrator:
     @pytest.fixture
     def orchestrator(self):
         # Mock all dependencies
-        self.mock_config_mgr = MagicMock()
+        self.mock_app_context = MagicMock()
         self.mock_config_proc = MagicMock()
         self.mock_net_val = MagicMock()
         self.mock_xray_proc = MagicMock()
@@ -22,7 +22,7 @@ class TestConnectionOrchestrator:
         self.mock_legacy_config_svc.is_legacy.return_value = False
 
         return ConnectionOrchestrator(
-            self.mock_config_mgr,
+            self.mock_app_context,
             self.mock_config_proc,
             self.mock_net_val,
             self.mock_xray_proc,
@@ -37,7 +37,7 @@ class TestConnectionOrchestrator:
     def test_establish_proxy_connection_success(self, mock_file, mock_conn_test, orchestrator):
         """Test successful proxy connection."""
         # Setup mocks
-        orchestrator._config_manager.load_config.return_value = (
+        orchestrator._app_context.load_config.return_value = (
             {"outbounds": []},
             None,
         )
@@ -63,7 +63,7 @@ class TestConnectionOrchestrator:
     def test_establish_vpn_connection_success(self, mock_file, mock_conn_test, orchestrator):
         """Test successful VPN connection."""
         # Setup mocks
-        orchestrator._config_manager.load_config.return_value = (
+        orchestrator._app_context.load_config.return_value = (
             {"outbounds": []},
             None,
         )
@@ -98,7 +98,7 @@ class TestConnectionOrchestrator:
     @patch("builtins.open", new_callable=mock_open)
     def test_establish_connection_fail_xray(self, mock_file, orchestrator):
         """Test failure when Xray fails to start."""
-        orchestrator._config_manager.load_config.return_value = (
+        orchestrator._app_context.load_config.return_value = (
             {"outbounds": []},
             None,
         )

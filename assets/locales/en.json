@@ -36,7 +36,8 @@
     "share": "Share",
     "delete": "Delete",
     "copy_link": "Copy Link",
-    "subscription_updated": "Updated {count} servers"
+    "subscription_updated": "Updated {count} servers",
+    "servers": "servers"
   },
   "add_dialog": {
     "title": "Add Server or Subscription",
@@ -236,5 +237,43 @@
     "minimize": "Minimize",
     "cancel": "Cancel",
     "remember": "Always minimize to tray"
+  },
+  "chain": {
+    "title": "Create Chain",
+    "edit_title": "Edit Chain",
+    "subtitle": "Chain multiple servers together",
+    "name_label": "Chain Name",
+    "name_hint": "e.g., WireGuard → Reality",
+    "order_label": "Chain Order (Entry → Exit)",
+    "add_item": "Add to Chain",
+    "remove_item": "Remove",
+    "save": "Save Chain",
+    "cancel": "Cancel",
+    "entry_label": "Entry",
+    "exit_label": "→ Internet",
+    "select_outbound": "Select Server",
+    "info_hint": "First = Entry, Last = Internet",
+    "validation": {
+      "min_items": "Chain must have at least 2 items",
+      "circular": "Duplicate server in chain",
+      "invalid_protocol": "{protocol} cannot be used in chains",
+      "missing_profile": "Server not found",
+      "no_nesting": "Chains cannot contain other chains",
+      "has_dialer_proxy": "Last server already has dialerProxy"
+    },
+    "list_item": {
+      "chain_label": "Chain",
+      "servers_count": "{count} servers",
+      "expand": "Show details",
+      "collapse": "Hide details",
+      "invalid": "Missing profiles",
+      "broken_tooltip": "Some servers in this chain were deleted"
+    },
+    "toast": {
+      "created": "Chain '{name}' created! 🔗",
+      "updated": "Chain updated",
+      "deleted": "Chain deleted",
+      "invalid_chain": "Cannot connect: chain has missing servers"
+    }
   }
 }

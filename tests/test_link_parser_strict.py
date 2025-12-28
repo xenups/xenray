@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import Mock
 
-from src.core.config_manager import ConfigManager
+from src.core.app_context import AppContext
 from src.services.xray_config_processor import XrayConfigProcessor
 from src.utils.link_parser import LinkParser
 
@@ -95,7 +95,7 @@ class TestLinkParserStrict(unittest.TestCase):
 
 class TestXrayConfigProcessorStrict(unittest.TestCase):
     def setUp(self):
-        self.mock_config_manager = Mock(spec=ConfigManager)
+        self.mock_config_manager = Mock(spec=AppContext)
         self.mock_config_manager.load_dns_config.return_value = []
         self.mock_config_manager.get_proxy_port.return_value = 10805  # Mock user port
         self.processor = XrayConfigProcessor(self.mock_config_manager)

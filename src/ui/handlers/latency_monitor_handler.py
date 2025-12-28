@@ -7,7 +7,7 @@ from typing import Callable, Optional
 
 import flet as ft
 
-from src.core.config_manager import ConfigManager
+from src.core.app_context import AppContext
 from src.core.logger import logger
 from src.services.connection_tester import ConnectionTester
 
@@ -15,8 +15,8 @@ from src.services.connection_tester import ConnectionTester
 class LatencyMonitorHandler:
     """Manages periodic latency checks when disconnected."""
 
-    def __init__(self, config_manager: ConfigManager):
-        self._config_manager = config_manager
+    def __init__(self, app_context: AppContext):
+        self._app_context = app_context
         self._page: Optional[ft.Page] = None
         self._status_display = None
         self._server_card = None
@@ -74,7 +74,31 @@ class LatencyMonitorHandler:
         if not profile:
             return
 
-        config = profile.get("config", {})
+        config = profile.get("config")
+        is_chain = profile.get("_is_chain") or profile.get("items") is not None
+
+        # Build chain config if needed
+        if is_chain and (not config or not config.get("outbounds")):
+            try:
+                from src.services.xray_config_processor import XrayConfigProcessor
+
+                processor = XrayConfigProcessor(self._app_context)
+                success, chain_config, error_msg = processor.build_chain_config(profile)
+                if success:
+                    config = chain_config
+                else:
+                    logger.warning(f"[LatencyMonitor] Chain config build failed: {error_msg}")
+                    # Show error in status
+                    if self._ui_helper and self._status_display:
+                        self._ui_helper.call(
+                            self._status_display.set_pre_connection_ping,
+                            error_msg,
+                            False,
+                        )
+                    return
+            except Exception as e:
+                logger.error(f"[LatencyMonitor] Failed to build config for chain: {e}")
+                return
 
         def on_result(success, result_str, country_data=None):
             is_running = self._is_running_getter() if self._is_running_getter else False
@@ -91,7 +115,7 @@ class LatencyMonitorHandler:
                 # Update country if found
                 if country_data and profile:
                     profile.update(country_data)
-                    self._config_manager.update_profile(profile.get("id"), country_data)
+                    self._app_context.profiles.update(profile.get("id"), country_data)
                     # Update display
                     if self._ui_helper:
                         if self._server_card:
@@ -105,4 +129,4 @@ class LatencyMonitorHandler:
                             )
 
         fetch_flag = not profile.get("country_code")
-        ConnectionTester.test_connection(config, on_result, fetch_country=fetch_flag)
+        ConnectionTester.test_connection(config if config else {}, on_result, fetch_country=fetch_flag)
