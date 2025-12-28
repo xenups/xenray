@@ -10,12 +10,14 @@ from src.core.subscription_manager import SubscriptionManager
 
 class TestSubscriptionManager:
     @pytest.fixture
-    def mock_config_manager(self):
-        return MagicMock()
+    def mock_app_context(self):
+        mock = MagicMock()
+        mock.subscriptions = MagicMock()
+        return mock
 
     @pytest.fixture
-    def sub_manager(self, mock_config_manager):
-        return SubscriptionManager(mock_config_manager)
+    def sub_manager(self, mock_app_context):
+        return SubscriptionManager(mock_app_context)
 
     def test_parse_plain_text(self, sub_manager):
         """Test parsing plain text links."""
@@ -64,10 +66,10 @@ class TestSubscriptionManager:
         assert profiles[0]["name"] == "FetchedServer"
         mock_urlopen.assert_called_once()
 
-    def test_update_subscription(self, sub_manager, mock_config_manager):
+    def test_update_subscription(self, sub_manager, mock_app_context):
         """Test update_subscription with threading and callback."""
         sub_id = "test-sub-id"
-        mock_config_manager.load_subscriptions.return_value = [
+        mock_app_context.subscriptions.load_all.return_value = [
             {
                 "id": sub_id,
                 "name": "My Sub",
@@ -89,14 +91,14 @@ class TestSubscriptionManager:
 
             from unittest.mock import ANY
 
-            mock_config_manager.save_subscription_data.assert_called()
+            mock_app_context.subscriptions.update.assert_called()
             callback_mock.assert_called_with(True, ANY)
 
-    def test_update_subscription_not_found(self, sub_manager, mock_config_manager):
+    def test_update_subscription_not_found(self, sub_manager, mock_app_context):
         """Test update_subscription when ID is not found."""
-        mock_config_manager.load_subscriptions.return_value = []
+        mock_app_context.subscriptions.load_all.return_value = []
         sub_manager.update_subscription("wrong-id")
 
         # Small wait for thread
         time.sleep(0.1)
-        mock_config_manager.save_subscription_data.assert_not_called()
+        mock_app_context.subscriptions.update.assert_not_called()

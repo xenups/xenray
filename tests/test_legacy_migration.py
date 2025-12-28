@@ -74,10 +74,8 @@ class TestLegacyConfigService(unittest.TestCase):
 class TestOrchestratorFallback(unittest.TestCase):
     def setUp(self):
         self.mock_config_manager = Mock()
-        self.mock_config_processor = Mock()
         self.mock_network_validator = Mock()
         self.mock_xray_processor = Mock()
-        self.mock_routing_manager = Mock()
         self.mock_xray_service = Mock()
         self.mock_singbox_service = Mock()
         self.mock_legacy_service = Mock()
@@ -89,10 +87,8 @@ class TestOrchestratorFallback(unittest.TestCase):
 
         self.orchestrator = ConnectionOrchestrator(
             self.mock_config_manager,
-            self.mock_config_processor,
             self.mock_network_validator,
             self.mock_xray_processor,
-            self.mock_routing_manager,
             self.mock_xray_service,
             self.mock_singbox_service,
             self.mock_legacy_service,

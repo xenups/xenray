@@ -96,8 +96,10 @@ class TestLinkParserStrict(unittest.TestCase):
 class TestXrayConfigProcessorStrict(unittest.TestCase):
     def setUp(self):
         self.mock_config_manager = Mock(spec=AppContext)
-        self.mock_config_manager.load_dns_config.return_value = []
-        self.mock_config_manager.get_proxy_port.return_value = 10805  # Mock user port
+        self.mock_config_manager.dns = Mock()
+        self.mock_config_manager.dns.load.return_value = []
+        self.mock_config_manager.settings = Mock()
+        self.mock_config_manager.settings.get_proxy_port.return_value = 10805
         self.processor = XrayConfigProcessor(self.mock_config_manager)
 
     def test_processor_resolves_address_for_bootstrap(self):

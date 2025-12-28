@@ -10,10 +10,8 @@ class TestConnectionOrchestrator:
     def orchestrator(self):
         # Mock all dependencies
         self.mock_app_context = MagicMock()
-        self.mock_config_proc = MagicMock()
         self.mock_net_val = MagicMock()
         self.mock_xray_proc = MagicMock()
-        self.mock_routing_mgr = MagicMock()
         self.mock_xray_svc = MagicMock()
         self.mock_singbox_svc = MagicMock()
         self.mock_legacy_config_svc = MagicMock()
@@ -23,10 +21,8 @@ class TestConnectionOrchestrator:
 
         return ConnectionOrchestrator(
             self.mock_app_context,
-            self.mock_config_proc,
             self.mock_net_val,
             self.mock_xray_proc,
-            self.mock_routing_mgr,
             self.mock_xray_svc,
             self.mock_singbox_svc,
             self.mock_legacy_config_svc,

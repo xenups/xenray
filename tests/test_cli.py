@@ -18,9 +18,9 @@ class TestCLI:
     @patch("src.cli._init_core")
     def test_list_profiles_empty(self, mock_init):
         """Test list command with no profiles."""
-        mock_config_mgr = MagicMock()
-        mock_config_mgr.load_profiles.return_value = []
-        mock_init.return_value = (mock_config_mgr, MagicMock())
+        mock_app_context = MagicMock()
+        mock_app_context.profiles.load_all.return_value = []
+        mock_init.return_value = (mock_app_context, MagicMock())
 
         result = runner.invoke(app, ["list"])
         assert result.exit_code == 0
@@ -29,12 +29,12 @@ class TestCLI:
     @patch("src.cli._init_core")
     def test_list_profiles_with_data(self, mock_init):
         """Test list command with profiles."""
-        mock_config_mgr = MagicMock()
-        mock_config_mgr.load_profiles.return_value = [
+        mock_app_context = MagicMock()
+        mock_app_context.profiles.load_all.return_value = [
             {"id": "1", "name": "Profile 1", "config": {"address": "1.2.3.4"}}
         ]
-        mock_config_mgr.get_last_selected_profile_id.return_value = None
-        mock_init.return_value = (mock_config_mgr, MagicMock())
+        mock_app_context.settings.get_last_selected_profile_id.return_value = None
+        mock_init.return_value = (mock_app_context, MagicMock())
 
         result = runner.invoke(app, ["list"])
         assert result.exit_code == 0
@@ -49,11 +49,11 @@ class TestCLI:
     @patch("src.services.connection_tester.ConnectionTester.test_connection_sync")
     def test_connect_success(self, mock_ping, mock_perf, mock_cleanup, mock_prep, mock_admin, mock_init):
         """Test successful connect command."""
-        mock_config_mgr = MagicMock()
-        mock_config_mgr.load_profiles.return_value = [
+        mock_app_context = MagicMock()
+        mock_app_context.profiles.load_all.return_value = [
             {"id": "1", "name": "Profile 1", "config": {"address": "1.2.3.4"}}
         ]
-        mock_init.return_value = (mock_config_mgr, MagicMock())
+        mock_init.return_value = (mock_app_context, MagicMock())
         mock_perf.return_value = True
         mock_ping.return_value = (
             True,
@@ -72,8 +72,8 @@ class TestCLI:
     @patch("src.utils.link_parser.LinkParser.parse_link")
     def test_add_profile(self, mock_parse, mock_init):
         """Test add command."""
-        mock_config_mgr = MagicMock()
-        mock_init.return_value = (mock_config_mgr, MagicMock())
+        mock_app_context = MagicMock()
+        mock_init.return_value = (mock_app_context, MagicMock())
         mock_parse.return_value = {
             "config": {"v": "2"},
             "name": "New Server",
@@ -84,4 +84,4 @@ class TestCLI:
 
         assert result.exit_code == 0
         assert "Profile added successfully!" in result.stdout
-        mock_config_mgr.save_profile.assert_called_with("New Server", {"v": "2"})
+        mock_app_context.profiles.save.assert_called_with("New Server", {"v": "2"})

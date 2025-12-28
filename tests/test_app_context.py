@@ -212,7 +212,6 @@ class TestAppContext:
         assert profile["name"] == "S1"
         assert profile["subscription_id"] == sub_id
 
-
     def test_last_selected_profile_id(self, ctx):
         """Test setting and getting last selected profile ID."""
         ctx.settings.set_last_selected_profile_id("test-id")
