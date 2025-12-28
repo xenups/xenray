@@ -9,7 +9,6 @@ Usage:
     python scripts/download_geo_files.py
 """
 
-import os
 import sys
 import urllib.request
 from pathlib import Path
@@ -29,18 +28,18 @@ GEOSITE_URL = "https://github.com/v2fly/domain-list-community/releases/latest/do
 def download_file(url: str, dest: Path, rename_to: str = None) -> Path:
     """Download a file with progress."""
     final_dest = dest.parent / (rename_to or dest.name)
-    
+
     if final_dest.exists():
         print(f"  [SKIP] {final_dest.name} already exists")
         return final_dest
-    
+
     print(f"  [DOWNLOAD] {url}")
-    
+
     def progress(block_num, block_size, total_size):
         downloaded = block_num * block_size
         percent = min(100, (downloaded / total_size) * 100) if total_size > 0 else 0
         print(f"\r  Progress: {percent:.1f}%", end="", flush=True)
-    
+
     urllib.request.urlretrieve(url, final_dest, reporthook=progress)
     print()  # New line after progress
     print(f"  [OK] Downloaded to {final_dest}")
@@ -51,28 +50,28 @@ def main():
     print("=" * 60)
     print("Downloading Xray Geo Files to bin/")
     print("=" * 60)
-    
+
     # Create bin directory
     BIN_DIR.mkdir(parents=True, exist_ok=True)
-    
+
     try:
         # Download geoip.dat
         print("\n[STEP 1] Downloading geoip.dat...")
         download_file(GEOIP_URL, BIN_DIR / "geoip.dat")
-        
+
         # Download geosite.dat (renamed from dlc.dat)
         print("\n[STEP 2] Downloading geosite.dat...")
         download_file(GEOSITE_URL, BIN_DIR / "dlc.dat", rename_to="geosite.dat")
-        
+
         print("\n" + "=" * 60)
         print("DOWNLOAD COMPLETE!")
         print(f"Files location: {BIN_DIR}")
         print("=" * 60)
-        
+
     except Exception as e:
         print(f"\n[ERROR] Download failed: {e}")
         return 1
-    
+
     return 0
 
 

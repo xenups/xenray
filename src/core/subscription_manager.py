@@ -9,7 +9,7 @@ import urllib.request
 import uuid
 from typing import Callable, List, Optional
 
-from src.core.config_manager import ConfigManager
+from src.core.app_context import AppContext
 from src.core.i18n import t
 from src.core.logger import logger
 from src.utils.link_parser import LinkParser
@@ -18,8 +18,8 @@ from src.utils.link_parser import LinkParser
 class SubscriptionManager:
     """Manages subscription fetching and updating."""
 
-    def __init__(self, config_manager: ConfigManager):
-        self._config_manager = config_manager
+    def __init__(self, app_context: AppContext):
+        self._app_context = app_context
 
     def fetch_subscription(self, url: str) -> List[dict]:
         """
@@ -122,7 +122,7 @@ class SubscriptionManager:
 
         def _task():
             try:
-                subs = self._config_manager.load_subscriptions()
+                subs = self._app_context.subscriptions.load_all()
                 sub = next((s for s in subs if s["id"] == sub_id), None)
                 if not sub:
                     return
@@ -137,7 +137,7 @@ class SubscriptionManager:
                 sub["profiles"] = profiles
                 sub["updated_at"] = str(time.time())
 
-                self._config_manager.save_subscription_data(sub)
+                self._app_context.subscriptions.update(sub)
 
                 if callback:
                     callback(True, t("server_list.subscription_updated", count=len(profiles)))

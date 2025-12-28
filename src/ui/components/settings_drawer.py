@@ -8,21 +8,24 @@ import time
 import flet as ft
 from loguru import logger
 
-from src.core.config_manager import ConfigManager
+from src.core.app_context import AppContext
 from src.core.constants import APP_VERSION
 from src.core.i18n import set_language as set_app_language
 from src.core.i18n import t
 from src.core.types import ConnectionMode
+from src.services import task_scheduler
 from src.services.app_update_service import AppUpdateService
 from src.services.singbox_service import SingboxService
 from src.services.xray_installer import XrayInstallerService
 from src.ui.components.settings_sections import (
+    AutoReconnectToggleRow,
     CountryDropdownRow,
     LanguageDropdownRow,
     ModeSwitchRow,
     PortInputRow,
     SettingsListTile,
     SettingsSection,
+    StartupToggleRow,
 )
 from src.utils.process_utils import ProcessUtils
 
@@ -32,14 +35,14 @@ class SettingsDrawer(ft.NavigationDrawer):
 
     def __init__(
         self,
-        config_manager: ConfigManager,
+        app_context: AppContext,
         on_installer_run,
         on_mode_changed,
         get_current_mode,
         navigate_to,
         navigate_back,
     ):
-        self._config_manager = config_manager
+        self._app_context = app_context
         self._on_installer_run_external = on_installer_run
         self._on_mode_changed = on_mode_changed
         self._get_current_mode = get_current_mode
@@ -53,16 +56,32 @@ class SettingsDrawer(ft.NavigationDrawer):
         # Components
         self._mode_switch_row = ModeSwitchRow(is_proxy, self._handle_mode_change)
         self._port_row = PortInputRow(
-            self._config_manager.get_proxy_port(),
+            self._app_context.settings.get_proxy_port(),
             self._save_port,
         )
         self._country_row = CountryDropdownRow(
-            self._config_manager.get_routing_country(),
+            self._app_context.settings.get_routing_country(),
             self._save_country,
         )
         self._language_row = LanguageDropdownRow(
-            self._config_manager.get_language(),
+            self._app_context.settings.get_language(),
             self._save_language,
+        )
+
+        # Startup toggle (self-contained component)
+        self._startup_row = StartupToggleRow(
+            app_context=self._app_context,
+            is_registered=task_scheduler.is_task_registered(),
+            is_supported=task_scheduler.is_supported(),
+            on_register=task_scheduler.register_task,
+            on_unregister=task_scheduler.unregister_task,
+            toast_callback=self._show_toast,
+        )
+
+        # Auto-reconnect toggle (self-contained component)
+        self._auto_reconnect_row = AutoReconnectToggleRow(
+            app_context=self._app_context,
+            toast_callback=self._show_toast,
         )
 
         # Build UI
@@ -111,7 +130,8 @@ class SettingsDrawer(ft.NavigationDrawer):
                                 SettingsSection(
                                     t("settings.application"),
                                     [
-                                        self._language_row,
+                                        self._startup_row,
+                                        self._auto_reconnect_row,
                                         SettingsListTile(
                                             ft.Icons.ROUTE,
                                             t("settings.routing_rules"),
@@ -160,6 +180,7 @@ class SettingsDrawer(ft.NavigationDrawer):
                                             f"v{APP_VERSION} by Xenups",
                                             show_chevron=False,
                                         ),
+                                        self._language_row,
                                     ],
                                 ),
                             ],
@@ -244,7 +265,7 @@ class SettingsDrawer(ft.NavigationDrawer):
 
         def confirm_restart(e):
             page.close(dlg)
-            self._config_manager.set_connection_mode(ConnectionMode.VPN.value)
+            self._app_context.settings.set_connection_mode(ConnectionMode.VPN.value)
             ProcessUtils.restart_as_admin()
 
         dlg = ft.AlertDialog(
@@ -276,7 +297,7 @@ class SettingsDrawer(ft.NavigationDrawer):
         try:
             port = int(value)
             if 1024 <= port <= 65535:
-                self._config_manager.set_proxy_port(port)
+                self._app_context.settings.set_proxy_port(port)
                 self._port_row.set_border_color(ft.Colors.GREEN_400)
                 self._show_toast(t("settings.port_saved", port=port), "success")
             else:
@@ -295,7 +316,7 @@ class SettingsDrawer(ft.NavigationDrawer):
             return
 
         val = self._country_row.value
-        self._config_manager.set_routing_country(val)
+        self._app_context.settings.set_routing_country(val)
         self._show_toast(t("settings.country_saved", val=val), "success")
         page.update()
 
@@ -306,11 +327,11 @@ class SettingsDrawer(ft.NavigationDrawer):
             return
 
         lang = self._language_row.value
-        self._config_manager.set_language(lang)
+        self._app_context.settings.set_language(lang)
         set_app_language(lang)
 
         # Notify user - app needs restart for full effect
-        msg = "Language changed! Restart app for full effect. / زبان تغییر کرد! برنامه را ریستارت کنید."
+        msg = t("settings.language_restart_msg")
         self._show_toast(msg, "success")
         page.update()
 
@@ -320,7 +341,7 @@ class SettingsDrawer(ft.NavigationDrawer):
         if not page:
             return
 
-        self._config_manager.set_remember_close_choice(False)
+        self._app_context.settings.set_remember_close_choice(False)
         self._show_toast(t("settings.reset_close_success"), "success")
         page.update()
 
@@ -437,7 +458,7 @@ class SettingsDrawer(ft.NavigationDrawer):
 
         self.open = False
         self.update()
-        routing_page = RoutingPage(self._config_manager, on_back=self._on_subpage_back)
+        routing_page = RoutingPage(self._app_context, on_back=self._on_subpage_back)
         self._navigate_to(routing_page)
 
     def _open_dns_manager(self, e):
@@ -446,7 +467,7 @@ class SettingsDrawer(ft.NavigationDrawer):
 
         self.open = False
         self.update()
-        dns_page = DNSPage(self._config_manager, on_back=self._on_subpage_back)
+        dns_page = DNSPage(self._app_context, on_back=self._on_subpage_back)
         self._navigate_to(dns_page)
 
     def _check_app_updates(self, e):

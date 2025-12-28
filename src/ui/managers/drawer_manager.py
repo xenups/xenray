@@ -30,10 +30,13 @@ class DrawerManager:
 
         # Server list
         self._main._server_list = ServerList(
-            self._main._config_manager,
+            self._main._app_context,
             self._main._on_server_selected,
             on_profile_updated=self._main._on_profile_updated,
             toast_manager=self._main._toast,
+            navigate_to=self._main.navigate_to,
+            navigate_back=self._main.navigate_back,
+            close_sheet=lambda: self._close_server_sheet(),
         )
         self._main._server_list.set_page(self._main._page)
 
@@ -56,7 +59,7 @@ class DrawerManager:
 
         # Settings drawer
         self._main._settings_drawer = SettingsDrawer(
-            self._main._config_manager,
+            self._main._app_context,
             self._main._run_specific_installer,
             self._main._on_mode_changed,
             lambda: self._main._current_mode,
@@ -85,14 +88,20 @@ class DrawerManager:
 
     def _load_last_profile(self):
         """Load and set the last selected profile."""
-        last_profile_id = self._main._config_manager.get_last_selected_profile_id()
+        last_profile_id = self._main._app_context.settings.get_last_selected_profile_id()
         if last_profile_id:
-            profiles = self._main._config_manager.load_profiles()
+            profiles = self._main._app_context.profiles.load_all()
             for profile in profiles:
                 if profile.get("id") == last_profile_id:
                     self._main._selected_profile = profile
                     self._main._server_card.update_server(profile)
                     break
+
+    def _close_server_sheet(self):
+        """Close the server list bottom sheet."""
+        if self._main._server_sheet:
+            self._main._server_sheet.open = False
+            self._main._page.close(self._main._server_sheet)
 
     def open_server_drawer(self, e=None):
         """Open the server list bottom sheet."""

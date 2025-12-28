@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from src.ui.main_window import MainWindow
 
 
-from src.core.config_manager import ConfigManager
+from src.core.app_context import AppContext
 from src.core.connection_manager import ConnectionManager
 
 
@@ -26,10 +26,10 @@ class SystrayHandler:
     def __init__(
         self,
         connection_manager: ConnectionManager,
-        config_manager: ConfigManager,
+        app_context: AppContext,
     ):
         self._connection_manager = connection_manager
-        self._config_manager = config_manager
+        self._app_context = app_context
         self._main: Optional[MainWindow] = None
         self._icon: Optional[pystray.Icon] = None
         self._tray_thread: Optional[threading.Thread] = None

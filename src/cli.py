@@ -21,7 +21,7 @@ except ImportError:
 
 from loguru import logger
 
-from src.core.config_manager import ConfigManager
+from src.core.app_context import AppContext
 from src.core.connection_manager import ConnectionManager
 from src.core.settings import Settings
 
@@ -53,15 +53,15 @@ def _init_core():
     logger.add(EARLY_LOG_FILE, level="DEBUG", rotation="10 MB")
 
     # Initialize core managers
-    config_mgr = ConfigManager()
-    conn_mgr = ConnectionManager(config_manager=config_mgr)
+    app_context = AppContext.create()
+    conn_mgr = ConnectionManager(app_context=app_context)
 
-    return config_mgr, conn_mgr
+    return app_context, conn_mgr
 
 
-def _select_profile(config_mgr, profile_number: Optional[int]) -> dict:
+def _select_profile(app_context, profile_number: Optional[int]) -> dict:
     """Select profile by number or default."""
-    profiles_data = config_mgr.load_profiles()
+    profiles_data = app_context.profiles.load_all()
 
     if not profiles_data:
         typer.echo("❌ Error: No profiles found", err=True)
@@ -79,10 +79,10 @@ def _select_profile(config_mgr, profile_number: Optional[int]) -> dict:
         typer.echo(f"📋 Using profile #{profile_number}: {selected_profile.get('name', 'Unknown')}")
     else:
         # Use default (last selected) profile
-        last_profile_id = config_mgr.get_last_selected_profile_id()
+        last_profile_id = app_context.settings.get_last_selected_profile_id()
 
         if last_profile_id:
-            selected_profile = config_mgr.get_profile_by_id(last_profile_id)
+            selected_profile = app_context.get_profile_by_id(last_profile_id)
             if not selected_profile:
                 selected_profile = profiles_data[0]
         else:
@@ -133,10 +133,10 @@ def connect(
 
     check_and_request_admin(mode)
 
-    config_mgr, conn_mgr = _init_core()
+    app_context, conn_mgr = _init_core()
 
     # Select profile
-    selected_profile = _select_profile(config_mgr, profile_number)
+    selected_profile = _select_profile(app_context, profile_number)
 
     # Get config
     profile_config = selected_profile.get("config")
@@ -153,7 +153,7 @@ def connect(
 
         if success:
             # Save as last selected profile
-            config_mgr.set_last_selected_profile_id(selected_profile.get("id"))
+            app_context.settings.set_last_selected_profile_id(selected_profile.get("id"))
 
             typer.echo("✅ Connected successfully!")
             typer.echo(f"   Profile: {selected_profile.get('name', 'Unknown')}")
@@ -184,7 +184,7 @@ def connect(
 @app.command()
 def disconnect():
     """Disconnect from current VPN connection."""
-    config_mgr, conn_mgr = _init_core()
+    app_context, conn_mgr = _init_core()
 
     if not conn_mgr._current_connection:
         typer.echo("ℹ️  Not connected")
@@ -198,7 +198,7 @@ def disconnect():
 @app.command()
 def status():
     """Show current connection status."""
-    config_mgr, conn_mgr = _init_core()
+    app_context, conn_mgr = _init_core()
 
     # Check if connection exists (handles adoption automatically)
     if conn_mgr._current_connection:
@@ -223,17 +223,17 @@ def status():
 @app.command("list")
 def list_profiles():
     """List all available profiles with numbers for easy selection."""
-    config_mgr, _ = _init_core()
+    app_context, _ = _init_core()
 
     # Get profiles using config manager method
-    profiles_data = config_mgr.load_profiles()
+    profiles_data = app_context.profiles.load_all()
 
     if not profiles_data:
         typer.echo("ℹ️  No profiles found")
         return
 
     # Get last selected profile for highlighting
-    last_profile_id = config_mgr.get_last_selected_profile_id()
+    last_profile_id = app_context.settings.get_last_selected_profile_id()
 
     typer.echo(f"📋 Available Profiles ({len(profiles_data)}):\n")
 
@@ -296,7 +296,7 @@ def add(
     ),
 ):
     """Add a new profile from a share link."""
-    config_mgr, _ = _init_core()
+    app_context, _ = _init_core()
 
     # Import link parser
     from src.utils.link_parser import LinkParser
@@ -315,14 +315,14 @@ def add(
         profile_name = name or result.get("name", "Imported Profile")
 
         # Save profile
-        config_mgr.save_profile(profile_name, config)
+        app_context.profiles.save(profile_name, config)
 
         typer.echo("✅ Profile added successfully!")
         typer.echo(f"   Name: {profile_name}")
         typer.echo(f"   Protocol: {result.get('protocol', 'Unknown')}")
 
         # Show in list
-        profiles = config_mgr.load_profiles()
+        profiles = app_context.profiles.load_all()
         profile_count = len(profiles)
         typer.echo(f"\n💡 Profile is now #{profile_count} in the list")
         typer.echo(f"   Use 'xenray-cli connect {profile_count}' to connect")
@@ -345,11 +345,11 @@ def ping(
     concurrency: int = typer.Option(3, "--concurrency", "-c", help="Batch workers for list ping"),
 ):
     """Test latency for profiles. Defaults to batch testing the entire list."""
-    config_mgr, _ = _init_core()
+    app_context, _ = _init_core()
 
     # CASE 1: Single Profile Ping
     if profile_number is not None:
-        selected_profile = _select_profile(config_mgr, profile_number)
+        selected_profile = _select_profile(app_context, profile_number)
         profile_config = selected_profile.get("config")
         if not profile_config:
             typer.echo("❌ Error: Invalid profile configuration", err=True)
@@ -374,7 +374,7 @@ def ping(
         return
 
     # CASE 2: Batch List Ping
-    profiles_data = config_mgr.load_profiles()
+    profiles_data = app_context.profiles.load_all()
     if not profiles_data:
         typer.echo("ℹ️  No profiles found")
         return

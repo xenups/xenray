@@ -4,6 +4,37 @@ All notable changes to XenRay will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **Signal-Based Monitoring Architecture**: Complete refactor of connection monitoring
+  - `MonitorSignal` enum - monitors emit facts, not events
+  - `ConnectionManager` is now the single event authority
+  - Session-scoped lifecycle prevents stale events after disconnect
+- **Auto-Reconnect**: Automatic connection recovery with hybrid detection
+  - Passive log monitoring for Xray error patterns
+  - Active traffic stall detection with Clash API metrics
+  - Smart warmup handling for xhttp/splithttp transports
+- **Battery Saver Mode**: Optional toggle to disable monitoring and save resources
+- **Startup on Boot**: Windows Task Scheduler integration for auto-start
+- **Self-Contained Settings Components**: `StartupToggleRow`, `AutoReconnectToggleRow`
+
+### Changed
+- **ConnectionMonitoringService**: Now creates its own dependencies internally
+  - Simplified ConnectionManager init from ~70 to ~40 lines
+  - Single `on_signal` callback replaces multiple callbacks
+- **ConnectionOrchestrator**: Removed unused `observer` and `log_monitor` parameters
+  - Monitoring now handled entirely by ConnectionMonitoringService
+- **Settings Drawer**: Extracted toggle components for better maintainability
+
+### Technical
+- New `services/monitoring/` subpackage with:
+  - `signals.py` - MonitorSignal enum
+  - `service.py` - ConnectionMonitoringService facade
+  - `passive_log_monitor.py` - Log-based failure detection
+  - `active_connectivity_monitor.py` - Traffic stall detection
+  - `auto_reconnect_service.py` - Reconnection handling
+- Removed 50+ lines of dead code from settings_drawer.py
+- All 140 tests passing
+
 ## [0.1.9-alpha] - 2025-12-21
 
 ### Added

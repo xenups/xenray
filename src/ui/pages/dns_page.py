@@ -1,15 +1,15 @@
 """DNS management page with i18n support."""
 import flet as ft
 
-from src.core.config_manager import ConfigManager
+from src.core.app_context import AppContext
 from src.core.i18n import t
 
 
 class DNSPage(ft.Container):
-    def __init__(self, config_manager: ConfigManager, on_back):
-        self._config_manager = config_manager
+    def __init__(self, app_context: AppContext, on_back):
+        self._app_context = app_context
         self._on_back = on_back
-        self._dns_list = self._config_manager.load_dns_config()
+        self._dns_list = self._app_context.dns.load()
 
         super().__init__(
             expand=True,
@@ -257,4 +257,4 @@ class DNSPage(ft.Container):
             self._refresh_list()
 
     def _save(self):
-        self._config_manager.save_dns_config(self._dns_list)
+        self._app_context.dns.save(self._dns_list)

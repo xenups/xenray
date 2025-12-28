@@ -7,15 +7,17 @@ from typing import Callable, Optional
 
 import flet as ft
 
-from src.core.config_manager import ConfigManager
+from src.core.app_context import AppContext
 from src.core.i18n import t
 from src.core.logger import logger
 from src.core.subscription_manager import SubscriptionManager
 from src.services.latency_tester import LatencyTester
 from src.ui.components.add_server_dialog import AddServerDialog
+from src.ui.components.chain_list_item import ChainListItem
 from src.ui.components.server_list_header import ServerListHeader
 from src.ui.components.server_list_item import ServerListItem
 from src.ui.components.subscription_list_item import SubscriptionListItem
+from src.ui.pages.chain_builder_page import ChainBuilderPage
 
 
 class ServerList(ft.Container):
@@ -23,25 +25,32 @@ class ServerList(ft.Container):
 
     def __init__(
         self,
-        config_manager: ConfigManager,
+        app_context: AppContext,
         on_server_selected: Callable,
         on_profile_updated: Callable = None,
         toast_manager=None,
+        navigate_to: Callable = None,
+        navigate_back: Callable = None,
+        close_sheet: Callable = None,
     ):
-        self._config_manager = config_manager
-        self._subscription_manager = SubscriptionManager(config_manager)
+        self._app_context = app_context
+        self._subscription_manager = SubscriptionManager(app_context)
         self._on_server_selected = on_server_selected
         self._on_profile_updated = on_profile_updated
         self._toast = toast_manager
+        self._navigate_to = navigate_to
+        self._navigate_back = navigate_back
+        self._close_sheet = close_sheet
 
         # Data
         self._profiles: list[dict] = []
         self._subscriptions: list[dict] = []
+        self._chains: list[dict] = []
 
         # State
         self._page: Optional[ft.Page] = None
         self._current_list_view = None
-        self._selected_profile_id = self._config_manager.get_last_selected_profile_id()  # Load last selected
+        self._selected_profile_id = self._app_context.settings.get_last_selected_profile_id()  # Load last selected
         self._active_subscription = None
 
         # Item tracking for updates
@@ -52,11 +61,12 @@ class ServerList(ft.Container):
             on_test_start=self._on_latency_test_start,
             on_test_complete=self._on_latency_test_complete,
             on_all_complete=self._on_all_latency_tests_complete,
+            app_context=self._app_context,
         )
 
         # Header Component
         self._header = ServerListHeader(
-            get_sort_mode=self._config_manager.get_sort_mode,
+            get_sort_mode=self._app_context.settings.get_sort_mode,
             set_sort_mode=self._on_sort_changed,
             on_test_latency=self._test_all_latencies,
             on_add_click=self._show_add_dialog,
@@ -70,6 +80,7 @@ class ServerList(ft.Container):
             on_server_added=self._handle_server_added,
             on_subscription_added=self._handle_subscription_added,
             on_close=self._close_add_dialog,
+            on_create_chain=self.show_chain_builder,
         )
 
         # Animated Body Switcher
@@ -80,6 +91,7 @@ class ServerList(ft.Container):
             reverse_duration=150,
             switch_in_curve=ft.AnimationCurve.EASE_IN,
             switch_out_curve=ft.AnimationCurve.EASE_OUT,
+            expand=True,
         )
 
         super().__init__(
@@ -124,7 +136,7 @@ class ServerList(ft.Container):
     # --- Sort Handling ---
     def _on_sort_changed(self, mode: str):
         """Handle sort mode change."""
-        self._config_manager.set_sort_mode(mode)
+        self._app_context.settings.set_sort_mode(mode)
         if self._active_subscription:
             self._enter_subscription_view(self._active_subscription, preserve_tests=True)
         else:
@@ -132,7 +144,7 @@ class ServerList(ft.Container):
 
     def _apply_sort(self, items: list) -> list:
         """Apply current sort mode to items."""
-        mode = self._config_manager.get_sort_mode()
+        mode = self._app_context.settings.get_sort_mode()
 
         def get_latency(item):
             pid = item.get("id")
@@ -154,8 +166,9 @@ class ServerList(ft.Container):
         """Load and display profiles."""
 
         def _task():
-            self._profiles = self._config_manager.load_profiles()
-            self._subscriptions = self._config_manager.load_subscriptions()
+            self._profiles = self._app_context.profiles.load_all()
+            self._subscriptions = self._app_context.subscriptions.load_all()
+            self._chains = self._app_context.load_chains()
             self._subscriptions.sort(key=lambda x: x.get("name", "").lower())
 
             # If in subscription view, refresh that instead
@@ -177,6 +190,24 @@ class ServerList(ft.Container):
             # Build list view
             new_list_view = ft.ListView(expand=True, spacing=5, padding=5)
             self._item_map.clear()
+
+            # Add chains first
+            # Add chains first
+            logger.info(f"Loading {len(self._chains)} chains into UI")
+            for chain in self._chains:
+                try:
+                    chain_item = ChainListItem(
+                        chain=chain,
+                        app_context=self._app_context,
+                        on_select=self._select_chain,
+                        on_edit=self._edit_chain,
+                        on_delete=self._delete_chain,
+                        is_selected=(self._selected_profile_id == chain.get("id")),
+                    )
+                    new_list_view.controls.append(chain_item)
+                    self._item_map[chain.get("id")] = chain_item
+                except Exception as e:
+                    logger.error(f"Failed to create ChainListItem for {chain.get('name')}: {e}")
 
             # Add subscriptions
             for sub in self._subscriptions:
@@ -308,9 +339,9 @@ class ServerList(ft.Container):
         if success and country_data:
             profile.update(country_data)
             if self._active_subscription:
-                self._config_manager.save_subscription_data(self._active_subscription)
+                self._app_context.subscriptions.update(self._active_subscription)
             else:
-                self._config_manager.update_profile(pid, country_data)
+                self._app_context.profiles.update(pid, country_data)
 
             # Notify parent
             if self._on_profile_updated:
@@ -336,9 +367,9 @@ class ServerList(ft.Container):
             }
             if self._active_subscription:
                 profile.update(latency_data)  # Update reference inside subscription
-                self._config_manager.save_subscription_data(self._active_subscription)
+                self._app_context.subscriptions.update(self._active_subscription)
             else:
-                self._config_manager.update_profile(pid, latency_data)
+                self._app_context.profiles.update(pid, latency_data)
 
     def _on_all_latency_tests_complete(self):
         """Called when all latency tests are done."""
@@ -361,7 +392,7 @@ class ServerList(ft.Container):
 
     def _delete_server(self, profile_id: str):
         """Delete a server profile."""
-        self._config_manager.delete_profile(profile_id)
+        self._app_context.profiles.delete(profile_id)
         self._load_profiles(update_ui=True)
         if self._page:
             if self._toast:
@@ -392,7 +423,7 @@ class ServerList(ft.Container):
 
     def _delete_subscription(self, sub_id: str):
         """Delete a subscription."""
-        self._config_manager.delete_subscription(sub_id)
+        self._app_context.subscriptions.delete(sub_id)
         self._load_profiles(update_ui=True)
         if self._page:
             if self._toast:
@@ -420,14 +451,115 @@ class ServerList(ft.Container):
 
     def _handle_server_added(self, name: str, config: dict):
         """Handle a new server being added."""
-        self._config_manager.save_profile(name, config)
+        self._app_context.profiles.save(name, config)
         if self._toast:
             self._toast.success(t("add_dialog.server_added", name=name))
         self._load_profiles(update_ui=True)
 
     def _handle_subscription_added(self, name: str, url: str):
         """Handle a new subscription being added."""
-        self._config_manager.save_subscription(name, url)
+        self._app_context.subscriptions.save(name, url)
         if self._toast:
             self._toast.success(t("add_dialog.subscription_added", name=name))
         self._load_profiles(update_ui=True)
+
+    # --- Chain Management ---
+    def _select_chain(self, chain: dict):
+        """Handle chain selection for connection."""
+        # Check if chain is valid
+        if not chain.get("valid", True):
+            if self._toast:
+                self._toast.error(t("chain.toast.invalid_chain"))
+            return
+
+        self._selected_profile_id = chain["id"]
+
+        # Pass chain to parent with a special marker and exit server's country info
+        chain_with_marker = chain.copy()
+        chain_with_marker["_is_chain"] = True
+
+        # Get exit server (last in chain) for country/flag display
+        if chain.get("items"):
+            last_profile_id = chain["items"][-1]
+            exit_profile = self._app_context.get_profile_by_id(last_profile_id)
+            if exit_profile:
+                chain_with_marker["country_code"] = exit_profile.get("country_code")
+                chain_with_marker["country_name"] = exit_profile.get("country_name")
+
+        if self._on_server_selected:
+            self._on_server_selected(chain_with_marker)
+        self._load_profiles(update_ui=True)
+
+    def _edit_chain(self, chain: dict):
+        """Open chain builder view for editing."""
+        self.show_chain_builder(existing_chain=chain)
+
+    def _delete_chain(self, chain_id: str):
+        """Delete a chain."""
+        self._app_context.chains.delete(chain_id)
+        self._load_profiles(update_ui=True)
+        if self._page:
+            if self._toast:
+                self._toast.success(t("chain.toast.deleted"))
+            self._page.update()
+
+    def _handle_chain_saved(self, name: str, profile_ids: list):
+        """Handle a new chain being saved."""
+        chain_id = self._app_context.save_chain(name, profile_ids)
+        if chain_id:
+            if self._toast:
+                self._toast.success(t("chain.toast.created", name=name))
+            self._load_profiles(update_ui=True)
+
+    def _handle_chain_updated(self, chain_id: str, name: str, profile_ids: list):
+        """Handle a chain being updated."""
+        success = self._app_context.update_chain(
+            chain_id,
+            {
+                "name": name,
+                "items": profile_ids,
+            },
+        )
+        if success:
+            if self._toast:
+                self._toast.success(t("chain.toast.updated"))
+            self._load_profiles(update_ui=True)
+
+    def show_chain_builder(self, existing_chain: Optional[dict] = None):
+        """Show the chain builder page for creating/editing a chain."""
+        if not self._navigate_to:
+            logger.warning("No navigate_to callback available for chain builder")
+            return
+
+        # Close the server sheet first
+        if self._close_sheet:
+            self._close_sheet()
+
+        logger.info("Opening chain builder page")
+
+        def on_back(e=None):
+            """Handle back navigation from chain builder."""
+            logger.info("Navigating back from chain builder")
+            if self._navigate_back:
+                self._navigate_back()
+            # Reload profiles after returning
+            self._load_profiles(update_ui=True)
+
+        def on_save(name: str, profile_ids: list):
+            """Handle chain save."""
+            if existing_chain:
+                if self._toast:
+                    self._toast.success(t("chain.toast.updated"))
+            else:
+                if self._toast:
+                    self._toast.success(t("chain.toast.created", name=name))
+
+        chain_page = ChainBuilderPage(
+            app_context=self._app_context,
+            on_back=on_back,
+            on_save=on_save,
+            existing_chain=existing_chain,
+        )
+
+        # Navigate to the chain builder page
+        self._navigate_to(chain_page)

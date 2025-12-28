@@ -42,7 +42,7 @@ async def main(page):
     # Initialize i18n
     from src.core.i18n import set_language
 
-    set_language(container.config_manager().get_language())
+    set_language(container.app_context().settings.get_language())
 
     # Initialize UI with DI
     window = container.main_window(page=page)
@@ -75,14 +75,17 @@ async def main(page):
 
 def run():
     """Entry point for poetry script - routes to GUI or CLI."""
+    import os  # Import early for getcwd and env vars
 
     # Import logger early so it's available for both modes
     from src.core.logger import logger
 
+    # Log early startup info for debugging Windows boot issues
+    logger.info(f"[Startup] XenRay starting, argv={sys.argv}, cwd={os.getcwd()}")
+
     # Check if CLI mode is requested (any command-line arguments)
     if len(sys.argv) > 1:
         # CLI mode - delegate to CLI handler (no Flet import!)
-        import os
 
         os.environ["XENRAY_SKIP_I18N"] = "1"
 
@@ -109,14 +112,25 @@ def run():
         kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
         mutex_name = "Global\\XenRay_Singleton_Mutex_v1"
 
+        # CRITICAL: Clear last error before creating mutex to avoid false positives
+        ctypes.set_last_error(0)
+
         # Create named mutex (Keep reference to prevent GC)
         global _singleton_mutex
         _singleton_mutex = kernel32.CreateMutexW(None, False, mutex_name)
 
-        if kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
+        # Get the error AFTER creating the mutex
+        last_error = ctypes.get_last_error()
+        logger.debug(f"[Startup] Mutex creation result: handle={_singleton_mutex}, last_error={last_error}")
+
+        if last_error == 183:  # ERROR_ALREADY_EXISTS
             # Application is already running
             logger.warning("Another instance is already running. Exiting.")
             return  # Exit run() without starting app
+        elif _singleton_mutex == 0:
+            # Mutex creation failed entirely
+            logger.error(f"[Startup] Failed to create mutex, error code: {last_error}")
+            # Continue anyway - better to have multiple instances than no app
     else:
         # For Unix-like systems (macOS, Linux), we can use a PID file
         import errno

@@ -7,14 +7,14 @@ from typing import Optional
 
 import flet as ft
 
-from src.core.config_manager import ConfigManager
+from src.core.app_context import AppContext
 
 
 class ThemeHandler:
     """Manages theme switching and persistence for the application."""
 
-    def __init__(self, config_manager: ConfigManager):
-        self._config_manager = config_manager
+    def __init__(self, app_context: AppContext):
+        self._app_context = app_context
         self._page: Optional[ft.Page] = None
         self._connection_button = None
         self._server_card = None
@@ -38,7 +38,7 @@ class ThemeHandler:
 
         # Save preference in background to avoid blocking UI
         threading.Thread(
-            target=self._config_manager.set_theme_mode,
+            target=self._app_context.settings.set_theme_mode,
             args=("light" if is_dark else "dark",),
             daemon=True,
         ).start()

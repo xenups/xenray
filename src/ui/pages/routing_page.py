@@ -1,16 +1,16 @@
 """Routing rules management page with i18n support."""
 import flet as ft
 
-from src.core.config_manager import ConfigManager
+from src.core.app_context import AppContext
 from src.core.i18n import t
 
 
 class RoutingPage(ft.Container):
-    def __init__(self, config_manager: ConfigManager, on_back):
-        self._config_manager = config_manager
+    def __init__(self, app_context: AppContext, on_back):
+        self._app_context = app_context
         self._on_back = on_back
-        self._rules = self._config_manager.load_routing_rules()
-        self._toggles = self._config_manager.get_routing_toggles()
+        self._rules = self._app_context.routing.load_rules()
+        self._toggles = self._app_context.routing.load_toggles()
         self._current_tab = "direct"
 
         super().__init__(
@@ -50,7 +50,7 @@ class RoutingPage(ft.Container):
     def _on_toggle_change(self, key: str, value: bool):
         """Handle toggle change."""
         self._toggles[key] = value
-        self._config_manager.set_routing_toggle(key, value)
+        self._app_context.routing.save_toggle(key, value)
 
     def _setup_ui(self):
         # Header
@@ -289,4 +289,4 @@ class RoutingPage(ft.Container):
             self._refresh_list(update=True)
 
     def _save(self):
-        self._config_manager.save_routing_rules(self._rules)
+        self._app_context.routing.save_rules(self._rules)

@@ -17,6 +17,7 @@ class LatencyTester:
         on_test_start: Optional[Callable[[dict], None]] = None,
         on_test_complete: Optional[Callable[[dict, bool, str, Optional[dict]], None]] = None,
         on_all_complete: Optional[Callable] = None,
+        app_context=None,
     ):
         """
         Initialize the latency tester.
@@ -25,10 +26,12 @@ class LatencyTester:
             on_test_start: Called when a test starts, receives profile
             on_test_complete: Called when a test completes, receives (profile, success, result, country_data)
             on_all_complete: Called when all tests are done
+            app_context: AppContext instance for resolving chains
         """
         self._on_test_start = on_test_start
         self._on_test_complete = on_test_complete
         self._on_all_complete = on_all_complete
+        self._app_context = app_context
         self._is_testing = False
         self._cancel_flag = False
         self._test_thread: Optional[threading.Thread] = None
@@ -75,9 +78,33 @@ class LatencyTester:
                 # Determine if we need to fetch flag
                 should_fetch = fetch_flags and not profile.get("country_code")
 
+                # Prepare config (handle chains)
+                config = profile.get("config")
+                is_chain = profile.get("_is_chain") or profile.get("items") is not None
+
+                # Chains don't have pre-built config - need to build it
+                if is_chain and (not config or not config.get("outbounds")) and self._app_context:
+                    try:
+                        from src.services.xray_config_processor import XrayConfigProcessor
+
+                        processor = XrayConfigProcessor(self._app_context)
+                        success, chain_config, error_msg = processor.build_chain_config(profile)
+                        if success:
+                            config = chain_config
+                        else:
+                            logger.warning(f"Chain config build failed: {error_msg}")
+                            if self._on_test_complete:
+                                self._on_test_complete(profile, False, error_msg, None)
+                            continue
+                    except Exception as e:
+                        logger.error(f"Failed to build chain config: {e}")
+                        if self._on_test_complete:
+                            self._on_test_complete(profile, False, str(e), None)
+                        continue
+
                 # Run test
                 success, result, country_data = ConnectionTester.test_connection_sync(
-                    profile.get("config", {}),
+                    config if config else {},
                     fetch_country=should_fetch,
                 )
 

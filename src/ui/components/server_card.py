@@ -7,7 +7,8 @@ from src.core.i18n import t
 class ServerCard(ft.Container):
     """Server card with Apple glass-like theme and country-based gradient colors."""
 
-    def __init__(self, on_click):
+    def __init__(self, app_context, on_click):
+        self._app_context = app_context
         self._on_click = on_click
         self._current_colors = FLAG_COLORS["default"]
 
@@ -126,6 +127,9 @@ class ServerCard(ft.Container):
             self._current_colors = FLAG_COLORS["default"]
             self._update_gradient_colors()
         else:
+            # Check if this is a chain
+            is_chain = profile.get("_is_chain") or profile.get("items") is not None
+
             # Update flag
             cc = profile.get("country_code")
             if cc:
@@ -142,32 +146,69 @@ class ServerCard(ft.Container):
                 self._icon_container.content = new_image
                 self._icon_container.tooltip = profile.get("country_name", cc)
                 self._current_colors = self._get_country_colors(cc)
+            elif is_chain:
+                # Use chain icon for chains
+                chain_icon = ft.Icon(ft.Icons.LINK, size=28, color=ft.Colors.PRIMARY)
+                self._icon_container.content = chain_icon
+                self._current_colors = FLAG_COLORS["default"]
             else:
                 self._icon_container.content = self._globe_icon
                 self._current_colors = FLAG_COLORS["default"]
 
             # Update country/city text
-            country_name = profile.get("country_name") or profile.get("name", "")
-            if cc:
-                country_name = translate_country(cc, country_name)
-            city = profile.get("city")
-            if city:
-                translated_city = translate_city(city)
-                self._country_city_text.value = f"{country_name}, {translated_city}"
+            # Update country/city text
+            if is_chain:
+                # Show chain info but try to get exit node location
+                item_count = len(profile.get("items", []))
+
+                # Try to resolve exit node for location info
+                exit_profile = None
+                if profile.get("items") and self._app_context:
+                    exit_id = profile["items"][-1]
+                    exit_profile = self._app_context.get_profile_by_id(exit_id)
+
+                if exit_profile:
+                    # Use exit profile for location display
+                    country_name = exit_profile.get("country_name") or exit_profile.get("name", "")
+                    exit_cc = exit_profile.get("country_code")
+                    if exit_cc:
+                        country_name = translate_country(exit_cc, country_name)
+
+                    city = exit_profile.get("city")
+                    if city:
+                        translated_city = translate_city(city)
+                        self._country_city_text.value = f"{country_name}, {translated_city}"
+                    else:
+                        self._country_city_text.value = country_name
+                else:
+                    # Fallback to generic chain title
+                    self._country_city_text.value = f"⛓ {t('chain.title')}"
             else:
-                self._country_city_text.value = country_name
+                country_name = profile.get("country_name") or profile.get("name", "")
+                if cc:
+                    country_name = translate_country(cc, country_name)
+                city = profile.get("city")
+                if city:
+                    translated_city = translate_city(city)
+                    self._country_city_text.value = f"{country_name}, {translated_city}"
+                else:
+                    self._country_city_text.value = country_name
 
             self._name_text.value = profile["name"]
             self._name_text.color = ft.Colors.ON_SURFACE
 
-            # Address
-            try:
-                vnext = profile["config"]["outbounds"][0]["settings"]["vnext"][0]
-                address = vnext["address"]
-                port = vnext["port"]
-                self._address_text.value = f"{address}:{port}"
-            except Exception:
-                self._address_text.value = ""
+            # Address - only for non-chain profiles
+            if is_chain:
+                item_count = len(profile.get("items", []))
+                self._address_text.value = f"{item_count} {t('server_list.servers') if item_count != 1 else 'server'}"
+            else:
+                try:
+                    vnext = profile["config"]["outbounds"][0]["settings"]["vnext"][0]
+                    address = vnext["address"]
+                    port = vnext["port"]
+                    self._address_text.value = f"{address}:{port}"
+                except Exception:
+                    self._address_text.value = ""
 
             self._update_gradient_colors()
 

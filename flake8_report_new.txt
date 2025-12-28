@@ -1,0 +1,9 @@
+[1m.\build_pyinstaller.py[m[36m:[m191[36m:[m19[36m:[m [1m[31mF541[m f-string is missing placeholders
+[1m.\scripts\build_city_database.py[m[36m:[m17[36m:[m1[36m:[m [1m[31mF401[m 'os' imported but unused
+[1m.\scripts\build_city_database.py[m[36m:[m124[36m:[m17[36m:[m [1m[31mF841[m local variable 'is_short' is assigned to but never used
+[1m.\scripts\download_binaries.py[m[36m:[m29[36m:[m1[36m:[m [1m[31mE402[m module level import not at top of file
+[1m.\scripts\download_binaries.py[m[36m:[m123[36m:[m11[36m:[m [1m[31mF541[m f-string is missing placeholders
+[1m.\scripts\download_geo_files.py[m[36m:[m12[36m:[m1[36m:[m [1m[31mF401[m 'os' imported but unused
+[1m.\src\services\startup_service.py[m[36m:[m8[36m:[m1[36m:[m [1m[31mF401[m 'typing.Optional' imported but unused
+[1m.\src\services\task_scheduler.py[m[36m:[m95[36m:[m121[36m:[m [1m[31mE501[m line too long (129 > 120 characters)
+[1m.\src\services\monitoring\active_connectivity_monitor.py[m[36m:[m4[36m:[m1[36m:[m [1m[31mF401[m 'time' imported but unused

@@ -12,12 +12,12 @@ _project_root = Path(__file__).parent.parent.parent
 load_dotenv(_project_root / ".env")
 
 # Application version from environment
-APP_VERSION = os.getenv("APP_VERSION", "0.1.9-alpha")
+APP_VERSION = os.getenv("APP_VERSION", "0.1.10-alpha")
 GITHUB_REPO = os.getenv("GITHUB_REPO", "xenups/xenray")
 UPDATE_DOWNLOAD_TIMEOUT = float(os.getenv("UPDATE_DOWNLOAD_TIMEOUT", "60"))
 UPDATE_MIN_FILE_SIZE = int(os.getenv("UPDATE_MIN_FILE_SIZE", "1048576"))
 XRAY_VERSION = os.getenv("XRAY_VERSION", "25.12.8")
-SINGBOX_VERSION = os.getenv("SINGBOX_VERSION", "1.12.13")
+SINGBOX_VERSION = os.getenv("SINGBOX_VERSION", "1.12.14")
 ARCH = os.getenv("ARCH", "64")
 
 # Application Limits

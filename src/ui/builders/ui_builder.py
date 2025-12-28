@@ -42,7 +42,9 @@ class UIBuilder:
         # Main components
         self._main._status_display = StatusDisplay()
         self._main._connection_button = ConnectionButton(on_click=self._main._on_connect_clicked)
-        self._main._server_card = ServerCard(on_click=self._main._open_server_drawer)
+        self._main._server_card = ServerCard(
+            app_context=self._main._app_context, on_click=self._main._open_server_drawer
+        )
 
         # Dashboard view
         self._main._dashboard_view = self._main._create_dashboard_view()

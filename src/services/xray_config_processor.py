@@ -9,14 +9,13 @@ Handles all Xray-specific configuration processing:
 - Server IP extraction
 """
 
-import json
+import copy
 import os
-import socket
 from typing import Optional
 
 from loguru import logger
 
-from src.core.config_manager import ConfigManager
+from src.core.app_context import AppContext
 from src.core.constants import XRAY_LOCATION_ASSET
 
 
@@ -28,16 +27,115 @@ class XrayConfigProcessor:
     """
 
     SUPPORTED_PROTOCOLS = ["vless", "vmess", "trojan", "shadowsocks", "hysteria2"]
+    # Protocols that can be part of a chain (as intermediate or exit nodes)
+    CHAINABLE_PROTOCOLS = {
+        "vless",
+        "vmess",
+        "trojan",
+        "shadowsocks",
+        "socks",
+        "http",
+        "hysteria2",
+        "tuic",
+        "wireguard",
+    }
     DNS_TIMEOUT = 5.0  # seconds
 
-    def __init__(self, config_manager: ConfigManager):
+    def __init__(self, app_context: AppContext):
         """
         Initialize Xray config processor.
 
         Args:
             config_manager: Configuration manager instance
         """
-        self._config_manager = config_manager
+        self._app_context = app_context
+
+    def build_chain_config(self, chain_profile: dict) -> tuple[bool, Optional[dict], str]:
+        """
+        Build a complete Xray configuration for a chain of servers.
+
+        Args:
+            chain_profile: The chain profile object (containing 'items' list of profiles)
+
+        Returns:
+            Tuple (success, config_dict, error_message)
+        """
+        try:
+            items = chain_profile.get("items", [])
+            if not items or len(items) < 2:
+                return False, None, "Chain must have at least 2 servers"
+
+            # Resolve items if they are just IDs
+            resolved_items = []
+            for item in items:
+                if isinstance(item, str):
+                    profile = self._app_context.get_profile_by_id(item)
+                    if profile:
+                        resolved_items.append(profile)
+                    else:
+                        logger.warning(f"Chain item not found: {item}")
+                elif isinstance(item, dict):
+                    resolved_items.append(item)
+
+            if len(resolved_items) < 2:
+                return False, None, "Chain has insufficient valid servers"
+
+            # 1. Validate all nodes are chainable
+            chain_outbounds = []
+            for i, node in enumerate(resolved_items):
+                # Extract the outbound config from the node
+                node_config = node.get("config", {})
+                outbounds = node_config.get("outbounds", [])
+
+                # Find the proxy outbound
+                proxy_out = next((o for o in outbounds if o.get("protocol") in self.CHAINABLE_PROTOCOLS), None)
+
+                if not proxy_out:
+                    return False, None, f"Node {i+1} ({node.get('name')}) has no valid proxy outbound"
+
+                # Deep copy to avoid modifying original
+                outbound = copy.deepcopy(proxy_out)
+                outbound["tag"] = f"proxy_{i}"
+                chain_outbounds.append(outbound)
+
+            # 2. Link the chain: Exit -> Middle -> Entry
+            # In Xray, we define dependency in REVERSE order of traffic flow.
+            # If traffic flow is: Entry -> Middle -> Exit -> Target
+            # Then:
+            # Exit outbound needs dialerProxy = Middle
+            # Middle outbound needs dialerProxy = Entry
+            # Entry outbound connects directly (no dialerProxy)
+
+            # Iterate from 1 to N-1 (linking current to previous)
+            for i in range(1, len(chain_outbounds)):
+                current = chain_outbounds[i]  # e.g. Middle (index 1)
+                prev_tag = chain_outbounds[i - 1]["tag"]  # e.g. Entry (index 0)
+
+                if "streamSettings" not in current:
+                    current["streamSettings"] = {}
+
+                # sockopt.dialerProxy is the modern way to chain
+                if "sockopt" not in current["streamSettings"]:
+                    current["streamSettings"]["sockopt"] = {}
+
+                current["streamSettings"]["sockopt"]["dialerProxy"] = prev_tag
+
+            # 3. Construct final config
+            # We return the list as-is (Entry, Middle, Exit)
+            # ConnectionTester will route to the LAST item (Exit)
+            # which correctly pulls in Middle -> Entry via dialerProxy.
+
+            config = {
+                "log": {"loglevel": "info"},
+                "inbounds": [],
+                "outbounds": chain_outbounds,
+                "routing": {"domainStrategy": "AsIs", "rules": []},
+            }
+
+            return True, config, ""
+
+        except Exception as e:
+            return False, None, str(e)
 
     def process_config(self, config: dict) -> dict:
         """
@@ -50,7 +148,7 @@ class XrayConfigProcessor:
             Processed configuration
         """
         # Deep copy to avoid modifying original
-        new_config = json.loads(json.dumps(config))
+        new_config = copy.deepcopy(config)
 
         # Ensure log settings
         new_config["log"] = {"loglevel": "info", "access": "", "error": ""}
@@ -58,13 +156,163 @@ class XrayConfigProcessor:
         # Ensure asset location
         os.environ["XRAY_LOCATION_ASSET"] = XRAY_LOCATION_ASSET
 
-        # Force IP Strategy: Resolve domain and patch config
-        self._resolve_and_patch_config(new_config)
+        # Add inbounds with user's port settings (if not already present)
+        self._ensure_inbounds(new_config)
 
         # Configure DNS (User Settings)
         self.configure_dns(new_config)
 
+        # CRITICAL: Resolve outbound server addresses to IPs
+        # This allows ALL DNS queries to go through the tunnel after connection
+        # No bootstrap DNS needed - we resolve once before Xray starts
+        self._resolve_outbound_addresses(new_config)
+
+        # Safe Fallbacks (Non-destructive)
+        self._safe_patch_config(new_config)
+
         return new_config
+
+    def _ensure_inbounds(self, config: dict):
+        """
+        Ensure inbounds exist with user's configured ports.
+
+        Args:
+            config: Configuration dict (modified in-place)
+        """
+        # Get user configured port
+        user_port = self._app_context.settings.get_proxy_port()
+
+        # Check if inbounds already exist
+        if not config.get("inbounds"):
+            config["inbounds"] = []
+
+        # Add SOCKS inbound if not present
+        socks_exists = any(ib.get("protocol") == "socks" for ib in config["inbounds"])
+        if not socks_exists:
+            config["inbounds"].append(
+                {
+                    "tag": "socks",
+                    "port": user_port,
+                    "listen": "127.0.0.1",
+                    "protocol": "socks",
+                    "settings": {"udp": True},
+                    "sniffing": {
+                        "enabled": True,
+                        "destOverride": ["http", "tls", "quic"],
+                        "metadataOnly": False,
+                    },
+                }
+            )
+            logger.info(f"[XrayConfigProcessor] Added SOCKS inbound on port {user_port}")
+        else:
+            # Update existing SOCKS port and add sniffing
+            for inbound in config["inbounds"]:
+                if inbound.get("protocol") == "socks":
+                    inbound["port"] = user_port
+                    inbound["sniffing"] = {
+                        "enabled": True,
+                        "destOverride": ["http", "tls", "quic"],
+                        "metadataOnly": False,
+                    }
+        # Add HTTP inbound if not present
+        http_exists = any(ib.get("protocol") == "http" for ib in config["inbounds"])
+        if not http_exists:
+            config["inbounds"].append(
+                {
+                    "tag": "http",
+                    "port": user_port + 4,  # Default: 10809 if SOCKS is 10805
+                    "listen": "127.0.0.1",
+                    "protocol": "http",
+                }
+            )
+            logger.info(f"[XrayConfigProcessor] Added HTTP inbound on port {user_port + 4}")
+
+    def _resolve_outbound_addresses(self, config: dict):
+        """
+        Resolve outbound server domain names to IPs before Xray starts.
+        This eliminates the bootstrap DNS problem - all DNS can go through tunnel.
+
+        Args:
+            config: Configuration dict (modified in-place)
+        """
+        import socket
+
+        for outbound in config.get("outbounds", []):
+            protocol = outbound.get("protocol")
+            if protocol not in self.SUPPORTED_PROTOCOLS:
+                continue
+
+            settings = outbound.get("settings", {})
+            server_obj = self._get_server_object(settings)
+
+            if not server_obj or "address" not in server_obj:
+                continue
+
+            address = server_obj["address"]
+            # Skip if already an IP
+            if self._is_ip(address):
+                logger.debug(f"[XrayConfigProcessor] Address {address} is already an IP, skipping resolution")
+                continue
+
+            # Resolve domain to IP using system DNS (bootstrap)
+            try:
+                socket.setdefaulttimeout(5.0)
+                resolved_ip = socket.gethostbyname(address)
+                server_obj["address"] = resolved_ip
+                logger.info(f"Bootstrap: Resolved {address} → {resolved_ip}")
+                logger.info("All DNS queries will now go through tunnel")
+            except (socket.gaierror, socket.timeout, OSError) as e:
+                logger.error(f"Failed to resolve {address}: {e}")
+                logger.warning("Keeping domain address - may cause DNS issues")
+            finally:
+                socket.setdefaulttimeout(None)
+
+    def validate_config(self, config: dict) -> tuple[bool, str]:
+        """
+        Validate Xray configuration structure and values.
+
+        Args:
+            config: Configuration dict to validate
+
+        Returns:
+            Tuple of (is_valid, error_message)
+        """
+        if not config or not isinstance(config, dict):
+            return False, "Config must be a non-empty dictionary"
+
+        # Check for required outbounds
+        if "outbounds" not in config or not isinstance(config["outbounds"], list):
+            return False, "Config must have 'outbounds' list"
+
+        if len(config["outbounds"]) == 0:
+            return False, "At least one outbound is required"
+
+        # Validate outbounds
+        for idx, outbound in enumerate(config["outbounds"]):
+            if not isinstance(outbound, dict):
+                return False, f"Outbound {idx} must be a dictionary"
+
+            protocol = outbound.get("protocol")
+            if not protocol:
+                return False, f"Outbound {idx} missing 'protocol'"
+
+            if protocol in self.SUPPORTED_PROTOCOLS:
+                settings = outbound.get("settings", {})
+                server_obj = self._get_server_object(settings)
+                if server_obj:
+                    # Validate port
+                    port = server_obj.get("port")
+                    if port and not (1 <= port <= 65535):
+                        return False, f"Outbound {idx} has invalid port: {port}"
+
+        # Validate inbounds if present
+        if "inbounds" in config:
+            for idx, inbound in enumerate(config["inbounds"]):
+                port = inbound.get("port")
+                if port and not (1 <= port <= 65535):
+                    return False, f"Inbound {idx} has invalid port: {port}"
+
+        return True, ""
 
     def get_socks_port(self, config: dict) -> int:
         """
@@ -77,7 +325,7 @@ class XrayConfigProcessor:
             SOCKS port number
         """
         # Get user configured port
-        user_port = self._config_manager.get_proxy_port()
+        user_port = self._app_context.settings.get_proxy_port()
 
         # Update the config to listen on this port and inject Sniffing
         for inbound in config.get("inbounds", []):
@@ -137,6 +385,23 @@ class XrayConfigProcessor:
                 return True
         return False
 
+    def get_transport_type(self, config: dict) -> str:
+        """
+        Get the transport network type from config.
+
+        Args:
+            config: Configuration dict
+
+        Returns:
+            Transport type string (e.g., 'xhttp', 'ws', 'tcp') or empty string
+        """
+        for outbound in config.get("outbounds", []):
+            protocol = outbound.get("protocol")
+            if protocol in self.SUPPORTED_PROTOCOLS:
+                stream_settings = outbound.get("streamSettings", {})
+                return stream_settings.get("network", "tcp")
+        return ""
+
     def configure_dns(self, config: dict):
         """
         Configure DNS based on user settings.
@@ -144,7 +409,7 @@ class XrayConfigProcessor:
         Args:
             config: Configuration dict (modified in-place)
         """
-        dns_config = self._config_manager.load_dns_config()
+        dns_config = self._app_context.dns.load()
 
         servers = []
         for item in dns_config:
@@ -178,21 +443,22 @@ class XrayConfigProcessor:
         if "dns" not in config:
             config["dns"] = {}
 
-        config["dns"]["servers"] = servers
+        config["dns"]["servers"] = servers if servers else ["1.1.1.1", "8.8.8.8"]
 
-        # Ensure query strategy
+        # All DNS queries will go through tunnel (outbound uses IP)
         if "queryStrategy" not in config["dns"]:
             config["dns"]["queryStrategy"] = "UseIP"
 
-        logger.info(f"[XrayConfigProcessor] Configured DNS with {len(servers)} servers")
+        logger.info(
+            f"[XrayConfigProcessor] Configured {len(config['dns']['servers'])} DNS server(s) - all queries via tunnel"
+        )
 
-    def _resolve_and_patch_config(self, config: dict):
+    def _safe_patch_config(self, config: dict):
         """
-        Resolve domains to IPs and patch SNI/Host settings.
-
-        Args:
-            config: Configuration dict (modified in-place)
+        Apply context-aware fallbacks only if fields are missing.
+        Strictly follows the "no-override" and "parser-intent" rules.
         """
+        fallback_count = 0
         for outbound in config.get("outbounds", []):
             protocol = outbound.get("protocol")
             if protocol not in self.SUPPORTED_PROTOCOLS:
@@ -200,121 +466,97 @@ class XrayConfigProcessor:
 
             settings = outbound.get("settings", {})
             server_obj = self._get_server_object(settings)
-
             if not server_obj or "address" not in server_obj:
                 continue
 
             domain = server_obj["address"]
 
-            # Attempt to resolve domain to IP
-            ip = self._resolve_domain_to_ip(domain, timeout=self.DNS_TIMEOUT)
+            # Apply fallbacks only if missing
+            applied = self._apply_safe_stream_fallbacks(outbound, domain)
+            if applied:
+                fallback_count += 1
+        if fallback_count > 0:
+            logger.info(f"[XrayConfigProcessor] Applied safe fallbacks to {fallback_count} outbound(s)")
 
-            if ip:
-                # SUCCESS: Replace address with IP
-                server_obj["address"] = ip
-                logger.info(f"[XrayConfigProcessor] Replaced address {domain} with resolved IP {ip}")
-            else:
-                # FALLBACK: Keep domain
-                logger.warning(
-                    f"[XrayConfigProcessor] DNS resolution failed for {domain}. "
-                    "Keeping domain address and relying on Xray internal DNS/routing."
-                )
-                server_obj["address"] = domain
-
-            # Patch stream settings with original domain
-            try:
-                self._patch_stream_settings(outbound, domain)
-            except Exception as e:
-                logger.error(f"[XrayConfigProcessor] Failed to patch stream settings for {domain}: {e}")
-
-    def _resolve_domain_to_ip(self, domain: str, timeout: float = 5.0) -> Optional[str]:
+    def _apply_safe_stream_fallbacks(self, outbound: dict, domain: str) -> bool:
         """
-        Resolve domain to IP address with timeout.
-
-        Args:
-            domain: Domain name
-            timeout: Resolution timeout
+        Safe fallbacks for stream settings (SNI/Host) if missing.
 
         Returns:
-            IP address or None
+            True if any fallback was applied
         """
-        # Check if it's already an IP
-        try:
-            socket.inet_aton(domain)
-            return domain  # Already an IP
-        except (socket.error, OSError):
-            pass  # It's a domain, need to resolve
+        applied = False
+        stream_settings = outbound.setdefault("streamSettings", {})
+        security = stream_settings.get("security", "none")
+        network = stream_settings.get("network", "")
 
-        try:
-            # Set socket timeout
-            socket.setdefaulttimeout(timeout)
-            ip = socket.gethostbyname(domain)
-            logger.info(f"[XrayConfigProcessor] Resolved {domain} to {ip}")
-            return ip
-        except (socket.gaierror, socket.timeout, OSError) as e:
-            logger.error(f"[XrayConfigProcessor] Failed to resolve {domain}: {e}")
-            return None
-        finally:
-            # Reset timeout
-            socket.setdefaulttimeout(None)
+        # 1. SNI Fallback (tls/reality)
+        if security in ("tls", "reality") and security != "none":
+            field = "tlsSettings" if security == "tls" else "realitySettings"
+            sec_settings = stream_settings.setdefault(field, {})
+            if not sec_settings.get("serverName"):
+                # Missing SNI - use address as fallback (standard Xray behavior)
+                # But only if domain is NOT an IP (safe optimization)
+                if not self._is_ip(domain):
+                    sec_settings["serverName"] = domain
+                    logger.info(f"[XrayConfigProcessor] Fallback: Set {field}.serverName = {domain}")
+                    applied = True
+
+        # 2. Host Fallback (ws/httpupgrade/xhttp)
+        if network == "ws":
+            ws_settings = stream_settings.setdefault("wsSettings", {})
+            headers = ws_settings.setdefault("headers", {})
+            if not headers.get("Host") and not self._is_ip(domain):
+                headers["Host"] = domain
+                logger.info(f"[XrayConfigProcessor] Fallback: Set wsSettings.headers.Host = {domain}")
+                applied = True
+        elif network == "httpupgrade":
+            hu_settings = stream_settings.setdefault("httpupgradeSettings", {})
+            if not hu_settings.get("host") and not self._is_ip(domain):
+                hu_settings["host"] = domain
+                logger.info(f"[XrayConfigProcessor] Fallback: Set httpupgradeSettings.host = {domain}")
+                applied = True
+        elif network == "xhttp":
+            xhttp_settings = stream_settings.setdefault("xhttpSettings", {})
+            if not xhttp_settings.get("host") and not self._is_ip(domain):
+                xhttp_settings["host"] = domain
+                logger.info(f"[XrayConfigProcessor] Fallback: Set xhttpSettings.host = {domain}")
+                applied = True
+
+            # XHTTP Stability: Set mode to packet-up for best CDN compatibility if not specified
+            # packet-up = "packetized uplink, streaming downlink" - most reliable for CDNs
+            if not xhttp_settings.get("mode"):
+                xhttp_settings["mode"] = "packet-up"
+                logger.info("[XrayConfigProcessor] Set xhttpSettings.mode = packet-up for stability")
+                applied = True
+
+            # XMUX: Add connection cycling to prevent stalls (if not configured)
+            # These defaults prevent connection timeouts and Nginx request limits
+            if "xmux" not in xhttp_settings:
+                xhttp_settings["xmux"] = {
+                    "maxConcurrency": "16-32",  # Default from Xray docs - random range
+                    "hMaxReusableSecs": "1800-3000",  # Cycle connections every 30-50 min
+                    "hMaxRequestTimes": "600-900",  # Stay under Nginx's 1000 limit
+                }
+                logger.info("[XrayConfigProcessor] Added XMUX settings for connection stability")
+                applied = True
+
+        return applied
 
     def _get_server_object(self, settings: dict) -> Optional[dict]:
-        """Extract server object from settings based on protocol."""
+        """Extract server object from settings."""
         if "vnext" in settings and settings["vnext"]:
             return settings["vnext"][0]
         elif "servers" in settings and settings["servers"]:
             return settings["servers"][0]
         return None
 
-    def _patch_stream_settings(self, outbound: dict, domain: str):
-        """Patch stream settings (TLS, Reality, WS, HTTPUpgrade) with domain."""
-        stream_settings = outbound.setdefault("streamSettings", {})
-        security = stream_settings.get("security", "none")
-        network = stream_settings.get("network", "")
+    def _is_ip(self, address: str) -> bool:
+        """Check if address is an IP (IPv4 or IPv6)."""
+        import ipaddress
 
-        # Patch security settings
-        if security == "tls":
-            self._patch_tls_settings(stream_settings, domain)
-        elif security == "reality":
-            self._patch_reality_settings(stream_settings, domain)
-
-        # Sanitize network
-        if network == "udp":
-            logger.warning("[XrayConfigProcessor] Removed invalid 'udp' network from streamSettings")
-            stream_settings.pop("network", None)
-            network = ""
-
-        # Patch network settings
-        if network == "ws":
-            self._patch_ws_settings(stream_settings, domain)
-        elif network == "httpupgrade":
-            self._patch_httpupgrade_settings(stream_settings, domain)
-
-    def _patch_tls_settings(self, stream_settings: dict, domain: str):
-        """Patch TLS settings with SNI."""
-        tls_settings = stream_settings.setdefault("tlsSettings", {})
-        if not tls_settings.get("serverName"):
-            tls_settings["serverName"] = domain
-            logger.info(f"[XrayConfigProcessor] Set TLS SNI to {domain}")
-
-    def _patch_reality_settings(self, stream_settings: dict, domain: str):
-        """Patch Reality settings with SNI."""
-        reality_settings = stream_settings.setdefault("realitySettings", {})
-        if not reality_settings.get("serverName"):
-            reality_settings["serverName"] = domain
-            logger.info(f"[XrayConfigProcessor] Set Reality SNI to {domain}")
-
-    def _patch_ws_settings(self, stream_settings: dict, domain: str):
-        """Patch WebSocket settings with Host header."""
-        ws_settings = stream_settings.setdefault("wsSettings", {})
-        headers = ws_settings.setdefault("headers", {})
-        if not headers.get("Host"):
-            headers["Host"] = domain
-            logger.info(f"[XrayConfigProcessor] Set WS Host to {domain}")
-
-    def _patch_httpupgrade_settings(self, stream_settings: dict, domain: str):
-        """Patch HTTPUpgrade settings with host."""
-        httpupgrade_settings = stream_settings.setdefault("httpupgradeSettings", {})
-        if not httpupgrade_settings.get("host"):
-            httpupgrade_settings["host"] = domain
-            logger.info(f"[XrayConfigProcessor] Set HTTPUpgrade Host to {domain}")
+        try:
+            ipaddress.ip_address(address)
+            return True
+        except ValueError:
+            return False

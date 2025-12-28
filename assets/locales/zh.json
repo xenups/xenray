@@ -87,7 +87,16 @@
     "language_description": "选择应用语言",
     "reset_close_choice": "重置关闭偏好",
     "reset_close_choice_desc": "关闭时再次显示确认对话框",
-    "reset_close_success": "关闭偏好已重置! 🔄"
+    "reset_close_success": "关闭偏好已重置! 🔄",
+    "add_to_startup": "开机自启",
+    "add_to_startup_desc": "登录系统时自动启动 XenRay",
+    "startup_error": "更新启动设置失败",
+    "auto_reconnect": "自动重连",
+    "auto_reconnect_desc": "连接丢失时自动重新连接",
+    "auto_reconnect_enabled": "自动重连已开启",
+    "auto_reconnect_disabled": "自动重连已关闭 (省电模式)",
+    "language_restart_msg": "语言已更改！重启应用以完全生效。",
+    "experimental": "实验性"
   },
   "admin": {
     "title": "需要管理员权限",
@@ -157,7 +166,14 @@
     "error": "错误",
     "checking_network": "正在检查网络连接...",
     "no_internet": "无网络连接！",
-    "connected_no_internet": "已连接但无网络访问"
+    "connected_no_internet": "已连接但无网络访问",
+    "verifying_latency": "正在验证连接延迟...",
+    "falling_back": "正在回退到原始配置...",
+    "failure_detected": "检测到连接问题，正在检查...",
+    "reconnecting": "正在重新连接...",
+    "reconnected": "连接已恢复！✅",
+    "reconnect_failed": "自动重连失败",
+    "adopted_connection": "已接管的连接"
   },
   "routing": {
     "title": "路由规则",
@@ -217,5 +233,43 @@
     "minimize": "最小化",
     "cancel": "取消",
     "remember": "总是最小化到托盘"
+  },
+  "chain": {
+    "title": "创建链路",
+    "edit_title": "编辑链路",
+    "subtitle": "串联多个服务器",
+    "name_label": "链路名称",
+    "name_hint": "例如: WireGuard → Reality",
+    "order_label": "链路顺序 (入口 → 出口)",
+    "add_item": "添加到链路",
+    "remove_item": "删除",
+    "save": "保存链路",
+    "cancel": "取消",
+    "entry_label": "入口",
+    "exit_label": "→ 互联网",
+    "select_outbound": "选择服务器",
+    "info_hint": "第一个 = 入口，最后一个 = 互联网",
+    "validation": {
+      "min_items": "链路至少需要2个项目",
+      "circular": "链路中存在重复服务器",
+      "invalid_protocol": "{protocol} 不能用于链路",
+      "missing_profile": "服务器未找到",
+      "no_nesting": "链路不能包含其他链路",
+      "has_dialer_proxy": "最后一个服务器已有dialerProxy配置"
+    },
+    "list_item": {
+      "chain_label": "链路",
+      "servers_count": "{count} 个服务器",
+      "expand": "显示详情",
+      "collapse": "隐藏详情",
+      "invalid": "缺少配置文件",
+      "broken_tooltip": "此链路中的某些服务器已被删除"
+    },
+    "toast": {
+      "created": "链路 '{name}' 已创建! 🔗",
+      "updated": "链路已更新",
+      "deleted": "链路已删除",
+      "invalid_chain": "无法连接：链路存在缺少的服务器"
+    }
   }
 }

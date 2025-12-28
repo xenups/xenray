@@ -8,13 +8,13 @@ from PyInstaller.utils.hooks import collect_submodules
 hiddenimports = []
 
 # Collect UI handlers
-hiddenimports += collect_submodules('src.ui.handlers')
+hiddenimports += collect_submodules("src.ui.handlers")
 
-# Collect UI managers  
-hiddenimports += collect_submodules('src.ui.managers')
+# Collect UI managers
+hiddenimports += collect_submodules("src.ui.managers")
 
 # Collect services that might be lazy-loaded
-hiddenimports += collect_submodules('src.services')
+hiddenimports += collect_submodules("src.services")
 
 # Main window
-hiddenimports += ['src.ui.main_window']
+hiddenimports += ["src.ui.main_window"]
