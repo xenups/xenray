@@ -225,7 +225,7 @@ class CountryDropdownRow(ft.Container):
             ],
             border_color=ft.Colors.OUTLINE_VARIANT,
             focused_border_color=ft.Colors.PRIMARY,
-            on_change=on_change,
+            on_select=on_change,
         )
 
         super().__init__(
@@ -272,7 +272,7 @@ class LanguageDropdownRow(ft.Container):
             options=[ft.dropdown.Option(lang_code, f"{name}") for lang_code, flag_code, name in self._languages],
             border_color=ft.Colors.OUTLINE_VARIANT,
             focused_border_color=ft.Colors.PRIMARY,
-            on_change=on_change,
+            on_select=on_change,
         )
 
         # Get current flag code
@@ -286,7 +286,7 @@ class LanguageDropdownRow(ft.Container):
             src=f"/flags/{current_flag}.svg",
             width=24,
             height=18,
-            fit=ft.ImageFit.COVER,
+            fit=ft.BoxFit.COVER,
             border_radius=3,
             filter_quality=ft.FilterQuality.HIGH,
             anti_alias=True,
@@ -304,7 +304,7 @@ class LanguageDropdownRow(ft.Container):
                     break
             original_on_change(e)
 
-        self._dropdown.on_change = wrapped_on_change
+        self._dropdown.on_select = wrapped_on_change
 
         super().__init__(
             content=ft.Row(
@@ -313,7 +313,7 @@ class LanguageDropdownRow(ft.Container):
                         [
                             ft.Container(
                                 content=self._flag_image,
-                                alignment=ft.alignment.center,
+                                alignment=ft.Alignment.CENTER,
                             ),
                             ft.Text(
                                 t("settings.language"),

@@ -17,6 +17,19 @@ class UIThreadHelper:
         """
         self._page = page
 
+    @staticmethod
+    def is_mounted(control) -> bool:
+        """
+        Safely check if a control is attached to a page.
+        In Flet 1.0, accessing control.page raises RuntimeError if not mounted.
+        """
+        if not control:
+            return False
+        try:
+            return hasattr(control, "page") and control.page is not None
+        except (RuntimeError, AttributeError):
+            return False
+
     def call(self, fn: Callable, *args, update_page: bool = False, **kwargs):
         """
         Execute a UI update in a thread-safe manner.

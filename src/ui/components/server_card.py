@@ -1,4 +1,5 @@
 import flet as ft
+from src.ui.helpers.ui_thread_helper import UIThreadHelper
 
 from src.core.flag_colors import FLAG_COLORS
 from src.core.i18n import t
@@ -18,7 +19,7 @@ class ServerCard(ft.Container):
             content=self._globe_icon,
             width=36,
             height=36,
-            alignment=ft.alignment.center,
+            alignment=ft.Alignment.CENTER,
             border_radius=18,
             clip_behavior=ft.ClipBehavior.HARD_EDGE,
             bgcolor=ft.Colors.with_opacity(0.15, ft.Colors.ON_SURFACE),
@@ -45,7 +46,7 @@ class ServerCard(ft.Container):
             content=ft.Icon(ft.Icons.EXPAND_MORE, size=22, color=ft.Colors.ON_SURFACE_VARIANT),
             width=36,
             height=36,
-            alignment=ft.alignment.center,
+            alignment=ft.Alignment.CENTER,
             border_radius=18,
             bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE),
             on_click=on_click,
@@ -83,8 +84,8 @@ class ServerCard(ft.Container):
             content=self._content_row,
             bgcolor="#121212",  # Solid background to prevent transparency issues
             gradient=ft.LinearGradient(
-                begin=ft.alignment.top_left,
-                end=ft.alignment.bottom_right,
+                begin=ft.Alignment.TOP_LEFT,
+                end=ft.Alignment.BOTTOM_RIGHT,
                 colors=[
                     ft.Colors.with_opacity(0.35, "#6366f1"),
                     ft.Colors.with_opacity(0.20, "#8b5cf6"),
@@ -137,7 +138,7 @@ class ServerCard(ft.Container):
                     src=f"/flags/{cc.lower()}.svg",
                     width=36,
                     height=36,
-                    fit=ft.ImageFit.COVER,
+                    fit=ft.BoxFit.COVER,
                     gapless_playback=True,
                     filter_quality=ft.FilterQuality.HIGH,
                     border_radius=ft.border_radius.all(18),
@@ -224,24 +225,23 @@ class ServerCard(ft.Container):
             self.border = ft.border.all(1, ft.Colors.with_opacity(0.2, ft.Colors.ON_SURFACE))
             self._globe_icon.color = ft.Colors.ON_SURFACE_VARIANT
             self._list_btn.bgcolor = ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE)
-            # Safe shadow update
-            if self.shadow:
-                if isinstance(self.shadow, list):
-                    if len(self.shadow) > 0:
-                        self.shadow[0].color = ft.Colors.with_opacity(0.15, ft.Colors.BLACK)
+            # Safe shadow update for Flet 1.0
+            if hasattr(self, "shadow") and self.shadow:
+                if isinstance(self.shadow, list) and len(self.shadow) > 0:
+                    self.shadow[0].color = ft.Colors.with_opacity(0.15, ft.Colors.BLACK)
                 else:
                     self.shadow.color = ft.Colors.with_opacity(0.15, ft.Colors.BLACK)
         else:
             self.border = ft.border.all(1, ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE))
             self._globe_icon.color = ft.Colors.ON_SURFACE_VARIANT
             self._list_btn.bgcolor = ft.Colors.with_opacity(0.08, ft.Colors.ON_SURFACE)
-            # Safe shadow update
-            if self.shadow:
-                if isinstance(self.shadow, list):
-                    if len(self.shadow) > 0:
-                        self.shadow[0].color = ft.Colors.with_opacity(0.08, ft.Colors.BLACK)
+            # Safe shadow update for Flet 1.0
+            if hasattr(self, "shadow") and self.shadow:
+                if isinstance(self.shadow, list) and len(self.shadow) > 0:
+                    self.shadow[0].color = ft.Colors.with_opacity(0.08, ft.Colors.BLACK)
                 else:
                     self.shadow.color = ft.Colors.with_opacity(0.08, ft.Colors.BLACK)
 
         self._update_gradient_colors()
-        self.update()
+        if UIThreadHelper.is_mounted(self):
+            self.update()

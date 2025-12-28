@@ -27,8 +27,8 @@ class GradientHelper:
             color1, color2 = FLAG_COLORS[cc]
 
         return ft.LinearGradient(
-            begin=ft.alignment.top_left,
-            end=ft.alignment.bottom_right,
+            begin=ft.Alignment.TOP_LEFT,
+            end=ft.Alignment.BOTTOM_RIGHT,
             colors=[
                 ft.Colors.with_opacity(0.25, color1),
                 ft.Colors.with_opacity(0.15, color2),

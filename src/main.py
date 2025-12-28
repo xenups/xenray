@@ -21,7 +21,7 @@ async def main(page):
     logger.debug("[DEBUG] Starting Flet session (async main)")
     page.window.width = 420
     page.window.height = 550
-    page.window.center()
+    await page.window.center()
     page.title = "XenRay"
     page.window.prevent_close = True
     page.window.resizable = False
@@ -60,7 +60,7 @@ async def main(page):
 
     # NOW show the window - it already has correct size so no flash
     page.window.visible = True
-    page.update()
+    await page.update_async() if hasattr(page, "update_async") else page.update()
 
     # Keep session alive - use a larger sleep to reduce overhead
     logger.debug("[DEBUG] Session initialized, entering persistence loop")
@@ -131,6 +131,9 @@ def run():
             # Mutex creation failed entirely
             logger.error(f"[Startup] Failed to create mutex, error code: {last_error}")
             # Continue anyway - better to have multiple instances than no app
+        else:
+            # Mutex created successfully, we'll keep it held
+            pass
     else:
         # For Unix-like systems (macOS, Linux), we can use a PID file
         import errno

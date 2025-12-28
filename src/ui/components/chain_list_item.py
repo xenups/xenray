@@ -96,7 +96,7 @@ class ChainListItem(ft.Container):
                     src=f"/flags/{exit_country_code.lower()}.svg",
                     width=28,
                     height=28,
-                    fit=ft.ImageFit.COVER,
+                    fit=ft.BoxFit.COVER,
                     border_radius=ft.border_radius.all(14),
                 ),
                 width=28,
@@ -119,7 +119,7 @@ class ChainListItem(ft.Container):
         if self._on_edit:
             menu_items.append(
                 ft.PopupMenuItem(
-                    text=t("chain.edit_title"),
+                    content=ft.Text(t("chain.edit_title")),
                     icon=ft.Icons.EDIT,
                     on_click=lambda e: self._on_edit(self._chain),
                 )
@@ -127,7 +127,7 @@ class ChainListItem(ft.Container):
         if self._on_delete:
             menu_items.append(
                 ft.PopupMenuItem(
-                    text=t("server_list.delete"),
+                    content=ft.Text(t("server_list.delete")),
                     icon=ft.Icons.DELETE_OUTLINE_ROUNDED,
                     on_click=lambda e: self._on_delete(self._chain["id"]),
                 )

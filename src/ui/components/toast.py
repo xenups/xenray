@@ -77,7 +77,7 @@ class ToastManager:
             top=75,  # Position higher - above connect button with margin from header
             left=0,
             right=0,
-            alignment=ft.alignment.top_center,
+            alignment=ft.Alignment.TOP_CENTER,
         )
 
         # Add to overlay

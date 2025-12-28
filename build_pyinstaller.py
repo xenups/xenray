@@ -150,6 +150,7 @@ def main():
         "--hidden-import=pystray",
         "--hidden-import=PIL",
         "--hidden-import=psutil",
+        "--hidden-import=flet",
         # Dependency Injector essentials
         "--hidden-import=dependency_injector",
         "--hidden-import=dependency_injector.errors",

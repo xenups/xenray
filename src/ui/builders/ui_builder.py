@@ -64,7 +64,7 @@ class UIBuilder:
         self._main._background = ft.Container(
             image=ft.DecorationImage(
                 src="earth_horizon.png",
-                fit=ft.ImageFit.COVER,
+                fit=ft.BoxFit.COVER,
             ),
             expand=True,
         )
@@ -72,7 +72,7 @@ class UIBuilder:
         # Horizon glow overlay
         self._main._earth_glow = ft.Container(
             gradient=ft.RadialGradient(
-                center=ft.alignment.bottom_center,
+                center=ft.Alignment.BOTTOM_CENTER,
                 radius=1.2,
                 colors=[
                     ft.Colors.with_opacity(0.0, ft.Colors.TRANSPARENT),

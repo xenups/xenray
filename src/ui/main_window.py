@@ -317,7 +317,7 @@ class MainWindow:
     def _show_admin_restart_dialog(self):
         """Shows an AlertDialog asking the user to restart the app as Admin."""
         dialog = AdminRestartDialog(on_restart=self._on_admin_restart_confirmed)
-        self._page.open(dialog)
+        self._page.show_dialog(dialog)
 
     def _on_admin_restart_confirmed(self):
         """Callback from AdminRestartDialog."""
@@ -373,9 +373,9 @@ class MainWindow:
     def _safe_update_server_list(self):
         """Waits for the sheet to be mounted before updating list."""
 
-        async def _wait_and_update():
-            # Wait until the server list control is mounted to the page
-            while self._server_list.page is None:
+        async def _wait_and_load():
+            # Wait until the control is mounted to the page
+            while not UIThreadHelper.is_mounted(self._main._server_list):
                 await asyncio.sleep(0.05)
 
             try:

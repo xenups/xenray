@@ -45,7 +45,7 @@ class InstallerHandler:
             modal=True,
         )
 
-        self._page.open(dialog)
+        self._page.show_dialog(dialog)
 
         def update_status(msg: str):
             status.value = msg
@@ -68,6 +68,6 @@ class InstallerHandler:
                     self._toast.show(t("status.update_error", error=str(e)), "error")
             finally:
                 if self._ui_helper:
-                    self._ui_helper.call(lambda: self._page.close(dialog))
+                    self._ui_helper.call(lambda: self._page.pop_dialog())
 
         threading.Thread(target=install_task, daemon=True).start()

@@ -1,4 +1,8 @@
+from __future__ import annotations
+import asyncio
 import flet as ft
+from src.ui.helpers.ui_thread_helper import UIThreadHelper
+from src.ui.managers.profile_manager import ProfileManager
 
 
 class ConnectionButton(ft.Container):
@@ -41,7 +45,7 @@ class ConnectionButton(ft.Container):
             border=ft.border.all(1.5, ft.Colors.with_opacity(0.2, ft.Colors.WHITE)),
             on_click=on_click,
             animate=ft.Animation(400, ft.AnimationCurve.EASE_OUT),
-            alignment=ft.alignment.center,
+            alignment=ft.Alignment.CENTER,
         )
 
         # Stack: glow behind, button on top
@@ -51,11 +55,11 @@ class ConnectionButton(ft.Container):
                     self._glow_layer,
                     self._button,
                 ],
-                alignment=ft.alignment.center,
+                alignment=ft.Alignment.CENTER,
             ),
             width=190,  # Match glow layer
             height=190,
-            alignment=ft.alignment.center,
+            alignment=ft.Alignment.CENTER,
         )
 
     def update_theme(self, is_dark: bool):
@@ -71,7 +75,8 @@ class ConnectionButton(ft.Container):
             self._button.bgcolor = ft.Colors.with_opacity(0.15, ft.Colors.WHITE)
             self._button.border = ft.border.all(1.5, ft.Colors.with_opacity(0.3, ft.Colors.BLACK12))
 
-        self._button.update()
+        if self._button.page:
+            self._button.update()
 
     def set_connected(self):
         """Set button to connected state with subtle purple glass glow."""
@@ -83,7 +88,8 @@ class ConnectionButton(ft.Container):
         self._button.bgcolor = ft.Colors.with_opacity(0.25, "#8b5cf6")
         self._button.border = ft.border.all(2.5, ft.Colors.with_opacity(0.5, "#a78bfa"))
         self._icon.color = ft.Colors.WHITE
-        self._button.update()
+        if self._button.page:
+            self._button.update()
 
         # Reset glow layer for network activity animation
         self._glow_layer.opacity = 1.0
@@ -96,7 +102,8 @@ class ConnectionButton(ft.Container):
             color=ft.Colors.with_opacity(0.7, "#8b5cf6"),
             offset=ft.Offset(0, 0),
         )
-        self._glow_layer.update()
+        if UIThreadHelper.is_mounted(self._glow_layer):
+            self._glow_layer.update()
 
         # Start a gentle idle breathing pulse for the connected state
         # This keeps the button "alive" even when waiting for first network stats
@@ -116,7 +123,8 @@ class ConnectionButton(ft.Container):
                             else:
                                 self._glow_layer.opacity = 0.5
                                 self._glow_layer.scale = 1.0
-                            self._glow_layer.update()
+                            if UIThreadHelper.is_mounted(self._glow_layer):
+                                self._glow_layer.update()
 
                         grow = not grow
                         await asyncio.sleep(1.2)  # Slower, calmer breath for connected idle
@@ -136,7 +144,8 @@ class ConnectionButton(ft.Container):
         self._button.bgcolor = ft.Colors.with_opacity(0.15, "#1e293b")
         self._button.border = ft.border.all(1.5, ft.Colors.with_opacity(0.2, ft.Colors.WHITE))
         self._icon.color = ft.Colors.WHITE
-        self._button.update()
+        if UIThreadHelper.is_mounted(self._button):
+            self._button.update()
 
         # Minimal glow
         self._glow_layer.shadow = ft.BoxShadow(
@@ -145,7 +154,8 @@ class ConnectionButton(ft.Container):
             color=ft.Colors.with_opacity(0.2, ft.Colors.BLACK),
             offset=ft.Offset(0, 0),
         )
-        self._glow_layer.update()
+        if UIThreadHelper.is_mounted(self._glow_layer):
+            self._glow_layer.update()
 
     def set_connecting(self):
         """Set connecting state with subtle amber glass pulse."""
@@ -157,7 +167,8 @@ class ConnectionButton(ft.Container):
         self._button.bgcolor = ft.Colors.with_opacity(0.25, "#f59e0b")
         self._button.border = ft.border.all(2.5, ft.Colors.with_opacity(0.5, "#fbbf24"))
         self._icon.color = ft.Colors.WHITE
-        self._button.update()
+        if self._button.page:
+            self._button.update()
 
         # Reset glow layer for smooth connecting animation
         self._glow_layer.opacity = 1.0
@@ -170,7 +181,8 @@ class ConnectionButton(ft.Container):
             color=ft.Colors.with_opacity(0.5, "#f59e0b"),  # Reduced from 0.8
             offset=ft.Offset(0, 0),
         )
-        self._glow_layer.update()
+        if UIThreadHelper.is_mounted(self._glow_layer):
+            self._glow_layer.update()
 
         # Start async pulse loop
         if self.page:
@@ -187,7 +199,8 @@ class ConnectionButton(ft.Container):
                             self._glow_layer.opacity = 0.4
                             self._glow_layer.scale = 1.0
 
-                        self._glow_layer.update()
+                        if UIThreadHelper.is_mounted(self._glow_layer):
+                            self._glow_layer.update()
                         grow = not grow
                         await asyncio.sleep(0.8)
                     except Exception:
@@ -205,7 +218,8 @@ class ConnectionButton(ft.Container):
         self._button.bgcolor = ft.Colors.with_opacity(0.25, ft.Colors.RED_700)
         self._button.border = ft.border.all(2.5, ft.Colors.with_opacity(0.5, ft.Colors.RED_400))
         self._icon.color = ft.Colors.WHITE
-        self._button.update()
+        if self._button.page:
+            self._button.update()
 
         # Reset glow layer for smooth animation
         self._glow_layer.opacity = 1.0
@@ -218,7 +232,8 @@ class ConnectionButton(ft.Container):
             color=ft.Colors.with_opacity(0.5, ft.Colors.RED_400),
             offset=ft.Offset(0, 0),
         )
-        self._glow_layer.update()
+        if UIThreadHelper.is_mounted(self._glow_layer):
+            self._glow_layer.update()
 
         # Start async pulse loop
         if self.page:
@@ -235,7 +250,8 @@ class ConnectionButton(ft.Container):
                             self._glow_layer.opacity = 0.4
                             self._glow_layer.scale = 1.0
 
-                        self._glow_layer.update()
+                        if UIThreadHelper.is_mounted(self._glow_layer):
+                            self._glow_layer.update()
                         grow = not grow
                         await asyncio.sleep(0.4)  # Faster pulse for disconnecting
                     except Exception:
@@ -302,6 +318,7 @@ class ConnectionButton(ft.Container):
             )
             self._glow_layer.scale = scale
             self._glow_layer.opacity = glow_opacity
-            self._glow_layer.update()
+            if UIThreadHelper.is_mounted(self._glow_layer):
+                self._glow_layer.update()
         except Exception:
             pass

@@ -1,6 +1,7 @@
 """Status display component for showing connection status below button."""
 
 import flet as ft
+from src.ui.helpers.ui_thread_helper import UIThreadHelper
 
 from src.core.i18n import t
 
@@ -42,7 +43,7 @@ class StatusDisplay(ft.Container):
         self.content = ft.Container(
             content=self._text_column,
             padding=ft.padding.symmetric(horizontal=10, vertical=10),
-            alignment=ft.alignment.center,
+            alignment=ft.Alignment.CENTER,
             width=320,
         )
 
@@ -60,7 +61,8 @@ class StatusDisplay(ft.Container):
         """Triggers a smooth transition to a new label."""
         self._status_label = self._create_label(text, color)
         self._switcher.content = self._status_label
-        self.update()
+        if UIThreadHelper.is_mounted(self):
+            self.update()
 
     def set_step(self, msg: str):
         """Updates the status text during connection steps."""

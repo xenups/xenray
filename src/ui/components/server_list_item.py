@@ -73,7 +73,7 @@ class ServerListItem(ft.Container):
                 src=f"/flags/{country_code.lower()}.svg",
                 width=28,
                 height=28,
-                fit=ft.ImageFit.COVER,
+                fit=ft.BoxFit.COVER,
                 gapless_playback=True,
                 filter_quality=ft.FilterQuality.HIGH,
                 error_content=ft.Icon(ft.Icons.PUBLIC, size=28, color=ft.Colors.GREY_400),
@@ -87,13 +87,13 @@ class ServerListItem(ft.Container):
             border_radius=14,
             clip_behavior=ft.ClipBehavior.HARD_EDGE,
             content=flag_content,
-            alignment=ft.alignment.center,
+            alignment=ft.Alignment.CENTER,
         )
 
         # Actions Menu
         menu_items = [
             ft.PopupMenuItem(
-                text=t("server_list.share"),
+                content=ft.Text(t("server_list.share")),
                 icon=ft.Icons.SHARE_ROUNDED,
                 on_click=self._copy_config,
             ),
@@ -101,7 +101,7 @@ class ServerListItem(ft.Container):
         if not read_only and on_delete:
             menu_items.append(
                 ft.PopupMenuItem(
-                    text=t("server_list.delete"),
+                    content=ft.Text(t("server_list.delete")),
                     icon=ft.Icons.DELETE_OUTLINE_ROUNDED,
                     on_click=self._delete_item,
                 )
@@ -222,7 +222,7 @@ class ServerListItem(ft.Container):
                 src=f"/flags/{code.lower()}.svg",
                 width=28,
                 height=28,
-                fit=ft.ImageFit.COVER,
+                fit=ft.BoxFit.COVER,
                 gapless_playback=True,
                 filter_quality=ft.FilterQuality.HIGH,
                 error_content=ft.Icon(ft.Icons.PUBLIC, size=28, color=ft.Colors.GREY_400),

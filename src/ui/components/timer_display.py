@@ -4,6 +4,7 @@ import threading
 import time
 
 import flet as ft
+from src.ui.helpers.ui_thread_helper import UIThreadHelper
 
 from src.core.i18n import get_language, t
 
@@ -44,7 +45,7 @@ class TimerDisplay(ft.Container):
         # Use a fixed-width container for timer to prevent shifting
         self.content = ft.Container(
             content=self._timer_text,
-            alignment=ft.alignment.center,
+            alignment=ft.Alignment.CENTER,
             padding=ft.padding.only(top=10),
             width=200,  # Fixed width to prevent shifting
         )
@@ -62,7 +63,8 @@ class TimerDisplay(ft.Container):
         self._timer_text.color = "#d97706"  # Amber that works in both modes
         self._timer_text.size = 28
         self._timer_text.weight = ft.FontWeight.BOLD
-        self.update()
+        if UIThreadHelper.is_mounted(self):
+            self.update()
 
     def set_connected(self):
         """Start the connection timer."""

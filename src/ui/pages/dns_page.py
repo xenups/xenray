@@ -159,7 +159,7 @@ class DNSPage(ft.Container):
                         ],
                         horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                     ),
-                    alignment=ft.alignment.center,
+                    alignment=ft.Alignment.CENTER,
                     padding=50,
                     opacity=0.5,
                 )
@@ -185,7 +185,7 @@ class DNSPage(ft.Container):
                             padding=ft.padding.symmetric(horizontal=6, vertical=2),
                             border_radius=4,
                             width=50,
-                            alignment=ft.alignment.center,
+                            alignment=ft.Alignment.CENTER,
                         ),
                         ft.Text(
                             addr,

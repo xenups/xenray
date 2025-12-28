@@ -238,7 +238,7 @@ class RoutingPage(ft.Container):
                         ],
                         horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                     ),
-                    alignment=ft.alignment.center,
+                    alignment=ft.Alignment.CENTER,
                     padding=50,
                     opacity=0.5,
                 )

@@ -23,6 +23,7 @@ class LogsDrawer(ft.NavigationDrawer):
         self._log_viewer = log_viewer
         self._heartbeat = heartbeat
         self._heartbeat.animate_opacity = 500
+        self._is_visible = False  # Track drawer visibility for performance
 
         self._pause_button = ft.IconButton(
             icon=ft.Icons.PAUSE_ROUNDED,
@@ -99,7 +100,12 @@ class LogsDrawer(ft.NavigationDrawer):
             ],
             bgcolor=ft.Colors.with_opacity(0.9, "#0f172a"),
             shadow_color=ft.Colors.with_opacity(0.2, ft.Colors.BLACK),
+            on_dismiss=self._on_drawer_dismiss,
         )
+
+    def _on_drawer_dismiss(self, e=None):
+        """Handle drawer dismissal to track visibility."""
+        self._is_visible = False
 
     def _toggle_log_pause(self, e: ft.ControlEvent) -> None:
         """Toggle pause state for log updates."""
@@ -116,8 +122,20 @@ class LogsDrawer(ft.NavigationDrawer):
 
         e.control.page.update()
 
+    @property
+    def is_visible(self) -> bool:
+        """Check if the drawer is currently visible."""
+        return self._is_visible
+
+    def set_visible(self, visible: bool):
+        """Set the drawer visibility state."""
+        self._is_visible = visible
+
     def update_network_stats(self, download_speed: str, upload_speed: str):
         """Update network stats elements (Idempotent)."""
+        # Skip updates if drawer is not visible for performance
+        if not self._is_visible:
+            return
         # Only update if values changed to prevent unnecessary repaints
         dl_val = to_persian_numerals(download_speed) if get_language() == "fa" else download_speed
         ul_val = to_persian_numerals(upload_speed) if get_language() == "fa" else upload_speed

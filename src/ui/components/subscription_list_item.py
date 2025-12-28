@@ -23,7 +23,7 @@ class SubscriptionListItem(ft.Container):
         # --- Menu Items ---
         menu_items = [
             ft.PopupMenuItem(
-                text=t("server_list.copy_link"),
+                content=ft.Text(t("server_list.copy_link")),
                 icon=ft.Icons.LINK,
                 on_click=self._copy_link,
             ),
@@ -31,7 +31,7 @@ class SubscriptionListItem(ft.Container):
         if on_delete:
             menu_items.append(
                 ft.PopupMenuItem(
-                    text=t("server_list.delete"),
+                    content=ft.Text(t("server_list.delete")),
                     icon=ft.Icons.DELETE_OUTLINE_ROUNDED,
                     on_click=self._delete_item,
                 )

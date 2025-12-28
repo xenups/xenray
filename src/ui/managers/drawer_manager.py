@@ -11,6 +11,7 @@ from src.ui.components.logs_drawer import LogsDrawer
 from src.ui.components.settings_drawer import SettingsDrawer
 from src.ui.log_viewer import LogViewer
 from src.ui.server_list import ServerList
+from src.ui.helpers.ui_thread_helper import UIThreadHelper
 
 if TYPE_CHECKING:
     from src.ui.main_window import MainWindow
@@ -57,7 +58,7 @@ class DrawerManager:
             ),
         )
 
-        # Settings drawer
+        # Settings drawer - set position in constructor for Flet 1.0
         self._main._settings_drawer = SettingsDrawer(
             self._main._app_context,
             self._main._run_specific_installer,
@@ -66,9 +67,11 @@ class DrawerManager:
             navigate_to=self._main.navigate_to,
             navigate_back=self._main.navigate_back,
         )
+        self._main._settings_drawer.position = "end"
 
-        # Logs drawer
+        # Logs drawer - set position in constructor for Flet 1.0
         self._main._logs_drawer_component = LogsDrawer(self._main._log_viewer, self._main._logs_heartbeat)
+        self._main._logs_drawer_component.position = "end"
 
         # Server bottom sheet
         self._main._server_sheet = ft.BottomSheet(
@@ -80,11 +83,15 @@ class DrawerManager:
             open=False,
             bgcolor=ft.Colors.TRANSPARENT,
             elevation=0,
-            enable_drag=True,
+            draggable=True,
         )
 
         # Load last selected profile
         self._load_last_profile()
+
+        # Add bottom sheet to page overlay (BottomSheet does have open= property)
+        self._main._page.overlay.append(self._main._server_sheet)
+        self._main._page.update()
 
     def _load_last_profile(self):
         """Load and set the last selected profile."""
@@ -101,29 +108,31 @@ class DrawerManager:
         """Close the server list bottom sheet."""
         if self._main._server_sheet:
             self._main._server_sheet.open = False
-            self._main._page.close(self._main._server_sheet)
+            self._main._page.update()
 
     def open_server_drawer(self, e=None):
         """Open the server list bottom sheet."""
         if self._main._server_sheet:
-            self._main._page.open(self._main._server_sheet)
+            self._main._server_sheet.open = True
+            self._main._page.update()
             self._safe_update_server_list()
 
     def open_logs_drawer(self, e=None):
         """Open the logs drawer."""
-        if self._main._page.end_drawer != self._main._logs_drawer_component:
-            self._main._page.end_drawer = self._main._logs_drawer_component
-        self._main._logs_drawer_component.open = True
-        self._main._page.update()
+        # Use page.end_drawer and show_end_drawer() for Flet 0.80.0
+        # show_end_drawer is async, so use run_task to await it
+        self._main._page.end_drawer = self._main._logs_drawer_component
+        self._main._logs_drawer_component.set_visible(True)  # Track visibility for performance
+        self._main._page.run_task(self._main._page.show_end_drawer)
         # Trigger immediate stats update so user doesn't wait 1.5s for the first reading
         self._main._network_stats_handler.update_ui_immediately()
 
     def open_settings_drawer(self, e=None):
         """Open the settings drawer."""
-        if self._main._page.end_drawer != self._main._settings_drawer:
-            self._main._page.end_drawer = self._main._settings_drawer
-        self._main._settings_drawer.open = True
-        self._main._page.update()
+        # Use page.end_drawer and show_end_drawer() for Flet 0.80.0
+        # show_end_drawer is async, so use run_task to await it
+        self._main._page.end_drawer = self._main._settings_drawer
+        self._main._page.run_task(self._main._page.show_end_drawer)
 
     def _safe_update_server_list(self):
         """Wait for sheet to be mounted before updating list."""
@@ -132,7 +141,7 @@ class DrawerManager:
             max_wait = 2
             start = time.time()
             while time.time() - start < max_wait:
-                if self._main._server_sheet and self._main._server_sheet.page:
+                if self._main._server_sheet and UIThreadHelper.is_mounted(self._main._server_sheet):
                     try:
                         self._main._server_list._load_profiles(update_ui=True)
                     except Exception:

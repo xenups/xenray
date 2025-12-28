@@ -17,6 +17,7 @@ from src.ui.components.chain_list_item import ChainListItem
 from src.ui.components.server_list_header import ServerListHeader
 from src.ui.components.server_list_item import ServerListItem
 from src.ui.components.subscription_list_item import SubscriptionListItem
+from src.ui.helpers.ui_thread_helper import UIThreadHelper
 from src.ui.pages.chain_builder_page import ChainBuilderPage
 
 
@@ -116,7 +117,7 @@ class ServerList(ft.Container):
         threading.Thread(target=self._wait_until_added_and_load, daemon=True).start()
 
     def _wait_until_added_and_load(self):
-        while not self._page or not self.page:
+        while not self._page or not UIThreadHelper.is_mounted(self):
             time.sleep(0.05)
         self._load_profiles(update_ui=True)
 
@@ -440,13 +441,13 @@ class ServerList(ft.Container):
     def _show_add_dialog(self, e=None):
         """Show the add server/subscription dialog."""
         if self._page:
-            self._page.open(self._add_dialog)
+            self._page.show_dialog(self._add_dialog)
             self._page.update()
 
     def _close_add_dialog(self):
         """Close the add dialog."""
         if self._page:
-            self._page.close(self._add_dialog)
+            self._page.pop_dialog()
             self._page.update()
 
     def _handle_server_added(self, name: str, config: dict):
