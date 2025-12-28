@@ -94,11 +94,9 @@ class AppContext:
         """Resolve profile by ID across all sources."""
         return self.profile_resolver.resolve(profile_id, include_chains=search_chains)
 
-
     def load_config(self, file_path: str) -> Tuple[Optional[dict], bool]:
         """Load xray config from file."""
         return self.config_loader.load(file_path)
-
 
     # --- Chain convenience methods (need profile_resolver) ---
 
@@ -117,7 +115,6 @@ class AppContext:
     def get_chain_by_id(self, chain_id: str) -> Optional[dict]:
         """Get a chain by ID with validation status."""
         return self.chains.get_enriched_by_id(chain_id, self.profile_resolver)
-
 
     def validate_chain(self, profile_ids: list[str]) -> tuple[bool, str]:
         """Validate a chain configuration."""
