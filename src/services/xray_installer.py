@@ -10,7 +10,7 @@ import requests
 from loguru import logger
 
 from src.core.constants import BIN_DIR, XRAY_EXECUTABLE
-from src.utils.platform_utils import PlatformUtils
+from src.utils.platform_utils import Architecture, Platform, PlatformUtils
 
 # Constants
 DOWNLOAD_TIMEOUT = 30.0  # seconds
@@ -92,18 +92,18 @@ class XrayInstallerService:
         try:
             # Determine architecture
             arch = PlatformUtils.get_architecture()
-            if arch == "x86_64":
+            if arch == Architecture.X86_64:
                 arch_str = "64"
-            elif arch == "arm64":
+            elif arch == Architecture.ARM64:
                 arch_str = "arm64-v8a"
             else:
                 arch_str = "32"
 
             # Determine OS name
             platform = PlatformUtils.get_platform()
-            if platform == "windows":
+            if platform == Platform.WINDOWS:
                 os_name = "windows"
-            elif platform == "macos":
+            elif platform == Platform.MACOS:
                 os_name = "macos"
             else:
                 os_name = "linux"

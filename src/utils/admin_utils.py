@@ -25,13 +25,13 @@ def check_and_request_admin(mode: str) -> None:
     import ctypes
     import os
 
-    from src.utils.platform_utils import PlatformUtils
+    from src.utils.platform_utils import Platform, PlatformUtils
 
     # Check if already running as admin
     is_admin = False
     platform = PlatformUtils.get_platform()
 
-    if platform == "windows":
+    if platform == Platform.WINDOWS:
         try:
             is_admin = ctypes.windll.shell32.IsUserAnAdmin() != 0
         except Exception:
@@ -46,7 +46,7 @@ def check_and_request_admin(mode: str) -> None:
     typer.echo("⚠️  VPN mode requires administrator privileges", err=True)
     typer.echo()
 
-    if platform == "windows":
+    if platform == Platform.WINDOWS:
         _handle_windows_elevation()
     else:
         _handle_unix_elevation()

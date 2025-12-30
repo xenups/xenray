@@ -20,7 +20,7 @@ from src.core.constants import (
     XRAY_EXECUTABLE,
 )
 from src.utils.network_interface import NetworkInterfaceDetector
-from src.utils.platform_utils import PlatformUtils
+from src.utils.platform_utils import Platform, PlatformUtils
 from src.utils.process_utils import ProcessUtils
 
 # Constants
@@ -116,13 +116,19 @@ class SingboxService:
         """Add static route for IP via gateway."""
         if ip in self._added_routes:
             return
+        
+        # On Linux, if we are not root (even with caps), we cannot use 'ip route' command.
+        # We must rely on sing-box internal routing (bind_interface/auto_route).
+        platform = PlatformUtils.get_platform()
+        if platform == Platform.LINUX and not ProcessUtils.is_admin():
+            logger.debug(f"[SingboxService] Non-root user: skipping manual route for {ip} (relying on sing-box auto-route)")
+            return
+
         try:
             logger.info(f"[SingboxService] Adding static route: {ip} → {gateway}")
 
             # Platform-specific route commands
-            platform = PlatformUtils.get_platform()
-
-            if platform == "windows":
+            if platform == Platform.WINDOWS:
                 cmd = [
                     "route",
                     "add",
@@ -133,7 +139,7 @@ class SingboxService:
                     "metric",
                     "1",
                 ]
-            elif platform == "macos":
+            elif platform == Platform.MACOS:
                 cmd = [
                     "route",
                     "-n",
@@ -142,7 +148,7 @@ class SingboxService:
                     ip,
                     gateway,
                 ]
-            else:  # Linux
+            else:  # Linux (Root)
                 cmd = [
                     "ip",
                     "route",
@@ -166,14 +172,19 @@ class SingboxService:
         """Remove all added static routes."""
         platform = PlatformUtils.get_platform()
 
+        # On Linux non-root, we didn't add routes manually, so nothing to clean up manually.
+        if platform == Platform.LINUX and not ProcessUtils.is_admin():
+            self._added_routes.clear()
+            return
+
         for ip in self._added_routes[:]:
             try:
                 logger.debug(f"[SingboxService] Removing static route: {ip}")
 
                 # Platform-specific route delete commands
-                if platform == "windows":
+                if platform == Platform.WINDOWS:
                     cmd = ["route", "delete", ip]
-                elif platform == "macos":
+                elif platform == Platform.MACOS:
                     cmd = ["route", "-n", "delete", "-host", ip]
                 else:  # Linux
                     cmd = ["ip", "route", "del", ip]
@@ -413,7 +424,7 @@ class SingboxService:
             "log": {"level": "info", "timestamp": True},
             "experimental": {
                 "clash_api": {
-                    "external_controller": "127.0.0.1:9090",
+                    "external_controller": "127.0.0.1:9099",
                     "secret": "",
                 }
             },
@@ -452,7 +463,10 @@ class SingboxService:
                     "mtu": mtu,
                     "auto_route": True,
                     "strict_route": True,
-                    "stack": "system",
+                    # Stack selection by platform:
+                    # - gvisor: Userspace stack, reliable for Linux (handles TCP properly)
+                    # - system: Native kernel stack, fast on Windows/macOS
+                    "stack": "gvisor" if PlatformUtils.get_platform() == Platform.LINUX else "system",
                     "sniff": True,
                     "sniff_override_destination": True,
                     "endpoint_independent_nat": True,
@@ -486,8 +500,14 @@ class SingboxService:
                         "outbound": "direct",
                     },
                     {"process_path": [XRAY_EXECUTABLE], "outbound": "direct"},
+                    # DNS hijacking - MUST come before private IP bypass
                     {
                         "protocol": "dns",
+                        "action": "hijack-dns",
+                    },
+                    # Port 53 fallback for DNS not detected by protocol sniff
+                    {
+                        "port": 53,
                         "action": "hijack-dns",
                     },
                     {"network": "udp", "port": 443, "outbound": "proxy"},

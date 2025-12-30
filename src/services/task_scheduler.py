@@ -12,7 +12,7 @@ from pathlib import Path
 
 from loguru import logger
 
-from src.utils.platform_utils import PlatformUtils
+from src.utils.platform_utils import Platform, PlatformUtils
 from src.utils.process_utils import ProcessUtils
 
 TASK_NAME = "XenRayStartup"
@@ -22,7 +22,7 @@ APP_NAME = "XenRay"
 
 def _get_startupinfo():
     """Get STARTUPINFO to hide console window on Windows."""
-    if PlatformUtils.get_platform() == "windows":
+    if PlatformUtils.get_platform() == Platform.WINDOWS:
         startupinfo = subprocess.STARTUPINFO()
         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
         startupinfo.wShowWindow = 0  # SW_HIDE
@@ -234,4 +234,4 @@ def unregister_task() -> tuple[bool, str]:
 
 def is_supported() -> bool:
     """Check if startup management is supported on this platform."""
-    return PlatformUtils.get_platform() == "windows"
+    return PlatformUtils.get_platform() == Platform.WINDOWS

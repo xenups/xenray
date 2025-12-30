@@ -7,6 +7,17 @@ import sys
 if __name__ == "__main__":
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# [Linux Fix] Inject system site-packages to allow access to python3-gi (PyGObject)
+# This is required for pystray to use AppIndicator backend on Linux
+if sys.platform.startswith("linux"):
+    system_packages = "/usr/lib/python3/dist-packages"
+    if os.path.exists(system_packages) and system_packages not in sys.path:
+        # Check if gi is already available (e.g. key system dependencies)
+        try:
+            import gi  # noqa: F401
+        except ImportError:
+            sys.path.append(system_packages)
+
 import asyncio
 
 from src.core.constants import EARLY_LOG_FILE
@@ -105,10 +116,10 @@ def run():
 
     # Import PlatformUtils - works for both script and PyInstaller
     # PyInstaller bundles these as hidden-imports
-    from src.utils.platform_utils import PlatformUtils
+    from src.utils.platform_utils import Platform, PlatformUtils
 
     # Platform-specific singleton check
-    if PlatformUtils.get_platform() == "windows":
+    if PlatformUtils.get_platform() == Platform.WINDOWS:
         kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
         mutex_name = "Global\\XenRay_Singleton_Mutex_v1"
 

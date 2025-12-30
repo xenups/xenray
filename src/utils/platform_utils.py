@@ -2,58 +2,71 @@
 import os
 import platform
 import sys
-from typing import Literal, Tuple
+from enum import Enum
+from typing import Tuple
 
-PlatformType = Literal["windows", "macos", "linux"]
-ArchType = Literal["x86_64", "arm64", "x86", "unknown"]
+
+class Platform(Enum):
+    """Operating system platforms."""
+    WINDOWS = "windows"
+    MACOS = "macos"
+    LINUX = "linux"
+
+
+class Architecture(Enum):
+    """CPU architectures."""
+    X86_64 = "x86_64"
+    ARM64 = "arm64"
+    X86 = "x86"
+    UNKNOWN = "unknown"
 
 
 class PlatformUtils:
     """Utility class for platform detection and abstraction."""
 
     @staticmethod
-    def get_platform() -> PlatformType:
+    def get_platform() -> Platform:
         """
         Detect the current operating system.
 
         Returns:
-            Platform identifier: 'windows', 'macos', or 'linux'
+            Platform enum value: Platform.WINDOWS, Platform.MACOS, or Platform.LINUX
         """
         system = platform.system()
         if system == "Windows" or os.name == "nt":
-            return "windows"
+            return Platform.WINDOWS
         elif system == "Darwin":
-            return "macos"
+            return Platform.MACOS
         else:
-            return "linux"
+            return Platform.LINUX
 
     @staticmethod
-    def get_architecture() -> ArchType:
+    def get_architecture() -> Architecture:
         """
         Detect the CPU architecture.
 
         Returns:
-            Architecture identifier: 'x86_64', 'arm64', 'x86', or 'unknown'
+            Architecture enum value
         """
         machine = platform.machine().lower()
 
         # Normalize common architecture names
         if machine in ("amd64", "x86_64", "x64"):
-            return "x86_64"
+            return Architecture.X86_64
         elif machine in ("arm64", "aarch64", "arm64-v8a"):
-            return "arm64"
+            return Architecture.ARM64
         elif machine in ("i386", "i686", "x86"):
-            return "x86"
+            return Architecture.X86
         else:
-            return "unknown"
+            return Architecture.UNKNOWN
 
     @staticmethod
-    def get_platform_arch() -> Tuple[PlatformType, ArchType]:
+    def get_platform_arch() -> Tuple[Platform, Architecture]:
         """
         Get both platform and architecture.
 
         Returns:
-            Tuple of (platform, architecture)
+            Tuple of (Platform, Architecture) enums
         """
         return PlatformUtils.get_platform(), PlatformUtils.get_architecture()
 
@@ -65,7 +78,7 @@ class PlatformUtils:
         Returns:
             '.exe' for Windows, empty string for Unix-like systems
         """
-        return ".exe" if PlatformUtils.get_platform() == "windows" else ""
+        return ".exe" if PlatformUtils.get_platform() == Platform.WINDOWS else ""
 
     @staticmethod
     def get_platform_bin_dir(base_dir: str) -> str:
@@ -81,11 +94,15 @@ class PlatformUtils:
         """
         plat, arch = PlatformUtils.get_platform_arch()
 
-        # Map platform names to directory conventions
-        platform_map = {"windows": "windows", "macos": "darwin", "linux": "linux"}
+        # Map platform enum values to directory conventions
+        platform_map = {
+            Platform.WINDOWS: "windows",
+            Platform.MACOS: "darwin",
+            Platform.LINUX: "linux"
+        }
 
-        platform_dir = platform_map.get(plat, plat)
-        return os.path.join(base_dir, f"{platform_dir}-{arch}")
+        platform_dir = platform_map.get(plat, plat.value)
+        return os.path.join(base_dir, f"{platform_dir}-{arch.value}")
 
     @staticmethod
     def is_frozen() -> bool:
@@ -143,7 +160,7 @@ class PlatformUtils:
         """
         import subprocess
 
-        if PlatformUtils.get_platform() == "windows":
+        if PlatformUtils.get_platform() == Platform.WINDOWS:
             # CREATE_NO_WINDOW only exists on Windows
             return getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
         return 0
@@ -158,7 +175,7 @@ class PlatformUtils:
         """
         import subprocess
 
-        if PlatformUtils.get_platform() == "windows":
+        if PlatformUtils.get_platform() == Platform.WINDOWS:
             # STARTUPINFO and related constants only exist on Windows
             STARTUPINFO = getattr(subprocess, "STARTUPINFO", None)
             if STARTUPINFO:
@@ -177,9 +194,9 @@ class PlatformUtils:
             'SINGTUN' for Windows, 'utun9' for macOS, 'tun0' for Linux
         """
         plat = PlatformUtils.get_platform()
-        if plat == "windows":
+        if plat == Platform.WINDOWS:
             return "SINGTUN"
-        elif plat == "macos":
+        elif plat == Platform.MACOS:
             return "utun9"
         else:
             return "tun0"
@@ -192,4 +209,4 @@ class PlatformUtils:
         Returns:
             True for macOS (SMJobBless), False otherwise
         """
-        return PlatformUtils.get_platform() == "macos"
+        return PlatformUtils.get_platform() == Platform.MACOS

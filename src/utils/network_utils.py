@@ -5,7 +5,7 @@ import socket
 import subprocess
 
 from src.core.logger import logger
-from src.utils.platform_utils import PlatformUtils
+from src.utils.platform_utils import Platform, PlatformUtils
 
 
 class NetworkUtils:
@@ -152,8 +152,6 @@ class NetworkUtils:
         Returns:
             Optimal MTU value (defaults to 1420 if detection fails)
         """
-        import platform
-
         # Default safe MTU if detection fails
         default_mtu = 1420
 
@@ -166,7 +164,7 @@ class NetworkUtils:
         logger.info(f"MTU mode: auto - detecting optimal MTU (range: {min_mtu}-{max_mtu})...")
 
         # Platform-specific ping commands
-        system = platform.system().lower()
+        current_platform = PlatformUtils.get_platform()
 
         def test_mtu(mtu_size: int) -> bool:
             """Test if a specific MTU size works."""
@@ -179,7 +177,7 @@ class NetworkUtils:
                     return False
 
                 # Build ping command based on platform
-                if system == "windows":
+                if current_platform == Platform.WINDOWS:
                     # Windows: ping -n 1 -w timeout -f -l size host
                     cmd = [
                         "ping",

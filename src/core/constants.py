@@ -5,7 +5,7 @@ from pathlib import Path
 # Load environment variables from .env file
 from dotenv import load_dotenv
 
-from src.utils.platform_utils import PlatformUtils
+from src.utils.platform_utils import Platform, PlatformUtils
 
 # Load .env from project root
 _project_root = Path(__file__).parent.parent.parent
@@ -28,10 +28,10 @@ PLACEHOLDER_XRAY_PID = int(os.getenv("PLACEHOLDER_XRAY_PID", "-999999"))
 PLACEHOLDER_SINGBOX_PID = int(os.getenv("PLACEHOLDER_SINGBOX_PID", "-999997"))
 
 # Temporary directory (cross-platform)
-if PlatformUtils.get_platform() == "windows":
+if PlatformUtils.get_platform() == Platform.WINDOWS:
     # Windows: Use system temp directory
     TMPDIR = os.path.join(tempfile.gettempdir(), "xenray")
-elif PlatformUtils.get_platform() == "macos":
+elif PlatformUtils.get_platform() == Platform.MACOS:
     # macOS: Use system temp or user cache directory
     TMPDIR = os.path.join(os.path.expanduser("~/Library/Caches"), "xenray")
 else:

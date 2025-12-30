@@ -37,7 +37,7 @@ class ClashAPIProvider:
     The /traffic endpoint is streaming and not suitable for polling.
     """
 
-    DEFAULT_PORT = 9090
+    DEFAULT_PORT = 9099
     TIMEOUT = 2.0
 
     def __init__(self, port: int = None):
@@ -98,7 +98,7 @@ class DebugVarsProvider:
     Note: Only available if explicitly enabled in sing-box build.
     """
 
-    DEFAULT_PORT = 9090
+    DEFAULT_PORT = 9099
     TIMEOUT = 2.0
 
     def __init__(self, port: int = None):

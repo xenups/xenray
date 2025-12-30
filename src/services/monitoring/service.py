@@ -85,7 +85,7 @@ class ConnectionMonitoringService:
 
         # Create ActiveConnectivityMonitor (metrics-based, VPN mode only)
         # Emits ACTIVE_LOST, ACTIVE_RESTORED, ACTIVE_DEGRADED signals
-        metrics_provider = ClashAPIProvider(port=9090)
+        metrics_provider = ClashAPIProvider(port=9099)
         self._active_monitor = ActiveConnectivityMonitor(
             metrics_provider=metrics_provider,
             on_connectivity_lost=lambda: self._emit_signal(MonitorSignal.ACTIVE_LOST),
