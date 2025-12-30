@@ -9,7 +9,7 @@ import flet as ft
 # Local modules
 from src.core.app_context import AppContext
 from src.core.connection_manager import ConnectionManager
-from src.core.constants import APPDIR, FONT_URLS
+from src.core.constants import APPDIR, FONT_URLS, SINGBOX_EXECUTABLE, XRAY_EXECUTABLE
 from src.core.i18n import t
 from src.core.logger import logger
 from src.core.types import ConnectionMode
@@ -302,7 +302,7 @@ class MainWindow:
         # Admin Check for VPN Mode
         if not self._is_running:
             if self._current_mode == ConnectionMode.VPN:
-                if not ProcessUtils.is_admin():
+                if not ProcessUtils.has_vpn_privileges([SINGBOX_EXECUTABLE, XRAY_EXECUTABLE]):
                     # CALL THE NEW CLASS METHOD
                     self._show_admin_restart_dialog()
                     return  # Stop execution if admin restart is needed
@@ -438,9 +438,12 @@ class MainWindow:
     def _on_mode_changed(self, mode: ConnectionMode):
         from src.utils.process_utils import ProcessUtils
 
-        if mode == ConnectionMode.VPN and not ProcessUtils.is_admin():
-            self._show_toast(t("status.admin_required"), "warning")
-            return
+        if mode == ConnectionMode.VPN:
+            has_privs = ProcessUtils.has_vpn_privileges([SINGBOX_EXECUTABLE, XRAY_EXECUTABLE])
+            logger.debug(f"[_on_mode_changed] Switching to VPN. Privileges check: {has_privs}")
+            if not has_privs:
+                self._show_toast(t("status.admin_required"), "warning")
+                return
 
         self._current_mode = mode
         self._app_context.settings.set_connection_mode("vpn" if mode == ConnectionMode.VPN else "proxy")

@@ -14,7 +14,7 @@ import requests
 from loguru import logger
 
 from src.core.constants import APP_VERSION, GITHUB_REPO, UPDATE_DOWNLOAD_TIMEOUT, UPDATE_MIN_FILE_SIZE
-from src.utils.platform_utils import PlatformUtils
+from src.utils.platform_utils import Architecture, Platform, PlatformUtils
 
 # API URL constructed from configurable repo
 GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
@@ -127,14 +127,14 @@ class AppUpdateService:
         arch = PlatformUtils.get_architecture()
 
         # Determine asset name pattern
-        if platform == "windows":
-            if arch == "x86_64":
+        if platform == Platform.WINDOWS:
+            if arch == Architecture.X86_64:
                 pattern = "windows-x64.zip"
             else:
                 pattern = "windows-x86.zip"
-        elif platform == "linux":
+        elif platform == Platform.LINUX:
             pattern = "linux.AppImage"  # Future support
-        elif platform == "macos":
+        elif platform == Platform.MACOS:
             pattern = "macos.dmg"  # Future support
         else:
             return None

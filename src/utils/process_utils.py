@@ -7,7 +7,7 @@ from typing import List, Optional
 import psutil
 
 from src.core.logger import logger
-from src.utils.platform_utils import PlatformUtils
+from src.utils.platform_utils import Platform, PlatformUtils
 
 
 class ProcessUtils:
@@ -45,6 +45,83 @@ class ProcessUtils:
         except Exception as e:
             logger.warning(f"Unexpected error checking admin status: {e}")
             return False
+
+    @staticmethod
+    def has_vpn_privileges(binary_paths: List[str] = None) -> bool:
+        """
+        Check if the system has privileges to run VPN (Tun mode).
+        On Linux, this checks for CAP_NET_ADMIN on binaries or root.
+        On Windows/macOS, checks for Admin/Root.
+
+        Args:
+            binary_paths: List of absolute paths to binaries (sing-box, xray) to check capabilities for.
+
+        Returns:
+            True if privileged enough, False otherwise.
+        """
+        # If we are already admin/root, we are good
+        if ProcessUtils.is_admin():
+            return True
+
+        # On Linux, check for capabilities
+        if PlatformUtils.get_platform() == Platform.LINUX and binary_paths:
+            try:
+                import shutil
+                getcap = shutil.which("getcap")
+                
+                # Check standard locations if which() failed
+                if not getcap:
+                     for p in ["/sbin/getcap", "/usr/sbin/getcap", "/usr/bin/getcap"]:
+                         if os.path.exists(p):
+                             getcap = p
+                             break
+                
+                if not getcap or not os.path.exists(getcap):
+                    logger.debug(f"[ProcessUtils] getcap not found")
+                    return False
+
+                logger.debug(f"[ProcessUtils] Checking capabilities using {getcap}")
+
+                all_good = True
+                files_checked = 0
+                for binary in binary_paths:
+                    if not os.path.exists(binary):
+                        logger.debug(f"[ProcessUtils] Binary not found: {binary}")
+                        continue
+                    
+                    files_checked += 1
+                    # Check if binary has cap_net_admin
+                    try:
+                        result = subprocess.run(
+                            [getcap, binary], 
+                            capture_output=True, 
+                            text=True, 
+                            check=False
+                        )
+                        output = result.stdout.strip()
+                        logger.debug(f"[ProcessUtils] getcap {binary} -> {output}")
+                        
+                        # Output format: /path/to/binary cap_net_admin,cap_net_bind_service=ep
+                        if "cap_net_admin" not in output:
+                            logger.warning(f"[ProcessUtils] Missing cap_net_admin on {binary}")
+                            all_good = False
+                            break
+                    except Exception as e:
+                        logger.error(f"[ProcessUtils] Failed to run getcap: {e}")
+                        all_good = False
+                        break
+                
+                # If we didn't check any files, that's technically a pass (no binaries to restrict) 
+                # or a fail (paths wrong). Safer to pass if paths just don't exist yet but assume they will work?
+                # Actually, if binary_paths were provided but none found, we should probably warn, but returning True 
+                # maintains "innocent until proven guilty" logic.
+                return all_good
+
+            except Exception as e:
+                logger.error(f"[ProcessUtils] Error checking capabilities: {e}")
+                return False
+
+        return False
 
     @staticmethod
     def kill_process(pid: int, force: bool = False) -> bool:
@@ -242,12 +319,59 @@ class ProcessUtils:
 
         platform = PlatformUtils.get_platform()
 
-        if platform == "windows":
+        if platform == Platform.WINDOWS:
             ProcessUtils._restart_as_admin_windows()
-        elif platform == "macos":
+        elif platform == Platform.MACOS:
             ProcessUtils._restart_as_admin_macos()
         else:
-            logger.warning("restart_as_admin is not supported on Linux")
+            ProcessUtils._restart_as_admin_linux()
+
+    @staticmethod
+    def _restart_as_admin_linux():
+        """Restart as admin on Linux using pkexec."""
+        import sys
+        
+        try:
+            # Reconstruct the command
+            # If frozen (PyInstaller), sys.executable is the app binary
+            # If source, sys.executable is python, sys.argv[0] is script
+            
+            cmd = []
+            if getattr(sys, "frozen", False):
+                cmd = [sys.executable]
+            else:
+                cmd = [sys.executable] + sys.argv
+                
+            logger.info(f"Restarting as admin (pkexec): {cmd}")
+            
+            # Use pkexec with env to preserve display
+            # We use 'env' command as the executable for pkexec to run, 
+            # so we can pass environment variables
+            
+            pkexec_cmd = ["pkexec", "env"]
+            
+            # Preserve critical X11/Wayland env vars
+            for var in ["DISPLAY", "XAUTHORITY", "WAYLAND_DISPLAY", "XDG_RUNTIME_DIR"]:
+                val = os.environ.get(var)
+                if val:
+                    pkexec_cmd.append(f"{var}={val}")
+            
+            # Add the actual command
+            pkexec_cmd.extend(cmd)
+            
+            subprocess.Popen(pkexec_cmd)
+            
+            # Exit current instance
+            sys.exit(0)
+            
+        except Exception as e:
+            logger.error(f"Failed to restart as admin on Linux: {e}")
+            # Fallback to logging instructions
+            logger.warning(
+                "Automatic restart failed. "
+                "VPN mode requires root privileges on Linux. "
+                "Please run with: sudo poetry run xenray"
+            )
 
     @staticmethod
     def _restart_as_admin_windows():
@@ -363,6 +487,84 @@ class ProcessUtils:
 
         except Exception as e:
             logger.error(f"Failed to restart as admin on macOS: {e}")
+            import traceback
+
+            traceback.print_exc()
+
+    @staticmethod
+    def _restart_as_admin_linux():
+        """Restart as admin on Linux using pkexec (PolicyKit).
+
+        This method uses pkexec to request root privileges on Linux.
+        pkexec is part of PolicyKit and provides a graphical authentication dialog.
+        We use 'env' to pass DISPLAY and XAUTHORITY so the GUI can connect to X11.
+        """
+        import os
+        import shutil
+        import subprocess
+        import sys
+
+        try:
+            # Check if pkexec is available
+            pkexec_path = shutil.which("pkexec")
+            if not pkexec_path:
+                logger.error("pkexec not found. Please install PolicyKit (policykit-1 package)")
+                return
+
+            # Get display environment variables - required for GUI to work
+            display = os.environ.get("DISPLAY", ":0")
+            xauthority = os.environ.get("XAUTHORITY", os.path.expanduser("~/.Xauthority"))
+            wayland_display = os.environ.get("WAYLAND_DISPLAY", "")
+            xdg_runtime_dir = os.environ.get("XDG_RUNTIME_DIR", "")
+
+            # Get the executable path
+            if getattr(sys, "frozen", False):
+                # Running as compiled PyInstaller executable
+                executable = sys.executable
+                app_cmd = [executable]
+            else:
+                # Running as Python script
+                python_exe = sys.executable
+                script_path = sys.argv[0]
+
+                # Use the full path to the script
+                if not os.path.isabs(script_path):
+                    script_path = os.path.abspath(script_path)
+
+                app_cmd = [python_exe, script_path]
+
+            # Build command with env to pass display variables
+            # pkexec env DISPLAY=:0 XAUTHORITY=/path python script.py
+            env_cmd = ["env", f"DISPLAY={display}", f"XAUTHORITY={xauthority}"]
+
+            # Add Wayland variables if present
+            if wayland_display:
+                env_cmd.append(f"WAYLAND_DISPLAY={wayland_display}")
+            if xdg_runtime_dir:
+                env_cmd.append(f"XDG_RUNTIME_DIR={xdg_runtime_dir}")
+
+            cmd = [pkexec_path] + env_cmd + app_cmd
+
+            logger.info(f"Requesting admin privileges via pkexec: {' '.join(cmd)}")
+
+            # Launch the new instance with pkexec
+            # Use Popen to start the process and detach
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,  # Detach from current session
+            )
+
+            if process.pid:
+                logger.info(f"Successfully launched new instance with admin privileges (PID: {process.pid})")
+                # Exit current instance
+                sys.exit(0)
+            else:
+                logger.error("Failed to launch admin instance")
+
+        except Exception as e:
+            logger.error(f"Failed to restart as admin on Linux: {e}")
             import traceback
 
             traceback.print_exc()
