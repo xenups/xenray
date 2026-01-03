@@ -110,7 +110,9 @@ def run():
     # Platform-specific singleton check
     if PlatformUtils.get_platform() == "windows":
         kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-        mutex_name = "Global\\XenRay_Singleton_Mutex_v1"
+        # Use Local\ instead of Global\ to avoid Access Denied (Error 5) 
+        # when running without SeCreateGlobalPrivilege
+        mutex_name = "Local\\XenRay_Singleton_Mutex_v1"
 
         # CRITICAL: Clear last error before creating mutex to avoid false positives
         ctypes.set_last_error(0)

@@ -20,6 +20,7 @@ class ConnectionOrchestrator:
         xray_service,
         singbox_service,
         legacy_config_service,
+        tor_service,
     ):
         """
         Initialize ConnectionOrchestrator with injected dependencies.
@@ -41,6 +42,7 @@ class ConnectionOrchestrator:
         self._xray_service = xray_service
         self._singbox_service = singbox_service
         self._legacy_config_service = legacy_config_service
+        self._tor_service = tor_service
 
     def establish_connection(self, file_path: str, mode: str, step_callback=None) -> tuple[bool, Optional[dict]]:
         """
@@ -88,27 +90,46 @@ class ConnectionOrchestrator:
                 if not processed_config:
                     continue
 
-                # Start Xray service
-                xray_pid = self._start_xray(step_callback)
-                if not xray_pid:
-                    continue
-
-                # Start Sing-box if VPN mode
-                singbox_pid = None
-                if mode == "vpn":
-                    singbox_pid = self._start_singbox(processed_config, socks_port, step_callback)
-                    if not singbox_pid:
-                        self._xray_service.stop()
+                # Start Xray service (if not Tor mode)
+                xray_pid = None
+                if mode != "tor":
+                    xray_pid = self._start_xray(step_callback)
+                    if not xray_pid:
                         continue
 
-                # Verify connection health
-                if self._verify_connection_health(processed_config, step_callback):
+                # Start Tor service (if Tor mode)
+                tor_pid = None
+                if mode == "tor":
+                    if step_callback:
+                        step_callback(t("connection.initializing_tor"))
+                    tor_pid = self._tor_service.start(socks_port=9050)
+                    if not tor_pid:
+                        continue
+                    
+                    # NOTE: We do NOT wait for bootstrap here anymore.
+                    # Starting Singbox immediately allows TUN interface to be ready,
+                    # which might be needed for Tor to route correctly (or for us to exclude Tor from TUN).
+                    # The SOCKS5 errors (code 7) will happen until Tor is ready, but that's acceptable.
+
+                # Start Sing-box if VPN or Tor mode
+                singbox_pid = None
+                if mode in ["vpn", "tor"]:
+                    singbox_pid = self._start_singbox(processed_config, socks_port, step_callback, mode=mode)
+                    if not singbox_pid:
+                        if xray_pid:
+                            self._xray_service.stop()
+                        if tor_pid:
+                            self._tor_service.stop()
+                        continue
+
+                # Verify connection health (skip for Tor as it bootstraps slowly)
+                if mode == "tor" or self._verify_connection_health(processed_config, step_callback):
                     # Finalize connection
-                    connection_info = self._finalize_connection(file_path, mode, xray_pid, singbox_pid, step_callback)
+                    connection_info = self._finalize_connection(file_path, mode, xray_pid, singbox_pid, step_callback, tor_pid=tor_pid)
                     return True, connection_info
                 else:
                     logger.error(f"[ConnectionOrchestrator] {label.capitalize()} config failed health check")
-                    self.teardown_connection({"xray_pid": xray_pid, "singbox_pid": singbox_pid})
+                    self.teardown_connection({"xray_pid": xray_pid, "singbox_pid": singbox_pid, "tor_pid": tor_pid})
 
             logger.error("[ConnectionOrchestrator] All connection attempts failed")
             return False, None
@@ -134,6 +155,40 @@ class ConnectionOrchestrator:
         logger.warning(f"[ConnectionOrchestrator] Connection verification failed: {latency}")
         return False
 
+    def _wait_for_tor_bootstrap(self, step_callback=None) -> bool:
+        """Wait for Tor to fully bootstrap before starting Singbox."""
+        import time
+        from src.services.tor_service import TorService
+        
+        max_wait = 180  # 3 minutes
+        poll_interval = 1.0
+        elapsed = 0
+        last_percentage = 0
+        
+        logger.info("[ConnectionOrchestrator] Waiting for Tor to bootstrap...")
+        
+        while elapsed < max_wait:
+            percentage, message = TorService.get_bootstrap_progress()
+            
+            # Update UI with progress
+            if step_callback:
+                step_callback(f"Tor: {percentage}% - {message}")
+            
+            if percentage >= 100:
+                logger.info("[ConnectionOrchestrator] Tor bootstrap complete!")
+                return True
+            
+            # Log progress changes
+            if percentage > last_percentage:
+                logger.info(f"[ConnectionOrchestrator] Tor bootstrap: {percentage}% - {message}")
+                last_percentage = percentage
+            
+            time.sleep(poll_interval)
+            elapsed += poll_interval
+        
+        logger.error(f"[ConnectionOrchestrator] Tor bootstrap timeout at {percentage}%")
+        return False
+
     def teardown_connection(self, connection_info: dict):
         """
         Tear down active connection.
@@ -151,6 +206,10 @@ class ConnectionOrchestrator:
         # Stop Xray
         if connection_info.get("xray_pid"):
             self._xray_service.stop()
+
+        # Stop Tor
+        if connection_info.get("tor_pid"):
+            self._tor_service.stop()
 
         logger.info("Connection torn down successfully")
 
@@ -224,10 +283,12 @@ class ConnectionOrchestrator:
         logger.debug(f"Xray started with PID {xray_pid}")
         return xray_pid
 
-    def _start_singbox(self, processed_config: dict, socks_port: int, step_callback) -> Optional[int]:
-        """Start Sing-box service for VPN mode using XrayConfigProcessor."""
+    def _start_singbox(
+        self, processed_config: dict, socks_port: int, step_callback, mode: str = "vpn"
+    ) -> Optional[int]:
+        """Start Sing-box service for VPN/Tor mode using XrayConfigProcessor."""
         if step_callback:
-            step_callback(t("connection.initializing_vpn"))
+            step_callback(t("connection.initializing_vpn") if mode != "tor" else t("connection.initializing_tor"))
 
         from src.utils.network_utils import NetworkUtils
 
@@ -249,6 +310,7 @@ class ConnectionOrchestrator:
             routing_country=routing_country,
             routing_rules=routing_rules,
             mtu=optimal_mtu,
+            mode=mode,
         )
 
         if not singbox_pid:
@@ -264,6 +326,7 @@ class ConnectionOrchestrator:
         xray_pid: int,
         singbox_pid: Optional[int],
         step_callback,
+        tor_pid: Optional[int] = None,
     ) -> dict:
         """Finalize connection and return connection info."""
         if step_callback:
@@ -273,6 +336,7 @@ class ConnectionOrchestrator:
             "mode": mode,
             "xray_pid": xray_pid,
             "singbox_pid": singbox_pid,
+            "tor_pid": tor_pid,
             "file": file_path,
         }
 

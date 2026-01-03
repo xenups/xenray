@@ -237,14 +237,68 @@ class ConnectionHandler:
 
             self._set_running_state(True)
 
-            if not self._verify_post_connection():
-                return
+            # For Tor mode, wait for bootstrap and show progress
+            # For other modes, verify post-connection
+            if mode_str == "tor":
+                if not self._wait_for_tor_bootstrap():
+                    # Bootstrap failed - disconnect and show error
+                    logger.error("[ConnectionHandler] Tor bootstrap failed")
+                    self._set_connecting(False)
+                    self._connection_manager.disconnect()
+                    self._ui_call(self.reset_ui_disconnected)
+                    self._show_toast("connection.tor_bootstrap_failed", "error")
+                    return
+            else:
+                if not self._verify_post_connection():
+                    return
 
             self._finalize_connection(profile)
 
         except Exception as e:
             logger.error(f"[ConnectionHandler] Connection error: {e}")
             self._handle_connection_failure()
+
+    def _wait_for_tor_bootstrap(self) -> bool:
+        """Wait for Tor to bootstrap and show progress in UI."""
+        from src.services.tor_service import TorService
+        
+        max_wait = 180  # 3 minutes - Tor can be slow in censored regions
+        poll_interval = 1.0  # seconds
+        elapsed = 0
+        last_percentage = 0
+        stall_time = 0
+        stall_threshold = 30  # seconds without progress before considering it stalled
+        
+        while elapsed < max_wait:
+            percentage, message = TorService.get_bootstrap_progress()
+            
+            # Update UI with progress
+            status_text = f"Tor: {percentage}% - {message}"
+            if self._status_display:
+                self._ui_call(lambda t=status_text: self._status_display.set_step(t))
+            
+            if percentage >= 100:
+                logger.info("[ConnectionHandler] Tor bootstrap complete!")
+                return True
+            
+            # Check for stall (no progress for too long)
+            if percentage > last_percentage:
+                last_percentage = percentage
+                stall_time = 0  # Reset stall timer
+            else:
+                stall_time += poll_interval
+                
+                if stall_time >= stall_threshold and percentage > 0:
+                    # Show that we're waiting
+                    status_text = f"Tor: {percentage}% - {message} (waiting...)"
+                    if self._status_display:
+                        self._ui_call(lambda t=status_text: self._status_display.set_step(t))
+            
+            time.sleep(poll_interval)
+            elapsed += poll_interval
+        
+        logger.error(f"[ConnectionHandler] Tor bootstrap timeout at {percentage}%")
+        return False
 
     def _check_internet(self) -> bool:
         """Check internet connectivity before connecting."""
@@ -261,7 +315,14 @@ class ConnectionHandler:
         """Prepare connection parameters."""
         profile = self._selected_profile_getter() if self._selected_profile_getter else None
         mode = self._current_mode_getter() if self._current_mode_getter else ConnectionMode.PROXY
-        mode_str = "vpn" if mode == ConnectionMode.VPN else "proxy"
+        
+        # Convert enum to string for ConnectionManager
+        if mode == ConnectionMode.VPN:
+            mode_str = "vpn"
+        elif mode == ConnectionMode.TOR:
+            mode_str = "tor"
+        else:
+            mode_str = "proxy"
 
         os.makedirs(TMPDIR, exist_ok=True)
         return profile, mode_str

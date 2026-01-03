@@ -66,6 +66,7 @@
     "mode_description": "VPN or Proxy specific behavior",
     "vpn": "VPN",
     "proxy": "Proxy",
+    "tor": "Tor",
     "direct_country": "Direct Country",
     "socks_port": "SOCKS Port",
     "save": "Save",
@@ -160,6 +161,7 @@
     "processing_config": "Processing configuration...",
     "starting_xray": "Starting Xray...",
     "initializing_vpn": "Initializing VPN tunnel...",
+    "initializing_tor": "Initializing Tor network...",
     "finalizing": "Finalizing connection...",
     "ping_prefix": "Ping:",
     "latency_ms": "{value}ms",
@@ -177,7 +179,8 @@
     "reconnecting": "Reconnecting...",
     "reconnected": "Connection restored! ✅",
     "reconnect_failed": "Auto-reconnect failed",
-    "adopted_connection": "Adopted Connection"
+    "adopted_connection": "Adopted Connection",
+    "tor_bootstrap_failed": "Tor connection failed - network may be blocking Tor"
   },
   "routing": {
     "title": "Routing Rules",

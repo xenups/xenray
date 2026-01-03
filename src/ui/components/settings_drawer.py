@@ -21,7 +21,7 @@ from src.ui.components.settings_sections import (
     AutoReconnectToggleRow,
     CountryDropdownRow,
     LanguageDropdownRow,
-    ModeSwitchRow,
+    ModeSelectionRow,
     PortInputRow,
     SettingsListTile,
     SettingsSection,
@@ -54,7 +54,7 @@ class SettingsDrawer(ft.NavigationDrawer):
         is_proxy = current_mode == ConnectionMode.PROXY
 
         # Components
-        self._mode_switch_row = ModeSwitchRow(is_proxy, self._handle_mode_change)
+        self._mode_selection_row = ModeSelectionRow(current_mode.value, self._handle_mode_change)
         self._port_row = PortInputRow(
             self._app_context.settings.get_proxy_port(),
             self._save_port,
@@ -115,7 +115,7 @@ class SettingsDrawer(ft.NavigationDrawer):
                                 SettingsSection(
                                     t("settings.connection"),
                                     [
-                                        self._mode_switch_row,
+                                        self._mode_selection_row,
                                         self._port_row,
                                         self._country_row,
                                     ],
@@ -241,21 +241,21 @@ class SettingsDrawer(ft.NavigationDrawer):
         if self.page:
             self.page.close(self)
 
-    def _handle_mode_change(self, e):
-        """Handle VPN/Proxy mode switch."""
-        is_proxy = self._mode_switch_row.value
-
-        if not is_proxy and not ProcessUtils.is_admin():
-            self._mode_switch_row.value = True
-            self._mode_switch_row.update()
-            self._show_admin_restart_dialog()
+    def _handle_mode_change(self, val):
+        """Handle Connection mode change."""
+        new_mode_str = val
+        
+        if new_mode_str in ["vpn", "tor"] and not ProcessUtils.is_admin():
+            self._mode_selection_row.value = "proxy"
+            self._mode_selection_row.update()
+            self._show_admin_restart_dialog(new_mode_str)
             return
 
-        new_mode = ConnectionMode.PROXY if is_proxy else ConnectionMode.VPN
+        new_mode = ConnectionMode(new_mode_str)
         self._on_mode_changed(new_mode)
 
-    def _show_admin_restart_dialog(self):
-        """Show dialog to restart as admin for VPN mode."""
+    def _show_admin_restart_dialog(self, target_mode_str: str):
+        """Show dialog to restart as admin for VPN/Tor mode."""
         page = self.page
         if not page:
             return
@@ -265,7 +265,7 @@ class SettingsDrawer(ft.NavigationDrawer):
 
         def confirm_restart(e):
             page.close(dlg)
-            self._app_context.settings.set_connection_mode(ConnectionMode.VPN.value)
+            self._app_context.settings.set_connection_mode(target_mode_str)
             ProcessUtils.restart_as_admin()
 
         dlg = ft.AlertDialog(

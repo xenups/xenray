@@ -8,6 +8,7 @@ from src.core.app_context import AppContext
 from src.core.connection_orchestrator import ConnectionOrchestrator
 from src.core.i18n import t
 from src.services.singbox_service import SingboxService
+from src.services.tor_service import TorService
 from src.services.xray_service import XrayService
 
 
@@ -47,6 +48,7 @@ class ConnectionManager:
 
         xray_service = XrayService()
         singbox_service = SingboxService()
+        tor_service = TorService()
 
         # State
         self._current_connection = None
@@ -74,6 +76,7 @@ class ConnectionManager:
             xray_service=xray_service,
             singbox_service=singbox_service,
             legacy_config_service=legacy_config_service,
+            tor_service=tor_service,
         )
 
         # Connection Adoption: Check if services are already running (CLI persistence)
@@ -126,14 +129,20 @@ class ConnectionManager:
         """Adopt an already running connection (from PID files)."""
         xray_pid = self._orchestrator._xray_service.pid
         singbox_pid = self._orchestrator._singbox_service.pid
+        tor_pid = self._orchestrator._tor_service.pid
 
-        if xray_pid:
-            mode = "vpn" if singbox_pid else "proxy"
+        if xray_pid or tor_pid:
+            if tor_pid:
+                mode = "tor"
+            else:
+                mode = "vpn" if singbox_pid else "proxy"
+            
             self._session_id += 1
             self._current_connection = {
                 "mode": mode,
                 "xray_pid": xray_pid,
                 "singbox_pid": singbox_pid,
+                "tor_pid": tor_pid,
                 "file": t("connection.adopted_connection", default="Adopted Connection"),
                 "session_id": self._session_id,
             }

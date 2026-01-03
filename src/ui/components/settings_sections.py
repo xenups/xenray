@@ -92,69 +92,108 @@ class SettingsListTile(ft.ListTile):
         )
 
 
-class ModeSwitchRow(ft.Container):
-    """Mode switch row (VPN/Proxy) for settings."""
+class ModeSelectionRow(ft.Container):
+    """Mode selection row (VPN/Proxy/Tor) for settings."""
 
-    def __init__(self, is_proxy: bool, on_change: Callable):
-        self._switch = ft.Switch(
-            value=is_proxy,
-            active_color=ft.Colors.PRIMARY,
-            on_change=on_change,
+    def __init__(self, current_mode: str, on_change: Callable):
+        self._on_change_callback = on_change
+        
+        self._button = ft.SegmentedButton(
+            selected={current_mode},
+            allow_multiple_selection=False,
+            on_change=self._handle_change,
+            segments=[
+                ft.Segment(
+                    value="vpn",
+                    label=ft.Text(t("settings.vpn"), size=11),
+                    icon=ft.Icon(ft.Icons.SECURITY, size=16),
+                ),
+                ft.Segment(
+                    value="proxy",
+                    label=ft.Text(t("settings.proxy"), size=11),
+                    icon=ft.Icon(ft.Icons.VPN_LOCK, size=16),
+                ),
+                ft.Segment(
+                    value="tor",
+                    label=ft.Text(t("settings.tor"), size=11),
+                    icon=ft.Icon(ft.Icons.SHIELD, size=16),
+                ),
+            ],
+            style=ft.ButtonStyle(
+                padding=ft.padding.symmetric(horizontal=5),
+            ),
         )
-        self._is_proxy = is_proxy
 
         super().__init__(
-            content=ft.Row(
+            content=ft.Column(
                 [
-                    ft.Icon(ft.Icons.VPN_LOCK, color=ft.Colors.ON_SURFACE_VARIANT),
-                    ft.Column(
-                        [
-                            ft.Text(
-                                t("settings.connection_mode"),
-                                weight=ft.FontWeight.W_500,
-                            ),
-                            ft.Text(
-                                t("settings.mode_description"),
-                                size=11,
-                                color=ft.Colors.ON_SURFACE_VARIANT,
-                            ),
-                        ],
-                        spacing=2,
-                        expand=True,
-                    ),
                     ft.Row(
                         [
-                            ft.Text(
-                                t("settings.vpn"),
-                                size=11,
-                                color=ft.Colors.ON_SURFACE_VARIANT,
-                                weight=ft.FontWeight.BOLD if not is_proxy else ft.FontWeight.NORMAL,
-                            ),
-                            self._switch,
-                            ft.Text(
-                                t("settings.proxy"),
-                                size=11,
-                                color=ft.Colors.ON_SURFACE_VARIANT,
-                                weight=ft.FontWeight.BOLD if is_proxy else ft.FontWeight.NORMAL,
+                            ft.Icon(ft.Icons.SETTINGS_INPUT_COMPONENT, color=ft.Colors.ON_SURFACE_VARIANT),
+                            ft.Column(
+                                [
+                                    ft.Text(
+                                        t("settings.connection_mode"),
+                                        weight=ft.FontWeight.W_500,
+                                    ),
+                                    ft.Text(
+                                        t("settings.mode_description"),
+                                        size=11,
+                                        color=ft.Colors.ON_SURFACE_VARIANT,
+                                    ),
+                                ],
+                                spacing=2,
+                                expand=True,
                             ),
                         ],
-                        spacing=5,
+                    ),
+                    ft.Container(
+                        content=self._button,
+                        alignment=ft.alignment.center_right,
+                        padding=ft.padding.only(top=5),
                     ),
                 ],
-                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                spacing=5,
             ),
             padding=10,
             border_radius=8,
             bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE),
         )
 
+    def _handle_change(self, e):
+        """Handle mode selection change."""
+        # e.data in SegmentedButton is often a JSON string like '["vpn"]' or a set/list
+        import json
+        
+        val = e.data
+        if isinstance(val, str):
+            try:
+                # Try to parse as JSON if it looks like a list/set string
+                if val.startswith("[") or val.startswith("{"):
+                    parsed = json.loads(val)
+                    if isinstance(parsed, list) and parsed:
+                        val = parsed[0]
+                    elif isinstance(parsed, dict) and parsed:
+                        val = list(parsed.keys())[0]
+            except Exception:
+                pass
+        elif isinstance(val, (set, list)) and val:
+            val = list(val)[0]
+            
+        # Fallback for some Flet versions
+        if hasattr(e, "selection") and e.selection:
+            val = list(e.selection)[0]
+            
+        self._on_change_callback(val)
+
     @property
-    def value(self) -> bool:
-        return self._switch.value
+    def value(self) -> str:
+        return list(self._button.selected)[0]
 
     @value.setter
-    def value(self, val: bool):
-        self._switch.value = val
+    def value(self, val: str):
+        self._button.selected = {val}
+        self._button.update()
 
 
 class PortInputRow(ft.Container):

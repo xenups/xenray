@@ -245,7 +245,13 @@ class MainWindow:
         saved_mode = self._app_context.settings.get_connection_mode()
         saved_theme = self._app_context.settings.get_theme_mode()
 
-        self._current_mode = ConnectionMode.VPN if saved_mode == "vpn" else ConnectionMode.PROXY
+        if saved_mode == "vpn":
+            self._current_mode = ConnectionMode.VPN
+        elif saved_mode == "tor":
+            self._current_mode = ConnectionMode.TOR
+        else:
+            self._current_mode = ConnectionMode.PROXY
+            
         self._page.theme_mode = ft.ThemeMode.DARK if saved_theme == "dark" else ft.ThemeMode.LIGHT
 
         # Load last selected profile (from local OR subscriptions)
@@ -303,9 +309,18 @@ class MainWindow:
         if not self._is_running:
             if self._current_mode == ConnectionMode.VPN:
                 if not ProcessUtils.is_admin():
-                    # CALL THE NEW CLASS METHOD
                     self._show_admin_restart_dialog()
-                    return  # Stop execution if admin restart is needed
+                    return
+
+            if self._current_mode == ConnectionMode.TOR:
+                if not ProcessUtils.is_admin():
+                    self._show_admin_restart_dialog()
+                    return
+                
+                from src.services.tor_installer import TorInstallerService
+                if not TorInstallerService.is_installed():
+                    self._run_specific_installer("tor")
+                    return
 
             self._connection_button.set_connecting()
             self._status_display.set_connecting()
@@ -438,12 +453,12 @@ class MainWindow:
     def _on_mode_changed(self, mode: ConnectionMode):
         from src.utils.process_utils import ProcessUtils
 
-        if mode == ConnectionMode.VPN and not ProcessUtils.is_admin():
+        if mode in [ConnectionMode.VPN, ConnectionMode.TOR] and not ProcessUtils.is_admin():
             self._show_toast(t("status.admin_required"), "warning")
             return
 
         self._current_mode = mode
-        self._app_context.settings.set_connection_mode("vpn" if mode == ConnectionMode.VPN else "proxy")
+        self._app_context.settings.set_connection_mode(mode.value)
         self._status_display.set_status(t("status.mode_selected", mode=mode.name.title()))
         self._ui_helper.call(lambda: None)
 

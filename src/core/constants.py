@@ -44,6 +44,7 @@ XRAY_LOG_FILE = os.path.join(TMPDIR, "xenray_xray.log")
 OUTPUT_CONFIG_PATH = os.path.join(TMPDIR, "xenray_config.json")
 XRAY_PID_FILE = os.path.join(TMPDIR, "xray.pid")
 SINGBOX_PID_FILE = os.path.join(TMPDIR, "singbox.pid")
+TOR_PID_FILE = os.path.join(TMPDIR, "tor.pid")
 
 # Configuration directory
 CONFIG_DIR = os.path.expanduser("~/.config/xenray")
@@ -77,10 +78,13 @@ else:
 # Executable paths with platform-specific extensions
 XRAY_EXECUTABLE = os.path.join(BIN_DIR, f"xray{PlatformUtils.get_binary_suffix()}")
 SINGBOX_EXECUTABLE = os.path.join(BIN_DIR, f"sing-box{PlatformUtils.get_binary_suffix()}")
+TOR_EXECUTABLE = os.path.join(BIN_DIR, f"tor{PlatformUtils.get_binary_suffix()}")
 
 # Sing-box config and log paths
 SINGBOX_CONFIG_PATH = os.path.join(TMPDIR, "singbox_config.json")
 SINGBOX_LOG_FILE = os.path.join(TMPDIR, "xenray_singbox.log")
+TOR_LOG_FILE = os.path.join(TMPDIR, "xenray_tor.log")
+TOR_DATA_DIR = os.path.join(TMPDIR, "tor_data")
 
 # Xray geo files directory (geoip.dat, geosite.dat are in bin/)
 XRAY_LOCATION_ASSET = BIN_DIR

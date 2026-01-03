@@ -17,6 +17,7 @@ from src.core.constants import (
     SINGBOX_LOG_FILE,
     SINGBOX_PID_FILE,
     SINGBOX_RULE_SETS,
+    TOR_EXECUTABLE,
     XRAY_EXECUTABLE,
 )
 from src.utils.network_interface import NetworkInterfaceDetector
@@ -197,6 +198,7 @@ class SingboxService:
         routing_country: str = "",
         routing_rules: dict = None,
         mtu: int = 1420,
+        mode: str = "vpn",
     ) -> Optional[int]:
         """Start Sing-box TUN service."""
         try:
@@ -237,12 +239,14 @@ class SingboxService:
                 iface_name,
                 routing_rules,
                 mtu,
+                mode,
             )
 
             # 5. Wait for Xray to be ready (with retry)
-            if not self._wait_for_xray_ready(xray_socks_port):
-                self._cleanup_routes()
-                return None
+            if mode != "tor":
+                if not self._wait_for_xray_ready(xray_socks_port):
+                    self._cleanup_routes()
+                    return None
 
             # 6. Write config & start sing-box
             if not self._write_config_and_start(config):
@@ -403,6 +407,7 @@ class SingboxService:
         interface_name: Optional[str] = None,
         routing_rules: dict = None,
         mtu: int = 1420,
+        mode: str = "vpn",
     ) -> dict:
         """Generate Sing-box configuration."""
         proxy_list = self._normalize_list(proxy_server_ip)
@@ -427,7 +432,7 @@ class SingboxService:
                     },
                     {
                         "tag": "remote_proxy",
-                        "type": "udp",
+                        "type": "tcp" if mode == "tor" else "udp",
                         "server": "1.1.1.1",
                         "detour": "proxy",
                     },
@@ -465,6 +470,14 @@ class SingboxService:
                     "server": "127.0.0.1",
                     "server_port": socks_port,
                     "domain_resolver": "remote_proxy",
+                }
+                if mode != "tor"
+                else {
+                    "type": "socks",
+                    "tag": "proxy",
+                    "server": "127.0.0.1",
+                    "server_port": 9050,  # External Tor SOCKS port
+                    "domain_resolver": "remote_proxy",
                 },
                 {
                     "type": "direct",
@@ -480,12 +493,15 @@ class SingboxService:
                         "process_name": [
                             "xray.exe",
                             "v2ray.exe",
+                            "tor.exe",
                             "sing-box.exe",
                             "python.exe",
+                            "obfs4proxy.exe",
+                            "snowflake-client.exe",
                         ],
                         "outbound": "direct",
                     },
-                    {"process_path": [XRAY_EXECUTABLE], "outbound": "direct"},
+                    {"process_path": [XRAY_EXECUTABLE, TOR_EXECUTABLE], "outbound": "direct"},
                     {
                         "protocol": "dns",
                         "action": "hijack-dns",

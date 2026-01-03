@@ -60,6 +60,13 @@ class InstallerHandler:
                         progress_callback=update_status,
                         stop_service_callback=self._connection_manager.disconnect,
                     )
+                elif component == "tor":
+                    from src.services.tor_installer import TorInstallerService
+
+                    TorInstallerService.install(
+                        progress_callback=update_status,
+                        stop_service_callback=self._connection_manager.disconnect,
+                    )
 
                 if self._toast:
                     self._toast.show(t("status.update_complete", component=component), "success")

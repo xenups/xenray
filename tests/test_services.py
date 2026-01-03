@@ -249,3 +249,20 @@ class TestSingboxService:
         # Should have rules for the domain
         assert any(r.get("domain_suffix") == "myproxy.com" for r in config["route"]["rules"])
         assert any(r.get("domain_suffix") == "myproxy.com" for r in config["dns"]["rules"])
+
+    def test_generate_config_tor(self, singbox_service):
+        """Test _generate_config for Tor mode."""
+        config = singbox_service._generate_config(
+            socks_port=10805,
+            proxy_server_ip="",
+            routing_country="none",
+            mode="tor"
+        )
+
+        # Verify socks outbound is present and used as proxy pointing to Tor's local port 9050
+        outbounds = config["outbounds"]
+        proxy_outbound = next((o for o in outbounds if o.get("tag") == "proxy"), None)
+        assert proxy_outbound is not None
+        assert proxy_outbound.get("type") == "socks"
+        assert proxy_outbound.get("server") == "127.0.0.1"
+        assert proxy_outbound.get("server_port") == 9050
