@@ -228,7 +228,8 @@ class LinkParser:
                 reality_settings["spiderX"] = spx
 
             logger.debug(
-                f"Reality config: SNI={sni}, publicKey={pbk[:8]}..., shortIds={reality_settings['shortIds']}, fp={reality_settings['fingerprint']}"
+                f"Reality config: SNI={sni}, publicKey={pbk[:8]}..., \
+                 shortIds={reality_settings['shortIds']}, fp={reality_settings['fingerprint']}"
             )
             outbound["streamSettings"]["realitySettings"] = reality_settings
 

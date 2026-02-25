@@ -623,7 +623,7 @@ class SingboxService:
                     logger.info(f"[SingboxService] Country rule added: {tag_name} -> direct")
             else:
                 logger.warning(
-                    f"[SingboxService] Unknown country code '{country}' for routing. Available: {list(rule_sets_mapping.keys())}"
+                    f"[SingboxService] Unknown country code '{country}'"
                 )
 
         # Log final routing configuration for debugging
