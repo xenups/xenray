@@ -622,9 +622,7 @@ class SingboxService:
                     dns_rules.append({"rule_set": tag_name, "server": "bootstrap"})
                     logger.info(f"[SingboxService] Country rule added: {tag_name} -> direct")
             else:
-                logger.warning(
-                    f"[SingboxService] Unknown country code '{country}'"
-                )
+                logger.warning(f"[SingboxService] Unknown country code '{country}'")
 
         # Log final routing configuration for debugging
         logger.debug(f"[SingboxService] Total routing rules: {len(rules)}")
