@@ -429,6 +429,7 @@ class SingboxService:
                         "tag": "remote_proxy",
                         "type": "udp",
                         "server": "1.1.1.1",
+                        "domain_resolver": "bootstrap",
                         "detour": "proxy",
                     },
                 ],
@@ -441,6 +442,8 @@ class SingboxService:
                 ],
                 "final": "remote_proxy",
                 "strategy": "prefer_ipv4",
+                "disable_cache": False,
+                "disable_expire": False,
                 "independent_cache": True,
             },
             "inbounds": [
@@ -448,11 +451,11 @@ class SingboxService:
                     "type": "tun",
                     "tag": "tun-in",
                     "interface_name": PlatformUtils.get_tun_interface_name(),
-                    "address": ["172.20.0.1/30"],
+                    "address": ["172.20.0.1/30", "fd00::1/126"],
                     "mtu": mtu,
                     "auto_route": True,
                     "strict_route": True,
-                    "stack": "system",
+                    "stack": "mixed",
                     "sniff": True,
                     "sniff_override_destination": True,
                     "endpoint_independent_nat": True,
@@ -499,6 +502,9 @@ class SingboxService:
                             "192.168.0.0/16",
                             "127.0.0.0/8",
                             "169.254.0.0/16",
+                            "fc00::/7",  # IPv6 Unique Local Addresses
+                            "fe80::/10",  # IPv6 Link-Local
+                            "::1/128",  # IPv6 localhost
                         ],
                         "outbound": "direct",
                     },
@@ -591,12 +597,15 @@ class SingboxService:
         if routing_country and routing_country.lower() != "none":
             rule_sets_mapping = SINGBOX_RULE_SETS
             country = routing_country.lower()
+            logger.info(f"[SingboxService] Applying country-based routing for: {country}")
+            
             if country in rule_sets_mapping:
                 if "rule_set" not in cfg["route"]:
                     cfg["route"]["rule_set"] = []
 
                 for idx, url in enumerate(rule_sets_mapping[country]):
                     tag_name = f"{country}-rules-{idx}"
+                    logger.debug(f"[SingboxService] Adding rule set: {tag_name} from {url}")
 
                     cfg["route"]["rule_set"].append(
                         {
@@ -608,7 +617,17 @@ class SingboxService:
                             "update_interval": "24h",
                         }
                     )
+                    # Insert country rules BEFORE final proxy rule
                     rules.append({"rule_set": tag_name, "outbound": "direct"})
                     dns_rules.append({"rule_set": tag_name, "server": "bootstrap"})
+                    logger.info(f"[SingboxService] Country rule added: {tag_name} -> direct")
+            else:
+                logger.warning(f"[SingboxService] Unknown country code '{country}' for routing. Available: {list(rule_sets_mapping.keys())}")
+
+        # Log final routing configuration for debugging
+        logger.debug(f"[SingboxService] Total routing rules: {len(rules)}")
+        logger.debug(f"[SingboxService] Total DNS rules: {len(dns_rules)}")
+        for idx, rule in enumerate(rules[:10]):  # Log first 10 rules
+            logger.debug(f"[SingboxService] Route rule {idx}: {rule}")
 
         return cfg

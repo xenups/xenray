@@ -167,28 +167,67 @@ class LinkParser:
 
         # Configure TLS settings
         if security == "tls":
-            tls_settings = {"serverName": sni, "allowInsecure": allow_insecure}
+            tls_settings = {"serverName": sni or address, "allowInsecure": allow_insecure}
             if alpn_raw:
                 alpn_list = [x.strip() for x in alpn_raw.split(",") if x.strip()]
                 if alpn_list:
                     tls_settings["alpn"] = alpn_list
             if fp:
                 tls_settings["fingerprint"] = fp
+            
+            # ECH (Encrypted Client Hello) support for Xray-core
+            # Link format: ech=crypto.cloudflare.com+udp://8.8.8.8 (URL encoded as %2B and %3A)
+            # Xray format: echConfigList (string) - same as v2rayN
+            # NOTE: SNI is NOT changed - it remains as the original server SNI
+            ech = get_param("ech")
+            if ech:
+                try:
+                    # URL decode the ECH value
+                    ech_decoded = urllib.parse.unquote(ech)
+                    
+                    # Use the raw ECH config string (v2rayN compatible format)
+                    # Format: "crypto.cloudflare.com+udp://8.8.8.8"
+                    tls_settings["echConfigList"] = ech_decoded
+                    
+                    # Set echForceQuery to "none" for graceful fallback
+                    # If DNS query fails (e.g., behind firewall), connection continues without ECH
+                    # This prevents connection failures when ECH DNS server is unreachable
+                    tls_settings["echForceQuery"] = "none"
+                    
+                    logger.info(f"[TLS] ECH enabled with config: {ech_decoded} (force_query=none)")
+                        
+                except Exception as e:
+                    logger.warning(f"Failed to configure ECH: {e}")
+            
             outbound["streamSettings"]["tlsSettings"] = tls_settings
 
         # Configure Reality settings
         if security == "reality":
             pbk = get_param("pbk", "")
             sid = get_param("sid", "")
+            spx = get_param("spx", "")  # Spider X (optional)
+            
             if not pbk:
-                logger.warning("Reality security requires 'pbk' parameter")
+                logger.error("Reality security requires 'pbk' (publicKey) parameter")
+                raise ValueError("Reality configuration missing required 'pbk' parameter")
+            
+            if not sni:
+                logger.error("Reality security requires 'sni' (serverName) parameter")
+                raise ValueError("Reality configuration missing required 'sni' parameter")
 
             reality_settings = {
+                "show": False,
                 "serverName": sni,
                 "publicKey": pbk,
-                "shortIds": [s.strip() for s in sid.split(",") if s.strip()] if sid else [],
+                "shortIds": [s.strip() for s in sid.split(",") if s.strip()] if sid else [""],
                 "fingerprint": fp or DEFAULT_FINGERPRINT,
             }
+            
+            # Add optional Spider X parameter for reality
+            if spx:
+                reality_settings["spiderX"] = spx
+            
+            logger.debug(f"Reality config: SNI={sni}, publicKey={pbk[:8]}..., shortIds={reality_settings['shortIds']}, fp={reality_settings['fingerprint']}")
             outbound["streamSettings"]["realitySettings"] = reality_settings
 
         # Configure network-specific settings
@@ -740,6 +779,14 @@ class LinkParser:
                 params.append(f"fp={tls.get('fingerprint')}")
             if tls.get("alpn"):
                 params.append(f"alpn={','.join(tls['alpn'])}")
+            # Add ECH support - convert array back to URL-encoded string
+            if tls.get("echConfig"):
+                ech_config = tls.get("echConfig")
+                if isinstance(ech_config, list) and ech_config:
+                    # Join domains with comma and URL encode
+                    ech_str = ','.join(ech_config)
+                    ech_encoded = urllib.parse.quote(ech_str, safe='')
+                    params.append(f"ech={ech_encoded}")
         elif security == "reality":
             reality = stream.get("realitySettings", {})
             params.append(f"sni={reality.get('serverName', '')}")
@@ -747,6 +794,8 @@ class LinkParser:
             params.append(f"sid={','.join(reality.get('shortIds', []))}")
             if reality.get("fingerprint"):
                 params.append(f"fp={reality.get('fingerprint')}")
+            if reality.get("spiderX"):
+                params.append(f"spx={reality.get('spiderX')}")
 
         query = "&".join(params)
         fragment = urllib.parse.quote(name)

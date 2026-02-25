@@ -151,7 +151,7 @@ class XrayConfigProcessor:
         new_config = copy.deepcopy(config)
 
         # Ensure log settings
-        new_config["log"] = {"loglevel": "info", "access": "", "error": ""}
+        new_config["log"] = {"loglevel": "debug", "access": "", "error": ""}
 
         # Ensure asset location
         os.environ["XRAY_LOCATION_ASSET"] = XRAY_LOCATION_ASSET
@@ -161,11 +161,13 @@ class XrayConfigProcessor:
 
         # Configure DNS (User Settings)
         self.configure_dns(new_config)
+        
+        # Add DNS entries for outbound server domains
+        self._add_outbound_dns_entries(new_config)
 
-        # CRITICAL: Resolve outbound server addresses to IPs
-        # This allows ALL DNS queries to go through the tunnel after connection
-        # No bootstrap DNS needed - we resolve once before Xray starts
-        self._resolve_outbound_addresses(new_config)
+        # DISABLED: Domain resolution breaks ECH, Reality, and SNI-based protocols
+        # Keep domain addresses as-is for proper TLS/SNI handling
+        # self._resolve_outbound_addresses(new_config)
 
         # Safe Fallbacks (Non-destructive)
         self._safe_patch_config(new_config)
@@ -226,6 +228,94 @@ class XrayConfigProcessor:
                 }
             )
             logger.info(f"[XrayConfigProcessor] Added HTTP inbound on port {user_port + 4}")
+
+    def _add_outbound_dns_entries(self, config: dict):
+        """
+        Resolve outbound server domains to IPs and update the address field directly.
+        This is critical for ECH and Reality where DNS resolution must happen before Xray starts.
+        
+        Strategy:
+        1. Resolve domain to IP using system DNS
+        2. Replace address with IP in outbound config
+        3. Store original domain in a custom field for SNI preservation
+        
+        Args:
+            config: Configuration dict (modified in-place)
+        """
+        import socket
+        
+        # Collect all outbound server domains and resolve them
+        for outbound in config.get("outbounds", []):
+            protocol = outbound.get("protocol")
+            if protocol not in self.SUPPORTED_PROTOCOLS:
+                continue
+            
+            settings = outbound.get("settings", {})
+            server_obj = self._get_server_object(settings)
+            
+            if not server_obj or "address" not in server_obj:
+                continue
+            
+            address = server_obj["address"]
+            # Only process if it's a domain (not IP)
+            if self._is_ip(address):
+                continue
+            
+            try:
+                # Resolve domain to ALL IPs using system DNS
+                # Use gethostbyname_ex to get all available IPs
+                _, _, ip_list = socket.gethostbyname_ex(address)
+                
+                # Prefer non-local IPs (avoid 192.168.x.x, 10.x.x.x, 172.16-31.x.x, 127.x.x.x)
+                # These local IPs might be incorrect routing/NAT entries
+                def is_local_ip(ip_str):
+                    parts = ip_str.split('.')
+                    if len(parts) != 4:
+                        return False
+                    try:
+                        first = int(parts[0])
+                        second = int(parts[1])
+                        if first == 10 or first == 127:
+                            return True
+                        if first == 172 and 16 <= second <= 31:
+                            return True
+                        if first == 192 and second == 168:
+                            return True
+                    except ValueError:
+                        pass
+                    return False
+                
+                # Select the best IP: prefer public IPs over local IPs
+                selected_ip = None
+                for ip in ip_list:
+                    if not is_local_ip(ip):
+                        selected_ip = ip
+                        break
+                
+                # Fallback to first IP if all are local
+                if not selected_ip and ip_list:
+                    selected_ip = ip_list[0]
+                
+                # TEMPORARY: If multiple IPs, prefer the last one (workaround for DNS ordering issues)
+                # Some DNS servers return local/cached IPs first
+                if len(ip_list) > 1:
+                    selected_ip = ip_list[-1]  # Use last IP instead of first
+                
+                if selected_ip:
+                    # CRITICAL: Replace domain with IP in the address field
+                    # This prevents Xray from doing its own DNS resolution
+                    server_obj["address"] = selected_ip
+                else:
+                    # No IPs found, keep the domain
+                    pass
+                
+                # Store original domain for reference (used by SNI)
+                # SNI is already set in streamSettings.tlsSettings.serverName
+                # so we don't need to do anything else
+                
+                logger.info(f"[XrayConfigProcessor] Resolved {address} -> {ip} (replaced in outbound config)")
+            except Exception as e:
+                logger.warning(f"[XrayConfigProcessor] Failed to resolve {address}: {e}")
 
     def _resolve_outbound_addresses(self, config: dict):
         """
