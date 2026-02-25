@@ -598,7 +598,7 @@ class SingboxService:
             rule_sets_mapping = SINGBOX_RULE_SETS
             country = routing_country.lower()
             logger.info(f"[SingboxService] Applying country-based routing for: {country}")
-            
+
             if country in rule_sets_mapping:
                 if "rule_set" not in cfg["route"]:
                     cfg["route"]["rule_set"] = []
@@ -622,7 +622,9 @@ class SingboxService:
                     dns_rules.append({"rule_set": tag_name, "server": "bootstrap"})
                     logger.info(f"[SingboxService] Country rule added: {tag_name} -> direct")
             else:
-                logger.warning(f"[SingboxService] Unknown country code '{country}' for routing. Available: {list(rule_sets_mapping.keys())}")
+                logger.warning(
+                    f"[SingboxService] Unknown country code '{country}' for routing. Available: {list(rule_sets_mapping.keys())}"
+                )
 
         # Log final routing configuration for debugging
         logger.debug(f"[SingboxService] Total routing rules: {len(rules)}")
