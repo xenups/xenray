@@ -76,8 +76,8 @@ class TestLinkParserStrict(unittest.TestCase):
 
         self.assertEqual(settings.get("mode"), "stream-up")
         self.assertEqual(settings.get("noSSEHeader"), True)
-        self.assertEqual(settings.get("xPaddingBytes"), "100")
-        self.assertEqual(settings.get("scStreamUpServerSecs"), "30")
+        self.assertEqual(settings.get("xPaddingBytes"), 100)
+        self.assertEqual(settings.get("scStreamUpServerSecs"), 30)
         self.assertEqual(settings.get("scMaxBufferedPosts"), 50)
 
     def test_extended_splithttp_params_missing(self):

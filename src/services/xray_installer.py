@@ -9,7 +9,7 @@ from typing import Callable, Optional
 import requests
 from loguru import logger
 
-from src.core.constants import BIN_DIR, XRAY_EXECUTABLE
+from src.core.constants import BIN_DIR, XRAY_EXECUTABLE, XRAY_VERSION
 from src.utils.platform_utils import PlatformUtils
 
 # Constants
@@ -109,7 +109,9 @@ class XrayInstallerService:
                 os_name = "linux"
 
             filename = f"Xray-{os_name}-{arch_str}.zip"
-            url = f"https://github.com/XTLS/Xray-core/releases/latest/download/{filename}"
+            # Use pinned version from constants for reproducible builds
+            version = XRAY_VERSION.lstrip("v")
+            url = f"https://github.com/XTLS/Xray-core/releases/download/v{version}/{filename}"
 
             if progress_callback:
                 progress_callback(f"Downloading {filename}...")

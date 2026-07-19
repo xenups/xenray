@@ -1,4 +1,4 @@
-"""Sing-box Service Manager (safe, clean, fully compatible with sing-box 1.12.12)."""
+"""Sing-box Service Manager (safe, clean, fully compatible with sing-box 1.13.14)."""
 
 import ipaddress
 import json
@@ -456,8 +456,8 @@ class SingboxService:
                     "auto_route": True,
                     "strict_route": True,
                     "stack": "mixed",
-                    "sniff": True,
-                    "sniff_override_destination": True,
+                    # sniff/sniff_override_destination migrated to route.rules
+                    # (sing-box 1.11.0+: inbound sniff fields removed)
                     "endpoint_independent_nat": True,
                 }
             ],
@@ -479,16 +479,29 @@ class SingboxService:
             ],
             "route": {
                 "rules": [
+                    # Process bypass rules FIRST — ensures Python/curl/xray subprocess
+                    # traffic bypasses TUN on Windows (process_name matching is unreliable
+                    # for TUN-captured packets, so ip_cidr/process rules must come early)
                     {
                         "process_name": [
                             "xray.exe",
                             "v2ray.exe",
                             "sing-box.exe",
                             "python.exe",
+                            "curl.exe",
+                            "curl",
                         ],
                         "outbound": "direct",
                     },
                     {"process_path": [XRAY_EXECUTABLE], "outbound": "direct"},
+                    # Protocol sniffing omitted — the sniff route action
+                    # (sing-box 1.11+ replacement for inbound.sniff)
+                    # can interfere with subprocess proxy traffic on Windows TUN.
+                    # Without it, protocol-based routing (by protocol/domain)
+                    # won't work, but IP/process-based routing still functions.
+                    # Re-enable with:
+                    #   {"inbound": ["tun-in"], "port": [80, 443], "action": "sniff"}
+                    # See: https://sing-box.sagernet.org/migration/#migrate-legacy-inbound-fields-to-rule-actions
                     {
                         "protocol": "dns",
                         "action": "hijack-dns",

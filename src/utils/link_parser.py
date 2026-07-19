@@ -1,8 +1,9 @@
-"""VLESS Link Parser — xhttp/splithttp-ready, routing untouched"""
+"""VLESS Link Parser — xhttp/splithttp-ready, dynamic mapping router"""
 
+import json
 import re
 import urllib.parse
-from typing import Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from loguru import logger
 
@@ -27,6 +28,222 @@ VALID_NETWORKS = {
 VALID_SECURITY = {"none", "tls", "reality"}
 VALID_ENCRYPTION = {"none", "zero"}
 UUID_PATTERN = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE)
+
+# ── Dynamic Mapping Router: type system ────────────────────────────
+
+BOOL_TRUE = {"true", "1", "yes"}
+BOOL_FALSE = {"false", "0", "no"}
+
+# Comma-separated fields that should be split into lists
+SPLIT_FIELDS = {
+    "alpn", "sid",
+    "fm_tcp_lengths", "fm_tcp_delays",
+    "fm_udp_rand", "fm_udp_delay",
+}
+
+# XHTTP/SplitHTTP param keys that route into xhttpSettings
+XHTTP_PARAMS = {
+    "mode", "noSSEHeader", "xPaddingBytes",
+    "scStreamUpServerSecs", "scMaxBufferedPosts",
+    "scMaxEachPostBytes", "scMaxConcurrentPosts",
+    "xmuxMaxConcurrency", "xmuxMaxConnections",
+    "xmuxCMaxReuseTimes", "xmuxHMaxReusableSecs", "xmuxHMaxRequestTimes",
+}
+
+# Underscore-to-camelCase remapping for FinalMask and QUIC param suffixes
+# Ensures URL query params like fm_quic_brutal_up map to JSON key brutalUp
+SUFFIX_CAMEL_MAP = {
+    "brutal_up": "brutalUp",
+    "brutal_down": "brutalDown",
+    "max_split": "maxSplit",
+    "packet_size": "packetSize",
+    "salamander_pwd": "password",
+    "sudoku_pwd": "password",
+    "sudoku_ascii": "ascii",
+    "no_sse": "noSSEHeader",
+    "sc_stream_up_server_secs": "scStreamUpServerSecs",
+    "sc_max_buffered_posts": "scMaxBufferedPosts",
+    "sc_max_each_post_bytes": "scMaxEachPostBytes",
+    "sc_max_concurrent_posts": "scMaxConcurrentPosts",
+    "xmux_max_concurrency": "xmuxMaxConcurrency",
+    "xmux_max_connections": "xmuxMaxConnections",
+    "xmux_c_max_reuse_times": "xmuxCMaxReuseTimes",
+    "xmux_h_max_reusable_secs": "xmuxHMaxReusableSecs",
+    "xmux_h_max_request_times": "xmuxHMaxRequestTimes",
+}
+
+
+def _to_camel(suffix: str) -> str:
+    """Convert underscore_separated suffix to camelCase, with known overrides."""
+    if suffix in SUFFIX_CAMEL_MAP:
+        return SUFFIX_CAMEL_MAP[suffix]
+    parts = suffix.split("_")
+    return parts[0] + "".join(p.capitalize() for p in parts[1:])
+
+
+def _cast_value(raw: str) -> Any:
+    """Type-cast a raw URL query string into the correct Python type."""
+    if raw.lower() in BOOL_TRUE:
+        return True
+    if raw.lower() in BOOL_FALSE:
+        return False
+    try:
+        return int(raw)
+    except ValueError:
+        pass
+    try:
+        f = float(raw)
+        if f == int(f):
+            return int(f)
+        return f
+    except ValueError:
+        pass
+    return raw
+
+
+def _maybe_split(key: str, raw: str) -> Any:
+    """Split a comma-separated value into a typed list if the key is splittable."""
+    stripped = key.removeprefix("fm_tcp_").removeprefix("fm_udp_").removeprefix("fm_quic_")
+    if key in SPLIT_FIELDS or stripped in SPLIT_FIELDS:
+        parts = [p.strip() for p in raw.split(",") if p.strip()]
+        return [_cast_value(p) for p in parts]
+    return _cast_value(raw)
+
+
+def _route_fm_params(raw_params: Dict[str, str]) -> Dict[str, Any]:
+    """
+    Route fm_* query params into the finalmask nested structure.
+
+    Routing rules:
+      fm_tcp_<suffix>  → finalmask.tcp[0].settings[<suffix>]
+      fm_udp_<suffix>  → finalmask.udp[0].settings[<suffix>]
+      fm_quic_<suffix> → finalmask.quicParams[<suffix>]
+
+    The first mask of each protocol is created from all matching params.
+    """
+    finalmask: Dict[str, Any] = {}
+
+    tcp_group: Dict[str, Any] = {}
+    udp_group: Dict[str, Any] = {}
+    quic_group: Dict[str, Any] = {}
+
+    for key, raw in raw_params.items():
+        if key == "fm_tcp_type":
+            tcp_group["type"] = raw
+        elif key.startswith("fm_tcp_"):
+            suffix = _to_camel(key[7:])
+            # FinalMask settings are always strings (Int32Range, etc.) — no type casting
+            # But comma-separated values always become lists (matches Xray JSON schema)
+            parts = [p.strip() for p in raw.split(",") if p.strip()]
+            tcp_group.setdefault("settings", {})[suffix] = parts if len(parts) > 1 else raw
+        elif key == "fm_udp_type":
+            udp_group["type"] = raw
+        elif key.startswith("fm_udp_"):
+            suffix = _to_camel(key[7:])
+            parts = [p.strip() for p in raw.split(",") if p.strip()]
+            udp_group.setdefault("settings", {})[suffix] = parts if len(parts) > 1 else raw
+        elif key.startswith("fm_quic_"):
+            suffix = _to_camel(key[8:])
+            parts = [p.strip() for p in raw.split(",") if p.strip()]
+            quic_group[suffix] = parts if len(parts) > 1 else raw
+
+    if "type" in tcp_group:
+        mask: Dict[str, Any] = {"type": tcp_group["type"]}
+        if "settings" in tcp_group:
+            mask["settings"] = tcp_group["settings"]
+        finalmask["tcp"] = [mask]
+
+    if "type" in udp_group:
+        mask = {"type": udp_group["type"]}
+        if "settings" in udp_group:
+            mask["settings"] = udp_group["settings"]
+        finalmask["udp"] = [mask]
+
+    if quic_group:
+        finalmask["quicParams"] = quic_group
+
+    return finalmask
+
+
+def _expand_fm_to_params(finalmask: Dict[str, Any]) -> List[str]:
+    """Flatten finalmask JSON back into flat fm_* query params."""
+
+    REVERSE_CAMEL = {v: k for k, v in SUFFIX_CAMEL_MAP.items()}
+
+    def _to_snake(camel: str) -> str:
+        return REVERSE_CAMEL.get(camel, camel)
+
+    params: List[str] = []
+
+    for mask in finalmask.get("tcp", []):
+        mtype = mask.get("type", "")
+        if not mtype:
+            continue
+        params.append(f"fm_tcp_type={mtype}")
+        for sk, sv in mask.get("settings", {}).items():
+            key = _to_snake(sk)
+            if isinstance(sv, list):
+                params.append(f"fm_tcp_{key}={','.join(str(x) for x in sv)}")
+            else:
+                params.append(f"fm_tcp_{key}={sv}")
+
+    for mask in finalmask.get("udp", []):
+        mtype = mask.get("type", "")
+        if not mtype:
+            continue
+        params.append(f"fm_udp_type={mtype}")
+        for sk, sv in mask.get("settings", {}).items():
+            key = _to_snake(sk)
+            if isinstance(sv, list):
+                if sk == "noise" and isinstance(sv, list):
+                    for item in sv:
+                        if isinstance(item, dict):
+                            for nk, nv in item.items():
+                                params.append(f"fm_udp_{_to_snake(nk)}={nv}")
+                else:
+                    params.append(f"fm_udp_{key}={','.join(str(x) for x in sv)}")
+            else:
+                params.append(f"fm_udp_{key}={sv}")
+
+    for qk, qv in finalmask.get("quicParams", {}).items():
+        params.append(f"fm_quic_{_to_snake(qk)}={qv}")
+
+    return params
+
+
+def _route_xhttp_params(raw_params: Dict[str, str]) -> Dict[str, Any]:
+    """
+    Dynamically collect XHTTP/SplitHTTP parameters into xhttpSettings block.
+
+    Handles XMUX sub-object routing automatically.
+    """
+    xhttp: Dict[str, Any] = {}
+    xmux: Dict[str, Any] = {}
+
+    XMUX_MAP = {
+        "xmuxMaxConcurrency": "maxConcurrency",
+        "xmuxMaxConnections": "maxConnections",
+        "xmuxCMaxReuseTimes": "cMaxReuseTimes",
+        "xmuxHMaxReusableSecs": "hMaxReusableSecs",
+        "xmuxHMaxRequestTimes": "hMaxRequestTimes",
+    }
+
+    for key, raw in raw_params.items():
+        if key not in XHTTP_PARAMS:
+            continue
+        casted = _cast_value(raw)
+
+        if key in XMUX_MAP:
+            xmux[XMUX_MAP[key]] = casted
+        elif key == "noSSEHeader":
+            xhttp[key] = _cast_value(raw)
+        else:
+            xhttp[key] = casted
+
+    if xmux:
+        xhttp["xmux"] = xmux
+
+    return xhttp
 
 
 class LinkParser:
@@ -88,22 +305,23 @@ class LinkParser:
             raise ValueError(f"Failed to parse URL: {e}") from e
 
         # Validate and extract UUID + host:port
-        if "@" not in parsed.netloc:
-            raise ValueError("Invalid VLESS link: missing UUID or '@' separator")
+        # Some clients omit UUID (e.g., when using cert-based auth or custom encryption)
+        if "@" in parsed.netloc:
+            try:
+                user_id, host_port = parsed.netloc.split("@", 1)
+            except ValueError as e:
+                raise ValueError("Invalid VLESS link: malformed netloc") from e
+            if not UUID_PATTERN.match(user_id):
+                logger.warning(f"UUID format may be invalid: {user_id}")
+        else:
+            # No UUID — use a placeholder and treat entire netloc as host:port
+            user_id = "00000000-0000-0000-0000-000000000000"
+            host_port = parsed.netloc
+            logger.debug("VLESS link without UUID — using zero-UUID placeholder")
 
-        try:
-            user_id, host_port = parsed.netloc.split("@", 1)
-        except ValueError as e:
-            raise ValueError("Invalid VLESS link: malformed netloc") from e
-
-        # Validate UUID format
-        if not UUID_PATTERN.match(user_id):
-            logger.warning(f"UUID format may be invalid: {user_id}")
-
-        # Parse host and port
         if ":" in host_port:
             try:
-                address, port_str = host_port.rsplit(":", 1)  # Use rsplit to handle IPv6
+                address, port_str = host_port.rsplit(":", 1)
                 port = int(port_str)
                 if not (1 <= port <= 65535):
                     raise ValueError(f"Invalid port number: {port}")
@@ -113,27 +331,21 @@ class LinkParser:
             address = host_port
             port = DEFAULT_PORT
 
-        # Validate address
         if not address:
             raise ValueError("Invalid VLESS link: missing address")
 
-        # Parse query parameters
         try:
-            params = urllib.parse.parse_qs(parsed.query)
+            raw_params = urllib.parse.parse_qs(parsed.query)
         except Exception as e:
             raise ValueError(f"Failed to parse query parameters: {e}") from e
 
         def get_param(key: str, default: Optional[str] = None) -> Optional[str]:
-            """Get first value of query parameter."""
-            values = params.get(key)
+            values = raw_params.get(key)
             return values[0] if values and len(values) > 0 else default
 
-        # Extract name from fragment
         name = urllib.parse.unquote(parsed.fragment) if parsed.fragment else "VLESS Server"
 
-        # Extract and validate parameters
         encryption = get_param("encryption", DEFAULT_ENCRYPTION)
-        # Relaxed encryption validation to support custom types
 
         security = get_param("security", DEFAULT_SECURITY)
         if security not in VALID_SECURITY:
@@ -142,12 +354,10 @@ class LinkParser:
 
         sni = get_param("sni")
         fp = get_param("fp")
-        alpn_raw = get_param("alpn")
         flow = get_param("flow", "")
         allow_insecure = get_param("allowInsecure", get_param("insecure", "0")) == "1"
 
-        # Build base outbound
-        outbound = {
+        outbound: Dict[str, Any] = {
             "tag": "proxy",
             "protocol": "vless",
             "settings": {
@@ -165,230 +375,176 @@ class LinkParser:
             },
         }
 
-        # Configure TLS settings
+        network = get_param("type", outbound["streamSettings"]["network"])
+        if network not in VALID_NETWORKS:
+            logger.warning(f"Unknown network type: {network}, using default")
+            network = DEFAULT_NETWORK
+            outbound["streamSettings"]["network"] = network
+
+        # ── TLS settings ──
         if security == "tls":
-            tls_settings = {"serverName": sni or address, "allowInsecure": allow_insecure}
+            tls_settings: Dict[str, Any] = {"serverName": sni or address, "allowInsecure": allow_insecure}
+            alpn_raw = get_param("alpn")
             if alpn_raw:
-                alpn_list = [x.strip() for x in alpn_raw.split(",") if x.strip()]
-                if alpn_list:
+                alpn_list = _maybe_split("alpn", alpn_raw)
+                if isinstance(alpn_list, list) and alpn_list:
                     tls_settings["alpn"] = alpn_list
             if fp:
                 tls_settings["fingerprint"] = fp
 
-            # ECH (Encrypted Client Hello) support for Xray-core
-            # Link format: ech=crypto.cloudflare.com+udp://8.8.8.8 (URL encoded as %2B and %3A)
-            # Xray format: echConfigList (string) - same as v2rayN
-            # NOTE: SNI is NOT changed - it remains as the original server SNI
+            # ECH (Encrypted Client Hello)
             ech = get_param("ech")
             if ech:
                 try:
-                    # URL decode the ECH value
                     ech_decoded = urllib.parse.unquote(ech)
-
-                    # Use the raw ECH config string (v2rayN compatible format)
-                    # Format: "crypto.cloudflare.com+udp://8.8.8.8"
                     tls_settings["echConfigList"] = ech_decoded
-
-                    # Set echForceQuery to "none" for graceful fallback
-                    # If DNS query fails (e.g., behind firewall), connection continues without ECH
-                    # This prevents connection failures when ECH DNS server is unreachable
-                    tls_settings["echForceQuery"] = "none"
-
-                    logger.info(f"[TLS] ECH enabled with config: {ech_decoded} (force_query=none)")
-
+                    ech_force = get_param("echForceQuery")
+                    if ech_force:
+                        tls_settings["echForceQuery"] = _cast_value(ech_force)
+                    ech_sockopt_raw = get_param("echSockopt")
+                    if ech_sockopt_raw:
+                        try:
+                            decoded = urllib.parse.unquote(ech_sockopt_raw)
+                            ech_sockopt = json.loads(decoded)
+                            if isinstance(ech_sockopt, dict):
+                                tls_settings["echSockopt"] = ech_sockopt
+                        except (json.JSONDecodeError, ValueError):
+                            logger.warning(f"Failed to parse echSockopt: {ech_sockopt_raw}")
+                    logger.info(f"[TLS] ECH enabled with config: {ech_decoded}")
                 except Exception as e:
                     logger.warning(f"Failed to configure ECH: {e}")
 
             outbound["streamSettings"]["tlsSettings"] = tls_settings
 
-        # Configure Reality settings
+        # ── Reality settings ──
         if security == "reality":
             pbk = get_param("pbk", "")
-            sid = get_param("sid", "")
-            spx = get_param("spx", "")  # Spider X (optional)
+            sid_raw = get_param("sid", "")
 
             if not pbk:
-                logger.error("Reality security requires 'pbk' (publicKey) parameter")
                 raise ValueError("Reality configuration missing required 'pbk' parameter")
-
             if not sni:
-                logger.error("Reality security requires 'sni' (serverName) parameter")
                 raise ValueError("Reality configuration missing required 'sni' parameter")
 
-            reality_settings = {
+            reality_settings: Dict[str, Any] = {
                 "show": False,
                 "serverName": sni,
                 "publicKey": pbk,
-                "shortIds": [s.strip() for s in sid.split(",") if s.strip()] if sid else [""],
+                "shortIds": _maybe_split("sid", sid_raw) if sid_raw else [""],
                 "fingerprint": fp or DEFAULT_FINGERPRINT,
             }
-
-            # Add optional Spider X parameter for reality
+            spx = get_param("spx")
             if spx:
                 reality_settings["spiderX"] = spx
 
-            logger.debug(
-                f"Reality config: SNI={sni}, publicKey={pbk[:8]}..., \
-                 shortIds={reality_settings['shortIds']}, fp={reality_settings['fingerprint']}"
-            )
             outbound["streamSettings"]["realitySettings"] = reality_settings
 
-        # Configure network-specific settings
-        network = get_param("type", outbound["streamSettings"]["network"])
-        if network not in VALID_NETWORKS:
-            logger.warning(f"Unknown network type: {network}, using default")
-            network = DEFAULT_NETWORK
+        # ── FinalMask (dynamic routing via fm_* prefix + JSON fm param) ──
+        flat_params = {k: v[0] for k, v in raw_params.items() if v}
+        finalmask = _route_fm_params(flat_params)
 
-        # Handle splithttp/xhttp (Xray 1.8.0+)
+        # Support JSON-encoded fm param (v2rayN/Sing-box compatibility)
+        fm_json_raw = get_param("fm")
+        if fm_json_raw:
+            try:
+                fm_json = json.loads(urllib.parse.unquote(fm_json_raw))
+                if isinstance(fm_json, dict):
+                    # Merge: JSON takes precedence over flat fm_* params
+                    for key in ("tcp", "udp", "quicParams"):
+                        if key in fm_json:
+                            finalmask[key] = fm_json[key]
+                    logger.info(f"[FinalMask] Applied JSON fm param: {list(fm_json.keys())}")
+            except (json.JSONDecodeError, ValueError) as e:
+                logger.warning(f"Failed to parse JSON fm param: {e}")
+
+        if finalmask:
+            outbound["streamSettings"]["finalmask"] = finalmask
+            logger.info(f"[FinalMask] Configured traffic camouflage: {list(finalmask.keys())}")
+
+        # ── Transport-specific settings ──
+        host_param = get_param("host")
+
         if network in ("xhttp", "splithttp"):
             outbound["streamSettings"]["network"] = "xhttp"
 
-            # Host derivation: specific logic for xhttp/ws/httpupgrade
-            # If host param is missing, prefer SNI if it differs from address
-            host_param = get_param("host")
             if not host_param:
                 if sni and address != sni:
                     host_param = sni
                 else:
                     host_param = address
 
-            xhttp_settings = {
+            xhttp_settings: Dict[str, Any] = {
                 "path": get_param("path", DEFAULT_PATH),
                 "host": host_param,
             }
 
-            # Optional parameters (Extended xhttp/SplitHTTP support)
-            # mode: "auto" (default), "stream-one", "stream-up", "packet-up"
-            if mode := get_param("mode"):
-                xhttp_settings["mode"] = mode
+            xhttp_dynamic = _route_xhttp_params(flat_params)
+            xhttp_settings.update(xhttp_dynamic)
 
-            # noSSEHeader: bool
-            if no_sse := get_param("noSSEHeader"):
-                xhttp_settings["noSSEHeader"] = no_sse.lower() == "true" or no_sse == "1"
-
-            # xPaddingBytes: string/int
-            if padding := get_param("xPaddingBytes"):
-                xhttp_settings["xPaddingBytes"] = padding
-
-            # scStreamUpServerSecs: string/int
-            if stream_up_secs := get_param("scStreamUpServerSecs"):
-                xhttp_settings["scStreamUpServerSecs"] = stream_up_secs
-
-            # scMaxBufferedPosts: int
-            if max_buffered := get_param("scMaxBufferedPosts"):
+            # Support JSON-encoded extra param (v2rayN compatibility)
+            extra_raw = get_param("extra")
+            if extra_raw:
                 try:
-                    value = int(max_buffered)
-                    if value > 0:
-                        xhttp_settings["scMaxBufferedPosts"] = value
-                except ValueError:
-                    logger.warning(f"Invalid scMaxBufferedPosts: {max_buffered}")
-
-            # scMaxEachPostBytes: int
-            sc_max_each = get_param("scMaxEachPostBytes")
-            if sc_max_each:
-                try:
-                    value = int(sc_max_each)
-                    if value > 0:
-                        xhttp_settings["scMaxEachPostBytes"] = value
-                except ValueError:
-                    logger.warning(f"Invalid scMaxEachPostBytes: {sc_max_each}")
-
-            # scMaxConcurrentPosts: int
-            sc_max_concurrent = get_param("scMaxConcurrentPosts")
-            if sc_max_concurrent:
-                try:
-                    value = int(sc_max_concurrent)
-                    if value > 0:
-                        xhttp_settings["scMaxConcurrentPosts"] = value
-                except ValueError:
-                    logger.warning(f"Invalid scMaxConcurrentPosts: {sc_max_concurrent}")
-
-            # XMUX parameters for connection multiplexing/cycling
-            xmux_settings = {}
-            if xmux_max_conc := get_param("xmuxMaxConcurrency"):
-                xmux_settings["maxConcurrency"] = xmux_max_conc
-            if xmux_max_conn := get_param("xmuxMaxConnections"):
-                xmux_settings["maxConnections"] = xmux_max_conn
-            if xmux_reuse_times := get_param("xmuxCMaxReuseTimes"):
-                xmux_settings["cMaxReuseTimes"] = xmux_reuse_times
-            if xmux_reuse_secs := get_param("xmuxHMaxReusableSecs"):
-                xmux_settings["hMaxReusableSecs"] = xmux_reuse_secs
-            if xmux_req_times := get_param("xmuxHMaxRequestTimes"):
-                xmux_settings["hMaxRequestTimes"] = xmux_req_times
-            if xmux_settings:
-                xhttp_settings["xmux"] = xmux_settings
+                    extra_json = json.loads(urllib.parse.unquote(extra_raw))
+                    if isinstance(extra_json, dict):
+                        # Merge with existing — extra JSON values take precedence
+                        for ek, ev in extra_json.items():
+                            # Convert Xray JSON field names to xhttp param naming
+                            # e.g. noSSEHeader from JSON → keep as-is (already camelCase)
+                            xhttp_settings[ek] = ev
+                        logger.info(f"[XHTTP] Applied extra JSON: {list(extra_json.keys())}")
+                except (json.JSONDecodeError, ValueError) as e:
+                    logger.warning(f"Failed to parse extra JSON: {e}")
 
             outbound["streamSettings"]["xhttpSettings"] = xhttp_settings
 
-        # WebSocket transport
         elif network == "ws":
-            # Host derivation
-            host_param = get_param("host")
             if not host_param:
                 if sni and address != sni:
                     host_param = sni
                 else:
                     host_param = address
-
-            ws_settings = {
+            outbound["streamSettings"]["wsSettings"] = {
                 "path": get_param("path", DEFAULT_PATH),
                 "headers": {"Host": host_param},
             }
-            outbound["streamSettings"]["wsSettings"] = ws_settings
 
-        # gRPC transport
         elif network == "grpc":
             service_name = get_param("serviceName", "")
-            grpc_settings = {"serviceName": service_name}
-            outbound["streamSettings"]["grpcSettings"] = grpc_settings
+            outbound["streamSettings"]["grpcSettings"] = {"serviceName": service_name}
 
-        # HTTPUpgrade transport (new in Xray 1.8.0+)
         elif network == "httpupgrade":
             outbound["streamSettings"]["network"] = "httpupgrade"
-
-            # Host derivation
-            host_param = get_param("host")
             if not host_param:
                 if sni and address != sni:
                     host_param = sni
                 else:
                     host_param = address
-
-            httpupgrade_settings = {
+            outbound["streamSettings"]["httpupgradeSettings"] = {
                 "path": get_param("path", DEFAULT_PATH),
                 "host": host_param,
             }
-            outbound["streamSettings"]["httpupgradeSettings"] = httpupgrade_settings
 
-        # HTTP transport
         elif network == "http":
             outbound["streamSettings"]["network"] = "http"
             http_settings = {
                 "path": get_param("path", DEFAULT_PATH),
-                "host": get_param("host") or address,
+                "host": host_param or address,
             }
             outbound["streamSettings"]["httpSettings"] = http_settings
 
-        # QUIC/H3 transport (HTTP/3 over QUIC)
         elif network in ("quic", "h3"):
             outbound["streamSettings"]["network"] = "quic"
-            quic_settings = {
+            quic_settings: Dict[str, Any] = {
                 "security": get_param("quicSecurity", "none"),
                 "key": get_param("key", ""),
                 "type": get_param("headerType", "none"),
             }
-
-            # Remove empty key if security is none
             if quic_settings["security"] == "none" and not quic_settings["key"]:
                 quic_settings.pop("key", None)
-
-            # Remove type if it's "none"
             if quic_settings["type"] == "none":
                 quic_settings.pop("type", None)
-
             outbound["streamSettings"]["quicSettings"] = quic_settings
-
-        # TCP transport (default) - no additional settings needed
 
         return {"name": name, "config": LinkParser._build_config(outbound)}
 
@@ -467,38 +623,19 @@ class LinkParser:
         Supports standard JSON-in-Base64 format.
         """
         import base64
-        import json
 
         if not link.startswith("vmess://"):
             raise ValueError("Invalid VMess link")
 
         payload = link[8:]
         try:
-            # Fix base64 padding if needed
             padding = len(payload) % 4
             if padding:
                 payload += "=" * (4 - padding)
-
             decoded = base64.b64decode(payload).decode("utf-8")
             data = json.loads(decoded)
         except Exception as e:
             raise ValueError(f"Failed to decode VMess link: {e}") from e
-
-        # Extract fields from VMess JSON standard
-        # v: version
-        # ps: name
-        # add: address
-        # port: port
-        # id: uuid
-        # aid: alterId
-        # scy: security (auto/aes-128-gcm/chacha20-poly1305/none)
-        # net: network (tcp/kcp/ws/h2/quic)
-        # header type (none/http/srtp/utp/wechat-video/dtls/wireguard) -> for kcp/quic
-        # host: host/sni
-        # path: path
-        # tls: tls ("" or "tls")
-        # sni: sni
-        # alpn: alpn
 
         name = data.get("ps", "VMess Server")
         address = data.get("add", "")
@@ -516,11 +653,10 @@ class LinkParser:
         tls = data.get("tls", "")
         sni = data.get("sni", "")
         alpn = data.get("alpn", "")
-        fp = data.get("fp", "")  # some clients use fp
+        fp = data.get("fp", "")
 
-        # Normalize security
         if security == "auto":
-            security = "auto"  # xray supports "auto" for vmess
+            security = "auto"
 
         outbound = {
             "tag": "proxy",
@@ -546,27 +682,21 @@ class LinkParser:
             },
         }
 
-        # Stream Settings configuration
-        # Reuse logic similar to VLESS for transports if possible, or reimplement
-        # For simplicity and correctness with VMess JSON format quirks, we implement directly
-
         ss = outbound["streamSettings"]
 
-        # TLS
         if ss["security"] == "tls":
             ss["tlsSettings"] = {
                 "serverName": sni or host or address,
-                "allowInsecure": False,  # Defaults
+                "allowInsecure": False,
             }
             if alpn:
-                ss["tlsSettings"]["alpn"] = [x.strip() for x in alpn.split(",")]
+                ss["tlsSettings"]["alpn"] = _maybe_split("alpn", alpn) if isinstance(_maybe_split("alpn", alpn), list) else [x.strip() for x in alpn.split(",") if x.strip()]
             if fp:
                 ss["tlsSettings"]["fingerprint"] = fp
 
-        # Transports
         if network == "ws":
             ss["wsSettings"] = {"path": path, "headers": {"Host": host} if host else {}}
-        elif network in ("h2", "http"):  # h2 is http in xray
+        elif network in ("h2", "http"):
             ss["network"] = "http"
             ss["httpSettings"] = {
                 "path": path,
@@ -574,16 +704,13 @@ class LinkParser:
             }
         elif network == "quic":
             ss["quicSettings"] = {
-                "security": host,  # confused usage in some vmess links, but usually host field maps to quic security
+                "security": host,
                 "header": {"type": header_type},
             }
         elif network == "kcp":
             ss["kcpSettings"] = {"header": {"type": header_type}}
         elif network == "grpc":
-            ss["grpcSettings"] = {"serviceName": path}  # often path is used for serviceName in vmess json
-            if data.get("authority"):  # custom field sometimes
-                # ss["grpcSettings"]["authority"] = ... # Xray doesn't strictly need authority for client usually
-                pass
+            ss["grpcSettings"] = {"serviceName": path}
 
         return {"name": name, "config": LinkParser._build_config(outbound)}
 
@@ -645,20 +772,18 @@ class LinkParser:
             },
         }
 
-        # TLS Configuration
         if outbound["streamSettings"]["security"] == "tls":
-            tls_settings = {"serverName": sni, "allowInsecure": allow_insecure}
+            tls_settings: Dict[str, Any] = {"serverName": sni, "allowInsecure": allow_insecure}
             fp = get_param("fp")
             if fp:
                 tls_settings["fingerprint"] = fp
             alpn_raw = get_param("alpn")
             if alpn_raw:
-                alpn_list = [x.strip() for x in alpn_raw.split(",") if x.strip()]
-                if alpn_list:
+                alpn_list = _maybe_split("alpn", alpn_raw)
+                if isinstance(alpn_list, list) and alpn_list:
                     tls_settings["alpn"] = alpn_list
             outbound["streamSettings"]["tlsSettings"] = tls_settings
 
-        # Network Transports
         network = outbound["streamSettings"]["network"]
         if network == "ws":
             outbound["streamSettings"]["wsSettings"] = {
@@ -680,7 +805,7 @@ class LinkParser:
         """
         return {
             "log": {"loglevel": "warning"},
-            "inbounds": [],  # Will be populated by XrayConfigProcessor with user's port settings
+            "inbounds": [],
             "outbounds": [
                 outbound,
                 {"tag": "direct", "protocol": "freedom", "settings": {}},
@@ -714,7 +839,6 @@ class LinkParser:
             proxy_out = next((o for o in outbounds if o.get("tag") == "proxy"), None)
 
             if not proxy_out:
-                # Fallback: try first outbound
                 if outbounds:
                     proxy_out = outbounds[0]
 
@@ -731,7 +855,7 @@ class LinkParser:
             elif protocol == "hysteria2":
                 return LinkParser._generate_hysteria2(proxy_out, name)
             else:
-                return ""  # Unsupported
+                return ""
         except Exception as e:
             logger.error(f"Failed to generate link: {e}")
             return ""
@@ -748,11 +872,10 @@ class LinkParser:
         port = vnext.get("port", 443)
         flow = user.get("flow", "")
         encryption = user.get("encryption", "none")
-
         security = stream.get("security", "none")
         network = stream.get("network", "tcp")
 
-        params = []
+        params: List[str] = []
         params.append(f"type={network}")
         if security != "none":
             params.append(f"security={security}")
@@ -761,20 +884,34 @@ class LinkParser:
         if encryption and encryption != "none":
             params.append(f"encryption={encryption}")
 
-        # Stream specific
-        if network == "ws":
-            ws = stream.get("wsSettings", {})
-            params.append(f"path={urllib.parse.quote(ws.get('path', '/'))}")
-            host = ws.get("headers", {}).get("Host", "")
-            if host:
-                params.append(f"host={host}")
+        if network in ("ws", "xhttp"):
+            if network == "ws":
+                ws = stream.get("wsSettings", {})
+                params.append(f"path={urllib.parse.quote(ws.get('path', '/'))}")
+                host = ws.get("headers", {}).get("Host", "")
+                if host:
+                    params.append(f"host={host}")
+            else:  # xhttp
+                xh = stream.get("xhttpSettings", {})
+                params.append(f"path={urllib.parse.quote(xh.get('path', '/'))}")
+                host = xh.get("host", "")
+                if host:
+                    params.append(f"host={host}")
+                # Collect non-core xhttp fields into extra JSON param
+                XH_CORE = {"path", "host"}
+                extra_fields = {k: v for k, v in xh.items() if k not in XH_CORE}
+                if extra_fields:
+                    params.append(f"extra={urllib.parse.quote(json.dumps(extra_fields), safe='')}")
+                # Mode from extra or direct
+                mode = xh.get("mode")
+                if mode and "mode" not in extra_fields:
+                    params.append(f"mode={mode}")
         elif network == "grpc":
             grpc = stream.get("grpcSettings", {})
             service = grpc.get("serviceName", "")
             if service:
                 params.append(f"serviceName={service}")
 
-        # Security specific
         if security == "tls":
             tls = stream.get("tlsSettings", {})
             params.append(f"sni={tls.get('serverName', '')}")
@@ -782,34 +919,43 @@ class LinkParser:
                 params.append(f"fp={tls.get('fingerprint')}")
             if tls.get("alpn"):
                 params.append(f"alpn={','.join(tls['alpn'])}")
-            # Add ECH support - convert array back to URL-encoded string
-            if tls.get("echConfig"):
-                ech_config = tls.get("echConfig")
-                if isinstance(ech_config, list) and ech_config:
-                    # Join domains with comma and URL encode
-                    ech_str = ",".join(ech_config)
-                    ech_encoded = urllib.parse.quote(ech_str, safe="")
-                    params.append(f"ech={ech_encoded}")
+            ech = tls.get("echConfigList") or tls.get("echConfig")
+            if ech:
+                if isinstance(ech, list):
+                    ech = ",".join(ech)
+                params.append(f"ech={urllib.parse.quote(str(ech), safe='')}")
+            ech_sockopt = tls.get("echSockopt")
+            if ech_sockopt and isinstance(ech_sockopt, dict):
+                params.append(f"echSockopt={urllib.parse.quote(json.dumps(ech_sockopt), safe='')}")
         elif security == "reality":
             reality = stream.get("realitySettings", {})
             params.append(f"sni={reality.get('serverName', '')}")
             params.append(f"pbk={reality.get('publicKey', '')}")
-            params.append(f"sid={','.join(reality.get('shortIds', []))}")
+            sid_list = reality.get("shortIds", [])
+            params.append(f"sid={','.join(sid_list) if isinstance(sid_list, list) else sid_list}")
             if reality.get("fingerprint"):
                 params.append(f"fp={reality.get('fingerprint')}")
             if reality.get("spiderX"):
                 params.append(f"spx={reality.get('spiderX')}")
 
+        # FinalMask — prefer JSON fm param when it contains structured data (e.g. noisy array)
+        finalmask = stream.get("finalmask", {})
+        flat_fm = _expand_fm_to_params(finalmask)
+        if flat_fm:
+            # Check if flat representation is faithful; otherwise use JSON fm param
+            test_fm = _route_fm_params({p.split("=", 1)[0]: p.split("=", 1)[1] for p in flat_fm if "=" in p})
+            if test_fm == finalmask:
+                params.extend(flat_fm)
+            else:
+                params.append(f"fm={urllib.parse.quote(json.dumps(finalmask), safe='')}")
+
         query = "&".join(params)
         fragment = urllib.parse.quote(name)
-
         return f"vless://{uuid}@{address}:{port}?{query}#{fragment}"
 
     @staticmethod
     def _generate_vmess(outbound: dict, name: str) -> str:
-        # VMess uses base64 encoded JSON
         import base64
-        import json
 
         settings = outbound.get("settings", {})
         stream = outbound.get("streamSettings", {})
@@ -825,7 +971,7 @@ class LinkParser:
             "aid": str(user.get("alterId", 0)),
             "scy": user.get("security", "auto"),
             "net": stream.get("network", "tcp"),
-            "type": "none",  # Default
+            "type": "none",
             "host": "",
             "path": "",
             "tls": "",
@@ -850,7 +996,6 @@ class LinkParser:
             grpc = stream.get("grpcSettings", {})
             data["path"] = grpc.get("serviceName", "")
 
-        # Encode
         json_str = json.dumps(data)
         b64 = base64.b64encode(json_str.encode("utf-8")).decode("utf-8")
         return f"vmess://{b64}"
@@ -868,7 +1013,7 @@ class LinkParser:
         security = stream.get("security", "none")
         network = stream.get("network", "tcp")
 
-        params = []
+        params: List[str] = []
         params.append(f"type={network}")
         if security != "none":
             params.append(f"security={security}")
@@ -891,15 +1036,12 @@ class LinkParser:
 
         query = "&".join(params)
         fragment = urllib.parse.quote(name)
-
         return f"trojan://{password}@{address}:{port}?{query}#{fragment}"
 
     @staticmethod
     def _generate_hysteria2(outbound: dict, name: str) -> str:
         settings = outbound.get("settings", {})
         stream = outbound.get("streamSettings", {})
-        # Not fully implementing reverse gen for hysteria right now unless needed
-        # Basic implementation
         server = settings.get("vnext", [{}])[0]
         address = server.get("address", "")
         port = server.get("port", 443)
@@ -910,7 +1052,7 @@ class LinkParser:
         sni = tls.get("serverName", "")
         insecure = "1" if tls.get("allowInsecure") else "0"
 
-        params = []
+        params: List[str] = []
         if sni:
             params.append(f"sni={sni}")
         if insecure == "1":
