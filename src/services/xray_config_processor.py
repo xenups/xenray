@@ -580,25 +580,9 @@ class XrayConfigProcessor:
         security = stream_settings.get("security", "none")
         network = stream_settings.get("network", "")
 
-        # 0. Configure FinalMask defaults for better censorship circumvention
-        # FinalMask performs traffic camouflage after TLS/REALITY encryption
-        # See: https://xtls.github.io/en/config/transports/finalmask.html
-        finalmask = stream_settings.get("finalmask", {})
-        if finalmask:
-            tcp_masks = finalmask.get("tcp", [])
-            for i, mask in enumerate(tcp_masks):
-                mtype = mask.get("type", "")
-                if mtype == "fragment":
-                    settings = mask.setdefault("settings", {})
-                    # Apply safe defaults if not specified
-                    if not settings.get("packets"):
-                        settings["packets"] = "tlshello"
-                    if not settings.get("lengths"):
-                        settings["lengths"] = ["3-5", "6-8", "10-20"]
-                    if not settings.get("delays"):
-                        settings["delays"] = ["10-20"]
-                    applied = True
-            logger.debug(f"[XrayConfigProcessor] FinalMask configured: {list(finalmask.keys())}")
+        # FinalMask is passed through as-is from the link parser — no
+        # defaults are injected.  Only fields explicitly present in the
+        # source link or user config end up in the JSON output.
 
         # 1. SNI Fallback (tls/reality)
         if security in ("tls", "reality") and security != "none":
