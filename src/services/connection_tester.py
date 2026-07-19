@@ -115,8 +115,7 @@ class ConnectionTester:
                 except Exception as e:
                     if attempt < max_retries - 1:
                         logger.debug(
-                            f"SOCKS connection test attempt {attempt + 1}/{max_retries} "
-                            f"failed: {e}, retrying..."
+                            f"SOCKS connection test attempt {attempt + 1}/{max_retries} " f"failed: {e}, retrying..."
                         )
                         time.sleep(0.5)
                         continue
@@ -188,9 +187,7 @@ class ConnectionTester:
                     # We got bytes back through the chain (Xray → proxy → internet).
                     if fetch_country and response.status_code < 300:
                         try:
-                            geo_resp = requests.get(
-                                "http://ip-api.com/json", proxies=proxies, timeout=3
-                            )
+                            geo_resp = requests.get("http://ip-api.com/json", proxies=proxies, timeout=3)
                             if geo_resp.status_code == 200:
                                 gdata = geo_resp.json()
                                 if gdata.get("status") == "success":

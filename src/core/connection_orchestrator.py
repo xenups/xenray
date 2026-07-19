@@ -118,7 +118,9 @@ class ConnectionOrchestrator:
             logger.error(f"Connection orchestration failed: {e}")
             return False, None
 
-    def _verify_connection_health(self, config: dict, step_callback, mode: str = "proxy", health_socks_port: int = 0) -> bool:
+    def _verify_connection_health(
+        self, config: dict, step_callback, mode: str = "proxy", health_socks_port: int = 0
+    ) -> bool:
         """Verify the connection is actually working before declaring success."""
         if step_callback:
             step_callback(t("connection.verifying_latency"))
@@ -130,7 +132,9 @@ class ConnectionOrchestrator:
         # Xray SOCKS proxy instead of spawning a fresh Xray instance.
         socks_port = health_socks_port if (mode == "vpn" and os.name == "nt") else 0
         if socks_port:
-            logger.debug(f"[ConnectionOrchestrator] Routing health check through existing SOCKS proxy port {socks_port}")
+            logger.debug(
+                f"[ConnectionOrchestrator] Routing health check through existing SOCKS proxy port {socks_port}"
+            )
 
         success, latency, _ = ConnectionTester.test_connection_sync(config, socks_port=socks_port)
 

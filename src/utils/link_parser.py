@@ -36,18 +36,28 @@ BOOL_FALSE = {"false", "0", "no"}
 
 # Comma-separated fields that should be split into lists
 SPLIT_FIELDS = {
-    "alpn", "sid",
-    "fm_tcp_lengths", "fm_tcp_delays",
-    "fm_udp_rand", "fm_udp_delay",
+    "alpn",
+    "sid",
+    "fm_tcp_lengths",
+    "fm_tcp_delays",
+    "fm_udp_rand",
+    "fm_udp_delay",
 }
 
 # XHTTP/SplitHTTP param keys that route into xhttpSettings
 XHTTP_PARAMS = {
-    "mode", "noSSEHeader", "xPaddingBytes",
-    "scStreamUpServerSecs", "scMaxBufferedPosts",
-    "scMaxEachPostBytes", "scMaxConcurrentPosts",
-    "xmuxMaxConcurrency", "xmuxMaxConnections",
-    "xmuxCMaxReuseTimes", "xmuxHMaxReusableSecs", "xmuxHMaxRequestTimes",
+    "mode",
+    "noSSEHeader",
+    "xPaddingBytes",
+    "scStreamUpServerSecs",
+    "scMaxBufferedPosts",
+    "scMaxEachPostBytes",
+    "scMaxConcurrentPosts",
+    "xmuxMaxConcurrency",
+    "xmuxMaxConnections",
+    "xmuxCMaxReuseTimes",
+    "xmuxHMaxReusableSecs",
+    "xmuxHMaxRequestTimes",
 }
 
 # Underscore-to-camelCase remapping for FinalMask and QUIC param suffixes
@@ -690,7 +700,11 @@ class LinkParser:
                 "allowInsecure": False,
             }
             if alpn:
-                ss["tlsSettings"]["alpn"] = _maybe_split("alpn", alpn) if isinstance(_maybe_split("alpn", alpn), list) else [x.strip() for x in alpn.split(",") if x.strip()]
+                ss["tlsSettings"]["alpn"] = (
+                    _maybe_split("alpn", alpn)
+                    if isinstance(_maybe_split("alpn", alpn), list)
+                    else [x.strip() for x in alpn.split(",") if x.strip()]
+                )
             if fp:
                 ss["tlsSettings"]["fingerprint"] = fp
 
