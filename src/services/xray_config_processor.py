@@ -580,6 +580,10 @@ class XrayConfigProcessor:
         security = stream_settings.get("security", "none")
         network = stream_settings.get("network", "")
 
+        # FinalMask is passed through as-is from the link parser — no
+        # defaults are injected.  Only fields explicitly present in the
+        # source link or user config end up in the JSON output.
+
         # 1. SNI Fallback (tls/reality)
         if security in ("tls", "reality") and security != "none":
             field = "tlsSettings" if security == "tls" else "realitySettings"

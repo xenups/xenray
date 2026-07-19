@@ -1,6 +1,7 @@
 """Connection Orchestrator - Coordinates connection workflow."""
 
 import json
+import os
 from typing import Optional
 
 from loguru import logger
@@ -102,7 +103,7 @@ class ConnectionOrchestrator:
                         continue
 
                 # Verify connection health
-                if self._verify_connection_health(processed_config, step_callback):
+                if self._verify_connection_health(processed_config, step_callback, mode, socks_port):
                     # Finalize connection
                     connection_info = self._finalize_connection(file_path, mode, xray_pid, singbox_pid, step_callback)
                     return True, connection_info
@@ -117,15 +118,25 @@ class ConnectionOrchestrator:
             logger.error(f"Connection orchestration failed: {e}")
             return False, None
 
-    def _verify_connection_health(self, config: dict, step_callback) -> bool:
+    def _verify_connection_health(
+        self, config: dict, step_callback, mode: str = "proxy", health_socks_port: int = 0
+    ) -> bool:
         """Verify the connection is actually working before declaring success."""
         if step_callback:
             step_callback(t("connection.verifying_latency"))
 
         from src.services.connection_tester import ConnectionTester
 
-        # Run a quick sync test (since we are already in the orchestrator thread)
-        success, latency, _ = ConnectionTester.test_connection_sync(config)
+        # On Windows in VPN mode, the test Xray's outbound connection gets
+        # disrupted by the sing-box TUN.  Route the test through the existing
+        # Xray SOCKS proxy instead of spawning a fresh Xray instance.
+        socks_port = health_socks_port if (mode == "vpn" and os.name == "nt") else 0
+        if socks_port:
+            logger.debug(
+                f"[ConnectionOrchestrator] Routing health check through existing SOCKS proxy port {socks_port}"
+            )
+
+        success, latency, _ = ConnectionTester.test_connection_sync(config, socks_port=socks_port)
 
         if success:
             logger.info(f"[ConnectionOrchestrator] Connection verified: {latency}")

@@ -1,4 +1,4 @@
-"""Sing-box Service Manager (safe, clean, fully compatible with sing-box 1.12.12)."""
+"""Sing-box Service Manager (safe, clean, fully compatible with sing-box 1.13.14)."""
 
 import ipaddress
 import json
@@ -427,7 +427,14 @@ class SingboxService:
                     },
                     {
                         "tag": "remote_proxy",
-                        "type": "udp",
+                        # DoH (DNS-over-HTTPS) through the SOCKS proxy.
+                        # Port-53 TCP/UDP is unreliable through proxy chains;
+                        # many proxy servers block port 53, and Xray's SOCKS
+                        # inbound doesn't support UDP ASSOCIATE.
+                        # DoH on port 443 avoids both issues.
+                        # NOTE: sing-box appends /dns-query automatically for
+                        # type="https", so server is just the hostname.
+                        "type": "https",
                         "server": "1.1.1.1",
                         "domain_resolver": "bootstrap",
                         "detour": "proxy",
@@ -456,8 +463,8 @@ class SingboxService:
                     "auto_route": True,
                     "strict_route": True,
                     "stack": "mixed",
-                    "sniff": True,
-                    "sniff_override_destination": True,
+                    # sniff/sniff_override_destination migrated to route.rules
+                    # (sing-box 1.11.0+: inbound sniff fields removed)
                     "endpoint_independent_nat": True,
                 }
             ],
@@ -479,16 +486,31 @@ class SingboxService:
             ],
             "route": {
                 "rules": [
+                    # Process bypass rules FIRST — ensures Python/curl/xray subprocess
+                    # traffic bypasses TUN on Windows (process_name matching is unreliable
+                    # for TUN-captured packets, so ip_cidr/process rules must come early)
                     {
                         "process_name": [
                             "xray.exe",
                             "v2ray.exe",
                             "sing-box.exe",
                             "python.exe",
+                            "curl.exe",
+                            "curl",
                         ],
                         "outbound": "direct",
                     },
                     {"process_path": [XRAY_EXECUTABLE], "outbound": "direct"},
+                    # Protocol sniffing — required for hijack-dns to function.
+                    # Without it the DNS protocol can't be detected, queries
+                    # bypass the hijack-dns rule and go DIRECT (filtered by ISP).
+                    # Scoped to port 53 (DNS) only to minimise overhead.
+                    # See: https://sing-box.sagernet.org/migration/#migrate-legacy-inbound-fields-to-rule-actions
+                    {
+                        "inbound": ["tun-in"],
+                        "port": [53],
+                        "action": "sniff",
+                    },
                     {
                         "protocol": "dns",
                         "action": "hijack-dns",

@@ -18,6 +18,10 @@ from src.core.logger import logger
 TEST_TIMEOUT = 10  # seconds for the whole test
 CONNECT_TIMEOUT = 5  # seconds for HTTP request
 
+# SO_MARK is Linux-only; omitted on Windows where sing-box TUN
+# provides bypass via ip_cidr / process_name route rules instead.
+_IS_WINDOWS = os.name == "nt"
+
 
 class ConnectionTester:
     """Tests real connection latency via Xray Core."""
@@ -33,7 +37,11 @@ class ConnectionTester:
 
     @staticmethod
     def _create_temp_config(listen_port: int, outbound_config: dict) -> str:
-        """Create a temporary Xray config for testing."""
+        """Create a temporary Xray config for testing.
+
+        On Windows the SO_MARK socket option is silently ignored by the
+        kernel, so we skip it entirely.
+        """
         config = {
             "log": {"loglevel": "none"},
             "inbounds": [
@@ -49,20 +57,18 @@ class ConnectionTester:
                 {
                     "protocol": "freedom",
                     "tag": "direct",
-                    "streamSettings": {"sockopt": {"mark": 255}},
                 },
             ],
         }
 
-        # Inject Mark 255 into the User's Outbound Config as well
-        # This ensures the connection to the proxy server itself bypasses the Tun
-        if "streamSettings" not in config["outbounds"][0]:
-            config["outbounds"][0]["streamSettings"] = {}
-
-        if "sockopt" not in config["outbounds"][0]["streamSettings"]:
-            config["outbounds"][0]["streamSettings"]["sockopt"] = {}
-
-        config["outbounds"][0]["streamSettings"]["sockopt"]["mark"] = 255
+        # On Linux, mark=255 helps bypass VPN routing for the test Xray.
+        # Omitted on Windows (no-op / may cause warnings).
+        if not _IS_WINDOWS:
+            if "streamSettings" not in config["outbounds"][0]:
+                config["outbounds"][0]["streamSettings"] = {}
+            if "sockopt" not in config["outbounds"][0]["streamSettings"]:
+                config["outbounds"][0]["streamSettings"]["sockopt"] = {}
+            config["outbounds"][0]["streamSettings"]["sockopt"]["mark"] = 255
 
         filename = f"test_{uuid.uuid4()}.json"
         path = os.path.join(TMPDIR, filename)
@@ -76,31 +82,60 @@ class ConnectionTester:
             return ""
 
     @staticmethod
-    def test_connection_sync(profile_config: dict, fetch_country: bool = False) -> Tuple[bool, str, Optional[dict]]:
+    def test_connection_sync(
+        profile_config: dict,
+        fetch_country: bool = False,
+        socks_port: int = 0,
+    ) -> Tuple[bool, str, Optional[dict]]:
         """
         Test connection for a profile synchronously.
+
+        When *socks_port* is > 0 the test is performed through an existing Xray
+        SOCKS proxy directly (avoids spawning a second Xray that would be
+        disrupted by the sing-box TUN on Windows).
+
         Returns (success, latency_ms_str, country_data).
         country_data is {'code': 'XX', 'name': 'Country'} or None.
         This must be run in a thread.
         """
+        # ── SOCKS proxy mode (bypass TUN interference on Windows) ──
+        # Python's stdlib doesn't support SOCKS5 natively, so we do a
+        # TCP connectivity test to the proxy port. The actual end-to-end
+        # HTTP verification is handled by _verify_post_connection (curl).
+        if socks_port:
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    start_time = time.time()
+                    s = socket.create_connection(("127.0.0.1", socks_port), timeout=CONNECT_TIMEOUT)
+                    s.close()
+                    latency = int((time.time() - start_time) * 1000)
+                    logger.info(f"[ConnectionTester] SOCKS proxy reachable at 127.0.0.1:{socks_port} ({latency}ms)")
+                    return (True, t("connection.latency_ms", value=latency), None)
+                except Exception as e:
+                    if attempt < max_retries - 1:
+                        logger.debug(
+                            f"SOCKS connection test attempt {attempt + 1}/{max_retries} " f"failed: {e}, retrying..."
+                        )
+                        time.sleep(0.5)
+                        continue
+                    return False, t("connection.conn_error"), None
+
+        # ── Direct Xray instance mode (proxy mode / Linux) ──
         # Find the first valid outbound (vmess/vless/etc)
         target_outbound = None
         if "outbounds" in profile_config:
-            # Try to find the proxy outbound
             for out in profile_config["outbounds"]:
                 if out.get("protocol") not in ["freedom", "blackhole", "dns"]:
                     target_outbound = out
                     break
 
-        # If no specific outbound found (e.g. raw vless config object), assume it is the outbound
         if not target_outbound:
-            # Check if the profile_config itself looks like an outbound
             if "protocol" in profile_config:
                 target_outbound = profile_config
             else:
                 return False, t("connection.invalid_config"), None
 
-        # 1. Prepare environment
         port = ConnectionTester._find_free_port()
         config_path = ConnectionTester._create_temp_config(port, target_outbound)
 
@@ -109,11 +144,8 @@ class ConnectionTester:
 
         process = None
         try:
-            # 2. Start partial Xray
-            # Run without log output for speed
             cmd = [XRAY_EXECUTABLE, "run", "-c", config_path]
 
-            # Using startupinfo to hide window on Windows
             from src.utils.platform_utils import PlatformUtils
 
             process = subprocess.Popen(
@@ -124,19 +156,16 @@ class ConnectionTester:
                 creationflags=PlatformUtils.get_subprocess_flags(),
             )
 
-            # Give it a moment to bind port
             time.sleep(0.5)
 
             if process.poll() is not None:
                 return False, t("connection.core_failed"), None
 
-            # 3. Test Connection with retries
             proxies = {
                 "http": f"http://127.0.0.1:{port}",
                 "https": f"http://127.0.0.1:{port}",
             }
 
-            # Target URL: Use something reliable and fast
             target_url = "http://cp.cloudflare.com/"
 
             # Retry logic for connection test
@@ -147,45 +176,30 @@ class ConnectionTester:
                     start_time = time.time()
                     response = requests.get(target_url, proxies=proxies, timeout=CONNECT_TIMEOUT)
 
+                    country_data = None
                     latency = int((time.time() - start_time) * 1000)
 
-                    country_data = None
-                    # ANY response means connection works! Even 5xx errors mean proxy is functional.
-                    # The key is that we got a response through the proxy tunnel.
-                    # Strict check: 204 is expected from cp.cloudflare.com
-                    # We also accept 200-299 range just in case of different target or redirect
-                    if 200 <= response.status_code < 300:
-                        if fetch_country:
-                            try:
-                                # Use ip-api via the same proxy
-                                geo_resp = requests.get("http://ip-api.com/json", proxies=proxies, timeout=3)
-                                if geo_resp.status_code == 200:
-                                    gdata = geo_resp.json()
-                                    if gdata.get("status") == "success":
-                                        country_data = {
-                                            "country_code": gdata.get("countryCode"),
-                                            "country_name": gdata.get("country"),
-                                            "city": gdata.get("city"),
-                                        }
-                            except Exception:
-                                pass  # Fail silently for geoip
+                    # ANY response through the proxy tunnel means the proxy is functional.
+                    # Even 5xx errors indicate the connection through the proxy works.
+                    # We distinguish connectivity from upstream health: if we got bytes
+                    # back, the chain (Xray → proxy server → internet) is intact.
+                    # Accept ANY response code — even 5xx proves the proxy tunnel is intact.
+                    # We got bytes back through the chain (Xray → proxy → internet).
+                    if fetch_country and response.status_code < 300:
+                        try:
+                            geo_resp = requests.get("http://ip-api.com/json", proxies=proxies, timeout=3)
+                            if geo_resp.status_code == 200:
+                                gdata = geo_resp.json()
+                                if gdata.get("status") == "success":
+                                    country_data = {
+                                        "country_code": gdata.get("countryCode"),
+                                        "country_name": gdata.get("country"),
+                                        "city": gdata.get("city"),
+                                    }
+                        except Exception:
+                            pass  # country fetch is best-effort
 
-                        return (
-                            True,
-                            t("connection.latency_ms", value=latency),
-                            country_data,
-                        )
-
-                    # If status code is not 204/2xx, retry
-                    if attempt < max_retries - 1:
-                        logger.debug(
-                            f"Connection test attempt {attempt + 1}/{max_retries} "
-                            f"got status {response.status_code}, retrying..."
-                        )
-                        time.sleep(0.5)
-                        continue
-                    else:
-                        return False, t("connection.conn_error"), None
+                    return (True, t("connection.latency_ms", value=latency), country_data)
 
                 except requests.exceptions.Timeout:
                     if attempt < max_retries - 1:

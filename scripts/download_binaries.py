@@ -43,8 +43,8 @@ SINGBOX_URL_TEMPLATE = (
 
 def get_config(arch: int = 64):
     """Get configuration from environment."""
-    xray_version = os.getenv("XRAY_VERSION", "1.8.24")
-    singbox_version = os.getenv("SINGBOX_VERSION", "1.10.6")
+    xray_version = os.getenv("XRAY_VERSION", "26.7.11")
+    singbox_version = os.getenv("SINGBOX_VERSION", "1.13.14")
 
     return {
         "xray_version": xray_version,
