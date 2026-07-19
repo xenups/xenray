@@ -339,7 +339,11 @@ class TestParseVLESS:
         assert "type" not in qs
 
     def test_reality_full(self):
-        link = "vless://uuid@example.com:443?security=reality&pbk=publickey&sid=s1,s2&fp=chrome&sni=target.com&spx=spider#Real"
+        link = (
+            "vless://uuid@example.com:443"
+            "?security=reality&pbk=publickey&sid=s1,s2"
+            "&fp=chrome&sni=target.com&spx=spider#Real"
+        )
         result = LinkParser.parse_link(link)
         rs = result["config"]["outbounds"][0]["streamSettings"]["realitySettings"]
         assert rs["publicKey"] == "publickey"
@@ -359,7 +363,10 @@ class TestParseVLESS:
     @pytest.mark.parametrize(
         "fmt",
         [
-            "AF7+DQBaAAAgACA51i3Ssu4wUMV4FNCc8iRX5J+YC4Bhigz9sacl2lCfSQAkAAEAAQABAAIAAQADAAIAAQACAAIAAgADAAMAAQADAAIAAwADAAtleGFtcGxlLmNvbQAA",
+            (
+                "AF7+DQBaAAAgACA51i3Ssu4wUMV4FNCc8iRX5J+YC4Bhigz9sacl2lCfSQ"
+                "AkAAEAAQABAAIAAQADAAIAAQACAAIAAgADAAMAAQADAAIAAwADAAtleGFtcGxlLmNvbQAA"
+            ),
             "udp://1.1.1.1",
             "example.com+https://1.1.1.1/dns-query",
         ],
@@ -432,7 +439,11 @@ class TestParseVLESS:
 
 class TestParseVLESSFinalMask:
     def test_tcp_fragment(self):
-        link = "vless://uuid@example.com:443?security=tls&fm_tcp_type=fragment&fm_tcp_lengths=3-5,6-8&fm_tcp_delays=10-20&fm_tcp_max_split=3-6#FM"
+        link = (
+            "vless://uuid@example.com:443?security=tls"
+            "&fm_tcp_type=fragment&fm_tcp_lengths=3-5,6-8"
+            "&fm_tcp_delays=10-20&fm_tcp_max_split=3-6#FM"
+        )
         result = LinkParser.parse_link(link)
         fm = result["config"]["outbounds"][0]["streamSettings"]["finalmask"]
         m = fm["tcp"][0]
@@ -449,7 +460,11 @@ class TestParseVLESSFinalMask:
         assert m["settings"]["reset"] == "30-60"
 
     def test_udp_salamander(self):
-        link = "vless://uuid@example.com:443?fm_udp_type=salamander&fm_udp_salamander_pwd=obfpass&fm_udp_packet_size=512-1200#Salamander"
+        link = (
+            "vless://uuid@example.com:443"
+            "?fm_udp_type=salamander&fm_udp_salamander_pwd=obfpass"
+            "&fm_udp_packet_size=512-1200#Salamander"
+        )
         result = LinkParser.parse_link(link)
         m = result["config"]["outbounds"][0]["streamSettings"]["finalmask"]["udp"][0]
         assert m["type"] == "salamander"
@@ -457,7 +472,12 @@ class TestParseVLESSFinalMask:
         assert m["settings"]["packetSize"] == "512-1200"
 
     def test_quic_brutal(self):
-        link = "vless://uuid@example.com:443?fm_quic_congestion=force-brutal&fm_quic_brutal_up=60%20mbps&fm_quic_brutal_down=0#Brutal"
+        link = (
+            "vless://uuid@example.com:443"
+            "?fm_quic_congestion=force-brutal"
+            "&fm_quic_brutal_up=60%20mbps"
+            "&fm_quic_brutal_down=0#Brutal"
+        )
         result = LinkParser.parse_link(link)
         qp = result["config"]["outbounds"][0]["streamSettings"]["finalmask"]["quicParams"]
         assert qp["congestion"] == "force-brutal"
