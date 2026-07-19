@@ -427,7 +427,14 @@ class SingboxService:
                     },
                     {
                         "tag": "remote_proxy",
-                        "type": "udp",
+                        # DoH (DNS-over-HTTPS) through the SOCKS proxy.
+                        # Port-53 TCP/UDP is unreliable through proxy chains;
+                        # many proxy servers block port 53, and Xray's SOCKS
+                        # inbound doesn't support UDP ASSOCIATE.
+                        # DoH on port 443 avoids both issues.
+                        # NOTE: sing-box appends /dns-query automatically for
+                        # type="https", so server is just the hostname.
+                        "type": "https",
                         "server": "1.1.1.1",
                         "domain_resolver": "bootstrap",
                         "detour": "proxy",
@@ -494,14 +501,16 @@ class SingboxService:
                         "outbound": "direct",
                     },
                     {"process_path": [XRAY_EXECUTABLE], "outbound": "direct"},
-                    # Protocol sniffing omitted — the sniff route action
-                    # (sing-box 1.11+ replacement for inbound.sniff)
-                    # can interfere with subprocess proxy traffic on Windows TUN.
-                    # Without it, protocol-based routing (by protocol/domain)
-                    # won't work, but IP/process-based routing still functions.
-                    # Re-enable with:
-                    #   {"inbound": ["tun-in"], "port": [80, 443], "action": "sniff"}
+                    # Protocol sniffing — required for hijack-dns to function.
+                    # Without it the DNS protocol can't be detected, queries
+                    # bypass the hijack-dns rule and go DIRECT (filtered by ISP).
+                    # Scoped to port 53 (DNS) only to minimise overhead.
                     # See: https://sing-box.sagernet.org/migration/#migrate-legacy-inbound-fields-to-rule-actions
+                    {
+                        "inbound": ["tun-in"],
+                        "port": [53],
+                        "action": "sniff",
+                    },
                     {
                         "protocol": "dns",
                         "action": "hijack-dns",
