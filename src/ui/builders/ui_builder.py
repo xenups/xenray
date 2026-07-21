@@ -8,9 +8,8 @@ import flet as ft
 from src.ui.components.connection_button import ConnectionButton
 from src.ui.components.header import Header
 from src.ui.components.server_card import ServerCard
-from src.core.constants import WINDOW_HEIGHT, WINDOW_WIDTH
-from src.ui.theme import AppColors
 from src.ui.components.status_display import StatusDisplay
+from src.ui.theme import AppColors
 
 if TYPE_CHECKING:
     from src.ui.main_window import MainWindow
