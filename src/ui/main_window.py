@@ -9,7 +9,7 @@ import flet as ft
 # Local modules
 from src.core.app_context import AppContext
 from src.core.connection_manager import ConnectionManager
-from src.core.constants import APPDIR, FONT_URLS
+from src.core.constants import APPDIR, FONT_URLS, WINDOW_HEIGHT, WINDOW_WIDTH
 from src.core.i18n import t
 from src.core.logger import logger
 from src.core.types import ConnectionMode
@@ -317,7 +317,7 @@ class MainWindow:
     def _show_admin_restart_dialog(self):
         """Shows an AlertDialog asking the user to restart the app as Admin."""
         dialog = AdminRestartDialog(on_restart=self._on_admin_restart_confirmed)
-        self._page.open(dialog)
+        self._page.show_dialog(dialog)
 
     def _on_admin_restart_confirmed(self):
         """Callback from AdminRestartDialog."""
@@ -329,13 +329,13 @@ class MainWindow:
         """Delegate to drawer manager."""
         self._drawer_manager.open_server_drawer(e)
 
-    def _open_logs_drawer_impl(self, e=None):
+    async def _open_logs_drawer_impl(self, e=None):
         """Delegate to drawer manager."""
-        self._drawer_manager.open_logs_drawer(e)
+        await self._drawer_manager.open_logs_drawer(e)
 
-    def _open_settings_drawer_impl(self, e=None):
+    async def _open_settings_drawer_impl(self, e=None):
         """Delegate to drawer manager."""
-        self._drawer_manager.open_settings_drawer(e)
+        await self._drawer_manager.open_settings_drawer(e)
 
     # -----------------------------
     # Logic: Server Selection
@@ -344,8 +344,13 @@ class MainWindow:
         """Updates the UI with the selected profile."""
         self._selected_profile = profile
         self._server_card.update_server(profile)
-        self._server_sheet.open = False
-        self._page.update()  # Update page to close sheet
+        if self._server_sheet:
+            try:
+                if self._server_sheet.page is not None:
+                    self._page.pop_dialog()
+            except RuntimeError:
+                pass
+        self._page.update()
 
     def _trigger_reconnect(self):
         """Handle transparent reconnection when server changes while running."""
@@ -374,8 +379,12 @@ class MainWindow:
         """Waits for the sheet to be mounted before updating list."""
 
         async def _wait_and_update():
-            # Wait until the server list control is mounted to the page
-            while self._server_list.page is None:
+            while True:
+                try:
+                    if self._server_list.page is not None:
+                        break
+                except RuntimeError:
+                    pass
                 await asyncio.sleep(0.05)
 
             try:
@@ -459,38 +468,52 @@ class MainWindow:
     # Close Dialog
     # -----------------------------
     def show_close_dialog(self):
-        """Public method to trigger the close confirmation dialog."""
+        """Show the close confirmation dialog."""
         logger.debug("[DEBUG] MainWindow.show_close_dialog() called")
-
-        # Check if user already chose to always minimize
-        if self._app_context.settings.get_remember_close_choice():
-            logger.debug("[DEBUG] Remembered choice found: Always minimize")
-            self._handle_minimize_action()
-            return
 
         dialog = CloseDialog(
             on_exit=self._on_close_dialog_exit,
-            on_minimize=self._handle_minimize_action,
+            on_minimize=self._minimize_to_tray,
             app_context=self._app_context,
         )
-        self._page.overlay.append(dialog)
-        dialog.open = True
-        self._page.update()
-        logger.debug("[DEBUG] Redesigned close dialog opened")
+        self._page.show_dialog(dialog)
 
     def _on_close_dialog_exit(self):
-        """Unified exit handler for the app."""
+        """Exit handler — triggers clean shutdown."""
         self.cleanup()
+        from src.main import signal_exit
+
+        signal_exit()
         from src.utils.process_utils import ProcessUtils
 
         ProcessUtils.kill_process_tree()
         os._exit(0)
 
-    def _handle_minimize_action(self):
-        """Helper to minimize window to tray."""
+    def _minimize_to_tray(self):
+        """Hide window to tray (visible=False is safe with prevent_close=True)."""
         self._page.window.visible = False
-        self._page.window.skip_task_bar = True
         self._page.update()
+
+    def _restore_from_tray(self):
+        """Restore window from tray — re-locks dimensions, then reveals."""
+
+        async def _show():
+            try:
+                self._page.window.width = WINDOW_WIDTH
+                self._page.window.height = WINDOW_HEIGHT
+                self._page.window.min_width = WINDOW_WIDTH
+                self._page.window.min_height = WINDOW_HEIGHT
+                self._page.window.max_width = WINDOW_WIDTH
+                self._page.window.max_height = WINDOW_HEIGHT
+                self._page.window.resizable = False
+                self._page.window.visible = True
+                self._page.window.minimized = False
+                self._page.update()
+                await self._page.window.to_front()
+            except Exception:
+                pass
+
+        self._page.run_task(_show)
 
     # -----------------------------
     # Cleanup

@@ -109,7 +109,7 @@ class ChainBuilderPage(ft.Container):
                 ],
                 spacing=10,
             ),
-            padding=ft.padding.symmetric(horizontal=10, vertical=10),
+            padding=ft.Padding.symmetric(horizontal=10, vertical=10),
             bgcolor=ft.Colors.with_opacity(0.2, "#1e293b"),
             blur=ft.Blur(10, 10, ft.BlurTileMode.MIRROR),
         )
@@ -128,7 +128,7 @@ class ChainBuilderPage(ft.Container):
         self._chain_list = ft.ListView(
             spacing=0,
             expand=True,
-            padding=ft.padding.symmetric(vertical=10),
+            padding=ft.Padding.symmetric(vertical=10),
         )
 
         # Add button
@@ -140,7 +140,7 @@ class ChainBuilderPage(ft.Container):
                 ],
                 spacing=8,
             ),
-            padding=ft.padding.symmetric(horizontal=20, vertical=12),
+            padding=ft.Padding.symmetric(horizontal=20, vertical=12),
             ink=True,
             on_click=self._add_chain_item,
         )
@@ -163,7 +163,7 @@ class ChainBuilderPage(ft.Container):
                 shape=ft.RoundedRectangleBorder(radius=8),
                 color=ft.Colors.ON_PRIMARY,
                 bgcolor=ft.Colors.PRIMARY,
-                padding=ft.padding.symmetric(horizontal=30, vertical=15),
+                padding=ft.Padding.symmetric(horizontal=30, vertical=15),
             ),
         )
 
@@ -180,7 +180,7 @@ class ChainBuilderPage(ft.Container):
                             ft.Container(
                                 content=self._chain_list,
                                 expand=True,
-                                border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT),
+                                border=ft.Border.all(1, ft.Colors.OUTLINE_VARIANT),
                                 border_radius=8,
                             ),
                             # Add button
@@ -197,7 +197,7 @@ class ChainBuilderPage(ft.Container):
                         spacing=0,
                         expand=True,
                     ),
-                    padding=ft.padding.all(20),
+                    padding=ft.Padding.all(20),
                     expand=True,
                 ),
             ],
@@ -214,11 +214,11 @@ class ChainBuilderPage(ft.Container):
             value=selected_id,
             expand=True,
             text_size=13,
-            content_padding=ft.padding.symmetric(horizontal=12, vertical=8),
+            content_padding=ft.Padding.symmetric(horizontal=12, vertical=8),
             hint_text=t("chain.select_outbound"),
             border_color=ft.Colors.OUTLINE_VARIANT,
             focused_border_color=ft.Colors.PRIMARY,
-            on_change=lambda e: self._validate(),
+            on_select=lambda e: self._validate(),
         )
 
     def _add_chain_item(self, e=None, profile_id: Optional[str] = None):
@@ -287,7 +287,7 @@ class ChainBuilderPage(ft.Container):
                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
                     spacing=8,
                 ),
-                padding=ft.padding.symmetric(horizontal=20, vertical=6),
+                padding=ft.Padding.symmetric(horizontal=20, vertical=6),
             )
 
             self._chain_list.controls.append(row)
@@ -306,7 +306,7 @@ class ChainBuilderPage(ft.Container):
             #                     ),
             #                 ],
             #             ),
-            #             padding=ft.padding.symmetric(vertical=2),
+            #             padding=ft.Padding.symmetric(vertical=2),
             #         )
             #     )
 

@@ -12,7 +12,11 @@ _project_root = Path(__file__).parent.parent.parent
 load_dotenv(_project_root / ".env")
 
 # Application version from environment
-APP_VERSION = os.getenv("APP_VERSION", "0.1.12-alpha")
+APP_VERSION = os.getenv("APP_VERSION", "0.1.14-alpha")
+
+# Window dimensions
+WINDOW_WIDTH = 420
+WINDOW_HEIGHT = 550
 GITHUB_REPO = os.getenv("GITHUB_REPO", "xenups/xenray")
 UPDATE_DOWNLOAD_TIMEOUT = float(os.getenv("UPDATE_DOWNLOAD_TIMEOUT", "60"))
 UPDATE_MIN_FILE_SIZE = int(os.getenv("UPDATE_MIN_FILE_SIZE", "1048576"))

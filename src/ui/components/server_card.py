@@ -18,7 +18,7 @@ class ServerCard(ft.Container):
             content=self._globe_icon,
             width=36,
             height=36,
-            alignment=ft.alignment.center,
+            alignment=ft.Alignment.CENTER,
             border_radius=18,
             clip_behavior=ft.ClipBehavior.HARD_EDGE,
             bgcolor=ft.Colors.with_opacity(0.15, ft.Colors.ON_SURFACE),
@@ -45,7 +45,7 @@ class ServerCard(ft.Container):
             content=ft.Icon(ft.Icons.EXPAND_MORE, size=22, color=ft.Colors.ON_SURFACE_VARIANT),
             width=36,
             height=36,
-            alignment=ft.alignment.center,
+            alignment=ft.Alignment.CENTER,
             border_radius=18,
             bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE),
             on_click=on_click,
@@ -78,13 +78,13 @@ class ServerCard(ft.Container):
             ]
         )
 
-        # Initialize with solid gradient + subtle overlay
+        # Initialize with semi-transparent glass base
         super().__init__(
             content=self._content_row,
-            bgcolor="#121212",  # Solid background to prevent transparency issues
+            bgcolor=ft.Colors.with_opacity(0.4, "#1E293B"),
             gradient=ft.LinearGradient(
-                begin=ft.alignment.top_left,
-                end=ft.alignment.bottom_right,
+                begin=ft.Alignment.TOP_LEFT,
+                end=ft.Alignment.BOTTOM_RIGHT,
                 colors=[
                     ft.Colors.with_opacity(0.35, "#6366f1"),
                     ft.Colors.with_opacity(0.20, "#8b5cf6"),
@@ -92,10 +92,10 @@ class ServerCard(ft.Container):
                 ],
                 tile_mode=ft.GradientTileMode.CLAMP,
             ),
-            border=ft.border.all(1, ft.Colors.with_opacity(0.15, ft.Colors.WHITE)),
+            border=ft.Border.all(1, ft.Colors.with_opacity(0.15, ft.Colors.WHITE)),
             border_radius=20,
-            padding=ft.padding.symmetric(horizontal=16, vertical=14),
-            margin=ft.margin.only(left=20, right=20, bottom=16),
+            padding=ft.Padding.symmetric(horizontal=16, vertical=14),
+            margin=ft.Margin.only(left=20, right=20, bottom=16),
             on_click=on_click,
             animate=ft.Animation(300, ft.AnimationCurve.EASE_OUT),
         )
@@ -137,10 +137,10 @@ class ServerCard(ft.Container):
                     src=f"/flags/{cc.lower()}.svg",
                     width=36,
                     height=36,
-                    fit=ft.ImageFit.COVER,
+                    fit=ft.BoxFit.COVER,
                     gapless_playback=True,
                     filter_quality=ft.FilterQuality.HIGH,
-                    border_radius=ft.border_radius.all(18),
+                    border_radius=ft.BorderRadius.all(18),
                     anti_alias=True,
                 )
                 self._icon_container.content = new_image
@@ -221,7 +221,7 @@ class ServerCard(ft.Container):
     def update_theme(self, is_dark: bool):
         """Update card appearance based on theme."""
         if is_dark:
-            self.border = ft.border.all(1, ft.Colors.with_opacity(0.2, ft.Colors.ON_SURFACE))
+            self.border = ft.Border.all(1, ft.Colors.with_opacity(0.2, ft.Colors.ON_SURFACE))
             self._globe_icon.color = ft.Colors.ON_SURFACE_VARIANT
             self._list_btn.bgcolor = ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE)
             # Safe shadow update
@@ -232,7 +232,7 @@ class ServerCard(ft.Container):
                 else:
                     self.shadow.color = ft.Colors.with_opacity(0.15, ft.Colors.BLACK)
         else:
-            self.border = ft.border.all(1, ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE))
+            self.border = ft.Border.all(1, ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE))
             self._globe_icon.color = ft.Colors.ON_SURFACE_VARIANT
             self._list_btn.bgcolor = ft.Colors.with_opacity(0.08, ft.Colors.ON_SURFACE)
             # Safe shadow update
@@ -244,4 +244,7 @@ class ServerCard(ft.Container):
                     self.shadow.color = ft.Colors.with_opacity(0.08, ft.Colors.BLACK)
 
         self._update_gradient_colors()
-        self.update()
+        try:
+            self.update()
+        except RuntimeError:
+            pass

@@ -87,13 +87,13 @@ class LogsDrawer(ft.NavigationDrawer):
                 # Network Stats
                 ft.Container(
                     content=self._stats_row,
-                    padding=ft.padding.only(bottom=10),
+                    padding=ft.Padding.only(bottom=10),
                 ),
                 ft.Divider(),
                 # Logs content
                 ft.Container(
                     content=self._log_viewer.control,
-                    padding=ft.padding.only(left=15, right=15, bottom=15),
+                    padding=ft.Padding.only(left=15, right=15, bottom=15),
                     expand=True,
                 ),
             ],

@@ -45,7 +45,7 @@ class InstallerHandler:
             modal=True,
         )
 
-        self._page.open(dialog)
+        self._page.show_dialog(dialog)
 
         def update_status(msg: str):
             status.value = msg
@@ -68,6 +68,19 @@ class InstallerHandler:
                     self._toast.show(t("status.update_error", error=str(e)), "error")
             finally:
                 if self._ui_helper:
-                    self._ui_helper.call(lambda: self._page.close(dialog))
+
+                    def _safe_close():
+                        if self._page:
+                            try:
+                                _attached = dialog.page is not None
+                            except RuntimeError:
+                                _attached = False
+                            if _attached:
+                                try:
+                                    self._page.pop_dialog()
+                                except Exception:
+                                    pass
+
+                    self._ui_helper.call(_safe_close)
 
         threading.Thread(target=install_task, daemon=True).start()

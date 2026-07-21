@@ -3,136 +3,170 @@
 import os
 import sys
 
-# Add project root to path
 if __name__ == "__main__":
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import asyncio
 
-from src.core.constants import EARLY_LOG_FILE
+from src.core.constants import EARLY_LOG_FILE, WINDOW_HEIGHT, WINDOW_WIDTH
 from src.core.logger import logger
 from src.core.settings import Settings
+from src.ui.theme import AppColors
+
+_shutdown_event = asyncio.Event()
+
+
+def signal_exit():
+    _shutdown_event.set()
 
 
 async def main(page):
     """Main entry point."""
-    # Lazy-import Flet here (type hints available in function scope)
-
     logger.debug("[DEBUG] Starting Flet session (async main)")
-    page.window.width = 420
-    page.window.height = 550
-    page.window.center()
-    page.title = "XenRay"
-    page.window.prevent_close = True
+
+    # 1. Clear any leftover controls (safe on first call too)
+    page.controls.clear()
+
+    # 2. Lock native window dimensions at the very beginning
+    page.window_width = WINDOW_WIDTH
+    page.window_height = WINDOW_HEIGHT
+    page.window_min_width = WINDOW_WIDTH
+    page.window_min_height = WINDOW_HEIGHT
+    page.window_max_width = WINDOW_WIDTH
+    page.window_max_height = WINDOW_HEIGHT
+    page.window_resizable = False
+    page.window.width = WINDOW_WIDTH
+    page.window.height = WINDOW_HEIGHT
+    page.window.min_width = WINDOW_WIDTH
+    page.window.min_height = WINDOW_HEIGHT
+    page.window.max_width = WINDOW_WIDTH
+    page.window.max_height = WINDOW_HEIGHT
     page.window.resizable = False
+
     page.window.minimizable = True
     page.window.maximizable = False
-    # Don't update yet - keep window hidden
+    page.window.prevent_close = True
+    page.title = "XenRay"
+    page.padding = 0
+    page.spacing = 0
+    page.bgcolor = AppColors.GLASS_OVERLAY
 
-    # Setup logging
+    # 3. Background initialization
     Settings.create_temp_directories()
     Settings.create_log_files()
     Settings.setup_logging(EARLY_LOG_FILE)
 
-    # Initialize DI Container
     from src.core.container import ApplicationContainer
 
     container = ApplicationContainer()
 
-    # Initialize i18n
     from src.core.i18n import set_language
 
     set_language(container.app_context().settings.get_language())
 
-    # Initialize UI with DI
+    # 5. Build UI — first page.update() flushes dimensions + center + content in one frame
     window = container.main_window(page=page)
+    page.add(window._stack)
 
-    # Register window event handler
-    def on_window_event(e):
-        logger.debug(f"[DEBUG] Window event in main.py: {e.data}")
-        if e.data == "close":
-            logger.debug("[DEBUG] Close event detected, calling show_close_dialog")
-            window.show_close_dialog()
-            # Explicit update to ensure dialog renders before any potential default hide
+    # 6. Window event handler — checks both e.data and e.type
+    async def on_window_event(e):
+        event_type_str = str(getattr(e, "type", "")).lower()
+        event_data_str = str(e.data).lower() if e.data is not None else ""
+        logger.debug(f"[WINDOW_EVENT] data='{e.data}' type='{getattr(e, 'type', None)}'")
+
+        is_close = "close" in event_type_str or "close" in event_data_str
+        is_minimize = "minimize" in event_type_str or "minimize" in event_data_str
+
+        if is_close:
+            if window._app_context.settings.get_remember_close_choice():
+                logger.debug("[WINDOW_EVENT] Close + Always minimize — hiding to tray")
+                page.window.visible = False
+                page.update()
+            else:
+                logger.debug("[WINDOW_EVENT] Close matched — showing dialog")
+                window.show_close_dialog()
+                page.update()
+
+        elif is_minimize:
+            logger.debug("[WINDOW_EVENT] Minimize matched — hiding to tray")
+            page.window.visible = False
             page.update()
+
+        else:
+            logger.debug("[WINDOW_EVENT] Ignored — no match")
 
     page.window.on_event = on_window_event
 
-    # NOW show the window - it already has correct size so no flash
+    # 7. Final sync — center, reveal, bring to front
+    if hasattr(page.window, "center"):
+        fn = page.window.center
+        if asyncio.iscoroutinefunction(fn):
+            await fn()
+        else:
+            fn()
+
+    page.window.minimized = False
     page.window.visible = True
     page.update()
 
-    # Keep session alive - use a larger sleep to reduce overhead
+    if hasattr(page.window, "to_front"):
+        fn = page.window.to_front
+        if asyncio.iscoroutinefunction(fn):
+            await fn()
+        else:
+            fn()
+
+    # 8. Keep session alive until explicit shutdown
     logger.debug("[DEBUG] Session initialized, entering persistence loop")
-    try:
-        while True:
-            await asyncio.sleep(3600)
-    except asyncio.CancelledError:
-        logger.debug("[DEBUG] Flet session task cancelled")
-    except Exception as e:
-        logger.error(f"[ERROR] Main persistence loop crashed: {e}")
+    await _shutdown_event.wait()
+    logger.debug("[DEBUG] Shutdown event received — exiting main()")
+
+
+async def terminate_app(page):
+    """Clean termination from close dialog or systray Exit."""
+    logger.debug("[DEBUG] Terminating app")
+    signal_exit()
+    page.window.prevent_close = False
+    page.update()
+    await page.window.destroy()
 
 
 def run():
     """Entry point for poetry script - routes to GUI or CLI."""
-    import os  # Import early for getcwd and env vars
+    import os
 
-    # Import logger early so it's available for both modes
     from src.core.logger import logger
 
-    # Log early startup info for debugging Windows boot issues
     logger.info(f"[Startup] XenRay starting, argv={sys.argv}, cwd={os.getcwd()}")
 
-    # Check if CLI mode is requested (any command-line arguments)
     if len(sys.argv) > 1:
-        # CLI mode - delegate to CLI handler (no Flet import!)
-
         os.environ["XENRAY_SKIP_I18N"] = "1"
-
         from src.cli import main as cli_main
 
         cli_main()
         return
 
-    # GUI mode - continue with normal GUI startup
-    # Lazy-import Flet here (only when GUI is actually needed)
-    # This defers 115MB of framework overhead until this point
-    # Singleton Check (Moved here to prevent child processes from starting app)
     import ctypes
     import os
 
     import flet as ft
 
-    # Import PlatformUtils - works for both script and PyInstaller
-    # PyInstaller bundles these as hidden-imports
     from src.utils.platform_utils import PlatformUtils
 
-    # Platform-specific singleton check
     if PlatformUtils.get_platform() == "windows":
         kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
         mutex_name = "Global\\XenRay_Singleton_Mutex_v1"
-
-        # CRITICAL: Clear last error before creating mutex to avoid false positives
         ctypes.set_last_error(0)
-
-        # Create named mutex (Keep reference to prevent GC)
         global _singleton_mutex
         _singleton_mutex = kernel32.CreateMutexW(None, False, mutex_name)
-
-        # Get the error AFTER creating the mutex
         last_error = ctypes.get_last_error()
         logger.debug(f"[Startup] Mutex creation result: handle={_singleton_mutex}, last_error={last_error}")
-
-        if last_error == 183:  # ERROR_ALREADY_EXISTS
-            # Application is already running
+        if last_error == 183:
             logger.warning("Another instance is already running. Exiting.")
-            return  # Exit run() without starting app
+            return
         elif _singleton_mutex == 0:
-            # Mutex creation failed entirely
             logger.error(f"[Startup] Failed to create mutex, error code: {last_error}")
-            # Continue anyway - better to have multiple instances than no app
     else:
-        # For Unix-like systems (macOS, Linux), we can use a PID file
         import errno
         import fcntl
 
@@ -144,23 +178,18 @@ def run():
             _pid_file_handle.write(str(os.getpid()))
         except (IOError, OSError) as e:
             if e.errno == errno.EAGAIN:
-                # Application is already running
                 logger.warning("Another instance is already running. Exiting.")
                 return
             else:
                 raise
 
-    # Calculate absolute path to assets directory using PlatformUtils
-    # This handles both script development and frozen executable environments
     root_dir = PlatformUtils.get_app_dir()
     assets_path = os.path.join(root_dir, "assets")
     logger.debug(f"Assets path: {assets_path}")
 
-    # Start with hidden window to prevent flash
-    ft.app(
-        target=main,
+    ft.run(
+        main,
         assets_dir=assets_path,
-        view=ft.AppView.FLET_APP_HIDDEN,
     )
 
 

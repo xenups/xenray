@@ -26,6 +26,14 @@ class NetworkStatsHandler:
         # State access required for logic
         self._is_running_getter: Optional[Callable[[], bool]] = None
 
+    @staticmethod
+    def _page_attached(control) -> bool:
+        """Check if a control is mounted to the page (RuntimeError-safe)."""
+        try:
+            return control.page is not None
+        except RuntimeError:
+            return False
+
     def setup(
         self,
         page: ft.Page,
@@ -56,7 +64,7 @@ class NetworkStatsHandler:
         while True:
             try:
                 # 1. Lifecycle Check
-                if not self._status_display or not self._status_display.page:
+                if not self._status_display or not self._page_attached(self._status_display):
                     await asyncio.sleep(1.0)
                     continue
 
@@ -73,7 +81,7 @@ class NetworkStatsHandler:
     def update_ui_immediately(self):
         """Triggers an immediate UI update if possible."""
         try:
-            if self._status_display and self._status_display.page:
+            if self._status_display and self._page_attached(self._status_display):
                 self._update_ui()
         except Exception as e:
             logger.debug(f"Immediate stats update skipped: {e}")
@@ -84,7 +92,7 @@ class NetworkStatsHandler:
 
         if not is_running:
             # Reset heartbeat if needed
-            if self._heartbeat and self._heartbeat.page and self._heartbeat.opacity != 0:
+            if self._heartbeat and self._page_attached(self._heartbeat) and self._heartbeat.opacity != 0:
                 self._heartbeat.opacity = 0
                 self._heartbeat.update()
             return
@@ -102,15 +110,15 @@ class NetworkStatsHandler:
             total_bps = 0.0
 
         # Update Connection Button Glow
-        if self._connection_button and self._connection_button.page:
+        if self._connection_button and self._page_attached(self._connection_button):
             self._connection_button.update_network_activity(total_bps)
 
-        # Update LogsDrawer stats if open AND mounted
-        if self._logs_drawer_component and self._logs_drawer_component.open and self._logs_drawer_component.page:
+        # Update LogsDrawer stats if mounted
+        if self._logs_drawer_component and self._page_attached(self._logs_drawer_component):
             self._logs_drawer_component.update_network_stats(down_str, up_str)
 
         # Earth Glow Animation
-        if self._earth_glow and self._earth_glow.page:
+        if self._earth_glow and self._page_attached(self._earth_glow):
             total_mbps = total_bps / (1024 * 1024)
             intensity = min(1.0, total_mbps / 5.0)
 
@@ -124,7 +132,7 @@ class NetworkStatsHandler:
             self._earth_glow.update()
 
         # Heartbeat logic
-        if self._logs_heartbeat and self._logs_heartbeat.page:
+        if self._logs_heartbeat and self._page_attached(self._logs_heartbeat):
             is_bright = self._logs_heartbeat.opacity > 0.5
             self._logs_heartbeat.opacity = 0.3 if is_bright else 1.0
             self._logs_heartbeat.update()

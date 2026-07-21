@@ -44,8 +44,8 @@ class TimerDisplay(ft.Container):
         # Use a fixed-width container for timer to prevent shifting
         self.content = ft.Container(
             content=self._timer_text,
-            alignment=ft.alignment.center,
-            padding=ft.padding.only(top=10),
+            alignment=ft.Alignment.CENTER,
+            padding=ft.Padding.only(top=10),
             width=200,  # Fixed width to prevent shifting
         )
 

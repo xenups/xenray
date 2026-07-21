@@ -89,7 +89,7 @@ class CloseDialog(ft.AlertDialog):
                     # Checkbox (Under the buttons)
                     ft.Container(
                         content=self.remember_checkbox,
-                        margin=ft.margin.only(top=5),
+                        margin=ft.Margin.only(top=5),
                     ),
                 ],
                 tight=True,
@@ -101,9 +101,11 @@ class CloseDialog(ft.AlertDialog):
 
     def _handle_exit(self, e):
         logger.debug("[DEBUG] Close dialog: Exit clicked")
-        self.open = False
-        if self.page:
-            self.page.update()
+        if self.page is not None:
+            try:
+                self.page.pop_dialog()
+            except Exception:
+                pass
         self._on_exit_callback()
 
     def _handle_minimize(self, e):
@@ -111,7 +113,9 @@ class CloseDialog(ft.AlertDialog):
         if self.remember_checkbox.value:
             self._app_context.settings.set_remember_close_choice(True)
 
-        self.open = False
-        if self.page:
-            self.page.update()
+        if self.page is not None:
+            try:
+                self.page.pop_dialog()
+            except Exception:
+                pass
         self._on_minimize_callback()

@@ -32,7 +32,7 @@ class ServerListHeader(ft.Container):
         self._current_subscription: Optional[dict] = None
         self._inner_row = ft.Row([], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
 
-        super().__init__(content=self._inner_row, padding=ft.padding.only(left=15, right=5))
+        super().__init__(content=self._inner_row, padding=ft.Padding.only(left=15, right=5))
         self.show_main_header()
 
     def _create_sort_menu(self) -> ft.PopupMenuButton:
@@ -51,12 +51,12 @@ class ServerListHeader(ft.Container):
             tooltip=t("server_list.sort"),
             items=[
                 ft.PopupMenuItem(
-                    text=t("server_list.sort_name"),
+                    content=t("server_list.sort_name"),
                     checked=current_sort == "name_asc",
                     on_click=lambda e: set_sort("name_asc"),
                 ),
                 ft.PopupMenuItem(
-                    text=t("server_list.sort_latency"),
+                    content=t("server_list.sort_latency"),
                     checked=current_sort == "ping_asc",
                     on_click=lambda e: set_sort("ping_asc"),
                 ),
@@ -114,14 +114,14 @@ class ServerListHeader(ft.Container):
                         icon=ft.Icons.MORE_VERT,
                         items=[
                             ft.PopupMenuItem(
-                                text=t("server_list.update_subscription"),
+                                content=t("server_list.update_subscription"),
                                 icon=ft.Icons.REFRESH,
                                 on_click=lambda e: self._on_update_subscription(sub_id)
                                 if self._on_update_subscription
                                 else None,
                             ),
                             ft.PopupMenuItem(
-                                text=t("server_list.delete_subscription"),
+                                content=t("server_list.delete_subscription"),
                                 icon=ft.Icons.DELETE,
                                 on_click=lambda e: self._on_delete_subscription(sub_id)
                                 if self._on_delete_subscription

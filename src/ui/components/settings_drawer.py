@@ -211,7 +211,7 @@ class SettingsDrawer(ft.NavigationDrawer):
                             spacing=10,
                             alignment=ft.MainAxisAlignment.CENTER,
                         ),
-                        alignment=ft.alignment.center,
+                        alignment=ft.Alignment.CENTER,
                         padding=20,
                     ),
                 ],
@@ -231,15 +231,16 @@ class SettingsDrawer(ft.NavigationDrawer):
         super().__init__(
             controls=[drawer_container],
             bgcolor=ft.Colors.TRANSPARENT,
-            surface_tint_color=ft.Colors.TRANSPARENT,
             shadow_color=ft.Colors.TRANSPARENT,
         )
 
     def _close_drawer(self, e=None):
         """Close this settings drawer."""
-        self.open = False
-        if self.page:
-            self.page.close(self)
+        if self.page is not None:
+            try:
+                self.page.run_task(self.page.close_end_drawer)
+            except Exception:
+                pass
 
     def _handle_mode_change(self, e):
         """Handle VPN/Proxy mode switch."""
@@ -261,10 +262,18 @@ class SettingsDrawer(ft.NavigationDrawer):
             return
 
         def close_dlg(e):
-            page.close(dlg)
+            if page is not None:
+                try:
+                    page.pop_dialog()
+                except Exception:
+                    pass
 
         def confirm_restart(e):
-            page.close(dlg)
+            if page is not None:
+                try:
+                    page.pop_dialog()
+                except Exception:
+                    pass
             self._app_context.settings.set_connection_mode(ConnectionMode.VPN.value)
             ProcessUtils.restart_as_admin()
 
@@ -278,7 +287,7 @@ class SettingsDrawer(ft.NavigationDrawer):
             ],
             actions_alignment=ft.MainAxisAlignment.END,
         )
-        page.open(dlg)
+        page.show_dialog(dlg)
 
     def _show_toast(self, message: str, message_type: str = "info"):
         """Show a toast notification."""
@@ -381,10 +390,18 @@ class SettingsDrawer(ft.NavigationDrawer):
         msg = t("update.available", current=current, latest=latest) if current else t("update.install", version=latest)
 
         def close_dlg(e):
-            page.close(dlg)
+            if page is not None:
+                try:
+                    page.pop_dialog()
+                except Exception:
+                    pass
 
         def start_update(e):
-            page.close(dlg)
+            if page is not None:
+                try:
+                    page.pop_dialog()
+                except Exception:
+                    pass
             self._run_update_process(page)
 
         dlg = ft.AlertDialog(
@@ -397,7 +414,7 @@ class SettingsDrawer(ft.NavigationDrawer):
             ],
             actions_alignment=ft.MainAxisAlignment.END,
         )
-        page.open(dlg)
+        page.show_dialog(dlg)
 
     def _run_update_process(self, page):
         """Run the update process with progress dialog."""
@@ -420,7 +437,7 @@ class SettingsDrawer(ft.NavigationDrawer):
             ),
             actions=[],
         )
-        page.open(progress_dlg)
+        page.show_dialog(progress_dlg)
         page.update()
 
         def update_task():
@@ -437,7 +454,11 @@ class SettingsDrawer(ft.NavigationDrawer):
                 stop_service_callback=stop_service,
             )
 
-            page.close(progress_dlg)
+            if page is not None:
+                try:
+                    page.pop_dialog()
+                except Exception:
+                    pass
             if success:
                 self._show_toast(t("update.success"), "success")
             else:
@@ -512,10 +533,18 @@ class SettingsDrawer(ft.NavigationDrawer):
         )
 
         def close_dlg(e):
-            page.close(dlg)
+            if page is not None:
+                try:
+                    page.pop_dialog()
+                except Exception:
+                    pass
 
         def start_update(e):
-            page.close(dlg)
+            if page is not None:
+                try:
+                    page.pop_dialog()
+                except Exception:
+                    pass
             self._run_app_update_process(page, download_url)
 
         dlg = ft.AlertDialog(
@@ -539,7 +568,7 @@ class SettingsDrawer(ft.NavigationDrawer):
             ],
             actions_alignment=ft.MainAxisAlignment.END,
         )
-        page.open(dlg)
+        page.show_dialog(dlg)
 
     def _run_app_update_process(self, page, download_url: str):
         """Run the app update process with progress dialog."""
@@ -562,7 +591,7 @@ class SettingsDrawer(ft.NavigationDrawer):
             ),
             actions=[],
         )
-        page.open(progress_dlg)
+        page.show_dialog(progress_dlg)
         page.update()
 
         def update_task():
@@ -574,7 +603,11 @@ class SettingsDrawer(ft.NavigationDrawer):
             zip_path = AppUpdateService.download_update(download_url, on_progress)
 
             if not zip_path:
-                page.close(progress_dlg)
+                if page is not None:
+                    try:
+                        page.pop_dialog()
+                    except Exception:
+                        pass
                 self._show_toast(t("app_update.download_failed"), "error")
                 return
 
@@ -595,7 +628,11 @@ class SettingsDrawer(ft.NavigationDrawer):
                 ProcessUtils.kill_process_tree()
                 os._exit(0)
             else:
-                page.close(progress_dlg)
+                if page is not None:
+                    try:
+                        page.pop_dialog()
+                    except Exception:
+                        pass
                 self._show_toast(t("app_update.extract_failed"), "error")
                 page.update()
 

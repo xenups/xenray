@@ -41,8 +41,8 @@ class StatusDisplay(ft.Container):
 
         self.content = ft.Container(
             content=self._text_column,
-            padding=ft.padding.symmetric(horizontal=10, vertical=10),
-            alignment=ft.alignment.center,
+            padding=ft.Padding.symmetric(horizontal=10, vertical=10),
+            alignment=ft.Alignment.CENTER,
             width=320,
         )
 
