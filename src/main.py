@@ -24,17 +24,9 @@ async def main(page):
     """Main entry point."""
     logger.debug("[DEBUG] Starting Flet session (async main)")
 
-    # 1. Clear any leftover controls (safe on first call too)
-    page.controls.clear()
-
-    # 2. Lock native window dimensions at the very beginning
-    page.window_width = WINDOW_WIDTH
-    page.window_height = WINDOW_HEIGHT
-    page.window_min_width = WINDOW_WIDTH
-    page.window_min_height = WINDOW_HEIGHT
-    page.window_max_width = WINDOW_WIDTH
-    page.window_max_height = WINDOW_HEIGHT
-    page.window_resizable = False
+    # 1. Lock native window geometry and configure page.
+    #    The window is already hidden at the OS level (FLET_APP_HIDDEN view).
+    #    We set dimensions here so they take effect before the first paint.
     page.window.width = WINDOW_WIDTH
     page.window.height = WINDOW_HEIGHT
     page.window.min_width = WINDOW_WIDTH
@@ -42,7 +34,6 @@ async def main(page):
     page.window.max_width = WINDOW_WIDTH
     page.window.max_height = WINDOW_HEIGHT
     page.window.resizable = False
-
     page.window.minimizable = True
     page.window.maximizable = False
     page.window.prevent_close = True
@@ -50,6 +41,10 @@ async def main(page):
     page.padding = 0
     page.spacing = 0
     page.bgcolor = AppColors.GLASS_OVERLAY
+    page.update()
+
+    # 2. Clear any leftover controls
+    page.controls.clear()
 
     # 3. Background initialization
     Settings.create_temp_directories()
@@ -187,9 +182,13 @@ def run():
     assets_path = os.path.join(root_dir, "assets")
     logger.debug(f"Assets path: {assets_path}")
 
+    # FLET_APP_HIDDEN: native window starts completely invisible at the OS level
+    # before any Python code runs — eliminates the blank default-size flicker.
+    # Our main() sets geometry then reveals the window only after the UI is built.
     ft.run(
         main,
         assets_dir=assets_path,
+        view=ft.AppView.FLET_APP_HIDDEN,
     )
 
 

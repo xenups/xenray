@@ -127,10 +127,9 @@ class ConnectionOrchestrator:
 
         from src.services.connection_tester import ConnectionTester
 
-        # On Windows in VPN mode, the test Xray's outbound connection gets
-        # disrupted by the sing-box TUN.  Route the test through the existing
-        # Xray SOCKS proxy instead of spawning a fresh Xray instance.
-        socks_port = health_socks_port if (mode == "vpn" and os.name == "nt") else 0
+        # Always use the existing Xray SOCKS proxy when available to prevent
+        # spawning a second Xray process that competes/fails on fragmented links.
+        socks_port = health_socks_port if health_socks_port > 0 else 0
         if socks_port:
             logger.debug(
                 f"[ConnectionOrchestrator] Routing health check through existing SOCKS proxy port {socks_port}"

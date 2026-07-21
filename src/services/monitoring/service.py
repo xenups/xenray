@@ -92,6 +92,7 @@ class ConnectionMonitoringService:
             on_connectivity_restored=lambda: self._emit_signal(MonitorSignal.ACTIVE_RESTORED),
             on_connectivity_degraded=lambda: self._emit_signal(MonitorSignal.ACTIVE_DEGRADED),
             xray_error_checker=self._log_monitor.has_recent_error,
+            proxy_port_getter=app_context.settings.get_proxy_port,
         )
 
     def _emit_signal(self, signal: MonitorSignal):

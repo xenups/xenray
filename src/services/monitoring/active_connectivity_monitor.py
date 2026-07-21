@@ -39,6 +39,7 @@ class ActiveConnectivityMonitor:
         on_connectivity_restored: Optional[Callable[[], None]] = None,
         on_connectivity_degraded: Optional[Callable[[], None]] = None,
         xray_error_checker: Optional[Callable[[], bool]] = None,
+        proxy_port_getter: Optional[Callable[[], int]] = None,
     ):
         """
         Initialize the monitor.
@@ -49,12 +50,14 @@ class ActiveConnectivityMonitor:
             on_connectivity_restored: Callback when connectivity is restored
             on_connectivity_degraded: Callback when connection shows issues (soft warning)
             xray_error_checker: Optional callback for Xray error confirmation
+            proxy_port_getter: Optional callback returning current SOCKS proxy port
         """
         self._provider = metrics_provider
         self._on_lost = on_connectivity_lost
         self._on_restored = on_connectivity_restored
         self._on_degraded = on_connectivity_degraded
         self._xray_error_checker = xray_error_checker
+        self._proxy_port_getter = proxy_port_getter
 
         self._running = False
         self._thread: Optional[threading.Thread] = None
@@ -289,17 +292,19 @@ class ActiveConnectivityMonitor:
         try:
             from src.utils.network_utils import NetworkUtils
 
-            # Quick connectivity check through proxy (1 retry, 2s timeout)
+            port = self._proxy_port_getter() if self._proxy_port_getter else 10805
+
+            # Connectivity check through proxy (2 retries, 5s timeout for fragment handshake)
             result = NetworkUtils.check_proxy_connectivity(
-                port=10805,
-                timeout=2,
-                retries=1,
+                port=port,
+                timeout=5,
+                retries=2,
             )
 
             if result:
-                logger.debug("[ActiveConnectivityMonitor] Probe OK")
+                logger.debug(f"[ActiveConnectivityMonitor] Probe OK via port {port}")
             else:
-                logger.debug("[ActiveConnectivityMonitor] Probe failed")
+                logger.debug(f"[ActiveConnectivityMonitor] Probe failed via port {port}")
 
             return result
 

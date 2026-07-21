@@ -102,7 +102,17 @@ class ConnectionTester:
         # Python's stdlib doesn't support SOCKS5 natively, so we do a
         # TCP connectivity test to the proxy port. The actual end-to-end
         # HTTP verification is handled by _verify_post_connection (curl).
+        # ── SOCKS proxy mode (existing Xray process) ──
         if socks_port:
+            from src.utils.network_utils import NetworkUtils
+
+            start_time = time.time()
+            if NetworkUtils.check_proxy_connectivity(socks_port, timeout=5, retries=2):
+                latency = int((time.time() - start_time) * 1000)
+                logger.info(f"[ConnectionTester] SOCKS proxy verified at 127.0.0.1:{socks_port} ({latency}ms)")
+                return (True, t("connection.latency_ms", value=latency), None)
+
+            # Fallback to TCP socket check on the proxy port
             max_retries = 3
             for attempt in range(max_retries):
                 try:
@@ -110,12 +120,12 @@ class ConnectionTester:
                     s = socket.create_connection(("127.0.0.1", socks_port), timeout=CONNECT_TIMEOUT)
                     s.close()
                     latency = int((time.time() - start_time) * 1000)
-                    logger.info(f"[ConnectionTester] SOCKS proxy reachable at 127.0.0.1:{socks_port} ({latency}ms)")
+                    logger.info(f"[ConnectionTester] SOCKS proxy port reachable at 127.0.0.1:{socks_port} ({latency}ms)")
                     return (True, t("connection.latency_ms", value=latency), None)
                 except Exception as e:
                     if attempt < max_retries - 1:
                         logger.debug(
-                            f"SOCKS connection test attempt {attempt + 1}/{max_retries} " f"failed: {e}, retrying..."
+                            f"SOCKS connection test attempt {attempt + 1}/{max_retries} failed: {e}, retrying..."
                         )
                         time.sleep(0.5)
                         continue
