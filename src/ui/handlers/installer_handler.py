@@ -68,6 +68,7 @@ class InstallerHandler:
                     self._toast.show(t("status.update_error", error=str(e)), "error")
             finally:
                 if self._ui_helper:
+
                     def _safe_close():
                         if self._page:
                             try:
@@ -79,6 +80,7 @@ class InstallerHandler:
                                     self._page.pop_dialog()
                                 except Exception:
                                     pass
+
                     self._ui_helper.call(_safe_close)
 
         threading.Thread(target=install_task, daemon=True).start()

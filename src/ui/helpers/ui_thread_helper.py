@@ -31,6 +31,7 @@ class UIThreadHelper:
             return
 
         import asyncio
+
         _is_coro = asyncio.iscoroutinefunction(fn)
 
         async def _coro():
@@ -50,6 +51,7 @@ class UIThreadHelper:
 
         try:
             import warnings
+
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", RuntimeWarning)
                 self._page.run_task(_coro)

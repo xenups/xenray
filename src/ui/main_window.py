@@ -482,8 +482,10 @@ class MainWindow:
         """Exit handler — triggers clean shutdown."""
         self.cleanup()
         from src.main import signal_exit
+
         signal_exit()
         from src.utils.process_utils import ProcessUtils
+
         ProcessUtils.kill_process_tree()
         os._exit(0)
 
@@ -494,6 +496,7 @@ class MainWindow:
 
     def _restore_from_tray(self):
         """Restore window from tray — re-locks dimensions, then reveals."""
+
         async def _show():
             try:
                 self._page.window.width = WINDOW_WIDTH
@@ -509,6 +512,7 @@ class MainWindow:
                 await self._page.window.to_front()
             except Exception:
                 pass
+
         self._page.run_task(_show)
 
     # -----------------------------
