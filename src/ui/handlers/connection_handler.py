@@ -327,14 +327,22 @@ class ConnectionHandler:
         """Verify connection is working after establishment."""
         from src.utils.network_utils import NetworkUtils
 
-        time.sleep(1)  # Allow connection to stabilize
+        time.sleep(2.0)  # Allow fragmented/finalmask connection streams to stabilize
 
         if self._status_display:
             self._ui_call(lambda: self._status_display.set_step(t("connection.checking_network")))
 
         proxy_port = self._app_context.settings.get_proxy_port()
-        if not NetworkUtils.check_proxy_connectivity(proxy_port):
-            logger.error("[ConnectionHandler] Post-connection check failed")
+        is_ok = NetworkUtils.check_proxy_connectivity(proxy_port, timeout=5, retries=2)
+
+        # Retry once after additional stabilization if initial attempt missed due to fragment warmup
+        if not is_ok:
+            logger.info("[ConnectionHandler] Initial post-connection check pending, retrying after warmup...")
+            time.sleep(1.5)
+            is_ok = NetworkUtils.check_proxy_connectivity(proxy_port, timeout=6, retries=2)
+
+        if not is_ok:
+            logger.error("[ConnectionHandler] Post-connection check failed after warmup retries")
             self._set_connecting(False)
             self._connection_manager.disconnect()
             self._ui_call(self.reset_ui_disconnected)

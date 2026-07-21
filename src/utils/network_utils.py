@@ -45,84 +45,93 @@ class NetworkUtils:
     @staticmethod
     def check_proxy_connectivity(
         port: int,
-        target_url="http://www.gstatic.com/generate_204",
+        target_url=None,
         timeout=5,
-        retries=3,
+        retries=2,
     ) -> bool:
         """
-        Check connectivity through a local SOCKS5 proxy using curl.
+        Check connectivity through a local SOCKS5 proxy using curl with fallback target URLs.
 
         Args:
             port: SOCKS5 proxy port
-            target_url: URL to test connectivity
+            target_url: Optional URL to test connectivity. If None or default, uses robust HTTPS/HTTP fallbacks.
             timeout: Timeout in seconds for each attempt
-            retries: Number of retry attempts (default: 3)
+            retries: Number of retry attempts (default: 2)
 
         Returns:
-            True if successful (HTTP 204/200), False otherwise
+            True if connectivity is confirmed through the proxy, False otherwise
         """
         curl_path = shutil.which("curl")
         if not curl_path:
             logger.warning("curl not found, skipping proxy connectivity check")
-            # If curl is missing, we assume success to avoid blocking users on constrained systems
             return True
 
-        # Command: curl -x socks5h://127.0.0.1:PORT URL --connect-timeout N
-        # -I might hang if HEAD not supported, so just GET and check status
-        # -s for silent, -o /dev/null (or NUL on windows) to verify execution
-        # -w "%{http_code}" to get status code
-        cmd = [
-            curl_path,
-            "-x",
-            f"socks5h://127.0.0.1:{port}",
-            target_url,
-            "--connect-timeout",
-            str(timeout),
-            "-s",
-            "-o",
-            os.devnull,
-            "-w",
-            "%{http_code}",
+        # Candidate targets: Encrypted HTTPS first (avoids ISP HTTP port 80 resets on DPI/fragmented links),
+        # followed by plain HTTP fallbacks.
+        default_targets = [
+            "https://cp.cloudflare.com/generate_204",
+            "https://www.gstatic.com/generate_204",
+            "http://www.gstatic.com/generate_204",
         ]
 
-        for attempt in range(retries):
-            try:
-                startupinfo = PlatformUtils.get_startupinfo()
+        if target_url and target_url not in default_targets:
+            targets = [target_url] + default_targets
+        else:
+            targets = default_targets
 
-                result = subprocess.run(
-                    cmd,
-                    capture_output=True,
-                    text=True,
-                    creationflags=PlatformUtils.get_subprocess_flags(),
-                    startupinfo=startupinfo,
-                    check=False,
-                )
+        max_time = str(max(timeout, 6))
+        connect_timeout = str(min(timeout, 5))
 
-                if result.returncode == 0:
-                    code = result.stdout.strip()
-                    logger.info(f"Proxy check to {target_url} returned: {code}")
-                    if code in ["200", "204"]:
-                        return True
-                else:
-                    if attempt < retries - 1:
-                        logger.debug(f"Proxy check attempt {attempt + 1}/{retries} failed: {result.stderr}")
+        for url in targets:
+            cmd = [
+                curl_path,
+                "-x",
+                f"socks5h://127.0.0.1:{port}",
+                url,
+                "--connect-timeout",
+                connect_timeout,
+                "--max-time",
+                max_time,
+                "-s",
+                "-o",
+                os.devnull,
+                "-w",
+                "%{http_code}",
+            ]
+
+            for attempt in range(retries):
+                try:
+                    startupinfo = PlatformUtils.get_startupinfo()
+
+                    result = subprocess.run(
+                        cmd,
+                        capture_output=True,
+                        text=True,
+                        creationflags=PlatformUtils.get_subprocess_flags(),
+                        startupinfo=startupinfo,
+                        check=False,
+                    )
+
+                    if result.returncode == 0:
+                        code = result.stdout.strip()
+                        logger.info(f"Proxy check to {url} returned: {code}")
+                        # Any valid HTTP status code (2xx, 3xx, 4xx, 5xx) proves the proxy tunnel is intact
+                        if code.isdigit() and int(code) > 0:
+                            return True
                     else:
-                        logger.warning(f"Proxy check curl failed after {retries} attempts: {result.stderr}")
+                        logger.debug(f"Proxy check to {url} attempt {attempt + 1}/{retries} failed: {result.stderr}")
 
-                # Brief delay between retries
-                if attempt < retries - 1:
-                    import time
+                    if attempt < retries - 1:
+                        import time
 
-                    time.sleep(0.5)
+                        time.sleep(0.5)
 
-            except Exception as e:
-                if attempt < retries - 1:
-                    logger.debug(f"Proxy check attempt {attempt + 1}/{retries} error: {e}")
-                    import time
+                except Exception as e:
+                    logger.debug(f"Proxy check error to {url}: {e}")
+                    if attempt < retries - 1:
+                        import time
 
-                    time.sleep(0.5)
-                else:
-                    logger.error(f"Proxy connectivity check error after {retries} attempts: {e}")
+                        time.sleep(0.5)
 
         return False
 
