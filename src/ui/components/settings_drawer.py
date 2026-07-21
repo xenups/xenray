@@ -84,145 +84,149 @@ class SettingsDrawer(ft.NavigationDrawer):
             toast_callback=self._show_toast,
         )
 
-        # Build UI
-        # Glass container wrapping all content
+        # Version text refs — populated lazily in background to avoid
+        # blocking subprocess calls (xray -version / sing-box version) at init time.
+        self._xray_version_text = ft.Text(
+            "Xray: v...",
+            size=11,
+            color=ft.Colors.OUTLINE,
+        )
+        self._singbox_version_text = ft.Text(
+            "Sing-box: v...",
+            size=11,
+            color=ft.Colors.OUTLINE,
+        )
+
+        # Build UI — glass container wrapping all content
+        settings_content = ft.Column(
+            [
+                # Top Bar with Back Button
+                ft.Container(
+                    content=ft.Row(
+                        [
+                            ft.IconButton(
+                                ft.Icons.ARROW_BACK,
+                                on_click=self._close_drawer,
+                            ),
+                            ft.Text(
+                                t("settings.title"),
+                                size=20,
+                                weight=ft.FontWeight.BOLD,
+                            ),
+                        ],
+                    ),
+                    padding=20,
+                ),
+                ft.Divider(height=1, color=ft.Colors.OUTLINE_VARIANT, opacity=0.2),
+                # Scrollable content including version footer
+                ft.Column(
+                    [
+                        # Connection Section
+                        SettingsSection(
+                            t("settings.connection"),
+                            [
+                                self._mode_switch_row,
+                                self._port_row,
+                                self._country_row,
+                            ],
+                        ),
+                        ft.Divider(
+                            height=1,
+                            color=ft.Colors.OUTLINE_VARIANT,
+                            opacity=0.2,
+                        ),
+                        ft.Container(height=10),
+                        # App Settings
+                        SettingsSection(
+                            t("settings.application"),
+                            [
+                                self._startup_row,
+                                self._auto_reconnect_row,
+                                SettingsListTile(
+                                    ft.Icons.ROUTE,
+                                    t("settings.routing_rules"),
+                                    t("settings.routing_description"),
+                                    on_click=self._open_routing_manager,
+                                ),
+                                SettingsListTile(
+                                    ft.Icons.DNS,
+                                    t("settings.dns_manager"),
+                                    t("settings.dns_description"),
+                                    on_click=self._open_dns_manager,
+                                ),
+                                SettingsListTile(
+                                    ft.Icons.RESTART_ALT,
+                                    t("settings.reset_close_choice"),
+                                    t("settings.reset_close_choice_desc"),
+                                    on_click=self._reset_close_preference,
+                                ),
+                            ],
+                        ),
+                        ft.Divider(
+                            height=1,
+                            color=ft.Colors.OUTLINE_VARIANT,
+                            opacity=0.2,
+                        ),
+                        ft.Container(height=10),
+                        # System Section
+                        SettingsSection(
+                            t("settings.system"),
+                            [
+                                SettingsListTile(
+                                    ft.Icons.UPGRADE,
+                                    t("settings.check_app_updates"),
+                                    t("settings.app_update_description"),
+                                    on_click=self._check_app_updates,
+                                ),
+                                SettingsListTile(
+                                    ft.Icons.SYSTEM_UPDATE_ALT,
+                                    t("settings.check_updates"),
+                                    t("settings.update_xray"),
+                                    on_click=lambda e: self._on_installer_run("xray"),
+                                ),
+                                SettingsListTile(
+                                    ft.Icons.INFO_OUTLINE,
+                                    t("settings.about"),
+                                    f"v{APP_VERSION} by Xenups",
+                                    show_chevron=False,
+                                ),
+                                self._language_row,
+                            ],
+                        ),
+                        # Version Footer inside scrollable area
+                        ft.Container(
+                            content=ft.Row(
+                                [
+                                    self._xray_version_text,
+                                    ft.Container(
+                                        width=1,
+                                        height=10,
+                                        bgcolor=ft.Colors.OUTLINE_VARIANT,
+                                    ),
+                                    self._singbox_version_text,
+                                ],
+                                spacing=10,
+                                alignment=ft.MainAxisAlignment.CENTER,
+                            ),
+                            alignment=ft.Alignment.CENTER,
+                            padding=20,
+                        ),
+                    ],
+                    scroll=ft.ScrollMode.HIDDEN,
+                    expand=True,
+                    spacing=0,
+                ),
+            ],
+            spacing=0,
+        )
+
         glass_content = ft.Container(
-            content=ft.Column(
-                [
-                    # Top Bar with Back Button
-                    ft.Container(
-                        content=ft.Row(
-                            [
-                                ft.IconButton(
-                                    ft.Icons.ARROW_BACK,
-                                    on_click=self._close_drawer,
-                                ),
-                                ft.Text(
-                                    t("settings.title"),
-                                    size=20,
-                                    weight=ft.FontWeight.BOLD,
-                                ),
-                            ],
-                        ),
-                        padding=20,
-                    ),
-                    ft.Divider(height=1, color=ft.Colors.OUTLINE_VARIANT, opacity=0.2),
-                    # Content
-                    ft.Container(
-                        content=ft.Column(
-                            [
-                                # Connection Section
-                                SettingsSection(
-                                    t("settings.connection"),
-                                    [
-                                        self._mode_switch_row,
-                                        self._port_row,
-                                        self._country_row,
-                                    ],
-                                ),
-                                ft.Divider(
-                                    height=1,
-                                    color=ft.Colors.OUTLINE_VARIANT,
-                                    opacity=0.2,
-                                ),
-                                ft.Container(height=10),
-                                # App Settings
-                                SettingsSection(
-                                    t("settings.application"),
-                                    [
-                                        self._startup_row,
-                                        self._auto_reconnect_row,
-                                        SettingsListTile(
-                                            ft.Icons.ROUTE,
-                                            t("settings.routing_rules"),
-                                            t("settings.routing_description"),
-                                            on_click=self._open_routing_manager,
-                                        ),
-                                        SettingsListTile(
-                                            ft.Icons.DNS,
-                                            t("settings.dns_manager"),
-                                            t("settings.dns_description"),
-                                            on_click=self._open_dns_manager,
-                                        ),
-                                        SettingsListTile(
-                                            ft.Icons.RESTART_ALT,
-                                            t("settings.reset_close_choice"),
-                                            t("settings.reset_close_choice_desc"),
-                                            on_click=self._reset_close_preference,
-                                        ),
-                                    ],
-                                ),
-                                ft.Divider(
-                                    height=1,
-                                    color=ft.Colors.OUTLINE_VARIANT,
-                                    opacity=0.2,
-                                ),
-                                ft.Container(height=10),
-                                # System Section
-                                SettingsSection(
-                                    t("settings.system"),
-                                    [
-                                        SettingsListTile(
-                                            ft.Icons.UPGRADE,
-                                            t("settings.check_app_updates"),
-                                            t("settings.app_update_description"),
-                                            on_click=self._check_app_updates,
-                                        ),
-                                        SettingsListTile(
-                                            ft.Icons.SYSTEM_UPDATE_ALT,
-                                            t("settings.check_updates"),
-                                            t("settings.update_xray"),
-                                            on_click=lambda e: self._on_installer_run("xray"),
-                                        ),
-                                        SettingsListTile(
-                                            ft.Icons.INFO_OUTLINE,
-                                            t("settings.about"),
-                                            f"v{APP_VERSION} by Xenups",
-                                            show_chevron=False,
-                                        ),
-                                        self._language_row,
-                                    ],
-                                ),
-                            ],
-                            scroll=ft.ScrollMode.HIDDEN,
-                        ),
-                        expand=True,
-                    ),
-                    # Version Footer
-                    ft.Container(
-                        content=ft.Row(
-                            [
-                                ft.Text(
-                                    f"Xray: v{XrayInstallerService.get_local_version() or 'ND'}",
-                                    size=11,
-                                    color=ft.Colors.OUTLINE,
-                                ),
-                                ft.Container(
-                                    width=1,
-                                    height=10,
-                                    bgcolor=ft.Colors.OUTLINE_VARIANT,
-                                ),
-                                ft.Text(
-                                    f"Sing-box: v{SingboxService().get_version() or 'ND'}",
-                                    size=11,
-                                    color=ft.Colors.OUTLINE,
-                                ),
-                            ],
-                            spacing=10,
-                            alignment=ft.MainAxisAlignment.CENTER,
-                        ),
-                        alignment=ft.Alignment.CENTER,
-                        padding=20,
-                    ),
-                ],
-                spacing=0,
-            ),
+            content=settings_content,
             bgcolor=ft.Colors.with_opacity(0.7, "#0f172a"),
             blur=ft.Blur(20, 20, ft.BlurTileMode.MIRROR),
             expand=True,
         )
 
-        # Wrap in container to control width
         drawer_container = ft.Container(
             content=glass_content,
             width=320,
@@ -232,7 +236,50 @@ class SettingsDrawer(ft.NavigationDrawer):
             controls=[drawer_container],
             bgcolor=ft.Colors.TRANSPARENT,
             shadow_color=ft.Colors.TRANSPARENT,
+            on_change=self._on_drawer_change,
         )
+
+        # Start version refresh in background so texts populate when drawer opens
+        threading.Thread(target=self._refresh_versions, daemon=True).start()
+
+    # ------------------------------------------------------------------
+    # Version refresh (lazy, non-blocking)
+    # ------------------------------------------------------------------
+    def _on_drawer_change(self, e=None):
+        """Fired when the drawer opens/closes — refresh versions."""
+        threading.Thread(target=self._refresh_versions, daemon=True).start()
+
+    def _refresh_versions(self):
+        """Read installed binary versions in a background thread and update UI."""
+        try:
+            xray_ver = XrayInstallerService.get_local_version() or "ND"
+        except Exception:
+            xray_ver = "ND"
+        try:
+            singbox_ver = SingboxService().get_version() or "ND"
+        except Exception:
+            singbox_ver = "ND"
+
+        new_xray = f"Xray: v{xray_ver}"
+        new_sb = f"Sing-box: v{singbox_ver}"
+
+        # Only update UI if values changed (avoids unnecessary repaints)
+        changed = False
+        if self._xray_version_text.value != new_xray:
+            self._xray_version_text.value = new_xray
+            changed = True
+        if self._singbox_version_text.value != new_sb:
+            self._singbox_version_text.value = new_sb
+            changed = True
+
+        if changed:
+            try:
+                if self._xray_version_text.page:
+                    self._xray_version_text.update()
+                if self._singbox_version_text.page:
+                    self._singbox_version_text.update()
+            except Exception:
+                pass
 
     def _close_drawer(self, e=None):
         """Close this settings drawer."""
@@ -402,7 +449,7 @@ class SettingsDrawer(ft.NavigationDrawer):
                     page.pop_dialog()
                 except Exception:
                     pass
-            self._run_update_process(page)
+            self._run_update_process(page, latest)
 
         dlg = ft.AlertDialog(
             modal=True,
@@ -416,7 +463,7 @@ class SettingsDrawer(ft.NavigationDrawer):
         )
         page.show_dialog(dlg)
 
-    def _run_update_process(self, page):
+    def _run_update_process(self, page, latest_version: str):
         """Run the update process with progress dialog."""
         progress_ring = ft.ProgressRing(width=16, height=16, stroke_width=2)
         status_text = ft.Text(t("update.starting"), size=12)
@@ -452,6 +499,7 @@ class SettingsDrawer(ft.NavigationDrawer):
             success = XrayInstallerService.install(
                 progress_callback=on_progress,
                 stop_service_callback=stop_service,
+                target_version=latest_version,
             )
 
             if page is not None:
@@ -461,6 +509,8 @@ class SettingsDrawer(ft.NavigationDrawer):
                     pass
             if success:
                 self._show_toast(t("update.success"), "success")
+                # Refresh version footer after successful update
+                threading.Thread(target=self._refresh_versions, daemon=True).start()
             else:
                 self._show_toast(t("update.failed"), "error")
             page.update()
@@ -470,15 +520,15 @@ class SettingsDrawer(ft.NavigationDrawer):
     def _on_subpage_back(self, e):
         """Handle navigation back from subpage."""
         self._navigate_back()
-        self.open = True
-        self.page.update()
+        if self.page:
+            self.page.run_task(self.page.show_end_drawer)
 
     def _open_routing_manager(self, e):
         """Open the routing rules page."""
         from src.ui.pages.routing_page import RoutingPage
 
-        self.open = False
-        self.update()
+        if self.page:
+            self.page.run_task(self.page.close_end_drawer)
         routing_page = RoutingPage(self._app_context, on_back=self._on_subpage_back)
         self._navigate_to(routing_page)
 
@@ -486,8 +536,8 @@ class SettingsDrawer(ft.NavigationDrawer):
         """Open the DNS settings page."""
         from src.ui.pages.dns_page import DNSPage
 
-        self.open = False
-        self.update()
+        if self.page:
+            self.page.run_task(self.page.close_end_drawer)
         dns_page = DNSPage(self._app_context, on_back=self._on_subpage_back)
         self._navigate_to(dns_page)
 

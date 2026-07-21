@@ -346,9 +346,10 @@ class MainWindow:
         self._server_card.update_server(profile)
         if self._server_sheet:
             try:
-                if self._server_sheet.page is not None:
-                    self._page.pop_dialog()
-            except RuntimeError:
+                if self._server_sheet.open:
+                    self._server_sheet.open = False
+                    self._server_sheet.update()
+            except Exception:
                 pass
         self._page.update()
 

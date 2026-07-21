@@ -87,6 +87,14 @@ class DrawerManager:
         self._main._page.end_drawer = self._main._logs_drawer_component
         self._main._page.update()
 
+        # Pre-add the BottomSheet to page.overlay with open=False.
+        # This avoids the show_dialog() pattern which appends to _dialogs and
+        # calls _dialogs.update() on every open — a page-level repaint that
+        # causes the visible flicker. With the sheet already in the overlay,
+        # opening it only requires setting open=True + sheet.update().
+        self._main._page.overlay.append(self._main._server_sheet)
+        self._main._page.update()
+
         # Load last selected profile
         self._load_last_profile()
 
@@ -102,22 +110,19 @@ class DrawerManager:
                     break
 
     def _close_server_sheet(self):
-        """Close the server list bottom sheet."""
+        """Close the server list bottom sheet (no pop_dialog needed — overlay toggle)."""
         if self._main._server_sheet:
             try:
-                _attached = self._main._server_sheet.page is not None
-            except RuntimeError:
-                _attached = False
-            if _attached:
-                try:
-                    self._main._page.pop_dialog()
-                except Exception:
-                    pass
+                self._main._server_sheet.open = False
+                self._main._server_sheet.update()
+            except Exception:
+                pass
 
     def open_server_drawer(self, e=None):
-        """Open the server list bottom sheet."""
+        """Open the server list bottom sheet (flicker-free via overlay toggle)."""
         if self._main._server_sheet:
-            self._main._page.show_dialog(self._main._server_sheet)
+            self._main._server_sheet.open = True
+            self._main._server_sheet.update()
             self._safe_update_server_list()
 
     async def open_logs_drawer(self, e=None):

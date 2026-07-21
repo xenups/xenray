@@ -12,7 +12,7 @@ _project_root = Path(__file__).parent.parent.parent
 load_dotenv(_project_root / ".env")
 
 # Application version from environment
-APP_VERSION = os.getenv("APP_VERSION", "0.1.16-alpha")
+APP_VERSION = os.getenv("APP_VERSION", "0.1.17-alpha")
 
 # Window dimensions
 WINDOW_WIDTH = 420
