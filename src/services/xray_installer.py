@@ -1,6 +1,5 @@
 """Xray Installer Service."""
 import os
-import shutil
 import subprocess
 import tempfile
 import zipfile
