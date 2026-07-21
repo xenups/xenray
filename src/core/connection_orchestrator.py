@@ -1,7 +1,6 @@
 """Connection Orchestrator - Coordinates connection workflow."""
 
 import json
-import os
 from typing import Optional
 
 from loguru import logger
