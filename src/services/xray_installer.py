@@ -13,11 +13,11 @@ from src.core.constants import BIN_DIR, XRAY_EXECUTABLE, XRAY_VERSION
 from src.utils.platform_utils import PlatformUtils
 
 # Constants
-CONNECT_TIMEOUT = 15.0       # seconds to establish connection
-READ_TIMEOUT = 60.0          # seconds between data chunks (prevents infinite stall)
-CHUNK_SIZE = 65536           # 64 KB read chunks for streaming download
-MIN_FILE_SIZE = 1024         # bytes — minimum expected file size
-MAX_RETRIES = 3              # number of download attempts before giving up
+CONNECT_TIMEOUT = 15.0  # seconds to establish connection
+READ_TIMEOUT = 60.0  # seconds between data chunks (prevents infinite stall)
+CHUNK_SIZE = 65536  # 64 KB read chunks for streaming download
+MIN_FILE_SIZE = 1024  # bytes — minimum expected file size
+MAX_RETRIES = 3  # number of download attempts before giving up
 
 
 class XrayInstallerService:
