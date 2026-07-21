@@ -120,7 +120,9 @@ class ConnectionTester:
                     s = socket.create_connection(("127.0.0.1", socks_port), timeout=CONNECT_TIMEOUT)
                     s.close()
                     latency = int((time.time() - start_time) * 1000)
-                    logger.info(f"[ConnectionTester] SOCKS proxy port reachable at 127.0.0.1:{socks_port} ({latency}ms)")
+                    logger.info(
+                        f"[ConnectionTester] SOCKS proxy port reachable at 127.0.0.1:{socks_port} ({latency}ms)"
+                    )
                     return (True, t("connection.latency_ms", value=latency), None)
                 except Exception as e:
                     if attempt < max_retries - 1:

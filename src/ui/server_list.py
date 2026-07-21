@@ -381,8 +381,10 @@ class ServerList(ft.Container):
 
     def _on_all_latency_tests_complete(self):
         """Called when all latency tests are done."""
-        if self._page:
-            self._ui(lambda: self._page.update())
+        if self._active_subscription:
+            self._ui(lambda: self._enter_subscription_view(self._active_subscription, preserve_tests=True))
+        else:
+            self._load_profiles(update_ui=True)
 
     def update_item_icon(self, profile_id: str, country_code: str):
         """Update the icon for a specific profile (called from MainWindow)."""
