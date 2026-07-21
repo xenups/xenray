@@ -23,12 +23,16 @@ class AdminRestartDialog(ft.AlertDialog):
         )
 
     def _close_dlg(self, e):
-        self.open = False
-        if self.page:
-            self.page.update()
+        if self.page is not None:
+            try:
+                self.page.pop_dialog()
+            except Exception:
+                pass
 
     def _confirm_restart(self, e):
-        self.open = False
-        if self.page:
-            self.page.update()
+        if self.page is not None:
+            try:
+                self.page.pop_dialog()
+            except Exception:
+                pass
         self._on_restart_callback()

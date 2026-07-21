@@ -42,7 +42,7 @@ class Toast(ft.Container):
             bgcolor=ft.Colors.with_opacity(0.08, ft.Colors.SURFACE),  # More transparent
             blur=30,  # More blur
             border_radius=10,
-            padding=ft.padding.symmetric(horizontal=16, vertical=10),
+            padding=ft.Padding.symmetric(horizontal=16, vertical=10),
             shadow=ft.BoxShadow(
                 spread_radius=0,
                 blur_radius=8,
@@ -77,7 +77,7 @@ class ToastManager:
             top=75,  # Position higher - above connect button with margin from header
             left=0,
             right=0,
-            alignment=ft.alignment.top_center,
+            alignment=ft.Alignment.TOP_CENTER,
         )
 
         # Add to overlay

@@ -25,7 +25,7 @@ class SettingsSection(ft.Container):
                     *controls,
                 ]
             ),
-            padding=ft.padding.symmetric(horizontal=padding_horizontal),
+            padding=ft.Padding.symmetric(horizontal=padding_horizontal),
         )
 
 
@@ -196,7 +196,7 @@ class PortInputRow(ft.Container):
                 alignment=ft.MainAxisAlignment.START,
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
             ),
-            padding=ft.padding.symmetric(horizontal=10, vertical=8),
+            padding=ft.Padding.symmetric(horizontal=10, vertical=8),
         )
 
     @property
@@ -225,7 +225,7 @@ class CountryDropdownRow(ft.Container):
             ],
             border_color=ft.Colors.OUTLINE_VARIANT,
             focused_border_color=ft.Colors.PRIMARY,
-            on_change=on_change,
+            on_select=on_change,
         )
 
         super().__init__(
@@ -244,7 +244,7 @@ class CountryDropdownRow(ft.Container):
                 alignment=ft.MainAxisAlignment.START,
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
             ),
-            padding=ft.padding.symmetric(horizontal=8, vertical=8),
+            padding=ft.Padding.symmetric(horizontal=8, vertical=8),
         )
 
     @property
@@ -272,7 +272,7 @@ class LanguageDropdownRow(ft.Container):
             options=[ft.dropdown.Option(lang_code, f"{name}") for lang_code, flag_code, name in self._languages],
             border_color=ft.Colors.OUTLINE_VARIANT,
             focused_border_color=ft.Colors.PRIMARY,
-            on_change=on_change,
+            on_select=on_change,
         )
 
         # Get current flag code
@@ -286,7 +286,7 @@ class LanguageDropdownRow(ft.Container):
             src=f"/flags/{current_flag}.svg",
             width=24,
             height=18,
-            fit=ft.ImageFit.COVER,
+            fit=ft.BoxFit.COVER,
             border_radius=3,
             filter_quality=ft.FilterQuality.HIGH,
             anti_alias=True,
@@ -313,7 +313,7 @@ class LanguageDropdownRow(ft.Container):
                         [
                             ft.Container(
                                 content=self._flag_image,
-                                alignment=ft.alignment.center,
+                                alignment=ft.Alignment.CENTER,
                             ),
                             ft.Text(
                                 t("settings.language"),
@@ -332,7 +332,7 @@ class LanguageDropdownRow(ft.Container):
                 alignment=ft.MainAxisAlignment.START,
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
             ),
-            padding=ft.padding.symmetric(horizontal=10, vertical=8),
+            padding=ft.Padding.symmetric(horizontal=10, vertical=8),
         )
 
     @property

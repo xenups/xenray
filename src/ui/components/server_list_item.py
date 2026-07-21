@@ -73,7 +73,7 @@ class ServerListItem(ft.Container):
                 src=f"/flags/{country_code.lower()}.svg",
                 width=28,
                 height=28,
-                fit=ft.ImageFit.COVER,
+                fit=ft.BoxFit.COVER,
                 gapless_playback=True,
                 filter_quality=ft.FilterQuality.HIGH,
                 error_content=ft.Icon(ft.Icons.PUBLIC, size=28, color=ft.Colors.GREY_400),
@@ -87,13 +87,13 @@ class ServerListItem(ft.Container):
             border_radius=14,
             clip_behavior=ft.ClipBehavior.HARD_EDGE,
             content=flag_content,
-            alignment=ft.alignment.center,
+            alignment=ft.Alignment.CENTER,
         )
 
         # Actions Menu
         menu_items = [
             ft.PopupMenuItem(
-                text=t("server_list.share"),
+                content=t("server_list.share"),
                 icon=ft.Icons.SHARE_ROUNDED,
                 on_click=self._copy_config,
             ),
@@ -101,7 +101,7 @@ class ServerListItem(ft.Container):
         if not read_only and on_delete:
             menu_items.append(
                 ft.PopupMenuItem(
-                    text=t("server_list.delete"),
+                    content=t("server_list.delete"),
                     icon=ft.Icons.DELETE_OUTLINE_ROUNDED,
                     on_click=self._delete_item,
                 )
@@ -145,7 +145,7 @@ class ServerListItem(ft.Container):
 
         self.content = ft.Row(
             [
-                ft.Container(content=self.flag_img, padding=ft.padding.only(left=5)),
+                ft.Container(content=self.flag_img, padding=ft.Padding.only(left=5)),
                 middle_content,
                 ft.Column(
                     [self.latency_text],
@@ -156,12 +156,12 @@ class ServerListItem(ft.Container):
             ],
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
         )
-        self.padding = ft.padding.symmetric(horizontal=10, vertical=8)
+        self.padding = ft.Padding.symmetric(horizontal=10, vertical=8)
         self.bgcolor = "#121212"
         self.gradient = GradientHelper.get_flag_gradient(country_code)
-        self.border = ft.border.all(color=border_side.color, width=border_side.width)
+        self.border = ft.Border.all(color=border_side.color, width=border_side.width)
         self.border_radius = 8
-        self.margin = ft.margin.symmetric(horizontal=10)  # Added to reduce width
+        self.margin = ft.Margin.symmetric(horizontal=10)  # Added to reduce width
         self.on_click = lambda e: self._on_select(self._profile)
 
     def _get_ping_color(self, val):
@@ -222,7 +222,7 @@ class ServerListItem(ft.Container):
                 src=f"/flags/{code.lower()}.svg",
                 width=28,
                 height=28,
-                fit=ft.ImageFit.COVER,
+                fit=ft.BoxFit.COVER,
                 gapless_playback=True,
                 filter_quality=ft.FilterQuality.HIGH,
                 error_content=ft.Icon(ft.Icons.PUBLIC, size=28, color=ft.Colors.GREY_400),

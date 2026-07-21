@@ -96,8 +96,8 @@ class ChainListItem(ft.Container):
                     src=f"/flags/{exit_country_code.lower()}.svg",
                     width=28,
                     height=28,
-                    fit=ft.ImageFit.COVER,
-                    border_radius=ft.border_radius.all(14),
+                    fit=ft.BoxFit.COVER,
+                    border_radius=ft.BorderRadius.all(14),
                 ),
                 width=28,
                 height=28,
@@ -119,7 +119,7 @@ class ChainListItem(ft.Container):
         if self._on_edit:
             menu_items.append(
                 ft.PopupMenuItem(
-                    text=t("chain.edit_title"),
+                    content=t("chain.edit_title"),
                     icon=ft.Icons.EDIT,
                     on_click=lambda e: self._on_edit(self._chain),
                 )
@@ -127,7 +127,7 @@ class ChainListItem(ft.Container):
         if self._on_delete:
             menu_items.append(
                 ft.PopupMenuItem(
-                    text=t("server_list.delete"),
+                    content=t("server_list.delete"),
                     icon=ft.Icons.DELETE_OUTLINE_ROUNDED,
                     on_click=lambda e: self._on_delete(self._chain["id"]),
                 )
@@ -178,7 +178,7 @@ class ChainListItem(ft.Container):
         self._expanded_content = ft.Container(
             content=self._build_expanded_view(),
             visible=False,
-            padding=ft.padding.only(top=10, left=30),
+            padding=ft.Padding.only(top=10, left=30),
         )
 
         # Selection border
@@ -195,11 +195,11 @@ class ChainListItem(ft.Container):
         )
 
         # Container styling
-        self.padding = ft.padding.symmetric(horizontal=12, vertical=10)
+        self.padding = ft.Padding.symmetric(horizontal=12, vertical=10)
         self.bgcolor = "#1a1a2e" if self._is_valid else "#2a1a1a"
-        self.border = ft.border.all(border_width, border_color)
+        self.border = ft.Border.all(border_width, border_color)
         self.border_radius = 8
-        self.margin = ft.margin.symmetric(horizontal=10, vertical=2)
+        self.margin = ft.Margin.symmetric(horizontal=10, vertical=2)
 
         # Click handler (only if valid)
         if self._is_valid:
@@ -302,7 +302,7 @@ class ChainListItem(ft.Container):
             #                 size=14,
             #                 color=ft.Colors.ON_SURFACE_VARIANT,
             #             ),
-            #             padding=ft.padding.only(left=5, top=2, bottom=2),
+            #             padding=ft.Padding.only(left=5, top=2, bottom=2),
             #         )
             #     )
 

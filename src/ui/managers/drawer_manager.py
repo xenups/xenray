@@ -74,14 +74,18 @@ class DrawerManager:
         self._main._server_sheet = ft.BottomSheet(
             ft.Container(
                 content=self._main._server_list,
-                padding=ft.padding.only(top=20),
+                padding=ft.Padding.only(top=20),
                 expand=True,
             ),
             open=False,
             bgcolor=ft.Colors.TRANSPARENT,
             elevation=0,
-            enable_drag=True,
+            draggable=True,
         )
+
+        # Pre-initialize end_drawer so it's registered in the engine
+        self._main._page.end_drawer = self._main._logs_drawer_component
+        self._main._page.update()
 
         # Load last selected profile
         self._load_last_profile()
@@ -100,30 +104,35 @@ class DrawerManager:
     def _close_server_sheet(self):
         """Close the server list bottom sheet."""
         if self._main._server_sheet:
-            self._main._server_sheet.open = False
-            self._main._page.close(self._main._server_sheet)
+            try:
+                _attached = self._main._server_sheet.page is not None
+            except RuntimeError:
+                _attached = False
+            if _attached:
+                try:
+                    self._main._page.pop_dialog()
+                except Exception:
+                    pass
 
     def open_server_drawer(self, e=None):
         """Open the server list bottom sheet."""
         if self._main._server_sheet:
-            self._main._page.open(self._main._server_sheet)
+            self._main._page.show_dialog(self._main._server_sheet)
             self._safe_update_server_list()
 
-    def open_logs_drawer(self, e=None):
+    async def open_logs_drawer(self, e=None):
         """Open the logs drawer."""
         if self._main._page.end_drawer != self._main._logs_drawer_component:
             self._main._page.end_drawer = self._main._logs_drawer_component
-        self._main._logs_drawer_component.open = True
-        self._main._page.update()
+        await self._main._page.show_end_drawer()
         # Trigger immediate stats update so user doesn't wait 1.5s for the first reading
         self._main._network_stats_handler.update_ui_immediately()
 
-    def open_settings_drawer(self, e=None):
+    async def open_settings_drawer(self, e=None):
         """Open the settings drawer."""
         if self._main._page.end_drawer != self._main._settings_drawer:
             self._main._page.end_drawer = self._main._settings_drawer
-        self._main._settings_drawer.open = True
-        self._main._page.update()
+        await self._main._page.show_end_drawer()
 
     def _safe_update_server_list(self):
         """Wait for sheet to be mounted before updating list."""

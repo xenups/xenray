@@ -36,12 +36,10 @@ class ConnectionButton(ft.Container):
             width=170,
             height=170,
             border_radius=85,
-            bgcolor=ft.Colors.with_opacity(0.15, "#1e293b"),
-            blur=ft.Blur(25, 25, ft.BlurTileMode.MIRROR),
-            border=ft.border.all(1.5, ft.Colors.with_opacity(0.2, ft.Colors.WHITE)),
+            bgcolor="#1e293b",
+            border=ft.Border.all(1.5, ft.Colors.with_opacity(0.2, ft.Colors.WHITE)),
             on_click=on_click,
-            animate=ft.Animation(400, ft.AnimationCurve.EASE_OUT),
-            alignment=ft.alignment.center,
+            alignment=ft.Alignment.CENTER,
         )
 
         # Stack: glow behind, button on top
@@ -51,11 +49,11 @@ class ConnectionButton(ft.Container):
                     self._glow_layer,
                     self._button,
                 ],
-                alignment=ft.alignment.center,
+                alignment=ft.Alignment.CENTER,
             ),
             width=190,  # Match glow layer
             height=190,
-            alignment=ft.alignment.center,
+            alignment=ft.Alignment.CENTER,
         )
 
     def update_theme(self, is_dark: bool):
@@ -66,12 +64,15 @@ class ConnectionButton(ft.Container):
         # Keep it glassy regardless of theme, just adjust tint
         if is_dark:
             self._button.bgcolor = ft.Colors.with_opacity(0.15, "#1e293b")
-            self._button.border = ft.border.all(1.5, ft.Colors.with_opacity(0.2, ft.Colors.WHITE))
+            self._button.border = ft.Border.all(1.5, ft.Colors.with_opacity(0.2, ft.Colors.WHITE))
         else:
             self._button.bgcolor = ft.Colors.with_opacity(0.15, ft.Colors.WHITE)
-            self._button.border = ft.border.all(1.5, ft.Colors.with_opacity(0.3, ft.Colors.BLACK12))
+            self._button.border = ft.Border.all(1.5, ft.Colors.with_opacity(0.3, ft.Colors.BLACK12))
 
-        self._button.update()
+        try:
+            self._button.update()
+        except RuntimeError:
+            pass
 
     def set_connected(self):
         """Set button to connected state with subtle purple glass glow."""
@@ -81,7 +82,7 @@ class ConnectionButton(ft.Container):
 
         # Purple Glass Style for button
         self._button.bgcolor = ft.Colors.with_opacity(0.25, "#8b5cf6")
-        self._button.border = ft.border.all(2.5, ft.Colors.with_opacity(0.5, "#a78bfa"))
+        self._button.border = ft.Border.all(2.5, ft.Colors.with_opacity(0.5, "#a78bfa"))
         self._icon.color = ft.Colors.WHITE
         self._button.update()
 
@@ -100,12 +101,20 @@ class ConnectionButton(ft.Container):
 
         # Start a gentle idle breathing pulse for the connected state
         # This keeps the button "alive" even when waiting for first network stats
-        if self.page:
+        try:
+            _has_page = self.page is not None
+        except RuntimeError:
+            _has_page = False
+        if _has_page:
             import asyncio
 
             async def _connected_breath():
                 grow = True
-                while self._state == "connected" and self.page:
+                while self._state == "connected":
+                    try:
+                        _ = self.page
+                    except RuntimeError:
+                        break
                     try:
                         # Only pulse if network activity is low (idle breath)
                         # High activity will override with more dramatic expansion in update_network_activity
@@ -134,7 +143,7 @@ class ConnectionButton(ft.Container):
 
         # Revert button to standard glass
         self._button.bgcolor = ft.Colors.with_opacity(0.15, "#1e293b")
-        self._button.border = ft.border.all(1.5, ft.Colors.with_opacity(0.2, ft.Colors.WHITE))
+        self._button.border = ft.Border.all(1.5, ft.Colors.with_opacity(0.2, ft.Colors.WHITE))
         self._icon.color = ft.Colors.WHITE
         self._button.update()
 
@@ -155,7 +164,7 @@ class ConnectionButton(ft.Container):
 
         # Amber Glass Style for button
         self._button.bgcolor = ft.Colors.with_opacity(0.25, "#f59e0b")
-        self._button.border = ft.border.all(2.5, ft.Colors.with_opacity(0.5, "#fbbf24"))
+        self._button.border = ft.Border.all(2.5, ft.Colors.with_opacity(0.5, "#fbbf24"))
         self._icon.color = ft.Colors.WHITE
         self._button.update()
 
@@ -173,12 +182,20 @@ class ConnectionButton(ft.Container):
         self._glow_layer.update()
 
         # Start async pulse loop
-        if self.page:
+        try:
+            _has_page = self.page is not None
+        except RuntimeError:
+            _has_page = False
+        if _has_page:
             import asyncio
 
             async def _pulse_loop():
                 grow = True
-                while self._is_connecting and self.page:
+                while self._is_connecting:
+                    try:
+                        _ = self.page
+                    except RuntimeError:
+                        break
                     try:
                         if grow:
                             self._glow_layer.opacity = 0.8
@@ -203,7 +220,7 @@ class ConnectionButton(ft.Container):
 
         # Red Glass Style for button
         self._button.bgcolor = ft.Colors.with_opacity(0.25, ft.Colors.RED_700)
-        self._button.border = ft.border.all(2.5, ft.Colors.with_opacity(0.5, ft.Colors.RED_400))
+        self._button.border = ft.Border.all(2.5, ft.Colors.with_opacity(0.5, ft.Colors.RED_400))
         self._icon.color = ft.Colors.WHITE
         self._button.update()
 
@@ -221,12 +238,20 @@ class ConnectionButton(ft.Container):
         self._glow_layer.update()
 
         # Start async pulse loop
-        if self.page:
+        try:
+            _has_page = self.page is not None
+        except RuntimeError:
+            _has_page = False
+        if _has_page:
             import asyncio
 
             async def _disconnecting_pulse():
                 grow = True
-                while self._state == "disconnecting" and self.page:
+                while self._state == "disconnecting":
+                    try:
+                        _ = self.page
+                    except RuntimeError:
+                        break
                     try:
                         if grow:
                             self._glow_layer.opacity = 0.8

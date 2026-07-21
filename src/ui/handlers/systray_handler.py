@@ -39,6 +39,7 @@ class SystrayHandler:
 
     def setup(self, main_window: MainWindow):
         """Bind main window to the handler and initialize tray."""
+        logger.debug("[TRAY] setup() called — binding MainWindow")
         self._main = main_window
         if not self._icon:
             self._init_tray()
@@ -59,7 +60,9 @@ class SystrayHandler:
 
     def _init_tray(self):
         """Initialize and start the tray icon."""
+        logger.debug("[TRAY] _init_tray() — creating tray icon")
         if self._icon:
+            logger.debug("[TRAY] _init_tray() — icon already exists, skipping")
             return
 
         self._icon = pystray.Icon(
@@ -69,13 +72,14 @@ class SystrayHandler:
             menu=self._create_menu(),
         )
 
-        # Start tray in a separate thread or detached
         try:
             self._icon.run_detached()
+            logger.debug("[TRAY] _init_tray() — run_detached() succeeded")
         except Exception as e:
-            logger.warning(f"run_detached failed, falling back to thread: {e}")
+            logger.warning(f"[TRAY] run_detached failed, falling back to thread: {e}")
             self._tray_thread = threading.Thread(target=self._icon.run, daemon=True)
             self._tray_thread.start()
+            logger.debug("[TRAY] _init_tray() — tray thread started")
 
     def _create_menu(self) -> pystray.Menu:
         """Create the tray context menu."""
@@ -121,40 +125,27 @@ class SystrayHandler:
     # --- Callbacks ---
     def _on_open(self, icon, item):
         """Restore window callback."""
-
-        def _show():
-            try:
-                self._main._page.window.visible = True
-                self._main._page.window.skip_task_bar = False
-                self._main._page.window.to_front()
-                self._main._page.update()
-            except Exception as e:
-                logger.debug(f"Systray restore error: {e}")
-
-        try:
-            self._main._ui_helper.call(_show)
-        except Exception as e:
-            logger.debug(f"Systray _on_open error: {e}")
+        logger.debug("[TRAY_EVENT] _on_open() called")
+        if not self._main:
+            return
+        self._main._restore_from_tray()
 
     def _on_toggle_connect(self, icon, item):
         """Toggle connection callback."""
+        logger.debug("[TRAY_EVENT] _on_toggle_connect() called")
         try:
-            # We need to run this on the UI thread or a safe thread
             self._main._on_connect_clicked(None)
         except Exception as e:
-            logger.debug(f"Systray _on_toggle_connect error: {e}")
+            logger.debug(f"[TRAY_EVENT] _on_toggle_connect error: {e}")
 
     def _on_exit(self, icon, item):
         """Final exit callback."""
+        logger.debug("[TRAY_EVENT] _on_exit() called — user clicked Exit")
         try:
-            # This will trigger the full cleanup and exit logic
             icon.stop()
-
-            # We use the MainWindow's cleanup or call ProcessUtils
             from src.utils.process_utils import ProcessUtils
 
             try:
-                # First try graceful cleanup
                 self._main.cleanup()
             except Exception:
                 pass
@@ -162,5 +153,5 @@ class SystrayHandler:
             ProcessUtils.kill_process_tree()
             os._exit(0)
         except Exception as e:
-            logger.error(f"Systray exit error: {e}")
+            logger.error(f"[TRAY_EVENT] Systray exit error: {e}")
             os._exit(1)

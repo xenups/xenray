@@ -106,7 +106,7 @@ class ServerList(ft.Container):
             padding=5,
             bgcolor=ft.Colors.with_opacity(0.15, "#0f172a"),  # More transparent
             blur=ft.Blur(25, 25, ft.BlurTileMode.MIRROR),  # Higher blur
-            border_radius=ft.border_radius.only(top_left=20, top_right=20),
+            border_radius=ft.BorderRadius.only(top_left=20, top_right=20),
             expand=True,
         )
 
@@ -116,7 +116,12 @@ class ServerList(ft.Container):
         threading.Thread(target=self._wait_until_added_and_load, daemon=True).start()
 
     def _wait_until_added_and_load(self):
-        while not self._page or not self.page:
+        while not self._page:
+            try:
+                if self.page is not None:
+                    break
+            except RuntimeError:
+                pass
             time.sleep(0.05)
         self._load_profiles(update_ui=True)
 
@@ -128,6 +133,9 @@ class ServerList(ft.Container):
         async def _coro():
             try:
                 fn()
+            except RuntimeError as e:
+                if "added to the page first" not in str(e):
+                    logger.debug(f"UI update error: {e}")
             except Exception as e:
                 logger.debug(f"UI update error: {e}")
 
@@ -440,13 +448,21 @@ class ServerList(ft.Container):
     def _show_add_dialog(self, e=None):
         """Show the add server/subscription dialog."""
         if self._page:
-            self._page.open(self._add_dialog)
+            self._page.show_dialog(self._add_dialog)
             self._page.update()
 
     def _close_add_dialog(self):
         """Close the add dialog."""
         if self._page:
-            self._page.close(self._add_dialog)
+            try:
+                _attached = self._add_dialog.page is not None
+            except RuntimeError:
+                _attached = False
+            if _attached:
+                try:
+                    self._page.pop_dialog()
+                except Exception:
+                    pass
             self._page.update()
 
     def _handle_server_added(self, name: str, config: dict):

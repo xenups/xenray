@@ -23,7 +23,7 @@ class SubscriptionListItem(ft.Container):
         # --- Menu Items ---
         menu_items = [
             ft.PopupMenuItem(
-                text=t("server_list.copy_link"),
+                content=t("server_list.copy_link"),
                 icon=ft.Icons.LINK,
                 on_click=self._copy_link,
             ),
@@ -31,7 +31,7 @@ class SubscriptionListItem(ft.Container):
         if on_delete:
             menu_items.append(
                 ft.PopupMenuItem(
-                    text=t("server_list.delete"),
+                    content=t("server_list.delete"),
                     icon=ft.Icons.DELETE_OUTLINE_ROUNDED,
                     on_click=self._delete_item,
                 )
@@ -49,7 +49,7 @@ class SubscriptionListItem(ft.Container):
             [
                 ft.Container(
                     content=ft.Icon(ft.Icons.FOLDER_OPEN_ROUNDED, color=ft.Colors.BLUE_400, size=24),
-                    padding=ft.padding.only(left=5, right=10),
+                    padding=ft.Padding.only(left=5, right=10),
                 ),
                 ft.Column(
                     [
@@ -83,13 +83,13 @@ class SubscriptionListItem(ft.Container):
         self.bgcolor = "#121212"
         self.gradient = GradientHelper.get_flag_gradient(None)  # Default gradient
         self.border = (
-            ft.border.all(1, ft.Colors.OUTLINE_VARIANT)
+            ft.Border.all(1, ft.Colors.OUTLINE_VARIANT)
             if hasattr(ft.Colors, "OUTLINE_VARIANT")
-            else ft.border.all(1, ft.Colors.OUTLINE)
+            else ft.Border.all(1, ft.Colors.OUTLINE)
         )
         self.border_radius = 8
-        self.margin = ft.margin.symmetric(horizontal=10)  # Added to reduce width
-        self.padding = ft.padding.symmetric(horizontal=10, vertical=8)
+        self.margin = ft.Margin.symmetric(horizontal=10)  # Added to reduce width
+        self.padding = ft.Padding.symmetric(horizontal=10, vertical=8)
         self.on_click = lambda e: self._on_click(self._sub)
 
     def _copy_link(self, e):

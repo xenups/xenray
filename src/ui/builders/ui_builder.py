@@ -8,6 +8,8 @@ import flet as ft
 from src.ui.components.connection_button import ConnectionButton
 from src.ui.components.header import Header
 from src.ui.components.server_card import ServerCard
+from src.core.constants import WINDOW_HEIGHT, WINDOW_WIDTH
+from src.ui.theme import AppColors
 from src.ui.components.status_display import StatusDisplay
 
 if TYPE_CHECKING:
@@ -60,11 +62,16 @@ class UIBuilder:
             expand=True,
         )
 
-        # Background
+        # Background — rich dark gradient
         self._main._background = ft.Container(
-            image=ft.DecorationImage(
-                src="earth_horizon.png",
-                fit=ft.ImageFit.COVER,
+            gradient=ft.LinearGradient(
+                begin=ft.Alignment.TOP_LEFT,
+                end=ft.Alignment.BOTTOM_RIGHT,
+                colors=[
+                    AppColors.BACKGROUND_GRADIENT_START,
+                    AppColors.BACKGROUND_GRADIENT_CENTER,
+                    AppColors.BACKGROUND_GRADIENT_END,
+                ],
             ),
             expand=True,
         )
@@ -72,7 +79,7 @@ class UIBuilder:
         # Horizon glow overlay
         self._main._earth_glow = ft.Container(
             gradient=ft.RadialGradient(
-                center=ft.alignment.bottom_center,
+                center=ft.Alignment.BOTTOM_CENTER,
                 radius=1.2,
                 colors=[
                     ft.Colors.with_opacity(0.0, ft.Colors.TRANSPARENT),
@@ -86,17 +93,18 @@ class UIBuilder:
             right=0,
             opacity=0.0,
             animate_opacity=500,
-            animate=ft.Animation(800, ft.AnimationCurve.EASE_IN_OUT),  # Smooth gradient transitions
         )
 
-        # Main content
+        # Main content — subtle glass panel
         self._main._main_content = ft.Container(
             content=self._main._view_switcher,
+            bgcolor=ft.Colors.with_opacity(AppColors.GLASS_BG_OPACITY, ft.Colors.WHITE),
+            border=ft.Border.all(0.5, ft.Colors.with_opacity(AppColors.GLASS_BORDER, ft.Colors.WHITE)),
             padding=0,
             expand=True,
         )
 
-        # Stack all layers
+        # Stack all layers — fills the native window frame naturally
         self._main._stack = ft.Stack(
             controls=[
                 self._main._background,
@@ -106,14 +114,12 @@ class UIBuilder:
             expand=True,
         )
 
-        # Add to page
-        self._main._page.add(self._main._stack)
+        # page.add() is called ONCE from main.py — not here
 
         # Force dark theme
         self._main._page.theme_mode = ft.ThemeMode.DARK
         self._main._connection_button.update_theme(True)
         self._main._server_card.update_theme(True)
 
-        # Show window
-        self._main._page.window.visible = True
+        # Window stays hidden — main() will reveal it after full init
         self._main._page.update()

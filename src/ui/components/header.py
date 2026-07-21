@@ -31,6 +31,6 @@ class Header(ft.Container):
 
         super().__init__(
             content=content,
-            padding=ft.padding.symmetric(horizontal=20, vertical=20),
+            padding=ft.Padding.symmetric(horizontal=20, vertical=20),
             # Fully transparent - no background, part of main window
         )

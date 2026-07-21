@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "xenray"
-version = "0.1.10-alpha"
+version = "0.1.14-alpha"
 description = "An Xray GUI for Linux/Windows, focusing on simplicity and enhancing VPN experience"
 authors = ["Xenups"]
 license = "AGPL-3.0-or-later"
@@ -15,7 +15,7 @@ loguru = "^0.7.3"
 pystray = "^0.19.5"
 Pillow = "^10.0.0"
 cryptography = "^46.0.3"
-flet-desktop = "^0.28.3"
+flet = "==0.86.1"
 pycountry = "^24.6.1"
 msgpack = "^1.1.2"
 zstandard = "^0.25.0"

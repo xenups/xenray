@@ -43,8 +43,8 @@ class RoutingPage(ft.Container):
                 ],
                 spacing=12,
             ),
-            padding=ft.padding.symmetric(horizontal=15, vertical=12),
-            border=ft.border.only(bottom=ft.border.BorderSide(1, ft.Colors.OUTLINE_VARIANT)),
+            padding=ft.Padding.symmetric(horizontal=15, vertical=12),
+            border=ft.Border.only(bottom=ft.border.BorderSide(1, ft.Colors.OUTLINE_VARIANT)),
         )
 
     def _on_toggle_change(self, key: str, value: bool):
@@ -72,7 +72,7 @@ class RoutingPage(ft.Container):
                 ],
                 spacing=10,
             ),
-            padding=ft.padding.symmetric(horizontal=10, vertical=10),
+            padding=ft.Padding.symmetric(horizontal=10, vertical=10),
             bgcolor=ft.Colors.with_opacity(0.2, "#1e293b"),
             blur=ft.Blur(10, 10, ft.BlurTileMode.MIRROR),
         )
@@ -108,7 +108,7 @@ class RoutingPage(ft.Container):
                 ],
                 spacing=0,
             ),
-            padding=ft.padding.symmetric(horizontal=10, vertical=10),
+            padding=ft.Padding.symmetric(horizontal=10, vertical=10),
             expand=True,
         )
 
@@ -148,7 +148,7 @@ class RoutingPage(ft.Container):
                 shape=ft.RoundedRectangleBorder(radius=8),
                 color=ft.Colors.ON_PRIMARY,
                 bgcolor=ft.Colors.PRIMARY,
-                padding=ft.padding.symmetric(horizontal=20),
+                padding=ft.Padding.symmetric(horizontal=20),
             ),
             on_click=self._add_rule,
             height=40,
@@ -156,7 +156,7 @@ class RoutingPage(ft.Container):
 
         self._input_container = ft.Container(
             content=ft.Row([self._input, add_btn], spacing=10),
-            padding=ft.padding.symmetric(horizontal=20, vertical=10),
+            padding=ft.Padding.symmetric(horizontal=20, vertical=10),
             visible=False,  # Hidden by default (Quick Settings tab)
         )
 
@@ -164,7 +164,7 @@ class RoutingPage(ft.Container):
         self._list_view = ft.ListView(
             expand=True,
             spacing=2,
-            padding=ft.padding.symmetric(horizontal=20, vertical=0),
+            padding=ft.Padding.symmetric(horizontal=20, vertical=0),
         )
 
         self._list_container = ft.Container(
@@ -238,7 +238,7 @@ class RoutingPage(ft.Container):
                         ],
                         horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                     ),
-                    alignment=ft.alignment.center,
+                    alignment=ft.Alignment.CENTER,
                     padding=50,
                     opacity=0.5,
                 )
@@ -260,8 +260,8 @@ class RoutingPage(ft.Container):
                         ],
                         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                     ),
-                    padding=ft.padding.symmetric(horizontal=10, vertical=5),
-                    border=ft.border.only(bottom=ft.border.BorderSide(1, ft.Colors.OUTLINE_VARIANT)),
+                    padding=ft.Padding.symmetric(horizontal=10, vertical=5),
+                    border=ft.Border.only(bottom=ft.border.BorderSide(1, ft.Colors.OUTLINE_VARIANT)),
                 )
             )
 
