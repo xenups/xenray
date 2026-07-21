@@ -11,7 +11,7 @@ class RoutingPage(ft.Container):
         self._on_back = on_back
         self._rules = self._app_context.routing.load_rules()
         self._toggles = self._app_context.routing.load_toggles()
-        self._current_tab = "direct"
+        self._current_tab = "quick"
 
         super().__init__(
             expand=True,
@@ -112,117 +112,111 @@ class RoutingPage(ft.Container):
             expand=True,
         )
 
-        # Tabs - now with 4 tabs including Quick Settings
+        # Build per-tab content for rule management tabs
+        tab_keys = ["direct", "proxy", "block"]
+        self._rule_tabs = {}
+        tab_contents: list[ft.Control] = [self._quick_settings_view]
+
+        for tab_key in tab_keys:
+            input_field = ft.TextField(
+                label=t("routing.domain_or_ip"),
+                hint_text=t("routing.hint"),
+                expand=True,
+                text_size=14,
+                height=40,
+                content_padding=10,
+                border_radius=8,
+            )
+            input_field.on_submit = lambda e, k=tab_key, inp=input_field: self._add_rule(k, inp)
+            add_btn = ft.ElevatedButton(
+                t("routing.add"),
+                icon=ft.Icons.ADD,
+                style=ft.ButtonStyle(
+                    shape=ft.RoundedRectangleBorder(radius=8),
+                    color=ft.Colors.ON_PRIMARY,
+                    bgcolor=ft.Colors.PRIMARY,
+                    padding=ft.Padding.symmetric(horizontal=20),
+                ),
+                on_click=lambda e, k=tab_key, inp=input_field: self._add_rule(k, inp),
+                height=40,
+            )
+            list_view = ft.ListView(
+                expand=True,
+                spacing=2,
+                padding=ft.Padding.symmetric(horizontal=20, vertical=0),
+            )
+
+            self._rule_tabs[tab_key] = {
+                "input": input_field,
+                "list_view": list_view,
+            }
+
+            tab_contents.append(
+                ft.Column(
+                    [
+                        ft.Container(
+                            content=ft.Row([input_field, add_btn], spacing=10),
+                            padding=ft.Padding.symmetric(horizontal=20, vertical=10),
+                        ),
+                        ft.Divider(height=1, color=ft.Colors.OUTLINE_VARIANT, opacity=0.5),
+                        list_view,
+                    ],
+                    spacing=0,
+                    expand=True,
+                )
+            )
+
+        # Tabs
         self._tabs = ft.Tabs(
+            length=4,
             selected_index=0,
             animation_duration=300,
             on_change=self._on_tab_change,
-            tabs=[
-                ft.Tab(text=t("routing.quick_settings"), icon=ft.Icons.TUNE),
-                ft.Tab(text=t("routing.direct"), icon=ft.Icons.DIRECTIONS),
-                ft.Tab(text=t("routing.proxy"), icon=ft.Icons.VPN_LOCK),
-                ft.Tab(text=t("routing.block"), icon=ft.Icons.BLOCK),
-            ],
-            divider_color=ft.Colors.TRANSPARENT,
-            indicator_color=ft.Colors.PRIMARY,
-            label_color=ft.Colors.PRIMARY,
-            unselected_label_color=ft.Colors.ON_SURFACE_VARIANT,
-        )
-
-        # Input Area (hidden for Quick Settings tab)
-        self._input = ft.TextField(
-            label=t("routing.domain_or_ip"),
-            hint_text=t("routing.hint"),
-            expand=True,
-            text_size=14,
-            height=40,
-            content_padding=10,
-            border_radius=8,
-            on_submit=self._add_rule,
-        )
-
-        add_btn = ft.ElevatedButton(
-            t("routing.add"),
-            icon=ft.Icons.ADD,
-            style=ft.ButtonStyle(
-                shape=ft.RoundedRectangleBorder(radius=8),
-                color=ft.Colors.ON_PRIMARY,
-                bgcolor=ft.Colors.PRIMARY,
-                padding=ft.Padding.symmetric(horizontal=20),
+            content=ft.Column(
+                expand=True,
+                spacing=0,
+                controls=[
+                    ft.TabBar(
+                        tabs=[
+                            ft.Tab(label=t("routing.quick_settings"), icon=ft.Icons.TUNE),
+                            ft.Tab(label=t("routing.direct"), icon=ft.Icons.DIRECTIONS),
+                            ft.Tab(label=t("routing.proxy"), icon=ft.Icons.VPN_LOCK),
+                            ft.Tab(label=t("routing.block"), icon=ft.Icons.BLOCK),
+                        ],
+                        divider_color=ft.Colors.TRANSPARENT,
+                        indicator_color=ft.Colors.PRIMARY,
+                        label_color=ft.Colors.PRIMARY,
+                        unselected_label_color=ft.Colors.ON_SURFACE_VARIANT,
+                    ),
+                    ft.TabBarView(
+                        expand=True,
+                        controls=tab_contents,
+                    ),
+                ],
             ),
-            on_click=self._add_rule,
-            height=40,
-        )
-
-        self._input_container = ft.Container(
-            content=ft.Row([self._input, add_btn], spacing=10),
-            padding=ft.Padding.symmetric(horizontal=20, vertical=10),
-            visible=False,  # Hidden by default (Quick Settings tab)
-        )
-
-        # List View (hidden for Quick Settings tab)
-        self._list_view = ft.ListView(
-            expand=True,
-            spacing=2,
-            padding=ft.Padding.symmetric(horizontal=20, vertical=0),
-        )
-
-        self._list_container = ft.Container(
-            content=self._list_view,
-            expand=True,
-            visible=False,  # Hidden by default (Quick Settings tab)
         )
 
         # Main Layout
         self.content = ft.Column(
-            [
-                header,
-                self._tabs,
-                self._quick_settings_view,
-                self._input_container,
-                ft.Divider(height=1, color=ft.Colors.OUTLINE_VARIANT, opacity=0.5),
-                self._list_container,
-            ],
+            [header, self._tabs],
             spacing=0,
         )
 
     def _on_tab_change(self, e):
         idx = self._tabs.selected_index
-        if idx == 0:
-            # Quick Settings tab
-            self._current_tab = "quick"
-            self._quick_settings_view.visible = True
-            self._input_container.visible = False
-            self._list_container.visible = False
-        elif idx == 1:
-            self._current_tab = "direct"
-            self._quick_settings_view.visible = False
-            self._input_container.visible = True
-            self._list_container.visible = True
-            self._refresh_list(update=True)
-        elif idx == 2:
-            self._current_tab = "proxy"
-            self._quick_settings_view.visible = False
-            self._input_container.visible = True
-            self._list_container.visible = True
-            self._refresh_list(update=True)
-        else:
-            self._current_tab = "block"
-            self._quick_settings_view.visible = False
-            self._input_container.visible = True
-            self._list_container.visible = True
-            self._refresh_list(update=True)
+        tab_map = {0: "quick", 1: "direct", 2: "proxy", 3: "block"}
+        self._current_tab = tab_map.get(idx, "quick")
+        if idx > 0:
+            self._refresh_list(self._current_tab, update=True)
 
-        if self.page:
-            self.content.update()
-
-    def _refresh_list(self, update=True):
-        self._list_view.controls.clear()
-        items = self._rules.get(self._current_tab, [])
+    def _refresh_list(self, tab_key, update=True):
+        list_view = self._rule_tabs[tab_key]["list_view"]
+        list_view.controls.clear()
+        items = self._rules.get(tab_key, [])
 
         if not items:
-            tab_name = t(f"routing.{self._current_tab}")
-            self._list_view.controls.append(
+            tab_name = t(f"routing.{tab_key}")
+            list_view.controls.append(
                 ft.Container(
                     content=ft.Column(
                         [
@@ -245,7 +239,7 @@ class RoutingPage(ft.Container):
             )
 
         for item in items:
-            self._list_view.controls.append(
+            list_view.controls.append(
                 ft.Container(
                     content=ft.Row(
                         [
@@ -266,27 +260,27 @@ class RoutingPage(ft.Container):
             )
 
         if update and self.page:
-            self._list_view.update()
+            list_view.update()
 
-    def _add_rule(self, e):
-        val = self._input.value.strip()
+    def _add_rule(self, tab_key, input_field):
+        val = input_field.value.strip()
         if not val:
             return
 
-        if val not in self._rules[self._current_tab]:
-            self._rules[self._current_tab].append(val)
+        if val not in self._rules[tab_key]:
+            self._rules[tab_key].append(val)
             self._save()
-            self._refresh_list(update=True)
+            self._refresh_list(tab_key, update=True)
 
-        self._input.value = ""
-        self._input.focus()
-        self._input.update()
+        input_field.value = ""
+        input_field.focus()
+        input_field.update()
 
     def _delete_rule(self, item):
         if item in self._rules[self._current_tab]:
             self._rules[self._current_tab].remove(item)
             self._save()
-            self._refresh_list(update=True)
+            self._refresh_list(self._current_tab, update=True)
 
     def _save(self):
         self._app_context.routing.save_rules(self._rules)
