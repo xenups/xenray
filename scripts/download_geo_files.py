@@ -106,7 +106,7 @@ def download_wintun():
                     print(f"  [OK] Extracted {WINTUN_FILE} from {name}")
                     break
             else:
-                print(f"  [WARNING] wintun.dll not found in archive!")
+                print("  [WARNING] wintun.dll not found in archive!")
 
     zip_path.unlink(missing_ok=True)
 
