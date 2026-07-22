@@ -13,7 +13,6 @@ class TestConnectionOrchestrator:
         self.mock_net_val = MagicMock()
         self.mock_xray_proc = MagicMock()
         self.mock_xray_svc = MagicMock()
-        self.mock_singbox_svc = MagicMock()
         self.mock_legacy_config_svc = MagicMock()
 
         # Configure legacy config service mock to return non-legacy by default
@@ -24,7 +23,6 @@ class TestConnectionOrchestrator:
             self.mock_net_val,
             self.mock_xray_proc,
             self.mock_xray_svc,
-            self.mock_singbox_svc,
             self.mock_legacy_config_svc,
         )
 
@@ -48,11 +46,9 @@ class TestConnectionOrchestrator:
         assert success is True
         assert info["mode"] == "proxy"
         assert info["xray_pid"] == 1234
-        assert info.get("singbox_pid") is None
 
         # Verify calls
         orchestrator._xray_service.start.assert_called_once()
-        orchestrator._singbox_service.start.assert_not_called()
 
     @patch("src.services.connection_tester.ConnectionTester.test_connection_sync")
     @patch("builtins.open", new_callable=mock_open)
@@ -67,7 +63,6 @@ class TestConnectionOrchestrator:
         orchestrator._xray_processor.process_config.return_value = {"processed": True}
         orchestrator._xray_processor.get_socks_port.return_value = 1080
         orchestrator._xray_service.start.return_value = 1234
-        orchestrator._singbox_service.start.return_value = 5678
         mock_conn_test.return_value = (True, "50ms", None)  # Health check passes
 
         with patch("src.utils.network_utils.NetworkUtils.detect_optimal_mtu", return_value=1420):
@@ -76,19 +71,16 @@ class TestConnectionOrchestrator:
         assert success is True
         assert info["mode"] == "vpn"
         assert info["xray_pid"] == 1234
-        assert info["singbox_pid"] == 5678
 
         # Verify calls
         orchestrator._xray_service.start.assert_called_once()
-        orchestrator._singbox_service.start.assert_called_once()
 
     def test_teardown_connection(self, orchestrator):
         """Test connection teardown."""
-        info = {"mode": "vpn", "xray_pid": 1234, "singbox_pid": 5678}
+        info = {"mode": "vpn", "xray_pid": 1234}
 
         orchestrator.teardown_connection(info)
 
-        orchestrator._singbox_service.stop.assert_called_once()
         orchestrator._xray_service.stop.assert_called_once()
 
     @patch("builtins.open", new_callable=mock_open)

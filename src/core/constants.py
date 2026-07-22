@@ -12,7 +12,7 @@ _project_root = Path(__file__).parent.parent.parent
 load_dotenv(_project_root / ".env")
 
 # Application version from environment
-APP_VERSION = os.getenv("APP_VERSION", "0.1.17-alpha")
+APP_VERSION = os.getenv("APP_VERSION", "0.2.0-beta")
 
 # Window dimensions
 WINDOW_WIDTH = 420
@@ -21,7 +21,12 @@ GITHUB_REPO = os.getenv("GITHUB_REPO", "xenups/xenray")
 UPDATE_DOWNLOAD_TIMEOUT = float(os.getenv("UPDATE_DOWNLOAD_TIMEOUT", "60"))
 UPDATE_MIN_FILE_SIZE = int(os.getenv("UPDATE_MIN_FILE_SIZE", "1048576"))
 XRAY_VERSION = os.getenv("XRAY_VERSION", "26.7.11")
-SINGBOX_VERSION = os.getenv("SINGBOX_VERSION", "1.13.14")
+# WINTUN_DLL — required for Xray native TUN on Windows
+WINTUN_DLL = os.path.join(os.path.join(os.path.join(Path(__file__).parent.parent.parent, "bin"), "wintun.dll"))
+WINTUN_DOWNLOAD_URL = os.getenv(
+    "WINTUN_DOWNLOAD_URL",
+    "https://www.wintun.net/builds/wintun-0.14.1.zip",
+)
 ARCH = os.getenv("ARCH", "64")
 
 # Application Limits
@@ -29,7 +34,6 @@ MAX_RECENT_FILES = int(os.getenv("MAX_RECENT_FILES", "20"))
 
 # Placeholder PIDs
 PLACEHOLDER_XRAY_PID = int(os.getenv("PLACEHOLDER_XRAY_PID", "-999999"))
-PLACEHOLDER_SINGBOX_PID = int(os.getenv("PLACEHOLDER_SINGBOX_PID", "-999997"))
 
 # Temporary directory (cross-platform)
 if PlatformUtils.get_platform() == "windows":
@@ -47,7 +51,6 @@ EARLY_LOG_FILE = os.path.join(TMPDIR, "xenray_app.log")
 XRAY_LOG_FILE = os.path.join(TMPDIR, "xenray_xray.log")
 OUTPUT_CONFIG_PATH = os.path.join(TMPDIR, "xenray_config.json")
 XRAY_PID_FILE = os.path.join(TMPDIR, "xray.pid")
-SINGBOX_PID_FILE = os.path.join(TMPDIR, "singbox.pid")
 
 # Configuration directory
 CONFIG_DIR = os.path.expanduser("~/.config/xenray")
@@ -80,16 +83,15 @@ else:
 
 # Executable paths with platform-specific extensions
 XRAY_EXECUTABLE = os.path.join(BIN_DIR, f"xray{PlatformUtils.get_binary_suffix()}")
-SINGBOX_EXECUTABLE = os.path.join(BIN_DIR, f"sing-box{PlatformUtils.get_binary_suffix()}")
 
-# Sing-box config and log paths
-SINGBOX_CONFIG_PATH = os.path.join(TMPDIR, "singbox_config.json")
-SINGBOX_LOG_FILE = os.path.join(TMPDIR, "xenray_singbox.log")
+# Xray geo files directory (geoip.dat, geosite.dat in assets/rules or bin/)
+RULES_DIR = os.path.join(ASSETS_DIR, "rules")
+if os.path.exists(os.path.join(RULES_DIR, "geosite.dat")):
+    XRAY_LOCATION_ASSET = RULES_DIR
+else:
+    XRAY_LOCATION_ASSET = BIN_DIR
 
-# Xray geo files directory (geoip.dat, geosite.dat are in bin/)
-XRAY_LOCATION_ASSET = BIN_DIR
-
-# Temp root for Xray and Singbox
+# Temp root for Xray
 TEMP_ROOT = TMPDIR
 
 # Fonts (from environment)
@@ -124,32 +126,120 @@ DNS_PROVIDERS = {
     ).split(","),
 }
 
-# Sing-box Rule Sets (from environment)
-SINGBOX_RULE_SETS = {
-    "ir": [
-        os.getenv(
-            "SINGBOX_RULESET_IR_GEOIP",
-            "https://raw.githubusercontent.com/Chocolate4U/Iran-sing-box-rules/rule-set/geoip-ir.srs",  # noqa: E501
-        ),
-        os.getenv(
-            "SINGBOX_RULESET_IR_GEOSITE",
-            "https://raw.githubusercontent.com/Chocolate4U/Iran-sing-box-rules/rule-set/geosite-ir.srs",  # noqa: E501
-        ),
-    ],
-    "cn": [
-        os.getenv(
-            "SINGBOX_RULESET_ADS_GEOSITE",
-            "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-category-ads-all.srs",  # noqa: E501
-        ),
-        os.getenv(
-            "SINGBOX_RULESET_CN_GEOIP",
-            "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs",  # noqa: E501
-        ),
-    ],
-    "ru": [
-        os.getenv(
-            "SINGBOX_RULESET_RU",
-            "https://github.com/legiz-ru/sb-rule-sets/raw/main/ru-bundle.srs",
-        )
-    ],
+# Xray country geoip/geosite codes used for per-country direct routing
+# These map country setting values → Xray geoip/geosite tag names
+XRAY_COUNTRY_GEOIP: dict = {
+    "ir": ["geoip:ir"],
+    "cn": ["geoip:cn"],
+    "ru": ["geoip:ru"],
 }
+
+# ---------------------------------------------------------------------------
+# Protocol / type string constants — NO hardcoded strings in business logic
+# ---------------------------------------------------------------------------
+
+# Inbound / Outbound protocols
+PROTOCOL_TUN = "tun"
+PROTOCOL_SOCKS = "socks"
+PROTOCOL_HTTP = "http"
+PROTOCOL_VLESS = "vless"
+PROTOCOL_VMESS = "vmess"
+PROTOCOL_TROJAN = "trojan"
+PROTOCOL_SHADOWSOCKS = "shadowsocks"
+PROTOCOL_HYSTERIA2 = "hysteria2"
+PROTOCOL_FREEDOM = "freedom"
+PROTOCOL_BLACKHOLE = "blackhole"
+PROTOCOL_DNS = "dns"
+PROTOCOL_LOOPBACK = "loopback"
+
+# Connection modes
+MODE_VPN = "vpn"
+MODE_PROXY = "proxy"
+
+# Outbound / inbound tags
+TAG_DIRECT = "direct"
+TAG_PROXY = "proxy"
+TAG_BLOCK = "block"
+
+# Transport network types
+NETWORK_TCP = "tcp"
+NETWORK_WS = "ws"
+NETWORK_GRPC = "grpc"
+NETWORK_QUIC = "quic"
+NETWORK_HTTP3 = "http3"
+NETWORK_XHTTP = "xhttp"
+NETWORK_HTTPUPGRADE = "httpupgrade"
+NETWORK_SPLITHTTP = "splithttp"
+NETWORK_H3 = "h3"
+NETWORK_H2 = "h2"
+
+# Security types
+SECURITY_TLS = "tls"
+SECURITY_REALITY = "reality"
+SECURITY_NONE = "none"
+TLS_SETTINGS = "tlsSettings"
+REALITY_SETTINGS = "realitySettings"
+
+# DNS protocol types
+DNS_UDP = "udp"
+DNS_TCP = "tcp"
+DNS_DOH = "doh"
+DNS_DOT = "dot"
+DNS_DOQ = "doq"
+
+# DNS query strategies
+DNS_USE_IP = "UseIP"
+DNS_USE_IPV4 = "UseIPv4"
+DNS_USE_IPV6 = "UseIPv6"
+
+# Domain strategy values
+DOMAIN_ASIS = "AsIs"
+DOMAIN_IP_IF_NON_MATCH = "IPIfNonMatch"
+DOMAIN_IP_ON_DEMAND = "IPOnDemand"
+
+# Geo prefix tags
+GEOIP_PREFIX = "geoip:"
+GEOSITE_PREFIX = "geosite:"
+
+# Sniffing dest-override values
+SNIFF_DEST_OVERRIDE = ["http", "tls", "quic"]
+
+# Routing rule type
+RULE_FIELD = "field"
+
+# Stream setting keys
+STREAM_WS_SETTINGS = "wsSettings"
+STREAM_HTTPUPGRADE_SETTINGS = "httpupgradeSettings"
+STREAM_XHTTP_SETTINGS = "xhttpSettings"
+STREAM_HEADERS = "headers"
+STREAM_HOST = "host"
+HEADER_HOST = "Host"  # HTTP header name (capital H)
+STREAM_MODE = "mode"
+STREAM_SERVER_NAME = "serverName"
+STREAM_PATH = "path"
+
+# Config dict keys
+CONFIG_DNS = "dns"
+CONFIG_ROUTING = "routing"
+CONFIG_RULES = "rules"
+CONFIG_INBOUNDS = "inbounds"
+CONFIG_OUTBOUNDS = "outbounds"
+CONFIG_SETTINGS = "settings"
+CONFIG_STREAM_SETTINGS = "streamSettings"
+CONFIG_DOMAIN_STRATEGY = "domainStrategy"
+CONFIG_QUERY_STRATEGY = "queryStrategy"
+CONFIG_PROTOCOL = "protocol"
+CONFIG_ADDRESS = "address"
+CONFIG_PORT = "port"
+CONFIG_TAG = "tag"
+CONFIG_IP = "ip"
+CONFIG_DOMAIN = "domain"
+CONFIG_DOMAINS = "domains"  # plural — used in DNS data storage
+CONFIG_SERVERS = "servers"
+CONFIG_OUTBOUND_TAG = "outboundTag"
+CONFIG_NETWORK = "network"
+CONFIG_SNIFFING = "sniffing"
+CONFIG_ENABLED = "enabled"
+CONFIG_DEST_OVERRIDE = "destOverride"
+CONFIG_METADATA_ONLY = "metadataOnly"
+CONFIG_ROUTE_ONLY = "routeOnly"

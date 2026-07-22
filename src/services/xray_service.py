@@ -4,7 +4,7 @@ import subprocess
 import time
 from typing import Optional
 
-from src.core.constants import XRAY_EXECUTABLE, XRAY_LOG_FILE, XRAY_PID_FILE
+from src.core.constants import XRAY_EXECUTABLE, XRAY_LOCATION_ASSET, XRAY_LOG_FILE, XRAY_PID_FILE
 from src.core.logger import logger
 from src.utils.process_utils import ProcessUtils
 
@@ -63,6 +63,10 @@ class XrayService:
             logger.error(f"[XrayService] Config not found: {config_file_path}")
             return None
 
+        # Ensure XRAY_LOCATION_ASSET environment variable is set
+        os.environ["XRAY_LOCATION_ASSET"] = XRAY_LOCATION_ASSET
+        logger.debug(f"[XrayService] XRAY_LOCATION_ASSET set to: {XRAY_LOCATION_ASSET}")
+
         # Small delay to ensure previous instance is fully terminated
         time.sleep(PROCESS_START_DELAY)
 
@@ -109,22 +113,12 @@ class XrayService:
                 pass
 
         if not pid_to_kill:
+            logger.debug("[XrayService] No process to stop")
             return True
 
-        success = ProcessUtils.kill_process(pid_to_kill, force=False)
-
-        if not success:
-            # Try force kill
-            success = ProcessUtils.kill_process(pid_to_kill, force=True)
-
-        if success:
-            # Wait briefly for process to terminate (non-blocking)
-            for _ in range(STOP_CHECK_RETRIES):
-                if not ProcessUtils.is_running(pid_to_kill):
-                    break
-                time.sleep(STOP_CHECK_DELAY)
-
-            logger.info("[XrayService] Stopped")
+        try:
+            logger.info(f"[XrayService] Stopping process {pid_to_kill}")
+            ProcessUtils.kill_process(pid_to_kill)
             self._pid = None
             self._process = None
 
@@ -132,30 +126,22 @@ class XrayService:
             if os.path.exists(XRAY_PID_FILE):
                 try:
                     os.remove(XRAY_PID_FILE)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning(f"[XrayService] Failed to remove PID file: {e}")
 
-        return success
-
-    def is_running(self) -> bool:
-        """Check if Xray is running."""
-        if self._pid and ProcessUtils.is_running(self._pid):
             return True
-
-        # Check PID file fallback
-        if os.path.exists(XRAY_PID_FILE):
-            try:
-                with open(XRAY_PID_FILE, "r") as f:
-                    old_pid = int(f.read().strip())
-                if ProcessUtils.is_running(old_pid):
-                    self._pid = old_pid  # Restore memory PID
-                    return True
-            except Exception:
-                pass
-
-        return False
+        except Exception as e:
+            logger.error(f"[XrayService] Failed to stop Xray: {e}")
+            return False
 
     @property
     def pid(self) -> Optional[int]:
-        """Get Xray process ID."""
-        return self._pid
+        """Get process PID if running."""
+        if self._pid and ProcessUtils.is_running(self._pid):
+            return self._pid
+        return None
+
+    @property
+    def is_running(self) -> bool:
+        """Check if Xray is currently running."""
+        return self.pid is not None

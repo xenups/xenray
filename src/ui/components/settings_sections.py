@@ -102,6 +102,18 @@ class ModeSwitchRow(ft.Container):
             on_change=on_change,
         )
         self._is_proxy = is_proxy
+        self._vpn_text = ft.Text(
+            t("settings.vpn"),
+            size=11,
+            color=ft.Colors.ON_SURFACE_VARIANT,
+            weight=ft.FontWeight.BOLD if not is_proxy else ft.FontWeight.NORMAL,
+        )
+        self._proxy_text = ft.Text(
+            t("settings.proxy"),
+            size=11,
+            color=ft.Colors.ON_SURFACE_VARIANT,
+            weight=ft.FontWeight.BOLD if is_proxy else ft.FontWeight.NORMAL,
+        )
 
         super().__init__(
             content=ft.Row(
@@ -124,19 +136,9 @@ class ModeSwitchRow(ft.Container):
                     ),
                     ft.Row(
                         [
-                            ft.Text(
-                                t("settings.vpn"),
-                                size=11,
-                                color=ft.Colors.ON_SURFACE_VARIANT,
-                                weight=ft.FontWeight.BOLD if not is_proxy else ft.FontWeight.NORMAL,
-                            ),
+                            self._vpn_text,
                             self._switch,
-                            ft.Text(
-                                t("settings.proxy"),
-                                size=11,
-                                color=ft.Colors.ON_SURFACE_VARIANT,
-                                weight=ft.FontWeight.BOLD if is_proxy else ft.FontWeight.NORMAL,
-                            ),
+                            self._proxy_text,
                         ],
                         spacing=5,
                     ),
@@ -155,6 +157,15 @@ class ModeSwitchRow(ft.Container):
     @value.setter
     def value(self, val: bool):
         self._switch.value = val
+        self._is_proxy = val
+        self._vpn_text.weight = ft.FontWeight.BOLD if not val else ft.FontWeight.NORMAL
+        self._proxy_text.weight = ft.FontWeight.BOLD if val else ft.FontWeight.NORMAL
+        try:
+            self._vpn_text.update()
+            self._proxy_text.update()
+            self._switch.update()
+        except RuntimeError:
+            pass
 
 
 class PortInputRow(ft.Container):

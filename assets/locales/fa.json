@@ -82,6 +82,8 @@
     "app_update_description": "بررسی به‌روزرسانی زن‌ری",
     "check_updates": "بررسی به‌روزرسانی",
     "update_xray": "به‌روزرسانی هسته Xray",
+    "update_rules": "به‌روزرسانی قوانین مسیریابی",
+    "update_rules_desc": "به‌روزرسانی پایگاه‌های geoip و geosite",
     "about": "درباره زن‌ری",
     "version": "نسخه 1.0.0 توسط Xenups",
     "language": "زبان",
@@ -140,6 +142,22 @@
     "ir": "ایران",
     "cn": "چین",
     "ru": "روسیه"
+  },
+  "rules_update": {
+    "checking": "در حال بررسی به‌روزرسانی قوانین... 📡",
+    "up_to_date": "قوانین مسیریابی به‌روز هستند! ✅",
+    "available": "قوانین جدید موجود است",
+    "title": "به‌روزرسانی قوانین مسیریابی",
+    "message": "آیا می‌خواهید geoip.dat و geosite.dat را به‌روزرسانی کنید؟",
+    "confirm": "دانلود و نصب",
+    "cancel": "اکنون نه",
+    "downloading": "در حال دانلود {file}... {progress}%",
+    "installing": "در حال نصب فایل‌های قوانین...",
+    "success": "قوانین مسیریابی به‌روزرسانی شد! 🎉",
+    "failed": "به‌روزرسانی قوانین ناموفق! ❌",
+    "check_failed": "بررسی به‌روزرسانی قوانین ناموفق بود",
+    "geoip": "geoip.dat",
+    "geosite": "geosite.dat"
   },
   "status": {
     "select_server": "لطفاً ابتدا یک سرور انتخاب کنید",

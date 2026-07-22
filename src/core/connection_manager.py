@@ -6,8 +6,8 @@ from loguru import logger
 
 from src.core.app_context import AppContext
 from src.core.connection_orchestrator import ConnectionOrchestrator
+from src.core.constants import MODE_PROXY, MODE_VPN, OUTPUT_CONFIG_PATH, PROTOCOL_TUN
 from src.core.i18n import t
-from src.services.singbox_service import SingboxService
 from src.services.xray_service import XrayService
 
 
@@ -26,7 +26,7 @@ class ConnectionManager:
     - Disconnect is TERMINAL: cancels all reconnect, monitoring, background tasks
     - No stale events can be emitted after disconnect
 
-    State Machine: IDLE → CONNECTING → CONNECTED → (RECONNECTING) → DISCONNECTING → IDLE
+    State Machine: IDLE -> CONNECTING -> CONNECTED -> (RECONNECTING) -> DISCONNECTING -> IDLE
     """
 
     def __init__(self, app_context: AppContext):
@@ -41,12 +41,10 @@ class ConnectionManager:
         self._MonitorSignal = MonitorSignal
 
         self._app_context = app_context
-        self._app_context = app_context
         self._xray_processor = XrayConfigProcessor(app_context)
         legacy_config_service = LegacyConfigService(self._xray_processor)
 
         xray_service = XrayService()
-        singbox_service = SingboxService()
 
         # State
         self._current_connection = None
@@ -55,10 +53,6 @@ class ConnectionManager:
         self._session_id = 0  # Unique ID for each connection session
 
         # Initialize ConnectionMonitoringService (creates its own monitors internally)
-        # Only 3 callbacks needed:
-        # - on_signal: Unified signal handler (this class is the event authority)
-        # - on_reconnect: Called when reconnect attempt is needed
-        # - on_reconnect_event: For reconnect-specific events (reconnecting, reconnected, etc.)
         self._monitoring = ConnectionMonitoringService(
             app_context=app_context,
             on_signal=self._handle_signal,
@@ -66,13 +60,12 @@ class ConnectionManager:
             on_reconnect_event=self._emit_event,
         )
 
-        # Create ConnectionOrchestrator with all dependencies
+        # Create ConnectionOrchestrator with all dependencies (no singbox_service)
         self._orchestrator = ConnectionOrchestrator(
             app_context=app_context,
             network_validator=self._monitoring.network_validator,
             xray_processor=self._xray_processor,
             xray_service=xray_service,
-            singbox_service=singbox_service,
             legacy_config_service=legacy_config_service,
         )
 
@@ -81,7 +74,7 @@ class ConnectionManager:
 
     def _handle_signal(self, signal):
         """
-        Handle monitor signals - SINGLE POINT OF SIGNAL→EVENT CONVERSION.
+        Handle monitor signals - SINGLE POINT OF SIGNAL->EVENT CONVERSION.
 
         This is the ONLY place where signals become user-visible events.
         All policy decisions (emit event? trigger reconnect?) happen here.
@@ -100,7 +93,7 @@ class ConnectionManager:
             logger.debug(f"[ConnectionManager] Signal {signal.name} ignored (no valid session)")
             return
 
-        # SIGNAL → EVENT MAPPING (single source of truth)
+        # SIGNAL -> EVENT MAPPING (single source of truth)
         if signal == self._MonitorSignal.PASSIVE_FAILURE:
             # Passive log detected failure - trigger reconnect
             logger.warning("[ConnectionManager] Passive failure detected")
@@ -125,15 +118,15 @@ class ConnectionManager:
     def _adopt_existing_connection(self):
         """Adopt an already running connection (from PID files)."""
         xray_pid = self._orchestrator._xray_service.pid
-        singbox_pid = self._orchestrator._singbox_service.pid
 
         if xray_pid:
-            mode = "vpn" if singbox_pid else "proxy"
+            # Single-process architecture: if Xray is running, determine mode from
+            # the saved config (if available) or default to proxy.
+            mode = self._detect_mode_from_running_config()
             self._session_id += 1
             self._current_connection = {
                 "mode": mode,
                 "xray_pid": xray_pid,
-                "singbox_pid": singbox_pid,
                 "file": t("connection.adopted_connection", default="Adopted Connection"),
                 "session_id": self._session_id,
             }
@@ -141,6 +134,20 @@ class ConnectionManager:
 
             # Start monitoring via facade (single decision point)
             self._monitoring.start(self._session_id, mode=mode)
+
+    def _detect_mode_from_running_config(self) -> str:
+        """Detect connection mode from the running Xray config (tun inbound = vpn)."""
+        try:
+            import json
+
+            with open(OUTPUT_CONFIG_PATH, "r", encoding="utf-8") as f:
+                config = json.load(f)
+            inbounds = config.get("inbounds", [])
+            if any(ib.get("protocol") == PROTOCOL_TUN for ib in inbounds):
+                return MODE_VPN
+        except Exception:
+            pass
+        return MODE_PROXY
 
     def connect(self, file_path: str, mode: str, step_callback=None) -> bool:
         """

@@ -102,10 +102,10 @@ class TestXrayConfigProcessorStrict(unittest.TestCase):
         self.mock_config_manager.settings.get_proxy_port.return_value = 10805
         self.processor = XrayConfigProcessor(self.mock_config_manager)
 
-    def test_processor_resolves_address_for_bootstrap(self):
+    def test_processor_preserves_domain_address(self):
         """
-        Verify processor resolves domain to IP for bootstrap DNS.
-        This allows all DNS queries to go through the tunnel.
+        Verify processor preserves domain address (no longer resolves to IP).
+        Bootstrap DNS resolution was removed because it broke ECH/Reality/SNI.
         """
         config = {
             "outbounds": [
@@ -119,20 +119,9 @@ class TestXrayConfigProcessorStrict(unittest.TestCase):
 
         processed = self.processor.process_config(config)
 
-        # Assert address is resolved to IP
+        # Address should remain as domain (resolution was removed)
         resolved_address = processed["outbounds"][0]["settings"]["vnext"][0]["address"]
-
-        # Should be an IP now, not the domain
-        import ipaddress
-
-        try:
-            ipaddress.ip_address(resolved_address)
-            is_ip = True
-        except ValueError:
-            is_ip = False
-
-        self.assertTrue(is_ip, f"Expected IP address, got: {resolved_address}")
-        self.assertNotEqual(resolved_address, "google.com", "Address should be resolved to IP")
+        self.assertEqual(resolved_address, "google.com")
 
 
 if __name__ == "__main__":

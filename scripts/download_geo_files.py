@@ -1,16 +1,21 @@
 #!/usr/bin/env python3
 """
-Download Xray geo files (geoip.dat and geosite.dat) to bin/ folder.
+Download geo files (geoip.dat, geosite.dat) and wintun.dll to bin/ folder.
 
-These files are required for Xray routing rules to work properly.
-They must be placed in the same directory as xray.exe.
+Geo files are from Chocolate4U/Iran-v2ray-rules for Iranian-optimized routing.
+wintun.dll is required by Xray for TUN interface on Windows.
+
+These files are bundled in CI releases so users don't need to download
+them on first start.
 
 Usage:
     python scripts/download_geo_files.py
 """
 
+import os
 import sys
 import urllib.request
+import zipfile
 from pathlib import Path
 
 # Add project root to path
@@ -20,18 +25,21 @@ sys.path.insert(0, str(PROJECT_ROOT))
 # Output directory - use bin/ folder where xray.exe is located
 BIN_DIR = PROJECT_ROOT / "bin"
 
-# GitHub URLs for geo files
-GEOIP_URL = "https://github.com/v2fly/geoip/releases/latest/download/geoip.dat"
-GEOSITE_URL = "https://github.com/v2fly/domain-list-community/releases/latest/download/dlc.dat"
+# GitHub URLs — Chocolate4U/Iran-v2ray-rules provides geo files with
+# Iranian-specific routing entries (IR geoip/geosite)
+GEOIP_URL = "https://github.com/Chocolate4U/Iran-v2ray-rules/releases/latest/download/geoip.dat"
+GEOSITE_URL = "https://github.com/Chocolate4U/Iran-v2ray-rules/releases/latest/download/geosite.dat"
+
+# wintun.dll is required for Xray TUN interface on Windows
+WINTUN_URL = "https://www.wintun.net/builds/wintun-0.14.1.zip"
+WINTUN_FILE = "wintun.dll"
 
 
-def download_file(url: str, dest: Path, rename_to: str = None) -> Path:
+def download_file(url: str, dest: Path) -> Path:
     """Download a file with progress."""
-    final_dest = dest.parent / (rename_to or dest.name)
-
-    if final_dest.exists():
-        print(f"  [SKIP] {final_dest.name} already exists")
-        return final_dest
+    if dest.exists():
+        print(f"  [SKIP] {dest.name} already exists")
+        return dest
 
     print(f"  [DOWNLOAD] {url}")
 
@@ -40,32 +48,82 @@ def download_file(url: str, dest: Path, rename_to: str = None) -> Path:
         percent = min(100, (downloaded / total_size) * 100) if total_size > 0 else 0
         print(f"\r  Progress: {percent:.1f}%", end="", flush=True)
 
-    urllib.request.urlretrieve(url, final_dest, reporthook=progress)
-    print()  # New line after progress
-    print(f"  [OK] Downloaded to {final_dest}")
-    return final_dest
+    urllib.request.urlretrieve(url, dest, reporthook=progress)
+    print()
+    print(f"  [OK] Downloaded to {dest}")
+    return dest
+
+
+def download_geo_files():
+    """Download both geoip.dat and geosite.dat."""
+    print("\n[STEP 1] Downloading geoip.dat...")
+    download_file(GEOIP_URL, BIN_DIR / "geoip.dat")
+
+    print("\n[STEP 2] Downloading geosite.dat...")
+    download_file(GEOSITE_URL, BIN_DIR / "geosite.dat")
+
+
+def download_wintun():
+    """
+    Download wintun.dll and extract it to bin/.
+    wintun.dll is architecture-specific — we extract the amd64 variant.
+    """
+    print("\n[STEP 3] Downloading and extracting wintun.dll...")
+
+    zip_path = BIN_DIR / "wintun.zip"
+    download_file(WINTUN_URL, zip_path)
+
+    target = BIN_DIR / WINTUN_FILE
+    if target.exists():
+        print(f"  [SKIP] {WINTUN_FILE} already exists")
+        zip_path.unlink(missing_ok=True)
+        return
+
+    with zipfile.ZipFile(zip_path, "r") as z:
+        # wintun zip contains: wintun/bin/amd64/wintun.dll
+        arch = "arm64" if os.environ.get("PROCESSOR_ARCHITECTURE", "").startswith("ARM") else "amd64"
+        member = f"wintun/bin/{arch}/wintun.dll"
+        if member in z.namelist():
+            z.extract(member, BIN_DIR)
+            extracted = BIN_DIR / member
+            extracted.replace(target)
+            # Clean up nested dirs
+            for p in [BIN_DIR / "wintun", BIN_DIR / "wintun/bin", BIN_DIR / f"wintun/bin/{arch}"]:
+                p.rmdir() if p.exists() else None
+            print(f"  [OK] Extracted {WINTUN_FILE} ({arch})")
+        else:
+            # Fallback: try any wintun.dll in the zip
+            for name in z.namelist():
+                if name.endswith("wintun.dll"):
+                    z.extract(name, BIN_DIR)
+                    extracted = BIN_DIR / name
+                    extracted.replace(target)
+                    print(f"  [OK] Extracted {WINTUN_FILE} from {name}")
+                    break
+            else:
+                print(f"  [WARNING] wintun.dll not found in archive!")
+
+    zip_path.unlink(missing_ok=True)
 
 
 def main():
     print("=" * 60)
-    print("Downloading Xray Geo Files to bin/")
+    print("Downloading Geo Files and wintun.dll to bin/")
     print("=" * 60)
 
-    # Create bin directory
     BIN_DIR.mkdir(parents=True, exist_ok=True)
 
     try:
-        # Download geoip.dat
-        print("\n[STEP 1] Downloading geoip.dat...")
-        download_file(GEOIP_URL, BIN_DIR / "geoip.dat")
-
-        # Download geosite.dat (renamed from dlc.dat)
-        print("\n[STEP 2] Downloading geosite.dat...")
-        download_file(GEOSITE_URL, BIN_DIR / "dlc.dat", rename_to="geosite.dat")
+        download_geo_files()
+        download_wintun()
 
         print("\n" + "=" * 60)
         print("DOWNLOAD COMPLETE!")
         print(f"Files location: {BIN_DIR}")
+        for f in ["geoip.dat", "geosite.dat", "wintun.dll"]:
+            p = BIN_DIR / f
+            size = p.stat().st_size / 1024 / 1024 if p.exists() else 0
+            print(f"  {f}: {'✓' if p.exists() else '✗'} ({size:.1f} MB)")
         print("=" * 60)
 
     except Exception as e:

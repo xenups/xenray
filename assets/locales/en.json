@@ -82,6 +82,8 @@
     "app_update_description": "Check for XenRay updates",
     "check_updates": "Check for Updates",
     "update_xray": "Update Xray Core",
+    "update_rules": "Update Routing Rules",
+    "update_rules_desc": "Update geoip & geosite databases",
     "about": "About XenRay",
     "version": "v1.0.0 by Xenups",
     "language": "Language",
@@ -143,6 +145,22 @@
     "ir": "Iran",
     "cn": "China",
     "ru": "Russia"
+  },
+  "rules_update": {
+    "checking": "Checking for rule updates... 📡",
+    "up_to_date": "Routing rules are up to date! ✅",
+    "available": "New rules available",
+    "title": "Update Routing Rules",
+    "message": "Update geoip.dat and geosite.dat from Iran-v2ray-rules?",
+    "confirm": "Download & Install",
+    "cancel": "Not Now",
+    "downloading": "Downloading {file}... {progress}%",
+    "installing": "Installing rule files...",
+    "success": "Routing rules updated! 🎉",
+    "failed": "Rule update failed! ❌",
+    "check_failed": "Failed to check for rule updates",
+    "geoip": "geoip.dat",
+    "geosite": "geosite.dat"
   },
   "status": {
     "select_server": "Please select a server first",
