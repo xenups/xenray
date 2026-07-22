@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 """
-Download Xray and Singbox binaries for Windows from GitHub releases.
+Download Xray binary for Windows from GitHub releases.
 
 This script:
-1. Reads versions from .env file
+1. Reads version from .env file
 2. Downloads from official GitHub releases
 3. Extracts to bin/ folder
 4. Supports both 32-bit and 64-bit architectures
-5. Ensures Windows 7+ compatibility
 
 Usage:
     python scripts/download_binaries.py
@@ -36,22 +35,16 @@ TEMP_DIR = PROJECT_ROOT / "temp_downloads"
 
 # GitHub release URLs
 XRAY_URL_TEMPLATE = "https://github.com/XTLS/Xray-core/releases/download/v{version}/Xray-windows-{arch}.zip"
-SINGBOX_URL_TEMPLATE = (
-    "https://github.com/SagerNet/sing-box/releases/download/v{version}/sing-box-{version}-windows-amd{arch}.zip"
-)
 
 
 def get_config(arch: int = 64):
     """Get configuration from environment."""
     xray_version = os.getenv("XRAY_VERSION", "26.7.11")
-    singbox_version = os.getenv("SINGBOX_VERSION", "1.13.14")
 
     return {
         "xray_version": xray_version,
-        "singbox_version": singbox_version,
         "arch": arch,
         "xray_url": XRAY_URL_TEMPLATE.format(version=xray_version, arch=arch),
-        "singbox_url": SINGBOX_URL_TEMPLATE.format(version=singbox_version, arch=arch),
     }
 
 
@@ -109,20 +102,19 @@ def cleanup(temp_dir: Path):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Download Xray and Singbox binaries")
+    parser = argparse.ArgumentParser(description="Download Xray binary")
     parser.add_argument("--arch", type=int, choices=[32, 64], default=64, help="Architecture: 32 or 64 (default: 64)")
     args = parser.parse_args()
 
     print("=" * 60)
-    print("Downloading Xray and Singbox Binaries")
+    print("Downloading Xray Binary")
     print("=" * 60)
 
     # Get configuration
     config = get_config(args.arch)
 
-    print(f"\nConfiguration:")  # noqa: F541
+    print("\nConfiguration:")
     print(f"  Xray Version: {config['xray_version']}")
-    print(f"  Singbox Version: {config['singbox_version']}")
     print(f"  Architecture: {config['arch']}-bit")
 
     # Create directories
@@ -135,12 +127,6 @@ def main():
         xray_zip = TEMP_DIR / f"xray-{config['xray_version']}.zip"
         download_file(config["xray_url"], xray_zip)
         extract_zip(xray_zip, BIN_DIR, "xray.exe")
-
-        # Download Singbox
-        print("\n[STEP 2] Downloading Singbox...")
-        singbox_zip = TEMP_DIR / f"singbox-{config['singbox_version']}.zip"
-        download_file(config["singbox_url"], singbox_zip)
-        extract_zip(singbox_zip, BIN_DIR, "sing-box.exe")
 
         print("\n" + "=" * 60)
         print("DOWNLOAD COMPLETE!")
