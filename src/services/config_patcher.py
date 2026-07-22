@@ -3,7 +3,6 @@ from loguru import logger
 
 from src.core.constants import (
     CONFIG_NETWORK,
-    CONFIG_OUTBOUNDS,
     CONFIG_SETTINGS,
     CONFIG_STREAM_SETTINGS,
     HEADER_HOST,

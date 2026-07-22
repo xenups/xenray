@@ -103,7 +103,6 @@ class RuleUpdateService:
         tmp_fd, tmp_path = tempfile.mkstemp(suffix=f"_{filename}")
         os.close(tmp_fd)
 
-        last_error = None
         for attempt in range(1, MAX_RETRIES + 1):
             try:
                 response = requests.get(
@@ -138,7 +137,6 @@ class RuleUpdateService:
                 return dest_path
 
             except Exception as e:
-                last_error = e
                 logger.warning(f"[RuleUpdateService] Attempt {attempt}/{MAX_RETRIES} failed for {filename}: {e}")
                 if progress_callback:
                     progress_callback(f"Retrying {filename}... ({attempt}/{MAX_RETRIES})")

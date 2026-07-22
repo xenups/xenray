@@ -1,5 +1,4 @@
 """Tests for shared config utility functions."""
-import pytest
 
 from src.services.config_utils import get_server_object, is_ip
 

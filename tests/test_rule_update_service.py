@@ -1,6 +1,5 @@
 """Tests for RuleUpdateService."""
 import os
-import tempfile
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
