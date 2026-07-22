@@ -74,12 +74,11 @@ class TestOrchestratorFallback(unittest.TestCase):
         self.mock_network_validator = Mock()
         self.mock_xray_processor = Mock()
         self.mock_xray_service = Mock()
-        self.mock_singbox_service = Mock()
         self.mock_legacy_service = Mock()
 
         # Default mock returns
         self.mock_network_validator.check_internet_connection.return_value = True
-        self.mock_xray_processor.process_config.side_effect = lambda x: x
+        self.mock_xray_processor.process_config.side_effect = lambda x, **kwargs: x
         self.mock_xray_processor.get_socks_port.return_value = 10805
 
         self.orchestrator = ConnectionOrchestrator(
@@ -87,7 +86,6 @@ class TestOrchestratorFallback(unittest.TestCase):
             self.mock_network_validator,
             self.mock_xray_processor,
             self.mock_xray_service,
-            self.mock_singbox_service,
             self.mock_legacy_service,
         )
 
