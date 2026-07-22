@@ -87,8 +87,8 @@ def download_wintun():
             z.extract(member, BIN_DIR)
             extracted = BIN_DIR / member
             extracted.replace(target)
-            # Clean up nested dirs
-            for p in [BIN_DIR / "wintun", BIN_DIR / "wintun/bin", BIN_DIR / f"wintun/bin/{arch}"]:
+            # Clean up nested dirs (deepest first)
+            for p in [BIN_DIR / f"wintun/bin/{arch}", BIN_DIR / "wintun/bin", BIN_DIR / "wintun"]:
                 p.rmdir() if p.exists() else None
             print(f"  [OK] Extracted {WINTUN_FILE} ({arch})")
         else:
@@ -98,6 +98,11 @@ def download_wintun():
                     z.extract(name, BIN_DIR)
                     extracted = BIN_DIR / name
                     extracted.replace(target)
+                    # Clean up any extracted dirs
+                    parent = BIN_DIR / name.rsplit("/", 1)[0]
+                    while parent != BIN_DIR:
+                        parent.rmdir()
+                        parent = parent.parent
                     print(f"  [OK] Extracted {WINTUN_FILE} from {name}")
                     break
             else:
