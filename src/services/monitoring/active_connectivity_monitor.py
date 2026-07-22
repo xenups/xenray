@@ -5,7 +5,7 @@ from typing import Callable, Optional
 
 from loguru import logger
 
-from src.services.singbox_metrics_provider import MetricsSnapshot, SingBoxMetricsProvider
+from src.services.xray_process_monitor import MetricsSnapshot, XrayProcessProvider
 
 
 class ActiveConnectivityMonitor:
@@ -34,7 +34,7 @@ class ActiveConnectivityMonitor:
 
     def __init__(
         self,
-        metrics_provider: SingBoxMetricsProvider,
+        metrics_provider: XrayProcessProvider,
         on_connectivity_lost: Optional[Callable[[], None]] = None,
         on_connectivity_restored: Optional[Callable[[], None]] = None,
         on_connectivity_degraded: Optional[Callable[[], None]] = None,
@@ -45,7 +45,7 @@ class ActiveConnectivityMonitor:
         Initialize the monitor.
 
         Args:
-            metrics_provider: Provider implementing SingBoxMetricsProvider protocol
+            metrics_provider: XrayProcessProvider (or compatible provider)
             on_connectivity_lost: Callback when connectivity is lost
             on_connectivity_restored: Callback when connectivity is restored
             on_connectivity_degraded: Callback when connection shows issues (soft warning)

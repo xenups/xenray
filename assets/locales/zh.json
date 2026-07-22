@@ -81,6 +81,8 @@
     "app_update_description": "检查XenRay更新",
     "check_updates": "检查更新",
     "update_xray": "更新Xray核心",
+    "update_rules": "更新路由规则",
+    "update_rules_desc": "更新 geoip 和 geosite 数据库",
     "about": "关于XenRay",
     "version": "v1.0.0 by Xenups",
     "language": "语言",
@@ -139,6 +141,22 @@
     "ir": "伊朗",
     "cn": "中国",
     "ru": "俄罗斯"
+  },
+  "rules_update": {
+    "checking": "正在检查规则更新... 📡",
+    "up_to_date": "路由规则已是最新! ✅",
+    "available": "新规则可用",
+    "title": "更新路由规则",
+    "message": "更新 geoip.dat 和 geosite.dat?",
+    "confirm": "下载并安装",
+    "cancel": "稍后再说",
+    "downloading": "正在下载 {file}... {progress}%",
+    "installing": "正在安装规则文件...",
+    "success": "路由规则已更新! 🎉",
+    "failed": "规则更新失败! ❌",
+    "check_failed": "检查规则更新失败",
+    "geoip": "geoip.dat",
+    "geosite": "geosite.dat"
   },
   "status": {
     "select_server": "请先选择服务器",

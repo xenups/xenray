@@ -109,8 +109,14 @@ jobs:
             - XenRay GUI Application
             - Xray Core ${{ env.XRAY_VERSION }}
             - Singbox ${{ env.SINGBOX_VERSION }}
+            - geoip.dat & geosite.dat (Iran-optimized routing rules)
+            - wintun.dll (TUN interface driver)
             - Multilingual support (EN, FA, RU, ZH)
             - Auto-updater script
+
+            ### Notes
+            - geoip.dat and geosite.dat from Chocolate4U/Iran-v2ray-rules
+            - wintun.dll is pre-bundled — no need to download on first start
           draft: false
           prerelease: false
         env:

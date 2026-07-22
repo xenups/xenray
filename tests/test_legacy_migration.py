@@ -54,9 +54,6 @@ class TestLegacyConfigService(unittest.TestCase):
                 }
             ]
         }
-        # Mock _get_server_object since it's used in _fill_transport_defaults
-        self.mock_processor._get_server_object.return_value = {"address": "server.com"}
-
         migrated = self.service.migrate_config(config)
         stream = migrated["outbounds"][0]["streamSettings"]
 

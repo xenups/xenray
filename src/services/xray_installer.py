@@ -8,7 +8,7 @@ from typing import Callable, Optional
 import requests
 from loguru import logger
 
-from src.core.constants import BIN_DIR, XRAY_EXECUTABLE, XRAY_VERSION
+from src.core.constants import BIN_DIR, WINTUN_DLL, WINTUN_DOWNLOAD_URL, XRAY_EXECUTABLE, XRAY_VERSION
 from src.utils.platform_utils import PlatformUtils
 
 # Constants
@@ -72,6 +72,9 @@ class XrayInstallerService:
                 progress_callback("Installing Xray Core...")
             if not XrayInstallerService._extract_core(zip_path):
                 return False
+
+            # 4. Ensure wintun.dll is present (required for VPN/TUN mode on Windows)
+            XrayInstallerService._ensure_wintun(progress_callback)
 
             if progress_callback:
                 progress_callback("Installation complete!")
@@ -218,6 +221,87 @@ class XrayInstallerService:
             return True
         except (zipfile.BadZipFile, OSError, IOError) as e:
             logger.error(f"Failed to extract Xray core: {e}")
+            return False
+
+    # ------------------------------------------------------------------
+    # wintun.dll management (Windows VPN/TUN mode)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def is_wintun_present() -> bool:
+        """Check if wintun.dll is present in the bin directory."""
+        return os.path.exists(WINTUN_DLL)
+
+    @staticmethod
+    def _ensure_wintun(
+        progress_callback: Optional[Callable[[str], None]] = None,
+    ) -> bool:
+        """
+        Ensure wintun.dll is present alongside xray.exe.
+
+        On non-Windows platforms this is a no-op.
+        Downloads wintun.zip from the official wintun.net release and
+        extracts the architecture-appropriate wintun.dll to BIN_DIR.
+
+        Returns:
+            True if wintun is present (or not needed), False if download failed.
+        """
+        if PlatformUtils.get_platform() != "windows":
+            return True  # wintun only needed on Windows
+
+        if XrayInstallerService.is_wintun_present():
+            logger.info("[XrayInstaller] wintun.dll already present, skipping download")
+            return True
+
+        if progress_callback:
+            progress_callback("Downloading wintun.dll for TUN/VPN mode...")
+
+        try:
+            wintun_zip = os.path.join(tempfile.gettempdir(), "wintun.zip")
+            logger.info(f"[XrayInstaller] Downloading wintun from {WINTUN_DOWNLOAD_URL}")
+            response = requests.get(
+                WINTUN_DOWNLOAD_URL,
+                stream=True,
+                timeout=(CONNECT_TIMEOUT, READ_TIMEOUT),
+            )
+            response.raise_for_status()
+
+            with open(wintun_zip, "wb") as f:
+                for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
+                    if chunk:
+                        f.write(chunk)
+
+            # Determine architecture subdir inside the wintun zip
+            # Structure: wintun/bin/amd64/wintun.dll  (or arm64/)
+            arch = PlatformUtils.get_architecture()
+            arch_subdir = "amd64" if arch == "x86_64" else "arm64"
+            dll_inner_path = f"wintun/bin/{arch_subdir}/wintun.dll"
+
+            with zipfile.ZipFile(wintun_zip, "r") as zf:
+                names = zf.namelist()
+                if dll_inner_path in names:
+                    with zf.open(dll_inner_path) as src, open(WINTUN_DLL, "wb") as dst:
+                        dst.write(src.read())
+                    logger.info(f"[XrayInstaller] wintun.dll extracted to {WINTUN_DLL}")
+                else:
+                    # Fallback: try any wintun.dll in the archive
+                    dll_entries = [n for n in names if n.endswith("wintun.dll")]
+                    if dll_entries:
+                        with zf.open(dll_entries[0]) as src, open(WINTUN_DLL, "wb") as dst:
+                            dst.write(src.read())
+                        logger.info(f"[XrayInstaller] wintun.dll (fallback) extracted from {dll_entries[0]}")
+                    else:
+                        logger.error("[XrayInstaller] wintun.dll not found in downloaded archive")
+                        return False
+
+            if progress_callback:
+                progress_callback("wintun.dll installed.")
+            return True
+
+        except Exception as e:
+            logger.warning(f"[XrayInstaller] Failed to download wintun.dll: {e} (VPN mode may not work)")
+            if progress_callback:
+                progress_callback(f"wintun.dll download failed: {e}")
             return False
 
     @staticmethod

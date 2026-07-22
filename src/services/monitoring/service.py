@@ -21,7 +21,8 @@ from loguru import logger
 from src.core.app_context import AppContext
 from src.services.connection_tester import ConnectionTester
 from src.services.network_validator import NetworkValidator
-from src.services.singbox_metrics_provider import ClashAPIProvider
+from src.services.xray_process_monitor import XrayProcessProvider
+from src.services.xray_service import XrayService
 
 from .active_connectivity_monitor import ActiveConnectivityMonitor
 from .auto_reconnect_service import AutoReconnectService
@@ -83,9 +84,13 @@ class ConnectionMonitoringService:
             event_emitter=on_reconnect_event,
         )
 
-        # Create ActiveConnectivityMonitor (metrics-based, VPN mode only)
+        # Create ActiveConnectivityMonitor (process-based, VPN mode only)
         # Emits ACTIVE_LOST, ACTIVE_RESTORED, ACTIVE_DEGRADED signals
-        metrics_provider = ClashAPIProvider(port=9090)
+        xray_service = XrayService()
+        metrics_provider = XrayProcessProvider(
+            pid_getter=lambda: xray_service.pid,
+            socks_port_getter=app_context.settings.get_proxy_port,
+        )
         self._active_monitor = ActiveConnectivityMonitor(
             metrics_provider=metrics_provider,
             on_connectivity_lost=lambda: self._emit_signal(MonitorSignal.ACTIVE_LOST),

@@ -81,6 +81,8 @@
     "app_update_description": "Проверить обновления XenRay",
     "check_updates": "Проверить обновления",
     "update_xray": "Обновить ядро Xray",
+    "update_rules": "Обновить правила маршрутизации",
+    "update_rules_desc": "Обновить базы geoip и geosite",
     "about": "О XenRay",
     "version": "v1.0.0 by Xenups",
     "language": "Язык",
@@ -139,6 +141,22 @@
     "ir": "Иран",
     "cn": "Китай",
     "ru": "Россия"
+  },
+  "rules_update": {
+    "checking": "Проверка обновлений правил... 📡",
+    "up_to_date": "Правила маршрутизации актуальны! ✅",
+    "available": "Доступны новые правила",
+    "title": "Обновление правил маршрутизации",
+    "message": "Обновить geoip.dat и geosite.dat?",
+    "confirm": "Скачать и установить",
+    "cancel": "Не сейчас",
+    "downloading": "Загрузка {file}... {progress}%",
+    "installing": "Установка файлов правил...",
+    "success": "Правила маршрутизации обновлены! 🎉",
+    "failed": "Ошибка обновления правил! ❌",
+    "check_failed": "Не удалось проверить обновления правил",
+    "geoip": "geoip.dat",
+    "geosite": "geosite.dat"
   },
   "status": {
     "select_server": "Сначала выберите сервер",

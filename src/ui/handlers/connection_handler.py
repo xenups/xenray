@@ -10,7 +10,7 @@ from typing import Callable, Optional
 
 from src.core.app_context import AppContext
 from src.core.connection_manager import ConnectionManager
-from src.core.constants import SINGBOX_LOG_FILE, TMPDIR, XRAY_LOG_FILE
+from src.core.constants import TMPDIR, XRAY_LOG_FILE
 from src.core.i18n import t
 from src.core.logger import logger
 from src.core.types import ConnectionMode
@@ -273,10 +273,7 @@ class ConnectionHandler:
 
         try:
             app_log = os.path.join(TMPDIR, "xenray.log")
-            if mode_str == "vpn":
-                self._log_viewer.start_tailing(app_log, XRAY_LOG_FILE, SINGBOX_LOG_FILE)
-            else:
-                self._log_viewer.start_tailing(app_log, XRAY_LOG_FILE)
+            self._log_viewer.start_tailing(app_log, XRAY_LOG_FILE)
         except Exception as e:
             logger.warning(f"[ConnectionHandler] Failed to start log tailing: {e}")
 
@@ -332,14 +329,23 @@ class ConnectionHandler:
         if self._status_display:
             self._ui_call(lambda: self._status_display.set_step(t("connection.checking_network")))
 
+        mode = self._current_mode_getter() if self._current_mode_getter else ConnectionMode.PROXY
+        is_vpn = mode == ConnectionMode.VPN or mode == "vpn"
+
         proxy_port = self._app_context.settings.get_proxy_port()
         is_ok = NetworkUtils.check_proxy_connectivity(proxy_port, timeout=5, retries=2)
+
+        # In VPN mode, traffic flows through TUN, so also check direct internet connectivity
+        if not is_ok and is_vpn:
+            is_ok = NetworkUtils.check_internet_connection(host="8.8.8.8", timeout=4)
 
         # Retry once after additional stabilization if initial attempt missed due to fragment warmup
         if not is_ok:
             logger.info("[ConnectionHandler] Initial post-connection check pending, retrying after warmup...")
             time.sleep(1.5)
             is_ok = NetworkUtils.check_proxy_connectivity(proxy_port, timeout=6, retries=2)
+            if not is_ok and is_vpn:
+                is_ok = NetworkUtils.check_internet_connection(host="8.8.8.8", timeout=5)
 
         if not is_ok:
             logger.error("[ConnectionHandler] Post-connection check failed after warmup retries")
