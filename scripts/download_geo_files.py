@@ -128,7 +128,7 @@ def main():
         for f in ["geoip.dat", "geosite.dat", "wintun.dll"]:
             p = BIN_DIR / f
             size = p.stat().st_size / 1024 / 1024 if p.exists() else 0
-            print(f"  {f}: {'✓' if p.exists() else '✗'} ({size:.1f} MB)")
+            print(f"  {f}: {'[OK]' if p.exists() else '[FAIL]'} ({size:.1f} MB)")
         print("=" * 60)
 
     except Exception as e:
