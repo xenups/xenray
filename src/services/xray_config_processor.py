@@ -29,7 +29,6 @@ from src.core.constants import (
     CONFIG_SNIFFING,
     CONFIG_STREAM_SETTINGS,
     CONFIG_TAG,
-    DNS,
     DOMAIN_ASIS,
     MODE_PROXY,
     MODE_VPN,
@@ -44,7 +43,6 @@ from src.core.constants import (
     PROTOCOL_VLESS,
     PROTOCOL_VMESS,
     SNIFF_DEST_OVERRIDE,
-    TUN,
     XRAY_LOCATION_ASSET,
 )
 from src.core.types import TunEngine

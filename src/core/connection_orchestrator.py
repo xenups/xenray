@@ -1,10 +1,11 @@
 """Connection Orchestrator - Coordinates connection workflow."""
 
+import json
 from typing import Optional
 
 from loguru import logger
 
-from src.core.constants import MODE_VPN
+from src.core.constants import MODE_VPN, OUTPUT_CONFIG_PATH
 from src.core.i18n import t
 from src.core.types import TunEngine
 from src.services.singbox_tun_service import SingboxTunService
