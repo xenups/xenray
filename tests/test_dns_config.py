@@ -233,28 +233,31 @@ class TestBuildTunDnsServers:
         assert "9.9.9.9" in servers
 
     def test_doh(self, dns_configurator, mock_dns):
-        """DoH address gets protocol prefix."""
+        """DoH address is returned as bare address (TUN expects IPs only)."""
         mock_dns.load.return_value = [
-            {"address": "dns.cloudflare.com", "protocol": "doh", "domains": []},
+            {"address": "1.1.1.1", "protocol": "doh", "domains": []},
         ]
         servers = dns_configurator.build_tun_servers()
-        assert "https://dns.cloudflare.com/dns-query" in servers
+        assert "1.1.1.1" in servers
+        assert "https://" not in " ".join(servers)
 
     def test_dot(self, dns_configurator, mock_dns):
-        """DoT address gets tls:// prefix."""
+        """DoT address is returned as bare address (TUN expects IPs only)."""
         mock_dns.load.return_value = [
-            {"address": "dns.google", "protocol": "dot", "domains": []},
+            {"address": "9.9.9.9", "protocol": "dot", "domains": []},
         ]
         servers = dns_configurator.build_tun_servers()
-        assert "tls://dns.google" in servers
+        assert "9.9.9.9" in servers
+        assert "tls://" not in " ".join(servers)
 
     def test_doq(self, dns_configurator, mock_dns):
-        """DoQ address gets quic:// prefix."""
+        """DoQ address is returned as bare address (TUN expects IPs only)."""
         mock_dns.load.return_value = [
-            {"address": "dns.nextdns.io", "protocol": "doq", "domains": []},
+            {"address": "94.140.14.14", "protocol": "doq", "domains": []},
         ]
         servers = dns_configurator.build_tun_servers()
-        assert "quic://dns.nextdns.io" in servers
+        assert "94.140.14.14" in servers
+        assert "quic://" not in " ".join(servers)
 
     def test_empty_address_skipped(self, dns_configurator, mock_dns):
         """Empty address entries are filtered out."""
@@ -273,12 +276,23 @@ class TestBuildTunDnsServers:
         assert "1.1.1.1" in servers
         assert "8.8.8.8" in servers
 
+    def test_domain_name_filtered_out(self, dns_configurator, mock_dns):
+        """Domain names are filtered out — TUN driver only accepts IPs."""
+        mock_dns.load.return_value = [
+            {"address": "dns.cloudflare.com", "protocol": "doh", "domains": []},
+            {"address": "1.1.1.1", "protocol": "udp", "domains": []},
+        ]
+        servers = dns_configurator.build_tun_servers()
+        assert "1.1.1.1" in servers
+        assert "dns.cloudflare.com" not in servers
+
     def test_multiple_servers(self, dns_configurator, mock_dns):
-        """Multiple DNS entries are all included."""
+        """Multiple DNS entries are all included as bare addresses."""
         mock_dns.load.return_value = [
             {"address": "9.9.9.9", "protocol": "udp", "domains": []},
-            {"address": "dns.google", "protocol": "dot", "domains": []},
+            {"address": "8.8.8.8", "protocol": "dot", "domains": []},
         ]
         servers = dns_configurator.build_tun_servers()
         assert "9.9.9.9" in servers
-        assert "tls://dns.google" in servers
+        assert "8.8.8.8" in servers
+        assert "tls://" not in " ".join(servers)

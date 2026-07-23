@@ -15,6 +15,7 @@ from src.core.constants import (
     DNS_UDP,
     DNS_USE_IP,
 )
+from src.services.config_utils import is_ip
 
 
 class DnsConfigurator:
@@ -67,19 +68,20 @@ class DnsConfigurator:
         )
 
     def build_tun_servers(self) -> list:
-        """Build DNS server list for TUN inbound from user configuration."""
+        """Build DNS server list for TUN inbound from user configuration.
+
+        TUN DNS servers must be bare IP addresses only — xray-core's TUN driver
+        parses each entry with netip.ParseAddr(), which rejects domain names
+        and protocol-prefixed URLs (https://, tls://, quic://).
+
+        Non-IP entries are skipped. Falls back to ["1.1.1.1", "8.8.8.8"]
+        when no valid IP entries exist.
+        """
         dns_config = self._app_context.dns.load()
         servers = []
         for item in dns_config:
             addr = item.get(CONFIG_ADDRESS, "")
-            if not addr:
+            if not addr or not is_ip(addr):
                 continue
-            proto = item.get(CONFIG_PROTOCOL, DNS_UDP)
-            if proto == DNS_DOH and not addr.startswith("https://"):
-                addr = f"https://{addr}/dns-query"
-            elif proto == DNS_DOT and not addr.startswith("tls://"):
-                addr = f"tls://{addr}"
-            elif proto == DNS_DOQ and not addr.startswith("quic://"):
-                addr = f"quic://{addr}"
             servers.append(addr)
         return servers if servers else ["1.1.1.1", "8.8.8.8"]
