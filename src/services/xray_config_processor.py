@@ -111,7 +111,7 @@ class XrayConfigProcessor:
         if mode == MODE_VPN:
             tun_engine = self._app_context.settings.get_tun_engine()
 
-            if tun_engine == str(self._TunEngine.XRAY):
+            if tun_engine == str(TunEngine.XRAY):
                 is_quic = self.is_quic_transport(new_config)
                 mtu_mode = "quic_safe" if is_quic else "auto"
                 optimal_mtu = NetworkUtils.detect_optimal_mtu(mtu_mode=mtu_mode)
