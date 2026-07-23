@@ -27,11 +27,6 @@ class ProfileManager:
         """Bind UI updater to the manager."""
         self._ui_call = ui_updater
 
-    @property
-    def selected_profile(self) -> Optional[dict]:
-        """Get currently selected profile."""
-        return self._selected_profile
-
     def set_ui_update_callback(self, callback: Callable[[dict], None]):
         """Set callback for UI updates when profile is selected."""
         self._on_profile_selected_ui = callback

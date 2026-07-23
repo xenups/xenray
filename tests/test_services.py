@@ -5,6 +5,18 @@ import pytest
 from src.services.xray_service import XrayService
 
 
+class TestXrayServiceInterface:
+    """Tests for XrayService interface contracts (properties vs methods)."""
+
+    def test_is_running_is_property(self):
+        """is_running must be a @property (not a method) to prevent 'bool not callable' errors."""
+        attr = XrayService.__dict__.get("is_running")
+        assert isinstance(attr, property), (
+            f"Expected 'is_running' to be a @property, got {type(attr).__name__}. "
+            "Access it as attribute, not method: service.is_running (no parentheses)."
+        )
+
+
 class TestXrayService:
     @pytest.fixture
     def xray_service(self):

@@ -205,15 +205,6 @@ class ConnectionMonitoringService:
 
         self._auto_reconnect.handle_failure(current_connection, session_id)
 
-    def is_running(self) -> bool:
-        """Check if monitoring is currently active."""
-        with self._lock:
-            return self._is_running
-
-    def is_enabled(self) -> bool:
-        """Check if auto-reconnect is enabled in settings."""
-        return self._app_context.settings.get_auto_reconnect_enabled()
-
     @property
     def session_id(self) -> int:
         """Get current session ID (0 if not running)."""
