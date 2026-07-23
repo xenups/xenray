@@ -124,11 +124,6 @@ class ActiveConnectivityMonitor:
             self._thread = None
             logger.info("[ActiveConnectivityMonitor] Stopped")
 
-    def is_running(self) -> bool:
-        """Check if monitor is currently running."""
-        with self._lock:
-            return self._running
-
     def _monitor_loop(self):
         """Main monitoring loop."""
         try:

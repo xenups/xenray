@@ -208,12 +208,9 @@ def status():
         typer.echo(f"   Mode: {mode}")
 
         # Double check if processes are actually running
-        x_running = conn_mgr._orchestrator._xray_service.is_running()
-        s_running = True
-        if mode == "vpn":
-            s_running = conn_mgr._orchestrator._singbox_service.is_running()
+        x_running = conn_mgr._orchestrator._xray_service.is_running
 
-        if not x_running or not s_running:
+        if not x_running:
             typer.echo("   ⚠️  Warning: Connection is in an inconsistent state.")
     else:
         typer.echo("📊 Connection Status:")

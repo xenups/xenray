@@ -238,16 +238,6 @@ class ConnectionManager:
         self._emit_event("disconnected")
         return True
 
-    def is_connected(self) -> bool:
-        """Check if currently connected."""
-        with self._state_lock:
-            return self._current_connection is not None
-
-    def get_current_session(self) -> int:
-        """Get current session ID (0 if not connected)."""
-        with self._state_lock:
-            return self._session_id if self._current_connection else 0
-
     def set_reconnect_event_listener(self, callback):
         """
         Set a callback to be notified of connection state changes.
