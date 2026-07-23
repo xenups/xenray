@@ -468,16 +468,14 @@ class SingboxTunService:
                 for idx, url in enumerate(SINGBOX_RULE_SETS[country]):
                     tag_name = f"{country}-rules-{idx}"
                     fmt = "source" if url.endswith(".json") else "binary"
-                    cfg["route"]["rule_set"].append(
-                        {
-                            "tag": tag_name,
-                            "type": "remote",
-                            "format": fmt,
-                            "url": url,
-                            "download_detour": "direct",
-                            "update_interval": "24h",
-                        }
-                    )
+                    cfg["route"]["rule_set"].append({
+                        "tag": tag_name,
+                        "type": "remote",
+                        "format": fmt,
+                        "url": url,
+                        "download_detour": "direct",
+                        "update_interval": "24h",
+                    })
                     rules.append({"rule_set": tag_name, "outbound": "direct"})
                     dns_rules.append({"rule_set": tag_name, "server": "bootstrap"})
 

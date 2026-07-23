@@ -91,16 +91,16 @@ SINGBOX_LOG_FILE = os.path.join(TMPDIR, "xenray_singbox.log")
 SINGBOX_PID_FILE = os.path.join(TMPDIR, "singbox.pid")
 SINGBOX_RULE_SETS = {
     "ir": [
-        "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-ir.json",
-        "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-ir.json",
+        "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-ir.srs",
+        "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-ir.srs",
     ],
     "cn": [
-        "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.json",
-        "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.json",
+        "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.srs",
+        "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs",
     ],
     "ru": [
-        "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-ru.json",
-        "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-ru.json",
+        "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-ru.srs",
+        "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-ru.srs",
     ],
 }
 
