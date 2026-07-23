@@ -26,6 +26,7 @@ from src.ui.components.settings_sections import (
     SettingsListTile,
     SettingsSection,
     StartupToggleRow,
+    TunEngineRow,
 )
 from src.utils.process_utils import ProcessUtils
 
@@ -62,6 +63,10 @@ class SettingsDrawer(ft.NavigationDrawer):
         self._country_row = CountryDropdownRow(
             self._app_context.settings.get_routing_country(),
             self._save_country,
+        )
+        self._tun_engine_row = TunEngineRow(
+            self._app_context.settings.get_tun_engine(),
+            self._save_tun_engine,
         )
         self._language_row = LanguageDropdownRow(
             self._app_context.settings.get_language(),
@@ -121,6 +126,7 @@ class SettingsDrawer(ft.NavigationDrawer):
                             t("settings.connection"),
                             [
                                 self._mode_switch_row,
+                                self._tun_engine_row,
                                 self._port_row,
                                 self._country_row,
                             ],
@@ -353,6 +359,24 @@ class SettingsDrawer(ft.NavigationDrawer):
         val = self._country_row.value
         self._app_context.settings.set_routing_country(val)
         self._show_toast(t("settings.country_saved", val=val), "success")
+        page.update()
+
+    def _save_tun_engine(self, e):
+        """Save the TUN engine setting."""
+        page = self.page
+        if not page:
+            return
+
+        new_engine = self._tun_engine_row.value
+        old_engine = self._app_context.settings.get_tun_engine()
+        self._app_context.settings.set_tun_engine(new_engine)
+        self._show_toast(t("settings.tun_engine_saved", engine=new_engine), "success")
+
+        # If currently connected in VPN mode, prompt reconnect to apply change
+        if old_engine != new_engine:
+            current_mode = self._get_current_mode()
+            if current_mode == ConnectionMode.VPN:
+                self._show_toast(t("settings.tun_engine_reconnect"), "warning")
         page.update()
 
     def _save_language(self, e):

@@ -102,7 +102,13 @@
     "auto_reconnect_enabled": "Auto-reconnect enabled",
     "auto_reconnect_disabled": "Auto-reconnect disabled (saves battery)",
     "language_restart_msg": "Language changed! Restart app for full effect.",
-    "experimental": "Experimental"
+    "experimental": "Experimental",
+    "tun_engine": "TUN Engine",
+    "tun_engine_hint": "TUN implementation for VPN mode",
+    "singbox_tun": "sing-box (Recommended)",
+    "xray_tun": "Xray",
+    "tun_engine_saved": "TUN engine set to {engine}",
+    "tun_engine_reconnect": "Reconnect to apply new TUN engine"
   },
   "admin": {
     "title": "Admin Rights Required",

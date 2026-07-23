@@ -98,7 +98,13 @@
     "auto_reconnect_enabled": "自动重连已开启",
     "auto_reconnect_disabled": "自动重连已关闭 (省电模式)",
     "language_restart_msg": "语言已更改！重启应用以完全生效。",
-    "experimental": "实验性"
+    "experimental": "实验性",
+    "tun_engine": "TUN 引擎",
+    "tun_engine_hint": "VPN 模式的 TUN 实现",
+    "singbox_tun": "sing-box (推荐)",
+    "xray_tun": "Xray",
+    "tun_engine_saved": "TUN 引擎已切换为 {engine}",
+    "tun_engine_reconnect": "请重新连接以应用新的 TUN 引擎"
   },
   "admin": {
     "title": "需要管理员权限",

@@ -168,6 +168,58 @@ class ModeSwitchRow(ft.Container):
             pass
 
 
+class TunEngineRow(ft.Container):
+    """TUN engine selector row (sing-box Recommended vs Xray)."""
+
+    def __init__(self, current_engine: str, on_change: Callable):
+        self._dropdown = ft.Dropdown(
+            width=160,
+            text_size=12,
+            content_padding=8,
+            value=current_engine if current_engine else "sing-box",
+            options=[
+                ft.dropdown.Option("sing-box", t("settings.singbox_tun")),
+                ft.dropdown.Option("xray", t("settings.xray_tun")),
+            ],
+            border_color=ft.Colors.OUTLINE_VARIANT,
+            focused_border_color=ft.Colors.PRIMARY,
+            on_select=on_change,
+        )
+        self._sublabel = ft.Text(
+            t("settings.tun_engine_hint"),
+            size=11,
+            color=ft.Colors.ON_SURFACE_VARIANT,
+        )
+
+        super().__init__(
+            content=ft.Row(
+                [
+                    ft.Icon(ft.Icons.SETTINGS_ETHERNET, color=ft.Colors.ON_SURFACE_VARIANT),
+                    ft.Column(
+                        [
+                            ft.Text(
+                                t("settings.tun_engine"),
+                                weight=ft.FontWeight.W_500,
+                            ),
+                            self._sublabel,
+                        ],
+                        spacing=2,
+                        expand=True,
+                    ),
+                    self._dropdown,
+                ],
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            ),
+            padding=10,
+            border_radius=8,
+            bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE),
+        )
+
+    @property
+    def value(self) -> str:
+        return self._dropdown.value
+
+
 class PortInputRow(ft.Container):
     """Port input row for settings."""
 

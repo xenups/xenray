@@ -1,12 +1,13 @@
 """Connection Manager - Facade for connection management with session-scoped lifecycle."""
 
+import os
 import threading
 
 from loguru import logger
 
 from src.core.app_context import AppContext
 from src.core.connection_orchestrator import ConnectionOrchestrator
-from src.core.constants import MODE_PROXY, MODE_VPN, OUTPUT_CONFIG_PATH, PROTOCOL_TUN
+from src.core.constants import MODE_PROXY, MODE_VPN, OUTPUT_CONFIG_PATH, PROTOCOL_TUN, SINGBOX_PID_FILE
 from src.core.i18n import t
 from src.services.xray_service import XrayService
 
@@ -60,7 +61,8 @@ class ConnectionManager:
             on_reconnect_event=self._emit_event,
         )
 
-        # Create ConnectionOrchestrator with all dependencies (no singbox_service)
+        # Create ConnectionOrchestrator with all dependencies
+        # (sing-box TUN is self-managed inside the orchestrator)
         self._orchestrator = ConnectionOrchestrator(
             app_context=app_context,
             network_validator=self._monitoring.network_validator,
@@ -120,13 +122,32 @@ class ConnectionManager:
         xray_pid = self._orchestrator._xray_service.pid
 
         if xray_pid:
-            # Single-process architecture: if Xray is running, determine mode from
-            # the saved config (if available) or default to proxy.
+            # Determine mode from running config + sing-box PID
             mode = self._detect_mode_from_running_config()
+
+            # Check if sing-box TUN was also running (sing-box engine)
+            singbox_pid = None
+            try:
+                if os.path.exists(SINGBOX_PID_FILE):
+                    with open(SINGBOX_PID_FILE, "r") as f:
+                        spid = int(f.read().strip())
+                    from src.utils.process_utils import ProcessUtils
+
+                    if ProcessUtils.is_running(spid):
+                        singbox_pid = spid
+            except Exception:
+                pass
+
+            # If sing-box is running, the mode is VPN even if Xray config has no TUN
+            if singbox_pid and mode == MODE_PROXY:
+                mode = MODE_VPN
+                logger.debug("[ConnectionManager] Sing-box TUN running — adopting as VPN mode")
+
             self._session_id += 1
             self._current_connection = {
                 "mode": mode,
                 "xray_pid": xray_pid,
+                "singbox_pid": singbox_pid,
                 "file": t("connection.adopted_connection", default="Adopted Connection"),
                 "session_id": self._session_id,
             }
