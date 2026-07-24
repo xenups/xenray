@@ -84,6 +84,23 @@ else:
 # Executable paths with platform-specific extensions
 XRAY_EXECUTABLE = os.path.join(BIN_DIR, f"xray{PlatformUtils.get_binary_suffix()}")
 
+# Sing-box executable paths
+SINGBOX_EXECUTABLE = os.path.join(BIN_DIR, f"sing-box{PlatformUtils.get_binary_suffix()}")
+SINGBOX_CONFIG_PATH = os.path.join(TMPDIR, "singbox_config.json")
+SINGBOX_LOG_FILE = os.path.join(TMPDIR, "xenray_singbox.log")
+SINGBOX_PID_FILE = os.path.join(TMPDIR, "singbox.pid")
+SINGBOX_RULE_SETS = {
+    "ir": [
+        "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-ir.srs",
+    ],
+    "cn": [
+        "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs",
+    ],
+    "ru": [
+        "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-ru.srs",
+    ],
+}
+
 # Xray geo files directory (geoip.dat, geosite.dat in assets/rules or bin/)
 RULES_DIR = os.path.join(ASSETS_DIR, "rules")
 if os.path.exists(os.path.join(RULES_DIR, "geosite.dat")):

@@ -99,7 +99,13 @@
     "auto_reconnect_enabled": "اتصال مجدد خودکار فعال شد",
     "auto_reconnect_disabled": "اتصال مجدد خودکار غیرفعال شد (به منظور کاهش مصرف باتری)",
     "language_restart_msg": "زبان تغییر کرد! برای اعمال کامل تغییرات، برنامه را ریستارت کنید.",
-    "experimental": "آزمایشی"
+    "experimental": "آزمایشی",
+    "tun_engine": "موتور TUN",
+    "tun_engine_hint": "موتور حالت VPN",
+    "singbox_tun": "sing-box (پیشنهادی)",
+    "xray_tun": "Xray",
+    "tun_engine_saved": "موتور TUN به {engine} تغییر یافت",
+    "tun_engine_reconnect": "برای اعمال موتور TUN جدید، دوباره متصل شوید"
   },
   "admin": {
     "title": "نیاز به دسترسی مدیر",

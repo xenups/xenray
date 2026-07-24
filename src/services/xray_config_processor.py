@@ -45,6 +45,7 @@ from src.core.constants import (
     SNIFF_DEST_OVERRIDE,
     XRAY_LOCATION_ASSET,
 )
+from src.core.types import TunEngine
 from src.services.config_patcher import ConfigPatcher
 from src.services.config_utils import get_server_object, is_ip
 from src.services.dns_configurator import DnsConfigurator
@@ -108,21 +109,26 @@ class XrayConfigProcessor:
         self._config_patcher.safe_patch(new_config)
 
         if mode == MODE_VPN:
-            is_quic = self.is_quic_transport(new_config)
-            mtu_mode = "quic_safe" if is_quic else "auto"
-            optimal_mtu = NetworkUtils.detect_optimal_mtu(mtu_mode=mtu_mode)
-            routing_country = self._app_context.settings.get_routing_country()
-            routing_rules = self._app_context.routing.load_rules()
-            proxy_server_ips = self.get_proxy_server_ip(new_config)
-            dns_servers = self._dns_configurator.build_tun_servers()
-            self._tun_injector.inject(
-                new_config,
-                dns_servers=dns_servers,
-                mtu=optimal_mtu,
-                routing_country=routing_country,
-                routing_rules=routing_rules,
-                proxy_server_ips=proxy_server_ips,
-            )
+            tun_engine = self._app_context.settings.get_tun_engine()
+
+            if tun_engine == str(TunEngine.XRAY):
+                is_quic = self.is_quic_transport(new_config)
+                mtu_mode = "quic_safe" if is_quic else "auto"
+                optimal_mtu = NetworkUtils.detect_optimal_mtu(mtu_mode=mtu_mode)
+                routing_country = self._app_context.settings.get_routing_country()
+                routing_rules = self._app_context.routing.load_rules()
+                proxy_server_ips = self.get_proxy_server_ip(new_config)
+                dns_servers = self._dns_configurator.build_tun_servers()
+                self._tun_injector.inject(
+                    new_config,
+                    dns_servers=dns_servers,
+                    mtu=optimal_mtu,
+                    routing_country=routing_country,
+                    routing_rules=routing_rules,
+                    proxy_server_ips=proxy_server_ips,
+                )
+            else:
+                logger.info("[XrayConfigProcessor] Sing-box TUN engine selected — skipping Xray TUN injection")
 
         return new_config
 

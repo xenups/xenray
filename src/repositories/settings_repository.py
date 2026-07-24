@@ -8,6 +8,7 @@ from src.repositories.file_utils import atomic_write
 # Defaults
 DEFAULT_PROXY_PORT = 10805
 DEFAULT_DNS = "8.8.8.8, 1.1.1.1"
+DEFAULT_TUN_ENGINE = "sing-box"
 
 
 class SettingsRepository:
@@ -146,3 +147,12 @@ class SettingsRepository:
     def set_last_selected_profile_id(self, profile_id: str) -> None:
         if profile_id:
             self._write("last_profile.txt", profile_id)
+
+    # --- TUN Engine ---
+    def get_tun_engine(self) -> str:
+        val = self._read("tun_engine.txt", DEFAULT_TUN_ENGINE)
+        return val if val in {"sing-box", "xray"} else DEFAULT_TUN_ENGINE
+
+    def set_tun_engine(self, engine: str) -> None:
+        if engine in {"sing-box", "xray"}:
+            self._write("tun_engine.txt", engine)
