@@ -100,7 +100,7 @@
     "language_restart_msg": "Язык изменен! Перезапустите приложение для полного применения.",
     "experimental": "Экспериментально",
     "tun_engine": "Движок TUN",
-    "tun_engine_hint": "Реализация TUN для режима VPN",
+    "tun_engine_hint": "Движок режима VPN",
     "singbox_tun": "sing-box (рекомендуется)",
     "xray_tun": "Xray",
     "tun_engine_saved": "Движок TUN изменён на {engine}",

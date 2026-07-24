@@ -101,7 +101,7 @@
     "language_restart_msg": "زبان تغییر کرد! برای اعمال کامل تغییرات، برنامه را ریستارت کنید.",
     "experimental": "آزمایشی",
     "tun_engine": "موتور TUN",
-    "tun_engine_hint": "پیاده‌سازی TUN برای حالت VPN",
+    "tun_engine_hint": "موتور حالت VPN",
     "singbox_tun": "sing-box (پیشنهادی)",
     "xray_tun": "Xray",
     "tun_engine_saved": "موتور TUN به {engine} تغییر یافت",

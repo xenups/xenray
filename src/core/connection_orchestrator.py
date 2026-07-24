@@ -1,11 +1,13 @@
 """Connection Orchestrator - Coordinates connection workflow."""
 
+import glob
 import json
+import os
 from typing import Optional
 
 from loguru import logger
 
-from src.core.constants import MODE_VPN, OUTPUT_CONFIG_PATH
+from src.core.constants import MODE_VPN, OUTPUT_CONFIG_PATH, TMPDIR
 from src.core.i18n import t
 from src.core.types import TunEngine
 from src.services.singbox_tun_service import SingboxTunService
@@ -42,6 +44,14 @@ class ConnectionOrchestrator:
         self._legacy_config_service = legacy_config_service
         self._singbox_tun: Optional[SingboxTunService] = None
 
+    def _clear_logs(self):
+        """Remove all log files in TMPDIR before connecting."""
+        for f in glob.glob(os.path.join(TMPDIR, "*.log")):
+            try:
+                os.remove(f)
+            except OSError:
+                pass
+
     def establish_connection(self, file_path: str, mode: str, step_callback=None) -> tuple[bool, Optional[dict]]:
         """
         Orchestrate full connection workflow with legacy migration and fallback.
@@ -54,6 +64,7 @@ class ConnectionOrchestrator:
         Returns:
             (success, connection_info) tuple
         """
+        self._clear_logs()
         try:
             # 1. Load and validate configuration
             original_config = self._load_and_validate_config(file_path, step_callback)

@@ -436,11 +436,11 @@ class LinkParser:
             if not sni:
                 raise ValueError("Reality configuration missing required 'sni' parameter")
 
+            sid_list = _maybe_split("sid", sid_raw) if sid_raw else [""]
             reality_settings: Dict[str, Any] = {
-                "show": False,
                 "serverName": sni,
                 "publicKey": pbk,
-                "shortIds": _maybe_split("sid", sid_raw) if sid_raw else [""],
+                "shortId": sid_list[0] if sid_list else "",
                 "fingerprint": fp or DEFAULT_FINGERPRINT,
             }
             spx = get_param("spx")
@@ -945,8 +945,11 @@ class LinkParser:
             reality = stream.get("realitySettings", {})
             params.append(f"sni={reality.get('serverName', '')}")
             params.append(f"pbk={reality.get('publicKey', '')}")
-            sid_list = reality.get("shortIds", [])
-            params.append(f"sid={','.join(sid_list) if isinstance(sid_list, list) else sid_list}")
+            sid = reality.get("shortId") or ""
+            if not sid:
+                sid_list = reality.get("shortIds", [])
+                sid = ",".join(sid_list) if isinstance(sid_list, list) else (sid_list or "")
+            params.append(f"sid={sid}")
             if reality.get("fingerprint"):
                 params.append(f"fp={reality.get('fingerprint')}")
             if reality.get("spiderX"):

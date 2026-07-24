@@ -347,7 +347,7 @@ class TestParseVLESS:
         result = LinkParser.parse_link(link)
         rs = result["config"]["outbounds"][0]["streamSettings"]["realitySettings"]
         assert rs["publicKey"] == "publickey"
-        assert rs["shortIds"] == ["s1", "s2"]
+        assert rs["shortId"] == "s1"
         assert rs["fingerprint"] == "chrome"
         assert rs["serverName"] == "target.com"
         assert rs["spiderX"] == "spider"
@@ -759,7 +759,7 @@ class TestGenerateVLESS:
                 "realitySettings": {
                     "serverName": "sni",
                     "publicKey": "pub",
-                    "shortIds": ["sid"],
+                    "shortId": "sid",
                     "fingerprint": "chrome",
                     "spiderX": "spider",
                 },
@@ -1060,7 +1060,7 @@ class TestRoundTrip:
         link = "vless://uuid@host:443?security=reality&pbk=pub&sid=s1,s2&fp=chrome&sni=target.com#RTReal"
         _, ob2, _ = self._rt(link)
         rs = ob2["streamSettings"]["realitySettings"]
-        assert rs["shortIds"] == ["s1", "s2"]
+        assert rs["shortId"] == "s1"
         assert rs["publicKey"] == "pub"
 
     def test_finalmask(self):

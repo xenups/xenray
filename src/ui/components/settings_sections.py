@@ -173,7 +173,8 @@ class TunEngineRow(ft.Container):
 
     def __init__(self, current_engine: str, on_change: Callable):
         self._dropdown = ft.Dropdown(
-            width=160,
+            width=140,
+            height=40,
             text_size=12,
             content_padding=8,
             value=current_engine if current_engine else "sing-box",
@@ -189,6 +190,8 @@ class TunEngineRow(ft.Container):
             t("settings.tun_engine_hint"),
             size=11,
             color=ft.Colors.ON_SURFACE_VARIANT,
+            no_wrap=True,
+            overflow=ft.TextOverflow.ELLIPSIS,
         )
 
         super().__init__(
@@ -209,6 +212,7 @@ class TunEngineRow(ft.Container):
                     self._dropdown,
                 ],
                 alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
             ),
             padding=10,
             border_radius=8,

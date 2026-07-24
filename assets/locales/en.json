@@ -104,7 +104,7 @@
     "language_restart_msg": "Language changed! Restart app for full effect.",
     "experimental": "Experimental",
     "tun_engine": "TUN Engine",
-    "tun_engine_hint": "TUN implementation for VPN mode",
+    "tun_engine_hint": "Engine for VPN mode",
     "singbox_tun": "sing-box (Recommended)",
     "xray_tun": "Xray",
     "tun_engine_saved": "TUN engine set to {engine}",

@@ -100,7 +100,7 @@
     "language_restart_msg": "语言已更改！重启应用以完全生效。",
     "experimental": "实验性",
     "tun_engine": "TUN 引擎",
-    "tun_engine_hint": "VPN 模式的 TUN 实现",
+    "tun_engine_hint": "VPN 模式引擎",
     "singbox_tun": "sing-box (推荐)",
     "xray_tun": "Xray",
     "tun_engine_saved": "TUN 引擎已切换为 {engine}",
