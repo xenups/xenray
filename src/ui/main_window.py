@@ -356,7 +356,6 @@ class MainWindow:
         self._selected_profile = profile
         self._app_context.settings.set_last_selected_profile_id(profile.get("id"))
         self._update_selected_profile_ui(profile)
-        self._connection_handler.reconnect()
 
     def _on_server_search(self, query: str = ""):
         if hasattr(self, "_server_list") and self._server_list:
