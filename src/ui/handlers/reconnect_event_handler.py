@@ -85,6 +85,7 @@ class ReconnectEventHandler:
             "reconnected": self._handle_reconnected,
             "connected": self._handle_connected,  # Handle both normal and reconnect connects
             "reconnect_failed": self._handle_reconnect_failed,
+            "disconnected": self._handle_disconnected,
         }
 
         handler = handlers.get(event_type)
@@ -192,5 +193,14 @@ class ReconnectEventHandler:
             msg_key = "connection.no_internet" if reason == "no_internet" else "connection.reconnect_failed"
             self._ui_call(lambda: self._toast.error(t(msg_key), 3000))
 
+        if self._reset_ui_callback:
+            self._ui_call(self._reset_ui_callback)
+
+    def _handle_disconnected(self, data: dict):
+        """Handle disconnected event (including emergency crash disconnects)."""
+        if data and (data.get("crashed") or data.get("reason")):
+            reason = data.get("reason") or t("status.tun_crashed", default="VPN Connection Lost: TUN engine terminated unexpectedly.")
+            if self._toast:
+                self._ui_call(lambda: self._toast.error(reason, 4000))
         if self._reset_ui_callback:
             self._ui_call(self._reset_ui_callback)
