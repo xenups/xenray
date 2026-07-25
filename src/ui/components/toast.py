@@ -71,11 +71,11 @@ class ToastManager:
         """Show a toast notification."""
         toast = Toast(message, message_type, duration)
 
-        # Centered container at top center of page
+        # Centered container over the main content canvas (offsetting left 210px sidebar)
         toast_container = ft.Container(
             content=toast,
             top=24,
-            left=0,
+            left=210,
             right=0,
             alignment=ft.Alignment.TOP_CENTER,
         )
