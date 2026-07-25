@@ -104,7 +104,12 @@
     "singbox_tun": "sing-box (推荐)",
     "xray_tun": "Xray",
     "tun_engine_saved": "TUN 引擎已切换为 {engine}",
-    "tun_engine_reconnect": "请重新连接以应用新的 TUN 引擎"
+    "tun_engine_reconnect": "请重新连接以应用新的 TUN 引擎",
+    "vpn_mode": "TUN/VPN 模式",
+    "vpn_mode_desc": "全隧道 VPN",
+    "proxy_mode": "系统代理模式",
+    "proxy_mode_desc": "SOCKS + HTTP 代理",
+    "recommended": "推荐"
   },
   "admin": {
     "title": "需要管理员权限",
@@ -237,6 +242,46 @@
     "title": "连接日志",
     "pause": "暂停日志更新",
     "resume": "恢复日志更新"
+  },
+  "dashboard": {
+    "network_traffic": "网络流量",
+    "live_statistics": "实时统计",
+    "current_node": "当前节点",
+    "change_server": "切换节点",
+    "uptime": "运行时间: {time}",
+    "upload": "上传",
+    "download": "下载",
+    "protocol": "协议",
+    "encryption": "加密",
+    "local_ip": "本地IP",
+    "secure": "安全",
+    "system_ready": "系统就绪",
+    "cpu": "CPU: {percent}%",
+    "ram": "RAM: {mb}MB"
+  },
+  "logs": {
+    "title": "连接日志",
+    "pause": "暂停日志",
+    "resume": "恢复日志",
+    "memory": "内存",
+    "active_threads": "活动线程",
+    "health_status": "健康状态",
+    "nodes": "节点数",
+    "optimal_performance": "性能优化",
+    "issues": "问题数",
+    "system_healthy": "系统正常",
+    "copy": "复制",
+    "download": "下载",
+    "clear": "清除",
+    "terminal_title": "XENRAY_CLI :: 主日志"
+  },
+  "nav": {
+    "dashboard": "仪表盘",
+    "servers": "服务器",
+    "logs": "日志",
+    "settings": "设置",
+    "connect_now": "连接",
+    "disconnect": "断开连接"
   },
   "header": {
     "toggle_theme": "切换主题",

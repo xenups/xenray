@@ -29,13 +29,11 @@ async def main(page):
     #    We set dimensions here so they take effect before the first paint.
     page.window.width = WINDOW_WIDTH
     page.window.height = WINDOW_HEIGHT
-    page.window.min_width = WINDOW_WIDTH
-    page.window.min_height = WINDOW_HEIGHT
-    page.window.max_width = WINDOW_WIDTH
-    page.window.max_height = WINDOW_HEIGHT
-    page.window.resizable = False
+    page.window.min_width = 880
+    page.window.min_height = 600
+    page.window.resizable = True
     page.window.minimizable = True
-    page.window.maximizable = False
+    page.window.maximizable = True
     page.window.prevent_close = True
     page.title = "XenRay"
     page.padding = 0
@@ -61,6 +59,7 @@ async def main(page):
 
     # 5. Build UI — first page.update() flushes dimensions + center + content in one frame
     window = container.main_window(page=page)
+    page._main_window = window
     page.add(window._stack)
 
     # 6. Window event handler — checks both e.data and e.type

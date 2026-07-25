@@ -225,7 +225,7 @@ class ConnectionManager:
         """Internal reconnect method for AutoReconnectService (no step_callback)."""
         return self.connect(file_path, mode, step_callback=None)
 
-    def disconnect(self) -> bool:
+    def disconnect(self, step_callback=None) -> bool:
         """
         Disconnect current connection.
 
@@ -233,30 +233,31 @@ class ConnectionManager:
         - Immediately cancels all reconnect attempts
         - Stops all monitoring (active and passive)
         - Invalidates current session to prevent late signals/events
-        - No automatic restart is possible after this
+        - Emits real-time step notifications via step_callback
         """
         # Emit disconnecting state FIRST (user-visible)
         self._emit_event("disconnecting")
+        if step_callback:
+            step_callback(t("app.disconnecting", default="Disconnecting..."))
 
         # Stop monitoring via facade (handles all: cancel reconnect, stop monitors)
         # After this, no signals will be forwarded
         self._monitoring.stop()
 
         with self._state_lock:
-            if not self._current_connection:
-                self._emit_event("disconnected")
-                return True
             connection = self._current_connection
             self._current_connection = None
             # Invalidate session to prevent any late signals
             self._session_id = 0
 
-        # Teardown connection
-        self._orchestrator.teardown_connection(connection)
+        # Always teardown connection (reverts proxy/TUN settings & kills running core processes)
+        self._orchestrator.teardown_connection(connection, step_callback=step_callback)
         logger.info("[ConnectionManager] Disconnected successfully (hard override)")
 
         # Emit final state
         self._emit_event("disconnected")
+        if step_callback:
+            step_callback(t("dashboard.disconnected", default="Disconnected"))
         return True
 
     def set_reconnect_event_listener(self, callback):

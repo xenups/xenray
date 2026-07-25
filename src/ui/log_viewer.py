@@ -7,6 +7,7 @@ from typing import Optional
 
 import flet as ft
 
+from src.core.constants import TMPDIR
 from src.core.logger import logger
 
 
@@ -132,6 +133,39 @@ class LogViewer:
             self._pause_blocker.set()
 
         return self._is_paused  # وضعیت جدید را به LogsDrawer برمی‌گرداند
+
+    def export_logs(self):
+        """Save logs to a file in TMPDIR."""
+        try:
+            path = os.path.join(TMPDIR, "xenray_exported.log")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(self._log_text.value or "")
+            logger.info(f"[LogViewer] Logs exported to {path}")
+            if self._page:
+                try:
+                    self._page.set_clipboard(path)
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.error(f"[LogViewer] Export failed: {e}")
+
+    def copy_to_clipboard(self):
+        """Copy current log text to clipboard."""
+        if not self._page:
+            return
+        try:
+            self._page.set_clipboard(self._log_text.value or "")
+        except Exception:
+            pass
+
+    def clear_logs(self):
+        """Clear all log text."""
+        self._log_text.value = ""
+        if self._page:
+            try:
+                self._page.update()
+            except Exception:
+                pass
 
     def _append_text(self, text: str):
         """Append text to log viewer (New line at the top)."""

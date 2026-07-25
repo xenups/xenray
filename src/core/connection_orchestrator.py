@@ -157,16 +157,17 @@ class ConnectionOrchestrator:
         logger.warning(f"[ConnectionOrchestrator] Connection verification failed: {latency}")
         return False
 
-    def teardown_connection(self, connection_info: dict):
+    def teardown_connection(self, connection_info: dict, step_callback=None):
         """
-        Tear down active connection.
+        Tear down active connection with granular step emissions.
 
         Args:
             connection_info: Connection information dictionary
-
-        NOTE: Monitoring is stopped by ConnectionManager via ConnectionMonitoringService
-              before this method is called.
+            step_callback: Optional step callback for UI status updates
         """
+        if step_callback:
+            step_callback(t("status.reverting_settings", default="Reverting proxy & TUN settings..."))
+
         # Stop sing-box TUN first (if running) before stopping Xray
         if self._singbox_tun and self._singbox_tun.is_running():
             logger.info("[ConnectionOrchestrator] Stopping active sing-box TUN instance...")
@@ -179,9 +180,14 @@ class ConnectionOrchestrator:
                 logger.info("[ConnectionOrchestrator] Stopping adopted sing-box TUN process...")
                 orphan_svc.stop()
 
-        # Stop Xray (single process — handles both proxy and TUN)
-        if connection_info.get("xray_pid"):
-            self._xray_service.stop()
+        if step_callback:
+            step_callback(t("status.stopping_core", default="Stopping core engine process..."))
+
+        # Stop Xray process unconditionally
+        self._xray_service.stop()
+
+        if step_callback:
+            step_callback(t("status.cleaning_up", default="Cleaning temporary sockets & files..."))
 
         logger.info("Connection torn down successfully")
 

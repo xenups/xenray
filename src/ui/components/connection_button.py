@@ -10,7 +10,7 @@ class ConnectionButton(ft.Container):
         self._is_connecting = False
         self._current_activity = 0
         self._last_active = False
-        self._state = "disconnected"  # Track state: disconnected, connecting, connected
+        self._state = "disconnected"  # Track state: disconnected, connecting, connected, disconnecting
 
         # Outer glow layer - very tight, minimal space for glow
         self._glow_layer = ft.Container(
@@ -24,11 +24,17 @@ class ConnectionButton(ft.Container):
                 color=ft.Colors.with_opacity(0.2, ft.Colors.BLACK),
                 offset=ft.Offset(0, 0),
             ),
-            opacity=1.0,  # Animated opacity for network activity visibility
-            animate_opacity=800,  # Smooth fade for network changes
-            animate_scale=ft.Animation(800, ft.AnimationCurve.EASE_IN_OUT),  # Smooth scaling
-            animate=ft.Animation(600, ft.AnimationCurve.EASE_IN_OUT),  # Smooth shadow/color changes
+            opacity=1.0,
+            animate_opacity=800,
+            animate_scale=ft.Animation(800, ft.AnimationCurve.EASE_IN_OUT),
+            animate=ft.Animation(600, ft.AnimationCurve.EASE_IN_OUT),
         )
+
+        def _on_button_click(e):
+            if self._state == "disconnecting":
+                return
+            if on_click:
+                on_click(e)
 
         # Inner button (the actual clickable glass button)
         self._button = ft.Container(
@@ -38,7 +44,7 @@ class ConnectionButton(ft.Container):
             border_radius=85,
             bgcolor="#1e293b",
             border=ft.Border.all(1.5, ft.Colors.with_opacity(0.2, ft.Colors.WHITE)),
-            on_click=on_click,
+            on_click=_on_button_click,
             alignment=ft.Alignment.CENTER,
         )
 
@@ -51,17 +57,41 @@ class ConnectionButton(ft.Container):
                 ],
                 alignment=ft.Alignment.CENTER,
             ),
-            width=190,  # Match glow layer
+            width=190,
             height=190,
             alignment=ft.Alignment.CENTER,
         )
+
+    def _safe_update(self, control):
+        try:
+            control.update()
+        except Exception:
+            pass
+
+    def _get_page_safe(self):
+        """Safely retrieve Flet page instance without raising RuntimeError."""
+        try:
+            if self.page:
+                return self.page
+        except Exception:
+            pass
+        try:
+            if self._button.page:
+                return self._button.page
+        except Exception:
+            pass
+        try:
+            if self._glow_layer.page:
+                return self._glow_layer.page
+        except Exception:
+            pass
+        return None
 
     def update_theme(self, is_dark: bool):
         """Update button appearance based on theme."""
         if self._is_connected or self._is_connecting:
             return
 
-        # Keep it glassy regardless of theme, just adjust tint
         if is_dark:
             self._button.bgcolor = ft.Colors.with_opacity(0.15, "#1e293b")
             self._button.border = ft.Border.all(1.5, ft.Colors.with_opacity(0.2, ft.Colors.WHITE))
@@ -78,46 +108,38 @@ class ConnectionButton(ft.Container):
         """Set button to connected state with subtle purple glass glow."""
         self._is_connected = True
         self._is_connecting = False
-        self._state = "connected"  # Track current state
+        self._state = "connected"
 
-        # Purple Glass Style for button
-        self._button.bgcolor = ft.Colors.with_opacity(0.25, "#8b5cf6")
-        self._button.border = ft.Border.all(2.5, ft.Colors.with_opacity(0.5, "#a78bfa"))
+        # Deep Apple Purple Glass Style for button
+        self._button.bgcolor = ft.Colors.with_opacity(0.3, "#6d28d9")
+        self._button.border = ft.Border.all(2.5, ft.Colors.with_opacity(0.5, "#7c3aed"))
         self._icon.color = ft.Colors.WHITE
-        self._button.update()
+        self._safe_update(self._button)
 
         # Reset glow layer for network activity animation
         self._glow_layer.opacity = 1.0
         self._glow_layer.scale = 1.0
 
-        # Outer glow - tight purple glow
+        # Outer glow - elegant, balanced Apple-style deep purple gradient halo
         self._glow_layer.shadow = ft.BoxShadow(
-            spread_radius=0,
-            blur_radius=30,
-            color=ft.Colors.with_opacity(0.7, "#8b5cf6"),
+            spread_radius=2,
+            blur_radius=36,
+            color=ft.Colors.with_opacity(0.55, "#6d28d9"),
             offset=ft.Offset(0, 0),
         )
-        self._glow_layer.update()
+        self._safe_update(self._glow_layer)
 
         # Start a gentle idle breathing pulse for the connected state
-        # This keeps the button "alive" even when waiting for first network stats
-        try:
-            _has_page = self.page is not None
-        except RuntimeError:
-            _has_page = False
-        if _has_page:
+        pg = self._get_page_safe()
+        if pg:
             import asyncio
 
             async def _connected_breath():
                 grow = True
                 while self._state == "connected":
-                    try:
-                        _ = self.page
-                    except RuntimeError:
+                    if not self._get_page_safe():
                         break
                     try:
-                        # Only pulse if network activity is low (idle breath)
-                        # High activity will override with more dramatic expansion in update_network_activity
                         if self._current_activity < 5:
                             if grow:
                                 self._glow_layer.opacity = 0.8
@@ -125,17 +147,20 @@ class ConnectionButton(ft.Container):
                             else:
                                 self._glow_layer.opacity = 0.5
                                 self._glow_layer.scale = 1.0
-                            self._glow_layer.update()
+                            self._safe_update(self._glow_layer)
 
                         grow = not grow
-                        await asyncio.sleep(1.2)  # Slower, calmer breath for connected idle
+                        await asyncio.sleep(1.2)
                     except Exception:
                         break
 
-            self.page.run_task(_connected_breath)
+            try:
+                pg.run_task(_connected_breath)
+            except Exception:
+                pass
 
     def set_disconnected(self):
-        """Set button to disconnected state."""
+        """Reset button to idle disconnected state."""
         self._is_connected = False
         self._is_connecting = False
         self._state = "disconnected"
@@ -145,56 +170,53 @@ class ConnectionButton(ft.Container):
         self._button.bgcolor = ft.Colors.with_opacity(0.15, "#1e293b")
         self._button.border = ft.Border.all(1.5, ft.Colors.with_opacity(0.2, ft.Colors.WHITE))
         self._icon.color = ft.Colors.WHITE
-        self._button.update()
+        self._safe_update(self._button)
 
         # Minimal glow
         self._glow_layer.shadow = ft.BoxShadow(
             spread_radius=0,
-            blur_radius=25,
+            blur_radius=20,
             color=ft.Colors.with_opacity(0.2, ft.Colors.BLACK),
             offset=ft.Offset(0, 0),
         )
-        self._glow_layer.update()
+        self._glow_layer.scale = 1.0
+        self._glow_layer.opacity = 1.0
+        self._safe_update(self._glow_layer)
 
     def set_connecting(self):
         """Set connecting state with subtle amber glass pulse."""
         self._is_connected = False
         self._is_connecting = True
-        self._state = "connecting"  # Track current state
+        self._state = "connecting"
 
         # Amber Glass Style for button
         self._button.bgcolor = ft.Colors.with_opacity(0.25, "#f59e0b")
         self._button.border = ft.Border.all(2.5, ft.Colors.with_opacity(0.5, "#fbbf24"))
         self._icon.color = ft.Colors.WHITE
-        self._button.update()
+        self._safe_update(self._button)
 
         # Reset glow layer for smooth connecting animation
         self._glow_layer.opacity = 1.0
         self._glow_layer.scale = 1.0
 
-        # Outer glow - tight amber with reduced intensity
+        # Outer glow - tight amber
         self._glow_layer.shadow = ft.BoxShadow(
             spread_radius=0,
             blur_radius=35,
-            color=ft.Colors.with_opacity(0.5, "#f59e0b"),  # Reduced from 0.8
+            color=ft.Colors.with_opacity(0.5, "#f59e0b"),
             offset=ft.Offset(0, 0),
         )
-        self._glow_layer.update()
+        self._safe_update(self._glow_layer)
 
         # Start async pulse loop
-        try:
-            _has_page = self.page is not None
-        except RuntimeError:
-            _has_page = False
-        if _has_page:
+        pg = self._get_page_safe()
+        if pg:
             import asyncio
 
             async def _pulse_loop():
                 grow = True
                 while self._is_connecting:
-                    try:
-                        _ = self.page
-                    except RuntimeError:
+                    if not self._get_page_safe():
                         break
                     try:
                         if grow:
@@ -204,13 +226,16 @@ class ConnectionButton(ft.Container):
                             self._glow_layer.opacity = 0.4
                             self._glow_layer.scale = 1.0
 
-                        self._glow_layer.update()
+                        self._safe_update(self._glow_layer)
                         grow = not grow
                         await asyncio.sleep(0.8)
                     except Exception:
                         break
 
-            self.page.run_task(_pulse_loop)
+            try:
+                pg.run_task(_pulse_loop)
+            except Exception:
+                pass
 
     def set_disconnecting(self):
         """Set disconnecting state with red glass pulse."""
@@ -222,7 +247,7 @@ class ConnectionButton(ft.Container):
         self._button.bgcolor = ft.Colors.with_opacity(0.25, ft.Colors.RED_700)
         self._button.border = ft.Border.all(2.5, ft.Colors.with_opacity(0.5, ft.Colors.RED_400))
         self._icon.color = ft.Colors.WHITE
-        self._button.update()
+        self._safe_update(self._button)
 
         # Reset glow layer for smooth animation
         self._glow_layer.opacity = 1.0
@@ -235,22 +260,17 @@ class ConnectionButton(ft.Container):
             color=ft.Colors.with_opacity(0.5, ft.Colors.RED_400),
             offset=ft.Offset(0, 0),
         )
-        self._glow_layer.update()
+        self._safe_update(self._glow_layer)
 
         # Start async pulse loop
-        try:
-            _has_page = self.page is not None
-        except RuntimeError:
-            _has_page = False
-        if _has_page:
+        pg = self._get_page_safe()
+        if pg:
             import asyncio
 
             async def _disconnecting_pulse():
                 grow = True
                 while self._state == "disconnecting":
-                    try:
-                        _ = self.page
-                    except RuntimeError:
+                    if not self._get_page_safe():
                         break
                     try:
                         if grow:
@@ -260,27 +280,24 @@ class ConnectionButton(ft.Container):
                             self._glow_layer.opacity = 0.4
                             self._glow_layer.scale = 1.0
 
-                        self._glow_layer.update()
+                        self._safe_update(self._glow_layer)
                         grow = not grow
                         await asyncio.sleep(0.4)  # Faster pulse for disconnecting
                     except Exception:
                         break
 
-            self.page.run_task(_disconnecting_pulse)
+            try:
+                pg.run_task(_disconnecting_pulse)
+            except Exception:
+                pass
 
     def update_network_activity(self, total_bps: float):
-        """
-        Update the glow based on real-time network activity (only when connected).
-        Args:
-            total_bps: Total bytes per second (download + upload)
-        """
-        # Only animate network activity when in connected state
+        """Update the glow based on real-time network activity (only when connected)."""
         if self._state != "connected":
             return
 
         kb_per_sec = total_bps / 1024
 
-        # Map network speed to activity percentage (0-100)
         if kb_per_sec < 10:
             activity = int(kb_per_sec * 1)
         elif kb_per_sec < 50:
@@ -292,41 +309,36 @@ class ConnectionButton(ft.Container):
         else:
             activity = min(100, int(90 + (kb_per_sec / 10000) * 10))
 
-        # Allow updates if activity changed by more than 2% for more responsive animation
         if abs(activity - self._current_activity) < 2:
             return
 
         self._current_activity = activity
 
-        # Calculate glow parameters - smooth shadow breathing only
-        min_blur = 25
-        max_blur = 45
-        min_spread = 0
-        max_spread = 1
+        min_blur = 28
+        max_blur = 48
+        min_spread = 1
+        max_spread = 4
 
         blur = min_blur + (max_blur - min_blur) * (activity / 100)
         spread = min_spread + (max_spread - min_spread) * (activity / 100)
-        opacity = 0.5 + 0.3 * (activity / 100)
+        opacity = 0.5 + 0.25 * (activity / 100)
 
-        # Clamp values
-        blur = max(20, min(50, blur))
-        spread = max(0, min(2, spread))
-        opacity = max(0.45, min(0.9, opacity))
+        blur = max(25, min(52, blur))
+        spread = max(1, min(5, spread))
+        opacity = max(0.45, min(0.75, opacity))
 
-        # Add pulsing scale and opacity for more tangible visual feedback
-        scale = 1.0 + (activity / 100) * 0.05  # 1.0 to 1.05
-        glow_opacity = 0.7 + (activity / 100) * 0.3  # 0.7 to 1.0
+        scale = 1.0 + (activity / 100) * 0.05
+        glow_opacity = 0.7 + (activity / 100) * 0.3
 
         try:
-            # Update shadow (instant) and animate scale/opacity (smooth)
             self._glow_layer.shadow = ft.BoxShadow(
                 spread_radius=spread,
                 blur_radius=blur,
-                color=ft.Colors.with_opacity(opacity, "#8b5cf6"),
+                color=ft.Colors.with_opacity(opacity * 0.75, "#6d28d9"),
                 offset=ft.Offset(0, 0),
             )
             self._glow_layer.scale = scale
             self._glow_layer.opacity = glow_opacity
-            self._glow_layer.update()
+            self._safe_update(self._glow_layer)
         except Exception:
             pass

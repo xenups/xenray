@@ -85,7 +85,12 @@ class TunInjector:
         routing_rules: dict,
         proxy_server_ips: list,
     ) -> list:
-        """Build Xray routing rules for TUN/VPN mode."""
+        """
+        Build Xray routing rules for TUN/VPN mode.
+
+        Bypasses proxy server IPs, SNIs, ECH Outer SNIs, and transport Host headers
+        via TAG_DIRECT to prevent TUN routing loops and ECH Handshake deadlocks.
+        """
         toggles = self._app_context.routing.load_toggles()
         rules: list = []
 
@@ -97,6 +102,10 @@ class TunInjector:
                 rules.append({"type": RULE_FIELD, "ip": ips, "outboundTag": TAG_DIRECT})
             if domains:
                 rules.append({"type": RULE_FIELD, "domain": domains, "outboundTag": TAG_DIRECT})
+
+        # Direct DNS bootstrap servers to bypass TUN routing loops
+        bootstrap_dns_ips = ["1.1.1.1", "8.8.8.8", "1.0.0.1", "8.8.4.4"]
+        rules.append({"type": RULE_FIELD, "ip": bootstrap_dns_ips, "outboundTag": TAG_DIRECT})
 
         user_block = routing_rules.get(TAG_BLOCK, [])
         if user_block:

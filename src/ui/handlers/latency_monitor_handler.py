@@ -101,6 +101,11 @@ class LatencyMonitorHandler:
                 return
 
         def on_result(success, result_str, country_data=None):
+            # Guard: if user switched to a different profile while test was running, discard result
+            current_selected = self._selected_profile_getter() if self._selected_profile_getter else None
+            if current_selected is None or profile is None or current_selected.get("id") != profile.get("id"):
+                return
+
             is_running = self._is_running_getter() if self._is_running_getter else False
             connecting = self._connecting_getter() if self._connecting_getter else False
 
@@ -127,6 +132,59 @@ class LatencyMonitorHandler:
                                 profile.get("id"),
                                 country_data.get("country_code"),
                             )
+
+                # Update dashboard and servers views with latency
+                if self._page and hasattr(self._page, "_main_window"):
+                    mw = self._page._main_window
+                    name = profile.get("name", "Unknown") if profile else "Unknown"
+                    if hasattr(mw, "_stitch_dashboard_view") and mw._stitch_dashboard_view:
+                        dv = mw._stitch_dashboard_view
+                        cc = (profile or {}).get("country_code", "")
+                        cn = (profile or {}).get("country_name", "")
+                        ob = profile.get("config", {}).get("outbounds", [{}])[0] if profile else {}
+                        stream_settings = ob.get("streamSettings", {}) if ob else {}
+                        proto = (ob.get("protocol") or "").upper() if ob else ""
+                        # Extract encryption from stream settings
+                        encryption = stream_settings.get("security", "")
+                        # Get remote server address
+                        server_addr = ""
+                        if profile:
+                            config = profile.get("config") or {}
+                            addr = config.get("address", "")
+                            if not addr and ob:
+                                settings = ob.get("settings", {})
+                                servers = settings.get("servers", []) if isinstance(settings, dict) else []
+                                if servers:
+                                    addr = servers[0].get("address", "")
+                        self._ui_helper.call(
+                            dv.update_server_info,
+                            name,
+                            result_str,
+                            protocol=f"Xray / {proto}" if proto else "",
+                            encryption=encryption.upper() if encryption else "",
+                            local_ip=addr or "",
+                            country_code=cc,
+                            country_name=cn,
+                        )
+                    if hasattr(mw, "_stitch_servers_view") and mw._stitch_servers_view:
+                        sv = mw._stitch_servers_view
+                        protocol = (
+                            profile.get("config", {}).get("outbounds", [{}])[0].get("protocol", "").upper()
+                            if profile
+                            else ""
+                        )
+                        ob = profile.get("config", {}).get("outbounds", [{}])[0] if profile else {}
+                        stream_settings = ob.get("streamSettings", {}) if ob else {}
+                        speed = stream_settings.get("security", "")
+                        cc = (profile or {}).get("country_code", "")
+                        self._ui_helper.call(
+                            sv.update_hero_node,
+                            name,
+                            result_str,
+                            protocol=f"Xray / {protocol}" if protocol else "",
+                            speed=speed.upper() if speed else "",
+                            country_code=cc,
+                        )
 
         fetch_flag = not profile.get("country_code")
         ConnectionTester.test_connection(config if config else {}, on_result, fetch_country=fetch_flag)

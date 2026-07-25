@@ -386,6 +386,39 @@ class ServerList(ft.Container):
         else:
             self._load_profiles(update_ui=True)
 
+    def filter_servers(self, query: str = ""):
+        """Alias for filter() to support search queries from MainWindow and ServersView."""
+        self.filter(query)
+
+    def filter(self, query: str):
+        """Filter the displayed server list by name, address, or region."""
+        q = query.strip().lower()
+        if not q:
+            for item in self._item_map.values():
+                item.visible = True
+            try:
+                self._body_switcher.update()
+            except Exception:
+                pass
+            return
+
+        for pid, item in self._item_map.items():
+            if hasattr(item, "_profile"):
+                p = item._profile
+                name = (p.get("name") or "").lower()
+                addr = (p.get("config") or {}).get("address", "").lower()
+                country_code = (p.get("country_code") or "").lower()
+                country_name = (p.get("country_name") or "").lower()
+                match = q in name or q in addr or q in country_code or q in country_name
+            else:
+                match = False
+            item.visible = match
+
+        try:
+            self._body_switcher.update()
+        except Exception:
+            pass
+
     def update_item_icon(self, profile_id: str, country_code: str):
         """Update the icon for a specific profile (called from MainWindow)."""
         item = self._item_map.get(profile_id)

@@ -30,6 +30,7 @@ from src.core.constants import (
     CONFIG_STREAM_SETTINGS,
     CONFIG_TAG,
     DOMAIN_ASIS,
+    HEADER_HOST,
     MODE_PROXY,
     MODE_VPN,
     NETWORK_HTTP3,
@@ -42,7 +43,16 @@ from src.core.constants import (
     PROTOCOL_TROJAN,
     PROTOCOL_VLESS,
     PROTOCOL_VMESS,
+    REALITY_SETTINGS,
     SNIFF_DEST_OVERRIDE,
+    STREAM_HEADERS,
+    STREAM_HTTPUPGRADE_SETTINGS,
+    STREAM_SERVER_NAME,
+    STREAM_WS_SETTINGS,
+    STREAM_XHTTP_SETTINGS,
+    TAG_BLOCK,
+    TAG_DIRECT,
+    TLS_SETTINGS,
     XRAY_LOCATION_ASSET,
 )
 from src.core.types import TunEngine
@@ -238,27 +248,84 @@ class XrayConfigProcessor:
                     CONFIG_DEST_OVERRIDE: list(SNIFF_DEST_OVERRIDE),
                     CONFIG_METADATA_ONLY: False,
                 }
-                logger.debug("[XrayConfigProcessor] Injected Sniffing settings into Xray SOCKS inbound.")
-
         return user_port
 
     def get_proxy_server_ip(self, config: dict) -> list[str]:
-        """Extract proxy server IPs/domains from config."""
-        addresses = []
+        """
+        Extract proxy server IPs, SNIs, outer SNIs (ECH), and transport Host headers from config.
+
+        ECH Handshake Deadlock Prevention:
+        When ECH (Encrypted Client Hello) is enabled on CDN profiles, the inner SNI is encrypted,
+        and initial ECH key resolution & Outer SNI handshakes require direct, unproxied network access.
+        Extracting all Outer SNIs, TLS/REALITY server names, and Host headers ensures they are explicitly
+        routed via TAG_DIRECT, preventing TUN routing loops and ECH handshake deadlocks.
+        """
+        endpoints = []
+
+        def _add_entry(val):
+            if isinstance(val, str) and val.strip():
+                endpoints.append(val.strip())
+            elif isinstance(val, list):
+                for item in val:
+                    if isinstance(item, str) and item.strip():
+                        endpoints.append(item.strip())
+
         for outbound in config.get(CONFIG_OUTBOUNDS, []):
-            if outbound.get(CONFIG_PROTOCOL) in [PROTOCOL_VLESS, PROTOCOL_VMESS, PROTOCOL_TROJAN, PROTOCOL_SHADOWSOCKS]:
-                settings = outbound.get(CONFIG_SETTINGS, {})
-                if "vnext" in settings:
-                    for server in settings["vnext"]:
-                        addr = server.get(CONFIG_ADDRESS, "")
-                        if addr:
-                            addresses.append(addr)
-                elif "servers" in settings:
-                    for server in settings["servers"]:
-                        addr = server.get(CONFIG_ADDRESS, "")
-                        if addr:
-                            addresses.append(addr)
-        return list(set(addresses))
+            protocol = outbound.get(CONFIG_PROTOCOL)
+            if protocol in [TAG_DIRECT, TAG_BLOCK, "freedom", "blackhole"]:
+                continue
+
+            settings = outbound.get(CONFIG_SETTINGS, {})
+            if "vnext" in settings:
+                for server in settings.get("vnext", []):
+                    _add_entry(server.get(CONFIG_ADDRESS))
+            if "servers" in settings:
+                for server in settings.get("servers", []):
+                    _add_entry(server.get(CONFIG_ADDRESS))
+            if CONFIG_ADDRESS in settings:
+                _add_entry(settings.get(CONFIG_ADDRESS))
+            if "peers" in settings:
+                for peer in settings.get("peers", []):
+                    endpoint = peer.get("endpoint", "")
+                    if endpoint:
+                        host = endpoint.split(":")[0] if ":" in endpoint else endpoint
+                        _add_entry(host)
+
+            stream_settings = outbound.get(CONFIG_STREAM_SETTINGS, {})
+            tls_settings = stream_settings.get(TLS_SETTINGS, {})
+            _add_entry(tls_settings.get(STREAM_SERVER_NAME))
+            _add_entry(tls_settings.get("outerServerName"))
+            _add_entry(tls_settings.get("ech"))
+
+            reality_settings = stream_settings.get(REALITY_SETTINGS, {})
+            _add_entry(reality_settings.get(STREAM_SERVER_NAME))
+            _add_entry(reality_settings.get("outerServerName"))
+
+            ws_settings = stream_settings.get(STREAM_WS_SETTINGS, {})
+            headers = ws_settings.get(STREAM_HEADERS, {})
+            _add_entry(headers.get(HEADER_HOST))
+            _add_entry(headers.get("host"))
+            _add_entry(ws_settings.get("host"))
+
+            http_settings = stream_settings.get("httpSettings", {})
+            _add_entry(http_settings.get("host"))
+
+            httpupgrade_settings = stream_settings.get(STREAM_HTTPUPGRADE_SETTINGS, {})
+            _add_entry(httpupgrade_settings.get("host"))
+
+            xhttp_settings = stream_settings.get(STREAM_XHTTP_SETTINGS, {})
+            _add_entry(xhttp_settings.get("host"))
+
+            grpc_settings = stream_settings.get("grpcSettings", {})
+            _add_entry(grpc_settings.get("serviceName"))
+            _add_entry(grpc_settings.get("authority"))
+
+            tcp_settings = stream_settings.get("tcpSettings", {})
+            tcp_headers = tcp_settings.get("header", {}).get("request", {}).get("headers", {})
+            _add_entry(tcp_headers.get("Host"))
+            _add_entry(tcp_headers.get("host"))
+
+        return list(set(endpoints))
 
     def is_quic_transport(self, config: dict) -> bool:
         """Detect if QUIC/HTTP3 transport is used."""

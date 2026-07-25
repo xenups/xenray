@@ -1,27 +1,26 @@
 """Settings drawer component with i18n support."""
+
 from __future__ import annotations
 
-import os
 import threading
-import time
 
 import flet as ft
 from loguru import logger
 
 from src.core.app_context import AppContext
 from src.core.constants import APP_VERSION
-from src.core.i18n import set_language as set_app_language
 from src.core.i18n import t
 from src.core.types import ConnectionMode
 from src.services import task_scheduler
 from src.services.app_update_service import AppUpdateService
 from src.services.rule_update_service import RuleUpdateService
 from src.services.xray_installer import XrayInstallerService
+from src.ui.components.settings.settings_form_presenter import SettingsFormPresenter
 from src.ui.components.settings_sections import (
     AutoReconnectToggleRow,
     CountryDropdownRow,
     LanguageDropdownRow,
-    ModeSwitchRow,
+    ModeRadioCards,
     PortInputRow,
     SettingsListTile,
     SettingsSection,
@@ -50,30 +49,30 @@ class SettingsDrawer(ft.NavigationDrawer):
         self._navigate_to = navigate_to
         self._navigate_back = navigate_back
 
-        # Mode state
-        current_mode = self._get_current_mode()
-        is_proxy = current_mode == ConnectionMode.PROXY
+        self._presenter = SettingsFormPresenter(self._app_context, self._show_toast)
 
-        # Components
-        self._mode_switch_row = ModeSwitchRow(is_proxy, self._handle_mode_change)
+        current_mode = self._get_current_mode()
+        self._is_proxy = current_mode == ConnectionMode.PROXY
+
+        self._mode_cards = ModeRadioCards(self._is_proxy, self._handle_mode_change)
         self._port_row = PortInputRow(
             self._app_context.settings.get_proxy_port(),
-            self._save_port,
+            self._presenter.save_port,
         )
         self._country_row = CountryDropdownRow(
             self._app_context.settings.get_routing_country(),
-            self._save_country,
+            self._presenter.save_country,
         )
         self._tun_engine_row = TunEngineRow(
             self._app_context.settings.get_tun_engine(),
-            self._save_tun_engine,
+            self._presenter.save_tun_engine,
         )
+        self._tun_engine_row.visible = not self._is_proxy
         self._language_row = LanguageDropdownRow(
             self._app_context.settings.get_language(),
-            self._save_language,
+            self._presenter.save_language,
         )
 
-        # Startup toggle (self-contained component)
         self._startup_row = StartupToggleRow(
             app_context=self._app_context,
             is_registered=task_scheduler.is_task_registered(),
@@ -83,24 +82,19 @@ class SettingsDrawer(ft.NavigationDrawer):
             toast_callback=self._show_toast,
         )
 
-        # Auto-reconnect toggle (self-contained component)
         self._auto_reconnect_row = AutoReconnectToggleRow(
             app_context=self._app_context,
             toast_callback=self._show_toast,
         )
 
-        # Version text ref — populated lazily in background to avoid
-        # blocking subprocess calls (xray -version) at init time.
         self._xray_version_text = ft.Text(
             "Xray: v...",
             size=11,
             color=ft.Colors.OUTLINE,
         )
 
-        # Build UI — glass container wrapping all content
         settings_content = ft.Column(
             [
-                # Top Bar with Back Button
                 ft.Container(
                     content=ft.Row(
                         [
@@ -118,26 +112,18 @@ class SettingsDrawer(ft.NavigationDrawer):
                     padding=20,
                 ),
                 ft.Divider(height=1, color=ft.Colors.OUTLINE_VARIANT, opacity=0.2),
-                # Scrollable content including version footer
                 ft.Column(
                     [
-                        # Connection Section
                         SettingsSection(
                             t("settings.connection"),
                             [
-                                self._mode_switch_row,
+                                self._mode_cards,
                                 self._tun_engine_row,
                                 self._port_row,
                                 self._country_row,
                             ],
                         ),
-                        ft.Divider(
-                            height=1,
-                            color=ft.Colors.OUTLINE_VARIANT,
-                            opacity=0.2,
-                        ),
-                        ft.Container(height=10),
-                        # App Settings
+                        ft.Divider(height=1, color=ft.Colors.OUTLINE_VARIANT, opacity=0.2),
                         SettingsSection(
                             t("settings.application"),
                             [
@@ -159,17 +145,11 @@ class SettingsDrawer(ft.NavigationDrawer):
                                     ft.Icons.RESTART_ALT,
                                     t("settings.reset_close_choice"),
                                     t("settings.reset_close_choice_desc"),
-                                    on_click=self._reset_close_preference,
+                                    on_click=lambda e: self._presenter.reset_close_preference(),
                                 ),
                             ],
                         ),
-                        ft.Divider(
-                            height=1,
-                            color=ft.Colors.OUTLINE_VARIANT,
-                            opacity=0.2,
-                        ),
-                        ft.Container(height=10),
-                        # System Section
+                        ft.Divider(height=1, color=ft.Colors.OUTLINE_VARIANT, opacity=0.2),
                         SettingsSection(
                             t("settings.system"),
                             [
@@ -197,608 +177,151 @@ class SettingsDrawer(ft.NavigationDrawer):
                                     f"v{APP_VERSION} by Xenups",
                                     show_chevron=False,
                                 ),
-                                self._language_row,
                             ],
                         ),
-                        # Version Footer inside scrollable area
                         ft.Container(
-                            content=ft.Row(
+                            content=ft.Column(
                                 [
                                     self._xray_version_text,
+                                    ft.Text(
+                                        f"App: v{APP_VERSION}",
+                                        size=11,
+                                        color=ft.Colors.OUTLINE,
+                                    ),
                                 ],
-                                spacing=10,
-                                alignment=ft.MainAxisAlignment.CENTER,
+                                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                                spacing=2,
                             ),
+                            padding=ft.Padding.symmetric(vertical=15),
                             alignment=ft.Alignment.CENTER,
-                            padding=20,
                         ),
                     ],
-                    scroll=ft.ScrollMode.HIDDEN,
+                    scroll=ft.ScrollMode.AUTO,
                     expand=True,
-                    spacing=0,
                 ),
             ],
-            spacing=0,
-        )
-
-        glass_content = ft.Container(
-            content=settings_content,
-            bgcolor=ft.Colors.with_opacity(0.7, "#0f172a"),
-            blur=ft.Blur(20, 20, ft.BlurTileMode.MIRROR),
             expand=True,
         )
 
-        drawer_container = ft.Container(
-            content=glass_content,
-            width=320,
-        )
-
         super().__init__(
-            controls=[drawer_container],
-            bgcolor=ft.Colors.TRANSPARENT,
-            shadow_color=ft.Colors.TRANSPARENT,
-            on_change=self._on_drawer_change,
+            controls=[
+                ft.Container(
+                    content=settings_content,
+                    padding=10,
+                    width=340,
+                    expand=True,
+                    bgcolor=ft.Colors.SURFACE_CONTAINER_HIGHEST,
+                )
+            ],
         )
 
-        # Start version refresh in background so texts populate when drawer opens
-        threading.Thread(target=self._refresh_versions, daemon=True).start()
-
-    # ------------------------------------------------------------------
-    # Version refresh (lazy, non-blocking)
-    # ------------------------------------------------------------------
-    def _on_drawer_change(self, e=None):
-        """Fired when the drawer opens/closes — refresh versions."""
-        threading.Thread(target=self._refresh_versions, daemon=True).start()
-
-    def _refresh_versions(self):
-        """Read installed Xray version in a background thread and update UI."""
-        try:
-            xray_ver = XrayInstallerService.get_local_version() or "ND"
-        except Exception:
-            xray_ver = "ND"
-
-        new_xray = f"Xray: v{xray_ver}"
-
-        if self._xray_version_text.value != new_xray:
-            self._xray_version_text.value = new_xray
-            try:
-                if self._xray_version_text.page:
-                    self._xray_version_text.update()
-            except Exception:
-                pass
+        self._load_xray_version_async()
 
     def _close_drawer(self, e=None):
-        """Close this settings drawer."""
-        if self.page is not None:
-            try:
-                self.page.run_task(self.page.close_end_drawer)
-            except Exception:
-                pass
+        try:
+            if self.page:
+                self.page.close(self)
+        except Exception:
+            pass
 
-    def _handle_mode_change(self, e):
-        """Handle VPN/Proxy mode switch."""
-        is_proxy = bool(e.control.value) if (e and hasattr(e, "control") and e.control) else self._mode_switch_row.value
+    def _handle_mode_change(self, is_proxy: bool):
+        new_mode = ConnectionMode.PROXY if is_proxy else ConnectionMode.VPN
 
-        if not is_proxy and not ProcessUtils.is_admin():
-            self._mode_switch_row.value = True
-            self._show_admin_restart_dialog()
+        if new_mode == ConnectionMode.VPN and not ProcessUtils.is_admin():
+            self._show_toast(t("status.admin_required"), "warning")
+            self._mode_cards.value = True
             return
 
-        new_mode = ConnectionMode.PROXY if is_proxy else ConnectionMode.VPN
+        self._is_proxy = is_proxy
+        self._tun_engine_row.visible = not is_proxy
+
+        mode_str = "proxy" if is_proxy else "vpn"
+        self._app_context.settings.set_connection_mode(mode_str)
         self._on_mode_changed(new_mode)
 
-    def _show_admin_restart_dialog(self):
-        """Show dialog to restart as admin for VPN mode."""
-        page = self.page
-        if not page:
-            return
-
-        def close_dlg(e):
-            if page is not None:
-                try:
-                    page.pop_dialog()
-                except Exception:
-                    pass
-
-        def confirm_restart(e):
-            if page is not None:
-                try:
-                    page.pop_dialog()
-                except Exception:
-                    pass
-            self._app_context.settings.set_connection_mode(ConnectionMode.VPN.value)
-            ProcessUtils.restart_as_admin()
-
-        dlg = ft.AlertDialog(
-            modal=True,
-            title=ft.Text(t("admin.title")),
-            content=ft.Text(t("admin.message")),
-            actions=[
-                ft.TextButton(t("admin.cancel"), on_click=close_dlg),
-                ft.TextButton(t("admin.restart"), on_click=confirm_restart),
-            ],
-            actions_alignment=ft.MainAxisAlignment.END,
-        )
-        page.show_dialog(dlg)
-
-    def _show_toast(self, message: str, message_type: str = "info"):
-        """Show a toast notification."""
-        if hasattr(self.page, "_toast_manager"):
-            self.page._toast_manager.show(message, message_type)
-        elif self.page:
-            # Log if toast manager is missing
-            logger.warning("Toast manager not available, message not shown")
-
-    def _save_port(self, value: str):
-        """Save the SOCKS port setting."""
-        page = self.page
-        if not page:
-            return
-
         try:
-            port = int(value)
-            if 1024 <= port <= 65535:
-                self._app_context.settings.set_proxy_port(port)
-                self._port_row.set_border_color(ft.Colors.GREEN_400)
-                self._show_toast(t("settings.port_saved", port=port), "success")
-            else:
-                self._port_row.set_border_color(ft.Colors.RED_400)
-                self._show_toast(t("settings.port_invalid_range"), "error")
-        except ValueError:
-            self._port_row.set_border_color(ft.Colors.RED_400)
-            self._show_toast(t("settings.port_must_be_number"), "error")
+            if self.page:
+                self.update()
+        except Exception:
+            pass
 
-        page.update()
-
-    def _save_country(self, e):
-        """Save the direct country setting."""
-        page = self.page
-        if not page:
-            return
-
-        val = self._country_row.value
-        self._app_context.settings.set_routing_country(val)
-        self._show_toast(t("settings.country_saved", val=val), "success")
-        page.update()
-
-    def _save_tun_engine(self, e):
-        """Save the TUN engine setting."""
-        page = self.page
-        if not page:
-            return
-
-        new_engine = self._tun_engine_row.value
-        old_engine = self._app_context.settings.get_tun_engine()
-        self._app_context.settings.set_tun_engine(new_engine)
-        self._show_toast(t("settings.tun_engine_saved", engine=new_engine), "success")
-
-        # If currently connected in VPN mode, prompt reconnect to apply change
-        if old_engine != new_engine:
-            current_mode = self._get_current_mode()
-            if current_mode == ConnectionMode.VPN:
-                self._show_toast(t("settings.tun_engine_reconnect"), "warning")
-        page.update()
-
-    def _save_language(self, e):
-        """Save the language setting and update i18n."""
-        page = self.page
-        if not page:
-            return
-
-        lang = self._language_row.value
-        self._app_context.settings.set_language(lang)
-        set_app_language(lang)
-
-        # Notify user - app needs restart for full effect
-        msg = t("settings.language_restart_msg")
-        self._show_toast(msg, "success")
-        page.update()
-
-    def _reset_close_preference(self, e):
-        """Reset the 'Remember Choice' for close dialog."""
-        page = self.page
-        if not page:
-            return
-
-        self._app_context.settings.set_remember_close_choice(False)
-        self._show_toast(t("settings.reset_close_success"), "success")
-        page.update()
-
-    def _on_installer_run(self, component: str):
-        """Handle update/install request."""
-        page = self.page
-        if not page:
-            return
-
-        if component == "xray":
-            self._show_toast(t("update.checking"), "info")
-
-            try:
-                available, current, latest = XrayInstallerService.check_for_updates()
-
-                # If up to date, show message and return
-                if not available and current:
-                    self._show_toast(t("update.up_to_date", version=current), "info")
-                    page.update()
-                    return
-
-                # If update is available, show update dialog
-                if available and latest:
-                    self._show_update_dialog(page, current, latest)
-                else:
-                    # Failed to check or no update info
-                    self._show_toast(t("update.check_failed"), "error")
-                    page.update()
-
-            except Exception as e:
-                logger.error(f"Update check failed: {e}")
-                self._show_toast(t("update.check_failed"), "error")
-                page.update()
-
-    def _show_update_dialog(self, page, current: str, latest: str):
-        """Show update confirmation dialog."""
-        msg = t("update.available", current=current, latest=latest) if current else t("update.install", version=latest)
-
-        def close_dlg(e):
-            if page is not None:
-                try:
-                    page.pop_dialog()
-                except Exception:
-                    pass
-
-        def start_update(e):
-            if page is not None:
-                try:
-                    page.pop_dialog()
-                except Exception:
-                    pass
-            self._run_update_process(page, latest)
-
-        dlg = ft.AlertDialog(
-            modal=True,
-            title=ft.Text(t("update.title")),
-            content=ft.Text(msg),
-            actions=[
-                ft.TextButton(t("add_dialog.cancel"), on_click=close_dlg),
-                ft.TextButton(t("add_dialog.add"), on_click=start_update),
-            ],
-            actions_alignment=ft.MainAxisAlignment.END,
-        )
-        page.show_dialog(dlg)
-
-    def _run_update_process(self, page, latest_version: str):
-        """Run the update process with progress dialog."""
-        progress_ring = ft.ProgressRing(width=16, height=16, stroke_width=2)
-        status_text = ft.Text(t("update.starting"), size=12)
-
-        progress_dlg = ft.AlertDialog(
-            modal=True,
-            title=ft.Text(t("update.updating")),
-            content=ft.Column(
-                [
-                    ft.Row(
-                        [progress_ring, status_text],
-                        spacing=10,
-                        alignment=ft.MainAxisAlignment.CENTER,
-                    ),
-                ],
-                tight=True,
-                alignment=ft.MainAxisAlignment.CENTER,
-            ),
-            actions=[],
-        )
-        page.show_dialog(progress_dlg)
-        page.update()
-
-        def update_task():
-            def on_progress(msg):
-                status_text.value = msg
-                status_text.update()
-
-            def stop_service():
-                ProcessUtils.kill_process_by_name("xray.exe")
-                ProcessUtils.kill_process_by_name("sing-box.exe")
-
-            success = XrayInstallerService.install(
-                progress_callback=on_progress,
-                stop_service_callback=stop_service,
-                target_version=latest_version,
-            )
-
-            if page is not None:
-                try:
-                    page.pop_dialog()
-                except Exception:
-                    pass
-            if success:
-                self._show_toast(t("update.success"), "success")
-                # Refresh version footer after successful update
-                threading.Thread(target=self._refresh_versions, daemon=True).start()
-            else:
-                self._show_toast(t("update.failed"), "error")
-            page.update()
-
-        threading.Thread(target=update_task, daemon=True).start()
-
-    def _on_subpage_back(self, e):
-        """Handle navigation back from subpage."""
-        self._navigate_back()
-        if self.page:
-            self.page.run_task(self.page.show_end_drawer)
-
-    def _open_routing_manager(self, e):
-        """Open the routing rules page."""
+    def _open_routing_manager(self, e=None):
         from src.ui.pages.routing_page import RoutingPage
 
-        if self.page:
-            self.page.run_task(self.page.close_end_drawer)
-        routing_page = RoutingPage(self._app_context, on_back=self._on_subpage_back)
-        self._navigate_to(routing_page)
+        if self._navigate_to:
+            routing_page = RoutingPage(self._app_context, self._navigate_back)
+            self._navigate_to(routing_page)
+        self._close_drawer()
 
-    def _open_dns_manager(self, e):
-        """Open the DNS settings page."""
+    def _open_dns_manager(self, e=None):
         from src.ui.pages.dns_page import DNSPage
 
-        if self.page:
-            self.page.run_task(self.page.close_end_drawer)
-        dns_page = DNSPage(self._app_context, on_back=self._on_subpage_back)
-        self._navigate_to(dns_page)
+        if self._navigate_to:
+            dns_page = DNSPage(self._app_context, self._navigate_back)
+            self._navigate_to(dns_page)
+        self._close_drawer()
 
-    def _check_app_updates(self, e):
-        """Check for app updates."""
-        page = self.page
-        if not page:
-            return
+    def _check_app_updates(self, e=None):
+        self._show_toast(t("settings.checking_app_updates"), "info")
 
-        self._show_toast(t("app_update.checking"), "info")
-
-        def check_task():
-            try:
-                (
-                    available,
-                    current,
-                    latest,
-                    download_url,
-                ) = AppUpdateService.check_for_updates()
-
-                if not available and current:
-                    self._show_toast(t("app_update.up_to_date", version=current), "info")
-                    page.update()
-                    return
-
-                if available and download_url:
-                    self._show_app_update_dialog(page, current, latest, download_url)
-                else:
-                    self._show_toast(t("app_update.check_failed"), "error")
-                    page.update()
-            except Exception:
-                self._show_toast(t("app_update.check_failed"), "error")
-                page.update()
-
-        threading.Thread(target=check_task, daemon=True).start()
-
-    def _show_app_update_dialog(self, page, current: str, latest: str, download_url: str):
-        """Show app update confirmation dialog."""
-        msg = (
-            t("app_update.available", current=current, latest=latest)
-            if current
-            else t("app_update.install", version=latest)
-        )
-
-        def close_dlg(e):
-            if page is not None:
-                try:
-                    page.pop_dialog()
-                except Exception:
-                    pass
-
-        def start_update(e):
-            if page is not None:
-                try:
-                    page.pop_dialog()
-                except Exception:
-                    pass
-            self._run_app_update_process(page, download_url)
-
-        dlg = ft.AlertDialog(
-            modal=True,
-            title=ft.Text(t("app_update.title")),
-            content=ft.Column(
-                [
-                    ft.Text(msg),
-                    ft.Text(
-                        t("app_update.message"),
-                        size=12,
-                        color=ft.Colors.ON_SURFACE_VARIANT,
-                    ),
-                ],
-                tight=True,
-                spacing=10,
-            ),
-            actions=[
-                ft.TextButton(t("app_update.cancel"), on_click=close_dlg),
-                ft.TextButton(t("app_update.confirm"), on_click=start_update),
-            ],
-            actions_alignment=ft.MainAxisAlignment.END,
-        )
-        page.show_dialog(dlg)
-
-    def _run_app_update_process(self, page, download_url: str):
-        """Run the app update process with progress dialog."""
-        progress_ring = ft.ProgressRing(width=16, height=16, stroke_width=2)
-        status_text = ft.Text(t("app_update.downloading", progress=0), size=12)
-
-        progress_dlg = ft.AlertDialog(
-            modal=True,
-            title=ft.Text(t("app_update.title")),
-            content=ft.Column(
-                [
-                    ft.Row(
-                        [progress_ring, status_text],
-                        spacing=10,
-                        alignment=ft.MainAxisAlignment.CENTER,
-                    ),
-                ],
-                tight=True,
-                alignment=ft.MainAxisAlignment.CENTER,
-            ),
-            actions=[],
-        )
-        page.show_dialog(progress_dlg)
-        page.update()
-
-        def update_task():
-            def on_progress(progress: int):
-                status_text.value = t("app_update.downloading", progress=progress)
-                status_text.update()
-
-            # Download update
-            zip_path = AppUpdateService.download_update(download_url, on_progress)
-
-            if not zip_path:
-                if page is not None:
-                    try:
-                        page.pop_dialog()
-                    except Exception:
-                        pass
-                self._show_toast(t("app_update.download_failed"), "error")
-                return
-
-            # Update status
-            status_text.value = t("app_update.extracting")
-            status_text.update()
-
-            # Apply update (launches updater and exits)
-            success = AppUpdateService.apply_update(zip_path)
-
-            if success:
-                # The updater will handle the rest, signal app to close
-                status_text.value = t("app_update.restarting")
-                status_text.update()
-                time.sleep(1)
-
-                # Trigger app exit
-                ProcessUtils.kill_process_tree()
-                os._exit(0)
+        def _task():
+            has_update, latest_ver, download_url = AppUpdateService.check_for_updates()
+            if has_update:
+                self._show_toast(t("settings.app_update_found", version=latest_ver), "success")
             else:
-                if page is not None:
-                    try:
-                        page.pop_dialog()
-                    except Exception:
-                        pass
-                self._show_toast(t("app_update.extract_failed"), "error")
-                page.update()
+                self._show_toast(t("settings.app_up_to_date"), "info")
 
-        threading.Thread(target=update_task, daemon=True).start()
+        threading.Thread(target=_task, daemon=True).start()
 
-    # ------------------------------------------------------------------
-    # Rule updates (geoip / geosite)
-    # ------------------------------------------------------------------
+    def _update_rules(self, e=None):
+        self._show_toast(t("settings.updating_rules"), "info")
 
-    def _update_rules(self, e):
-        """Check for and update geoip/geosite rule files."""
-        page = self.page
-        if not page:
-            return
+        def _task():
+            success, msg = RuleUpdateService.update_all_rules()
+            if success:
+                self._show_toast(t("settings.rules_updated"), "success")
+            else:
+                self._show_toast(t("settings.rules_update_failed", error=msg), "error")
 
-        self._show_toast(t("rules_update.checking"), "info")
+        threading.Thread(target=_task, daemon=True).start()
 
-        def check_task():
-            try:
-                available, local, latest = RuleUpdateService.check_for_updates()
+    def _on_installer_run(self, component: str):
+        self._on_installer_run_external(component)
 
-                if not available and local:
-                    self._show_toast(t("rules_update.up_to_date"), "info")
-                    page.update()
-                    return
+    def _load_xray_version_async(self):
+        def _task():
+            from src.core.constants import XRAY_VERSION
 
-                if available:
-                    self._show_rule_update_dialog(page, latest)
-                else:
-                    self._show_toast(t("rules_update.check_failed"), "error")
-                    page.update()
-            except Exception:
-                self._show_toast(t("rules_update.check_failed"), "error")
-                page.update()
+            version_str = XRAY_VERSION if XrayInstallerService.is_installed() else None
+            display_str = f"Xray: v{version_str}" if version_str else "Xray: " + t("status.not_installed")
 
-        threading.Thread(target=check_task, daemon=True).start()
-
-    def _show_rule_update_dialog(self, page, latest_version=None):
-        """Show confirmation dialog for rule update."""
-        msg = t("rules_update.message")
-        if latest_version:
-            msg += f"\n\nLatest: v{latest_version}"
-
-        def close_dlg(e):
-            if page is not None:
+            def _update_ui():
+                self._xray_version_text.value = display_str
                 try:
-                    page.pop_dialog()
+                    if self._xray_version_text.page:
+                        self._xray_version_text.update()
                 except Exception:
                     pass
 
-        def start_update(e):
-            if page is not None:
-                try:
-                    page.pop_dialog()
-                except Exception:
-                    pass
-            self._run_rule_update(page)
-
-        dlg = ft.AlertDialog(
-            modal=True,
-            title=ft.Text(t("rules_update.title")),
-            content=ft.Text(msg),
-            actions=[
-                ft.TextButton(t("rules_update.cancel"), on_click=close_dlg),
-                ft.ElevatedButton(t("rules_update.confirm"), on_click=start_update),
-            ],
-        )
-        page.show_dialog(dlg)
-
-    def _run_rule_update(self, page):
-        """Run the rule update process with progress dialog."""
-        progress_ring = ft.ProgressRing(width=16, height=16, stroke_width=2)
-        status_text = ft.Text(t("rules_update.installing"), size=12)
-
-        progress_dlg = ft.AlertDialog(
-            modal=True,
-            title=ft.Text(t("rules_update.title")),
-            content=ft.Column(
-                [
-                    ft.Row(
-                        [progress_ring, status_text],
-                        spacing=10,
-                        alignment=ft.MainAxisAlignment.CENTER,
-                    ),
-                ],
-                tight=True,
-                alignment=ft.MainAxisAlignment.CENTER,
-            ),
-            actions=[],
-        )
-        page.show_dialog(progress_dlg)
-        page.update()
-
-        def on_progress(msg):
             try:
-                status_text.value = msg
-                status_text.update()
+                _update_ui()
             except Exception:
                 pass
 
-        def update_task():
-            try:
-                success = RuleUpdateService.update_rules(progress_callback=on_progress)
-            finally:
-                if page is not None:
-                    try:
-                        page.pop_dialog()
-                    except Exception:
-                        pass
-            if success:
-                self._show_toast(t("rules_update.success"), "success")
-            else:
-                self._show_toast(t("rules_update.failed"), "error")
-            page.update()
+        threading.Thread(target=_task, daemon=True).start()
 
-        threading.Thread(target=update_task, daemon=True).start()
+    def _show_toast(self, message: str, message_type: str = "info"):
+        pg = None
+        try:
+            pg = self.page
+        except Exception:
+            pg = getattr(self, "_page", None)
+
+        if pg and hasattr(pg, "_toast_manager") and pg._toast_manager:
+            tm = pg._toast_manager
+            method = getattr(tm, message_type, None) or getattr(tm, "info", None) or getattr(tm, "show", None)
+            if method:
+                try:
+                    method(message)
+                except Exception:
+                    pass

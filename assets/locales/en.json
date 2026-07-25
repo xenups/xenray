@@ -108,7 +108,15 @@
     "singbox_tun": "sing-box (Recommended)",
     "xray_tun": "Xray",
     "tun_engine_saved": "TUN engine set to {engine}",
-    "tun_engine_reconnect": "Reconnect to apply new TUN engine"
+    "tun_engine_reconnect": "Reconnect to apply new TUN engine",
+    "connectivity_title": "Connectivity Settings",
+    "routing_title": "Routing & Anti-Leak",
+    "preferences_title": "Application Preferences",
+    "vpn_mode": "TUN / VPN Mode",
+    "vpn_mode_desc": "Full tunnel VPN",
+    "proxy_mode": "System Proxy Mode",
+    "proxy_mode_desc": "SOCKS + HTTP proxy",
+    "recommended": "Recommended"
   },
   "admin": {
     "title": "Admin Rights Required",
@@ -176,7 +184,8 @@
     "ping": "Ping: {latency}",
     "update_complete": "{component} Update Complete!",
     "update_error": "Error: {error}",
-    "admin_required": "Admin rights required for VPN mode"
+    "admin_required": "Admin rights required for VPN mode",
+    "checking": "Checking..."
   },
   "connection": {
     "loading_config": "Loading configuration...",
@@ -237,10 +246,53 @@
     "actions": "ACTIONS",
     "no_dns": "Use System/Default DNS"
   },
+  "dashboard": {
+    "network_traffic": "NETWORK TRAFFIC",
+    "live_statistics": "Live Statistics",
+    "current_node": "CURRENT NODE",
+    "change_server": "Change Server",
+    "uptime": "Uptime: {time}",
+    "upload": "Upload",
+    "download": "Download",
+    "protocol": "Protocol",
+    "encryption": "Encryption",
+    "local_ip": "Local IP",
+    "server_ip": "Server IP",
+    "checking": "Checking...",
+    "secure": "Secure",
+    "system_secure": "System Secure",
+    "system_ready": "SYSTEM READY",
+    "no_internet": "NO INTERNET",
+    "connected": "Connected",
+    "disconnected": "Disconnected",
+    "quick_disconnect": "Quick Disconnect",
+    "quick_connect": "Quick Connect",
+    "cpu": "CPU: {percent}%",
+    "ram": "RAM: {mb}MB"
+  },
   "logs": {
     "title": "Connection Logs",
     "pause": "Pause log update",
-    "resume": "Resume log update"
+    "resume": "Resume log update",
+    "memory": "Memory",
+    "active_threads": "Active Threads",
+    "health_status": "Health Status",
+    "nodes": "Nodes",
+    "optimal_performance": "Optimal Performance",
+    "issues": "Issues",
+    "system_healthy": "System is healthy",
+    "copy": "Copy",
+    "download": "Download",
+    "clear": "Clear",
+    "terminal_title": "XENRAY_CLI :: MAIN_LOGGER"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "servers": "Servers",
+    "logs": "Logs",
+    "settings": "Settings",
+    "connect_now": "Connect Now",
+    "disconnect": "Disconnect"
   },
   "header": {
     "toggle_theme": "Toggle Theme",

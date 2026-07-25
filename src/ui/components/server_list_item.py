@@ -52,9 +52,24 @@ class ServerListItem(ft.Container):
         last_ping = "..."
         last_ping_color = ft.Colors.GREY_500
         if cached_ping:
-            last_ping, last_ping_color, _ = cached_ping
+            cached_text, last_ping_color, cached_val = cached_ping
+            if cached_val is not None and cached_val < 999999:
+                last_ping = t("connection.latency_ms", value=cached_val)
+            else:
+                last_ping = cached_text
+        elif profile.get("last_latency_val") is not None:
+            latency_val = profile.get("last_latency_val")
+            last_ping = t("connection.latency_ms", value=latency_val)
+            last_ping_color = self._get_ping_color(latency_val)
         elif profile.get("last_latency"):
-            last_ping = profile["last_latency"]
+            import re
+
+            raw_ping = profile["last_latency"]
+            match = re.search(r"(\d+)", str(raw_ping))
+            if match:
+                last_ping = t("connection.latency_ms", value=int(match.group(1)))
+            else:
+                last_ping = raw_ping
             latency_val = profile.get("last_latency_val", 999999)
             last_ping_color = self._get_ping_color(latency_val)
 
