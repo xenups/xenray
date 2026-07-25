@@ -278,6 +278,10 @@ class ConnectionOrchestrator:
         mtu = NetworkUtils.detect_optimal_mtu(mtu_mode="auto")
 
         self._singbox_tun = SingboxTunService()
+        if hasattr(self._app_context, "connection_manager") and self._app_context.connection_manager:
+            self._singbox_tun.set_on_crash_callback(
+                lambda code, snippet: self._app_context.connection_manager._handle_tun_crash(code, snippet)
+            )
         return self._singbox_tun.start(
             xray_socks_port=socks_port,
             proxy_server_ip=proxy_server_ips,

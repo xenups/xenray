@@ -46,6 +46,9 @@ class ConnectionManager:
         legacy_config_service = LegacyConfigService(self._xray_processor)
 
         xray_service = XrayService()
+        xray_service.set_on_crash_callback(
+            lambda code, snippet: self._handle_tun_crash(code, snippet)
+        )
 
         # State
         self._current_connection = None
@@ -73,6 +76,46 @@ class ConnectionManager:
 
         # Connection Adoption: Check if services are already running (CLI persistence)
         self._adopt_existing_connection()
+
+    def _handle_tun_crash(self, returncode: int, log_snippet: str):
+        """Handler triggered by TUNProcessWatcher on unexpected process crash."""
+        logger.error(f"[ConnectionManager] TUN process crash detected (exit code {returncode}): {log_snippet}")
+        reason = t(
+            "status.tun_crashed",
+            default="VPN Connection Lost: TUN engine terminated unexpectedly.",
+        )
+        self.handle_emergency_disconnect(reason)
+
+    def handle_emergency_disconnect(self, reason: str):
+        """Perform emergency cleanup on TUN crash or unrecoverable connection loss."""
+        with self._state_lock:
+            if not self._current_connection and self._session_id == 0:
+                return  # Already disconnected
+            connection = self._current_connection
+            self._current_connection = None
+            self._session_id = 0
+
+        logger.error(f"[ConnectionManager] Triggering emergency disconnect: {reason}")
+
+        # 1. Transition state immediately to DISCONNECTING
+        self._emit_event("disconnecting")
+
+        # 2. Stop monitoring
+        self._monitoring.stop()
+
+        # 3. Perform emergency teardown (clean static routes, flush DNS, restore interfaces)
+        self._orchestrator.teardown_connection(connection)
+
+        # 4. Emit desktop OS Notification
+        from src.utils.notification_utils import send_os_notification
+
+        send_os_notification(
+            t("status.vpn_lost_title", default="VPN Connection Lost"),
+            reason,
+        )
+
+        # 5. Emit disconnected state to UI (updates UI toggle to RED immediately)
+        self._emit_event("disconnected", {"reason": reason, "crashed": True})
 
     def _handle_signal(self, signal):
         """

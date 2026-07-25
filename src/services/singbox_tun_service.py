@@ -6,7 +6,7 @@ import os
 import socket
 import subprocess
 import time
-from typing import List, Optional, Union
+from typing import Callable, List, Optional, Union
 
 from loguru import logger
 
@@ -17,6 +17,7 @@ from src.core.constants import (
     SINGBOX_PID_FILE,
     SINGBOX_RULE_SETS,
 )
+from src.services.tun_process_watcher import TUNProcessWatcher
 from src.utils.network_interface import NetworkInterfaceDetector
 from src.utils.platform_utils import PlatformUtils
 from src.utils.process_utils import ProcessUtils
@@ -34,6 +35,12 @@ class SingboxTunService:
         self._pid: Optional[int] = None
         self._log_handle = None
         self._added_routes: List[str] = []
+        self._watcher: Optional[TUNProcessWatcher] = None
+        self._on_crash_callback: Optional[Callable] = None
+
+    def set_on_crash_callback(self, callback: Callable[[int, str], None]):
+        """Set callback for unexpected process crashes."""
+        self._on_crash_callback = callback
 
     def _normalize_list(self, value: Union[str, List[str], None]) -> List[str]:
         if not value:
@@ -177,6 +184,15 @@ class SingboxTunService:
             except Exception as e:
                 logger.error(f"[SingboxTunService] Failed to write PID file: {e}")
 
+            if self._process and self._on_crash_callback:
+                self._watcher = TUNProcessWatcher(
+                    process=self._process,
+                    on_crash_callback=self._on_crash_callback,
+                    log_file_path=SINGBOX_LOG_FILE,
+                    name="SingboxTUN",
+                )
+                self._watcher.start()
+
             logger.info(f"[SingboxTunService] sing-box started | PID: {self._pid}")
             return self._pid
 
@@ -227,6 +243,10 @@ class SingboxTunService:
 
     def stop(self):
         """Stop the sing-box TUN service."""
+        if self._watcher:
+            self._watcher.stop()
+            self._watcher = None
+
         if self._process or self._pid:
             pid_to_kill = self._pid or (self._process.pid if self._process else None)
             if pid_to_kill:

@@ -57,26 +57,27 @@ class SettingsView(ft.Container):
                         content=ft.Row(
                             [
                                 ft.Container(
-                                    content=ft.Icon(ft.Icons.WIFI_TETHERING, color=WHITE, size=20),
+                                    content=ft.Icon(ft.Icons.WIFI_TETHERING, color=AppColors.PRIMARY, size=22),
                                     width=28,
                                     alignment=ft.Alignment.CENTER_LEFT,
                                 ),
                                 ft.Text(
                                     t("settings.connectivity_title", default="Connectivity Settings"),
-                                    size=16,
+                                    size=18,
                                     weight=ft.FontWeight.BOLD,
                                     color=WHITE,
                                 ),
                             ],
                             spacing=12,
                         ),
-                        padding=ft.Padding.only(left=8, right=8, top=4, bottom=4),
+                        padding=ft.Padding.only(left=8, right=8, top=4, bottom=10),
+                        border=ft.Border.only(bottom=ft.BorderSide(1, ft.Colors.with_opacity(0.12, WHITE))),
                     ),
                     self._mode_switch_row,
                     self._tun_engine_row,
                     self._port_row,
                 ],
-                spacing=8,
+                spacing=10,
             ),
         )
 
@@ -86,20 +87,21 @@ class SettingsView(ft.Container):
                 content=ft.Row(
                     [
                         ft.Container(
-                            content=ft.Icon(ft.Icons.ALT_ROUTE, color=WHITE, size=20),
+                            content=ft.Icon(ft.Icons.ALT_ROUTE, color=AppColors.PRIMARY, size=22),
                             width=28,
                             alignment=ft.Alignment.CENTER_LEFT,
                         ),
                         ft.Text(
                             t("settings.routing_title", default="Routing & Anti-Leak"),
-                            size=16,
+                            size=18,
                             weight=ft.FontWeight.BOLD,
                             color=WHITE,
                         ),
                     ],
                     spacing=12,
                 ),
-                padding=ft.Padding.only(left=8, right=8, top=4, bottom=4),
+                padding=ft.Padding.only(left=8, right=8, top=4, bottom=10),
+                border=ft.Border.only(bottom=ft.BorderSide(1, ft.Colors.with_opacity(0.12, WHITE))),
             ),
             self._country_row,
         ]
@@ -127,7 +129,7 @@ class SettingsView(ft.Container):
         self._routing_card = create_glass_container(
             content=ft.Column(
                 routing_controls,
-                spacing=8,
+                spacing=10,
             ),
         )
 
@@ -139,26 +141,27 @@ class SettingsView(ft.Container):
                         content=ft.Row(
                             [
                                 ft.Container(
-                                    content=ft.Icon(ft.Icons.TUNE, color=WHITE, size=20),
+                                    content=ft.Icon(ft.Icons.TUNE, color=AppColors.PRIMARY, size=22),
                                     width=28,
                                     alignment=ft.Alignment.CENTER_LEFT,
                                 ),
                                 ft.Text(
                                     t("settings.preferences_title", default="Application Preferences"),
-                                    size=16,
+                                    size=18,
                                     weight=ft.FontWeight.BOLD,
                                     color=WHITE,
                                 ),
                             ],
                             spacing=12,
                         ),
-                        padding=ft.Padding.only(left=8, right=8, top=4, bottom=4),
+                        padding=ft.Padding.only(left=8, right=8, top=4, bottom=10),
+                        border=ft.Border.only(bottom=ft.BorderSide(1, ft.Colors.with_opacity(0.12, WHITE))),
                     ),
                     self._language_row,
                     self._reconnect_row,
                     self._startup_row,
                 ],
-                spacing=8,
+                spacing=10,
             ),
         )
 

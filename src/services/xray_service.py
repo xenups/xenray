@@ -2,10 +2,11 @@
 import os
 import subprocess
 import time
-from typing import Optional
+from typing import Callable, Optional
 
 from src.core.constants import XRAY_EXECUTABLE, XRAY_LOCATION_ASSET, XRAY_LOG_FILE, XRAY_PID_FILE
 from src.core.logger import logger
+from src.services.tun_process_watcher import TUNProcessWatcher
 from src.utils.process_utils import ProcessUtils
 
 # Constants
@@ -21,7 +22,13 @@ class XrayService:
         """Initialize Xray service."""
         self._process = None
         self._pid: Optional[int] = None
+        self._watcher: Optional[TUNProcessWatcher] = None
+        self._on_crash_callback: Optional[Callable] = None
         self._check_and_restore_pid()
+
+    def set_on_crash_callback(self, callback: Callable[[int, str], None]):
+        """Set callback for unexpected process crashes."""
+        self._on_crash_callback = callback
 
     def _check_and_restore_pid(self):
         """Restore PID from file if it's still running (CLI state adoption)."""
@@ -89,6 +96,15 @@ class XrayService:
                 except Exception as e:
                     logger.error(f"[XrayService] Failed to write PID file: {e}")
 
+                if self._process and self._on_crash_callback:
+                    self._watcher = TUNProcessWatcher(
+                        process=self._process,
+                        on_crash_callback=self._on_crash_callback,
+                        log_file_path=XRAY_LOG_FILE,
+                        name="XrayCore",
+                    )
+                    self._watcher.start()
+
                 return self._pid
             else:
                 logger.error("[XrayService] Failed to start process")
@@ -101,6 +117,10 @@ class XrayService:
         """
         Stop Xray process.
         """
+        if self._watcher:
+            self._watcher.stop()
+            self._watcher = None
+
         # Checks memory PID first
         pid_to_kill = self._pid
 
