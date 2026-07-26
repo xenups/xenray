@@ -326,7 +326,6 @@
     "save": "Save Chain",
     "cancel": "Cancel",
     "entry_label": "Entry",
-    "exit_label": "→ Internet",
     "select_outbound": "Select Server",
     "info_hint": "First = Entry, Last = Internet",
     "validation": {
@@ -351,5 +350,11 @@
       "deleted": "Chain deleted",
       "invalid_chain": "Cannot connect: chain has missing servers"
     }
+  },
+  "servers": {
+    "selected_node": "SELECTED NODE",
+    "search_placeholder": "Search server name, region or IP...",
+    "add": "Add Server",
+    "latency": "LATENCY"
   }
 }
