@@ -15,8 +15,17 @@ from src.core.logger import logger
 from src.core.types import ConnectionMode
 from src.services.network_stats import NetworkStatsService
 from src.ui.builders.ui_builder import UIBuilder
+from src.ui.components.add_server_dialog import AddServerDialog
 from src.ui.components.admin_restart_dialog import AdminRestartDialog
 from src.ui.components.close_dialog import CloseDialog
+from src.ui.components.settings_sections import (
+    AutoReconnectToggleRow,
+    CountryDropdownRow,
+    LanguageDropdownRow,
+    ModeSwitchRow,
+    PortInputRow,
+    StartupToggleRow,
+)
 from src.ui.components.toast import ToastManager
 from src.ui.handlers.background_task_handler import BackgroundTaskHandler
 from src.ui.handlers.connection_handler import ConnectionHandler
@@ -27,6 +36,7 @@ from src.ui.handlers.reconnect_event_handler import ReconnectEventHandler
 from src.ui.handlers.systray_handler import SystrayHandler
 from src.ui.handlers.theme_handler import ThemeHandler
 from src.ui.helpers.glow_helper import GlowHelper
+from src.ui.helpers.profile_presenter import ProfilePresenter
 from src.ui.helpers.ui_thread_helper import UIThreadHelper
 from src.ui.managers.drawer_manager import DrawerManager
 from src.ui.managers.monitoring_service import MonitoringService
@@ -79,6 +89,8 @@ class MainWindow:
         self._is_running = False
         self._connecting = False
         self._selected_profile: Optional[dict] = None
+        self._active_tab = "dashboard"
+        self._nav_locked = False
 
         # --- UI Components Placeholders ---
         self._heartbeat: Optional[ft.Container] = None
@@ -123,8 +135,16 @@ class MainWindow:
             toast_manager=self._toast,
         )
 
-        self._ui_builder.build_ui()  # Delegate to builder
+        self._ui_builder.build_core_components()  # Step 1: legacy components
         self._drawer_manager.setup_drawers()  # Delegate to manager
+        self._ui_builder.build_stitch_views()  # Step 2: Stitch views + layout (after drawers)
+
+        # Forward last selected profile to new Stitch views (loaded by setup_drawers)
+        if self._selected_profile:
+            self._update_selected_profile_ui(self._selected_profile)
+
+        # Sync initial connection state to all new views
+        self._sync_dashboard_connection_state()
 
         # --- Bind Handlers (Post-UI Build) ---
         self._connection_handler.setup(
@@ -194,7 +214,11 @@ class MainWindow:
             logs_heartbeat=self._logs_heartbeat,
             heartbeat=self._heartbeat,
             is_running_getter=lambda: self._is_running,
+            active_tab_getter=lambda: self._active_tab,
         )
+
+        # Wrap status_display to forward step messages to the new dashboard view
+        self._wrap_status_display()
 
         self._background_task_handler.setup(page=self._page)
         self._systray.setup(self)
@@ -206,15 +230,215 @@ class MainWindow:
         if self._selected_profile:
             self._update_selected_profile_ui(self._selected_profile)
 
+        # Start forwarding tasks for new Stitch views
+        self._page.run_task(self._forward_network_stats)
+        self._page.run_task(self._forward_system_stats)
+
+    async def _forward_network_stats(self):
+        """Periodically forward network stats to new views."""
+        import asyncio
+
+        while True:
+            try:
+                await asyncio.sleep(3.0)
+                if not self._is_running or self._nav_locked:
+                    continue
+                stats = self._network_stats.get_stats()
+                down_str = stats.get("download_speed", "0 B/s")
+                up_str = stats.get("upload_speed", "0 B/s")
+                total_bps = float(stats.get("total_bps", 0))
+                # Estimate dl/ul bps from total (conservative 50/50 split)
+                dl_bps = total_bps * 0.6
+                ul_bps = total_bps * 0.4
+                dl_total_str = f"{dl_bps / (1024 * 1024):.1f} MB"
+                ul_total_str = f"{ul_bps / (1024 * 1024):.1f} MB"
+
+                kwargs = dict(
+                    rate_str=down_str,
+                    upload_str=ul_total_str,
+                    download_str=dl_total_str,
+                    download_bps=dl_bps,
+                    upload_bps=ul_bps,
+                    total_bps=total_bps,
+                )
+
+                # Only update the view that is currently visible
+                if (
+                    self._active_tab == "dashboard"
+                    and hasattr(self, "_stitch_dashboard_view")
+                    and self._stitch_dashboard_view
+                ):
+                    self._stitch_dashboard_view.update_network_stats(**kwargs)
+                elif (
+                    self._active_tab == "statistics"
+                    and hasattr(self, "_stitch_statistics_view")
+                    and self._stitch_statistics_view
+                ):
+                    self._stitch_statistics_view.update_network_stats(**kwargs)
+            except Exception:
+                pass
+
+    async def _forward_system_stats(self):
+        """Periodically forward system stats (memory, threads, health) to LogsView."""
+        import asyncio
+        import os
+        import threading
+
+        import psutil
+
+        while True:
+            try:
+                await asyncio.sleep(3.0)
+                if self._nav_locked:
+                    continue
+                # Only gather and push system stats when logs tab is visible
+                if self._active_tab != "logs":
+                    continue
+                process = psutil.Process()
+                mem_info = process.memory_info()
+                used_mb = mem_info.rss / (1024 * 1024)
+                total_mb = psutil.virtual_memory().total / (1024 * 1024)
+                thread_count = threading.active_count()
+                health_issues = 0
+
+                if hasattr(self, "_stitch_logs_view") and self._stitch_logs_view:
+                    self._stitch_logs_view.update_memory(used_mb, total_mb)
+                    self._stitch_logs_view.update_threads(thread_count)
+                    self._stitch_logs_view.update_health(health_issues)
+            except Exception:
+                pass
+
+    def _wrap_status_display(self):
+        """Wrap status_display methods to forward step messages to dashboard view."""
+        if not self._status_display:
+            return
+        sd = self._status_display
+
+        # Forward set_step to dashboard
+        orig_set_step = sd.set_step
+
+        def wrapped_set_step(msg):
+            orig_set_step(msg)
+            try:
+                if (
+                    hasattr(self, "_stitch_dashboard_view")
+                    and self._stitch_dashboard_view
+                ):
+                    self._stitch_dashboard_view.set_step(msg)
+            except Exception:
+                pass
+
+        sd.set_step = wrapped_set_step
+
+        # Forward set_connecting
+        orig_set_connecting = sd.set_connecting
+
+        def wrapped_set_connecting():
+            orig_set_connecting()
+            try:
+                if (
+                    hasattr(self, "_stitch_dashboard_view")
+                    and self._stitch_dashboard_view
+                ):
+                    self._stitch_dashboard_view.set_connection_state(
+                        is_connected=False, is_connecting=True
+                    )
+            except Exception:
+                pass
+
+        sd.set_connecting = wrapped_set_connecting
+
+        # Forward set_connected
+        orig_set_connected = sd.set_connected
+
+        def wrapped_set_connected(country_data=None):
+            orig_set_connected(country_data)
+            try:
+                if (
+                    hasattr(self, "_stitch_dashboard_view")
+                    and self._stitch_dashboard_view
+                ):
+                    self._stitch_dashboard_view.set_connection_state(is_connected=True)
+            except Exception:
+                pass
+
+        sd.set_connected = wrapped_set_connected
+
+        # Forward set_disconnected
+        orig_set_disconnected = sd.set_disconnected
+
+        def wrapped_set_disconnected():
+            orig_set_disconnected()
+            try:
+                if (
+                    hasattr(self, "_stitch_dashboard_view")
+                    and self._stitch_dashboard_view
+                ):
+                    self._stitch_dashboard_view.set_connection_state(is_connected=False)
+            except Exception:
+                pass
+
+        sd.set_disconnected = wrapped_set_disconnected
+
+        # Forward set_disconnecting
+        orig_set_disconnecting = sd.set_disconnecting
+
+        def wrapped_set_disconnecting():
+            orig_set_disconnecting()
+            try:
+                if (
+                    hasattr(self, "_stitch_dashboard_view")
+                    and self._stitch_dashboard_view
+                ):
+                    self._stitch_dashboard_view.set_connection_state(
+                        is_connected=False, is_disconnecting=True
+                    )
+            except Exception:
+                pass
+
+        sd.set_disconnecting = wrapped_set_disconnecting
+
     # --- State Helpers (for handlers) ---
     def _set_is_running(self, val: bool):
         self._is_running = val
+        self._sync_dashboard_connection_state()
 
     def _set_connecting(self, val: bool):
         self._connecting = val
+        self._sync_dashboard_connection_state()
 
     def _set_profile_manager_running(self, val: bool):
         self._profile_manager.is_running = val
+
+    def _sync_dashboard_connection_state(self):
+        """Sync the dashboard view's connection state with current state."""
+        try:
+            if hasattr(self, "_stitch_dashboard_view") and self._stitch_dashboard_view:
+                self._stitch_dashboard_view.set_connection_state(
+                    is_connected=self._is_running,
+                    is_connecting=self._connecting,
+                )
+            if (
+                hasattr(self, "_stitch_statistics_view")
+                and self._stitch_statistics_view
+            ):
+                self._stitch_statistics_view.set_connection_state(
+                    is_connected=self._is_running,
+                    is_connecting=self._connecting,
+                )
+            if hasattr(self, "_nav_sidebar") and self._nav_sidebar:
+                server_name = (
+                    self._selected_profile.get("name", "")
+                    if self._selected_profile
+                    else ""
+                )
+                self._nav_sidebar.update_connect_button_text(
+                    text="Disconnect" if self._is_running else "Connect",
+                    is_running=self._is_running,
+                    server_name=server_name,
+                )
+        except Exception:
+            pass
 
     def _set_monitoring_service_running(self, val: bool):
         self._monitoring_service.is_running = val
@@ -245,8 +469,12 @@ class MainWindow:
         saved_mode = self._app_context.settings.get_connection_mode()
         saved_theme = self._app_context.settings.get_theme_mode()
 
-        self._current_mode = ConnectionMode.VPN if saved_mode == "vpn" else ConnectionMode.PROXY
-        self._page.theme_mode = ft.ThemeMode.DARK if saved_theme == "dark" else ft.ThemeMode.LIGHT
+        self._current_mode = (
+            ConnectionMode.VPN if saved_mode == "vpn" else ConnectionMode.PROXY
+        )
+        self._page.theme_mode = (
+            ft.ThemeMode.DARK if saved_theme == "dark" else ft.ThemeMode.LIGHT
+        )
 
         # Load last selected profile (from local OR subscriptions)
         last_profile_id = self._app_context.settings.get_last_selected_profile_id()
@@ -261,26 +489,74 @@ class MainWindow:
     # Navigation & UI Building
     # -----------------------------
     def navigate_to(self, control: ft.Control):
-        """Navigate to a new view (replaces dashboard)."""
+        """Navigate to a new view — suppress background updates during swap."""
+        self._nav_locked = True
         self._view_switcher.content = control
         self._view_switcher.update()
+        self._nav_locked = False
+
+    def _on_server_search(self, query: str):
+        """Handle server search in ServersView."""
+        if self._profile_manager:
+            self._server_list._load_profiles(search_query=query, update_ui=True)
+
+    def _open_add_server_dialog(self, e=None):
+        """Open the add server dialog."""
+        self._show_add_server_dialog()
 
     def navigate_back(self, e=None):
         """Return to dashboard view."""
         self._view_switcher.content = self._dashboard_view
         self._view_switcher.update()
 
+    def _on_nav_tab_changed(self, tab_id: str):
+        """Switch the main content view based on the selected nav tab.
+
+        Uses targeted ``control.update()`` on just the view-switcher and
+        sidebar buttons instead of ``page.update()`` to avoid serializing
+        the entire page control tree.
+        """
+        if self._active_tab == tab_id:
+            return
+        self._active_tab = tab_id
+        view_map = {
+            "dashboard": self._stitch_dashboard_view,
+            "statistics": self._stitch_statistics_view,
+            "servers": self._stitch_servers_view,
+            "logs": self._stitch_logs_view,
+            "settings": self._stitch_settings_view,
+        }
+        target = view_map.get(tab_id, self._dashboard_view)
+
+        # Mutate both controls before flushing to the client
+        self._view_switcher.content = target
+        if hasattr(self, "_nav_sidebar") and self._nav_sidebar:
+            self._nav_sidebar._active_tab = tab_id
+            self._nav_sidebar._apply_active_styles()
+
+        # Targeted updates — only send the changed subtrees, not the entire page
+        self._view_switcher.update()
+        if hasattr(self, "_nav_sidebar") and self._nav_sidebar:
+            self._nav_sidebar._buttons_container.update()
+
+        # Update log viewer visibility (only live-stream logs when viewing logs tab or drawer)
+        if hasattr(self, "_log_viewer") and self._log_viewer:
+            drawer_open = (
+                getattr(self._logs_drawer_component, "open", False)
+                if hasattr(self, "_logs_drawer_component")
+                and self._logs_drawer_component
+                else False
+            )
+            self._log_viewer.set_visible(tab_id == "logs" or drawer_open)
+
     def _create_dashboard_view(self):
         return ft.Column(
             [
                 self._header,
                 ft.Container(expand=True),
-                # Connection Button in center
                 self._connection_button,
-                # Status Display directly below button (no gap)
                 self._status_display,
                 ft.Container(expand=True),
-                # Server Card at bottom
                 self._server_card,
             ],
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
@@ -309,9 +585,21 @@ class MainWindow:
 
             self._connection_button.set_connecting()
             self._status_display.set_connecting()
+            self._sync_dashboard_connection_state()
             self._ui_helper.call(lambda: None)
             self._connect_async()
         else:
+            # Show disconnecting state in dashboard
+            try:
+                if (
+                    hasattr(self, "_stitch_dashboard_view")
+                    and self._stitch_dashboard_view
+                ):
+                    self._stitch_dashboard_view.set_connection_state(
+                        is_connected=False, is_disconnecting=True
+                    )
+            except Exception:
+                pass
             self._disconnect()
 
     def _show_admin_restart_dialog(self):
@@ -344,6 +632,51 @@ class MainWindow:
         """Updates the UI with the selected profile."""
         self._selected_profile = profile
         self._server_card.update_server(profile)
+
+        try:
+            info = ProfilePresenter.extract_profile_info(profile)
+            name = profile.get("name", "") or profile.get("remark", "")
+            latency = info.get("latency", "--")
+            country_code = info.get("country_code", "")
+            country_name = info.get("country_name", "")
+            protocol = info.get("protocol", "")
+            encryption = info.get("encryption", "")
+            server_ip = info.get("server_ip", "")
+
+            # Update dashboard view
+            if hasattr(self, "_stitch_dashboard_view") and self._stitch_dashboard_view:
+                self._stitch_dashboard_view.update_server_info(
+                    name=name,
+                    latency=latency,
+                    protocol=protocol,
+                    encryption=encryption,
+                    server_ip=server_ip,
+                    country_code=country_code,
+                    country_name=country_name,
+                )
+
+            # Update servers view hero node
+            if hasattr(self, "_stitch_servers_view") and self._stitch_servers_view:
+                self._stitch_servers_view.update_hero_node(
+                    name=name,
+                    latency=latency,
+                    protocol=protocol,
+                    country_code=country_code,
+                )
+
+            # Update statistics view
+            if (
+                hasattr(self, "_stitch_statistics_view")
+                and self._stitch_statistics_view
+            ):
+                self._stitch_statistics_view.update_server_info(
+                    name=name,
+                    country_code=country_code,
+                    server_ip=server_ip,
+                )
+        except Exception:
+            pass
+
         if self._server_sheet:
             try:
                 if self._server_sheet.open:
@@ -351,7 +684,12 @@ class MainWindow:
                     self._server_sheet.update()
             except Exception:
                 pass
-        self._page.update()
+        # Targeted update — server_card was mutated above but not flushed
+        try:
+            if self._server_card and self._server_card.page:
+                self._server_card.update()
+        except Exception:
+            pass
 
     def _trigger_reconnect(self):
         """Handle transparent reconnection when server changes while running."""
@@ -369,7 +707,9 @@ class MainWindow:
 
         # 2. Trigger immediate latency check via dedicated handler
         if not self._is_running and not self._connecting:
-            self._ui_helper.call(self._status_display.set_pre_connection_ping, "...", False)
+            self._ui_helper.call(
+                self._status_display.set_pre_connection_ping, "...", False
+            )
             self._latency_monitor_handler.trigger_single_check()
 
         # 3. Handle live switch if running
@@ -420,6 +760,134 @@ class MainWindow:
     # -----------------------------
     # Logic: Utilities
     # -----------------------------
+    def _show_add_server_dialog(self):
+        """Show the add server/subscription dialog."""
+        dialog = AddServerDialog(
+            on_server_added=lambda name, config: self._profile_manager.add_profile(
+                name, config
+            ),
+            on_subscription_added=lambda name, url: (
+                self._profile_manager.add_subscription(name, url)
+            ),
+            on_close=lambda: self._page.close_dialog(),
+            on_create_chain=None,
+        )
+        self._page.show_dialog(dialog)
+
+    def _copy_logs(self):
+        """Copy logs to clipboard."""
+        if self._log_viewer:
+            self._log_viewer.copy_to_clipboard()
+            self._show_toast("Logs copied to clipboard", "success")
+
+    def _download_logs(self):
+        """Download logs to file."""
+        if self._log_viewer:
+            self._log_viewer.export_logs()
+            self._show_toast("Logs exported", "success")
+
+    def _clear_logs(self):
+        """Clear log viewer."""
+        if self._log_viewer:
+            self._log_viewer.clear_logs()
+
+    def _open_routing_page(self):
+        """Navigate to routing page."""
+        from src.ui.pages.routing_page import RoutingPage
+
+        page = RoutingPage(
+            app_context=self._app_context,
+            on_back=self.navigate_back,
+        )
+        self.navigate_to(page)
+
+    def _open_dns_page(self):
+        """Navigate to DNS management page."""
+        from src.ui.pages.dns_page import DNSPage
+
+        page = DNSPage(
+            app_context=self._app_context,
+            on_back=self.navigate_back,
+        )
+        self.navigate_to(page)
+
+    # --- Settings Row Builders ---
+    def _build_mode_switch_row(self) -> ModeSwitchRow:
+        is_proxy = self._current_mode == ConnectionMode.PROXY
+        row = ModeSwitchRow(
+            is_proxy=is_proxy,
+            on_change=lambda e: self._on_mode_changed(
+                ConnectionMode.PROXY if e.control.value else ConnectionMode.VPN
+            ),
+        )
+        return row
+
+    def _build_port_row(self) -> PortInputRow:
+        return PortInputRow(
+            initial_value=self._app_context.settings.get_proxy_port(),
+            on_save=lambda val: self._save_port(val),
+        )
+
+    def _build_country_row(self) -> CountryDropdownRow:
+        return CountryDropdownRow(
+            current_value=self._app_context.settings.get_routing_country() or "",
+            on_change=lambda code: self._app_context.settings.set_routing_country(code),
+        )
+
+    def _build_language_row(self) -> LanguageDropdownRow:
+        return LanguageDropdownRow(
+            current_value=self._app_context.settings.get_language() or "en",
+            on_change=lambda code: self._change_language(code),
+        )
+
+    def _build_reconnect_row(self) -> AutoReconnectToggleRow:
+        return AutoReconnectToggleRow(
+            app_context=self._app_context,
+            toast_callback=lambda msg, typ: self._show_toast(msg, typ),
+        )
+
+    def _build_startup_row(self) -> StartupToggleRow:
+        from src.services.task_scheduler import (
+            is_task_registered,
+            is_supported,
+            register_task,
+            unregister_task,
+        )
+
+        return StartupToggleRow(
+            app_context=self._app_context,
+            is_registered=is_task_registered(),
+            is_supported=is_supported(),
+            on_register=register_task,
+            on_unregister=unregister_task,
+            toast_callback=self._show_toast,
+        )
+
+        return StartupToggleRow(
+            app_context=self._app_context,
+            is_registered=is_registered(),
+            is_supported=is_supported(),
+            on_register=lambda: register_startup(),
+            on_unregister=lambda: unregister_startup(),
+            toast_callback=lambda msg, typ: self._show_toast(msg, typ),
+        )
+
+    def _save_port(self, val):
+        """Save proxy port setting."""
+        try:
+            port = int(val) if hasattr(val, "control") else int(val)
+            self._app_context.settings.set_proxy_port(port)
+            self._show_toast(f"SOCKS Port saved: {port}", "success")
+        except (ValueError, TypeError):
+            self._show_toast("Invalid port", "error")
+
+    @staticmethod
+    def _change_language(code: str):
+        """Change application language."""
+        from src.core.i18n import set_language
+
+        set_language(code)
+
     def _toggle_theme(self, e=None):
         """Delegate to theme handler."""
         self._theme_handler.toggle_theme(e)
@@ -443,7 +911,9 @@ class MainWindow:
             # Update local reference
             self._selected_profile.update(updated_profile)
             # Update Server Card
-            self._ui_helper.call(lambda: self._server_card.update_server(self._selected_profile))
+            self._ui_helper.call(
+                lambda: self._server_card.update_server(self._selected_profile)
+            )
 
     def _on_mode_changed(self, mode: ConnectionMode):
         from src.utils.process_utils import ProcessUtils
@@ -453,8 +923,12 @@ class MainWindow:
             return
 
         self._current_mode = mode
-        self._app_context.settings.set_connection_mode("vpn" if mode == ConnectionMode.VPN else "proxy")
-        self._status_display.set_status(t("status.mode_selected", mode=mode.name.title()))
+        self._app_context.settings.set_connection_mode(
+            "vpn" if mode == ConnectionMode.VPN else "proxy"
+        )
+        self._status_display.set_status(
+            t("status.mode_selected", mode=mode.name.title())
+        )
         self._ui_helper.call(lambda: None)
 
         if self._is_running:

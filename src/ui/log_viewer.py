@@ -7,6 +7,7 @@ from typing import Optional
 
 import flet as ft
 
+from src.core.constants import TMPDIR
 from src.core.logger import logger
 
 
@@ -36,6 +37,7 @@ class LogViewer:
 
         self._container = ft.Container(content=self._log_text, expand=True)
 
+        self._is_visible = False
         self._log_thread: Optional[threading.Thread] = None
         self._stop_flag: Optional[threading.Event] = None
         self._page: Optional[ft.Page] = None
@@ -49,6 +51,17 @@ class LogViewer:
     def set_page(self, page: ft.Page):
         """Set the page reference for updates."""
         self._page = page
+
+    def set_visible(self, visible: bool):
+        """Enable or disable live UI updates for log viewer."""
+        was_visible = self._is_visible
+        self._is_visible = visible
+        if visible and not was_visible and self._page:
+            try:
+                if self._log_text.page:
+                    self._log_text.update()
+            except Exception:
+                pass
 
     def start_tailing(self, *filepaths: str) -> None:
         """Start tailing one or more log files."""
@@ -66,8 +79,6 @@ class LogViewer:
             last_inodes = {}
 
             while not stop_event.is_set():
-                # --- تغییر ۱: چک کردن وضعیت مکث ---
-                # اگر self._pause_blocker.is_set() نباشد، ترد در اینجا مسدود می شود
                 self._pause_blocker.wait()
 
                 for filepath in filepaths:
@@ -79,14 +90,21 @@ class LogViewer:
                         if last_inodes.get(filepath) != stat.st_ino:
                             if filepath in file_handles:
                                 file_handles[filepath].close()
-                            file_handles[filepath] = open(filepath, "r", encoding="utf-8", errors="replace")
+                            file_handles[filepath] = open(
+                                filepath, "r", encoding="utf-8", errors="replace"
+                            )
                             file_handles[filepath].seek(0, os.SEEK_END)
                             last_inodes[filepath] = stat.st_ino
 
                         if filepath in file_handles:
-                            line = file_handles[filepath].readline()
-                            if line:
-                                self._append_text(line)
+                            lines = []
+                            while True:
+                                line = file_handles[filepath].readline()
+                                if not line:
+                                    break
+                                lines.append(line)
+                            if lines:
+                                self._append_batch(lines)
 
                     except Exception as e:
                         logger.error(f"Error reading log file {filepath}: {e}")
@@ -109,7 +127,6 @@ class LogViewer:
         logger.debug("[DEBUG] LogViewer.stop_tailing called")
         if self._stop_flag:
             self._stop_flag.set()
-        # در صورت توقف کامل، از حالت مکث خارج می شویم تا ترد بتواند join شود.
         self._pause_blocker.set()
         if self._log_thread:
             logger.debug("[DEBUG] Joining log thread...")
@@ -119,39 +136,74 @@ class LogViewer:
             else:
                 logger.debug("[DEBUG] Log thread joined")
 
-    # --- متد عمومی جدید برای LogsDrawer ---
     def toggle_pause(self) -> bool:
         """Toggle between paused and running states and returns the new state (is_paused)."""
         self._is_paused = not self._is_paused
 
         if self._is_paused:
-            # حالت مکث: ترد را مسدود کن (Clear the event)
             self._pause_blocker.clear()
         else:
-            # حالت ادامه: ترد را آزاد کن (Set the event)
             self._pause_blocker.set()
 
-        return self._is_paused  # وضعیت جدید را به LogsDrawer برمی‌گرداند
+        return self._is_paused
 
-    def _append_text(self, text: str):
-        """Append text to log viewer (New line at the top)."""
-        if self._page:
+    def export_logs(self):
+        """Save logs to a file in TMPDIR."""
+        try:
+            path = os.path.join(TMPDIR, "xenray_exported.log")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(self._log_text.value or "")
+            logger.info(f"[LogViewer] Logs exported to {path}")
+            if self._page:
+                try:
+                    self._page.set_clipboard(path)
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.error(f"[LogViewer] Export failed: {e}")
+
+    def copy_to_clipboard(self):
+        """Copy current log text to clipboard."""
+        if not self._page:
+            return
+        try:
+            self._page.set_clipboard(self._log_text.value or "")
+        except Exception:
+            pass
+
+    def clear_logs(self):
+        """Clear all log text."""
+        self._log_text.value = ""
+        try:
+            if self._log_text.page:
+                self._log_text.update()
+        except Exception:
+            pass
+
+    def _append_batch(self, lines: list[str]):
+        """Append batch of lines to log viewer (Newest at top)."""
+        new_text = "".join(lines).rstrip()
+        if not new_text:
+            return
+
+        current = self._log_text.value or ""
+        if current:
+            self._log_text.value = new_text + "\n" + current
+        else:
+            self._log_text.value = new_text
+
+        if len(self._log_text.value) > self.MAX_CHARS + 2000:
+            self._log_text.value = self._log_text.value[: self.MAX_CHARS]
+
+        # Only dispatch UI update if viewer is currently visible to user
+        if self._is_visible and self._page:
 
             async def update_ui():
-                current = self._log_text.value or ""
-                cleaned_text = text.rstrip()
-
-                # نمایش معکوس (جدیدترین در بالا)
-                if current:
-                    self._log_text.value = cleaned_text + "\n" + current
-                else:
-                    self._log_text.value = cleaned_text
-
-                # مدیریت تاریخچه
-                if len(self._log_text.value) > self.MAX_CHARS + 2000:
-                    self._log_text.value = self._log_text.value[: self.MAX_CHARS]
-
-                self._page.update()
+                try:
+                    if self._log_text.page:
+                        self._log_text.update()
+                except Exception:
+                    pass
 
             try:
                 self._page.run_task(update_ui)

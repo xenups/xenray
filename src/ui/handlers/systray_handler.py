@@ -1,4 +1,5 @@
 """System Tray Handler - Manages the tray icon and context menu."""
+
 from __future__ import annotations
 
 import os
@@ -87,7 +88,9 @@ class SystrayHandler:
         if self._main._is_running:
             toggle_label = t("tray.disconnect")
             status_text = t("tray.connected_to").format(
-                server=self._main._selected_profile.get("name", "Unknown") if self._main._selected_profile else "..."
+                server=self._main._selected_profile.get("name", "Unknown")
+                if self._main._selected_profile
+                else "..."
             )
         else:
             toggle_label = t("tray.connect")
@@ -128,7 +131,13 @@ class SystrayHandler:
         logger.debug("[TRAY_EVENT] _on_open() called")
         if not self._main:
             return
-        self._main._restore_from_tray()
+        try:
+            if hasattr(self._main, "_restore_from_tray"):
+                self._main._restore_from_tray()
+            elif hasattr(self._main, "restore_from_tray"):
+                self._main.restore_from_tray()
+        except Exception as e:
+            logger.warning(f"[SysTrayHandler] Error in _on_open: {e}")
 
     def _on_toggle_connect(self, icon, item):
         """Toggle connection callback."""

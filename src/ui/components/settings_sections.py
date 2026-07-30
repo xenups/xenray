@@ -1,4 +1,5 @@
 """Reusable settings section components with i18n support."""
+
 from __future__ import annotations
 
 from typing import Callable, Optional
@@ -52,7 +53,9 @@ class SettingsRow(ft.Container):
         if sublabel_control:
             label_column.controls.append(sublabel_control)
         elif sublabel:
-            label_column.controls.append(ft.Text(sublabel, size=11, color=ft.Colors.ON_SURFACE_VARIANT))
+            label_column.controls.append(
+                ft.Text(sublabel, size=11, color=ft.Colors.ON_SURFACE_VARIANT)
+            )
 
         super().__init__(
             content=ft.Row(
@@ -80,7 +83,11 @@ class SettingsListTile(ft.ListTile):
         on_click: Optional[Callable] = None,
         show_chevron: bool = True,
     ):
-        trailing = ft.Icon(ft.Icons.CHEVRON_RIGHT, size=18, color=ft.Colors.OUTLINE) if show_chevron else None
+        trailing = (
+            ft.Icon(ft.Icons.CHEVRON_RIGHT, size=18, color=ft.Colors.OUTLINE)
+            if show_chevron
+            else None
+        )
 
         super().__init__(
             leading=ft.Icon(icon, color=ft.Colors.ON_SURFACE_VARIANT),
@@ -168,6 +175,67 @@ class ModeSwitchRow(ft.Container):
             pass
 
 
+class TunEngineRow(ft.Container):
+    """TUN engine selector row with standardized column alignment."""
+
+    def __init__(self, current_engine: str, on_change: Callable):
+        self._dropdown = ft.Dropdown(
+            width=140,
+            height=38,
+            text_size=12,
+            content_padding=8,
+            value=current_engine if current_engine else "sing-box",
+            options=[
+                ft.dropdown.Option("sing-box", "sing-box"),
+                ft.dropdown.Option("xray", "Xray"),
+            ],
+            border_color=ft.Colors.OUTLINE_VARIANT,
+            focused_border_color=ft.Colors.PRIMARY,
+            on_select=on_change,
+        )
+
+        super().__init__(
+            content=ft.Row(
+                [
+                    ft.Container(
+                        content=ft.Icon(
+                            ft.Icons.SETTINGS_ETHERNET, size=20, color=ft.Colors.WHITE
+                        ),
+                        width=28,
+                        alignment=ft.Alignment.CENTER_LEFT,
+                    ),
+                    ft.Column(
+                        [
+                            ft.Text(
+                                "TUN Engine",
+                                size=14,
+                                weight=ft.FontWeight.W_600,
+                                color=ft.Colors.WHITE,
+                            ),
+                            ft.Text(
+                                "Core driver engine for VPN TUN mode",
+                                size=12,
+                                color=ft.Colors.ON_SURFACE_VARIANT,
+                            ),
+                        ],
+                        spacing=2,
+                        expand=True,
+                    ),
+                    self._dropdown,
+                ],
+                alignment=ft.MainAxisAlignment.START,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                spacing=12,
+            ),
+            padding=ft.Padding.symmetric(horizontal=8, vertical=8),
+            border_radius=10,
+        )
+
+    @property
+    def value(self) -> str:
+        return self._dropdown.value
+
+
 class PortInputRow(ft.Container):
     """Port input row for settings."""
 
@@ -187,7 +255,9 @@ class PortInputRow(ft.Container):
         super().__init__(
             content=ft.Row(
                 [
-                    ft.Icon(ft.Icons.INPUT, size=24, color=ft.Colors.ON_SURFACE_VARIANT),
+                    ft.Icon(
+                        ft.Icons.INPUT, size=24, color=ft.Colors.ON_SURFACE_VARIANT
+                    ),
                     ft.Text(
                         t("settings.socks_port"),
                         size=12,
@@ -242,7 +312,9 @@ class CountryDropdownRow(ft.Container):
         super().__init__(
             content=ft.Row(
                 [
-                    ft.Icon(ft.Icons.PUBLIC, size=24, color=ft.Colors.ON_SURFACE_VARIANT),
+                    ft.Icon(
+                        ft.Icons.PUBLIC, size=24, color=ft.Colors.ON_SURFACE_VARIANT
+                    ),
                     ft.Text(
                         t("settings.direct_country"),
                         size=12,
@@ -280,7 +352,10 @@ class LanguageDropdownRow(ft.Container):
             text_size=12,
             content_padding=8,
             value=current_value if current_value else "en",
-            options=[ft.dropdown.Option(lang_code, f"{name}") for lang_code, flag_code, name in self._languages],
+            options=[
+                ft.dropdown.Option(lang_code, f"{name}")
+                for lang_code, flag_code, name in self._languages
+            ],
             border_color=ft.Colors.OUTLINE_VARIANT,
             focused_border_color=ft.Colors.PRIMARY,
             on_select=on_change,
@@ -390,7 +465,11 @@ class StartupToggleRow(ft.Container):
             disabled=not is_supported,
         )
 
-        self._sublabel = ft.Text(t("settings.add_to_startup_desc"), size=11, color=ft.Colors.ON_SURFACE_VARIANT)
+        self._sublabel = ft.Text(
+            t("settings.add_to_startup_desc"),
+            size=11,
+            color=ft.Colors.ON_SURFACE_VARIANT,
+        )
 
         super().__init__(
             content=ft.Row(
@@ -398,7 +477,9 @@ class StartupToggleRow(ft.Container):
                     ft.Icon(ft.Icons.ROCKET_LAUNCH, color=ft.Colors.ON_SURFACE_VARIANT),
                     ft.Column(
                         [
-                            ft.Text(t("settings.add_to_startup"), weight=ft.FontWeight.W_500),
+                            ft.Text(
+                                t("settings.add_to_startup"), weight=ft.FontWeight.W_500
+                            ),
                             self._sublabel,
                         ],
                         spacing=2,
@@ -431,8 +512,11 @@ class StartupToggleRow(ft.Container):
             self._switch.update()
             self._toast_callback(t("settings.startup_error"), "error")
 
-        if self.page:
-            self.page.update()
+        try:
+            if self.page:
+                self.page.update()
+        except (RuntimeError, AttributeError):
+            pass
 
 
 class AutoReconnectToggleRow(ft.Container):
@@ -465,7 +549,9 @@ class AutoReconnectToggleRow(ft.Container):
             on_change=self._handle_toggle,
         )
 
-        self._sublabel = ft.Text(t("settings.experimental"), size=11, color=ft.Colors.ON_SURFACE_VARIANT)
+        self._sublabel = ft.Text(
+            t("settings.experimental"), size=11, color=ft.Colors.ON_SURFACE_VARIANT
+        )
 
         super().__init__(
             content=ft.Row(
@@ -473,7 +559,9 @@ class AutoReconnectToggleRow(ft.Container):
                     ft.Icon(ft.Icons.AUTORENEW, color=ft.Colors.ON_SURFACE_VARIANT),
                     ft.Column(
                         [
-                            ft.Text(t("settings.auto_reconnect"), weight=ft.FontWeight.W_500),
+                            ft.Text(
+                                t("settings.auto_reconnect"), weight=ft.FontWeight.W_500
+                            ),
                             self._sublabel,
                         ],
                         spacing=2,
@@ -498,5 +586,8 @@ class AutoReconnectToggleRow(ft.Container):
         else:
             self._toast_callback(t("settings.auto_reconnect_disabled"), "info")
 
-        if self.page:
-            self.page.update()
+        try:
+            if self.page:
+                self.page.update()
+        except (RuntimeError, AttributeError):
+            pass

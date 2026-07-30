@@ -1,7 +1,9 @@
 """Header component with i18n support."""
+
 import flet as ft
 
 from src.core.i18n import t
+from src.ui.theme import AppColors
 
 
 class Header(ft.Container):
@@ -32,5 +34,15 @@ class Header(ft.Container):
         super().__init__(
             content=content,
             padding=ft.Padding.symmetric(horizontal=20, vertical=20),
-            # Fully transparent - no background, part of main window
         )
+
+    def update_theme(self, is_dark: bool):
+        """Update icon colors based on theme."""
+        icon_color = ft.Colors.WHITE if is_dark else ft.Colors.BLACK87
+        for child in self.content.controls[1].controls:
+            if isinstance(child, ft.IconButton):
+                child.icon_color = icon_color
+        try:
+            self.update()
+        except Exception:
+            pass

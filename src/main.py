@@ -29,14 +29,14 @@ async def main(page):
     #    We set dimensions here so they take effect before the first paint.
     page.window.width = WINDOW_WIDTH
     page.window.height = WINDOW_HEIGHT
-    page.window.min_width = WINDOW_WIDTH
-    page.window.min_height = WINDOW_HEIGHT
-    page.window.max_width = WINDOW_WIDTH
-    page.window.max_height = WINDOW_HEIGHT
-    page.window.resizable = False
+    page.window.min_width = 880
+    page.window.min_height = 600
+    page.window.resizable = True
     page.window.minimizable = True
-    page.window.maximizable = False
+    page.window.maximizable = True
     page.window.prevent_close = True
+    page.window.title_bar_hidden = True
+    page.window.title_bar_buttons_hidden = True
     page.title = "XenRay"
     page.padding = 0
     page.spacing = 0
@@ -67,7 +67,9 @@ async def main(page):
     async def on_window_event(e):
         event_type_str = str(getattr(e, "type", "")).lower()
         event_data_str = str(e.data).lower() if e.data is not None else ""
-        logger.debug(f"[WINDOW_EVENT] data='{e.data}' type='{getattr(e, 'type', None)}'")
+        logger.debug(
+            f"[WINDOW_EVENT] data='{e.data}' type='{getattr(e, 'type', None)}'"
+        )
 
         is_close = "close" in event_type_str or "close" in event_data_str
         is_minimize = "minimize" in event_type_str or "minimize" in event_data_str
@@ -155,7 +157,9 @@ def run():
         global _singleton_mutex
         _singleton_mutex = kernel32.CreateMutexW(None, False, mutex_name)
         last_error = ctypes.get_last_error()
-        logger.debug(f"[Startup] Mutex creation result: handle={_singleton_mutex}, last_error={last_error}")
+        logger.debug(
+            f"[Startup] Mutex creation result: handle={_singleton_mutex}, last_error={last_error}"
+        )
         if last_error == 183:
             logger.warning("Another instance is already running. Exiting.")
             return

@@ -1,4 +1,5 @@
 """Settings drawer component with i18n support."""
+
 from __future__ import annotations
 
 import os
@@ -26,6 +27,7 @@ from src.ui.components.settings_sections import (
     SettingsListTile,
     SettingsSection,
     StartupToggleRow,
+    TunEngineRow,
 )
 from src.utils.process_utils import ProcessUtils
 
@@ -55,6 +57,10 @@ class SettingsDrawer(ft.NavigationDrawer):
 
         # Components
         self._mode_switch_row = ModeSwitchRow(is_proxy, self._handle_mode_change)
+        self._tun_engine_row = TunEngineRow(
+            self._app_context.settings.get_tun_engine() or "sing-box",
+            self._save_tun_engine,
+        )
         self._port_row = PortInputRow(
             self._app_context.settings.get_proxy_port(),
             self._save_port,
@@ -271,7 +277,11 @@ class SettingsDrawer(ft.NavigationDrawer):
 
     def _handle_mode_change(self, e):
         """Handle VPN/Proxy mode switch."""
-        is_proxy = bool(e.control.value) if (e and hasattr(e, "control") and e.control) else self._mode_switch_row.value
+        is_proxy = (
+            bool(e.control.value)
+            if (e and hasattr(e, "control") and e.control)
+            else self._mode_switch_row.value
+        )
 
         if not is_proxy and not ProcessUtils.is_admin():
             self._mode_switch_row.value = True
@@ -315,17 +325,25 @@ class SettingsDrawer(ft.NavigationDrawer):
         )
         page.show_dialog(dlg)
 
+    @property
+    def safe_page(self) -> Optional[ft.Page]:
+        """RuntimeError-safe page property getter."""
+        try:
+            return self.page
+        except (RuntimeError, AttributeError):
+            return None
+
     def _show_toast(self, message: str, message_type: str = "info"):
         """Show a toast notification."""
-        if hasattr(self.page, "_toast_manager"):
-            self.page._toast_manager.show(message, message_type)
-        elif self.page:
-            # Log if toast manager is missing
+        page = self.safe_page
+        if page and hasattr(page, "_toast_manager"):
+            page._toast_manager.show(message, message_type)
+        elif page:
             logger.warning("Toast manager not available, message not shown")
 
     def _save_port(self, value: str):
         """Save the SOCKS port setting."""
-        page = self.page
+        page = self.safe_page
         if not page:
             return
 
@@ -354,6 +372,15 @@ class SettingsDrawer(ft.NavigationDrawer):
         self._app_context.settings.set_routing_country(val)
         self._show_toast(t("settings.country_saved", val=val), "success")
         page.update()
+
+    def _save_tun_engine(self, e):
+        """Save the TUN engine setting."""
+        try:
+            engine = self._tun_engine_row.value
+            self._app_context.settings.set_tun_engine(engine)
+            logger.info(f"TUN engine set to: {engine}")
+        except Exception as ex:
+            logger.error(f"Failed to save TUN engine: {ex}")
 
     def _save_language(self, e):
         """Save the language setting and update i18n."""
@@ -413,7 +440,11 @@ class SettingsDrawer(ft.NavigationDrawer):
 
     def _show_update_dialog(self, page, current: str, latest: str):
         """Show update confirmation dialog."""
-        msg = t("update.available", current=current, latest=latest) if current else t("update.install", version=latest)
+        msg = (
+            t("update.available", current=current, latest=latest)
+            if current
+            else t("update.install", version=latest)
+        )
 
         def close_dlg(e):
             if page is not None:
@@ -499,15 +530,21 @@ class SettingsDrawer(ft.NavigationDrawer):
     def _on_subpage_back(self, e):
         """Handle navigation back from subpage."""
         self._navigate_back()
-        if self.page:
-            self.page.run_task(self.page.show_end_drawer)
+        try:
+            if self.page:
+                self.page.run_task(self.page.show_end_drawer)
+        except RuntimeError:
+            pass
 
     def _open_routing_manager(self, e):
         """Open the routing rules page."""
         from src.ui.pages.routing_page import RoutingPage
 
-        if self.page:
-            self.page.run_task(self.page.close_end_drawer)
+        try:
+            if self.page:
+                self.page.run_task(self.page.close_end_drawer)
+        except RuntimeError:
+            pass
         routing_page = RoutingPage(self._app_context, on_back=self._on_subpage_back)
         self._navigate_to(routing_page)
 
@@ -515,8 +552,11 @@ class SettingsDrawer(ft.NavigationDrawer):
         """Open the DNS settings page."""
         from src.ui.pages.dns_page import DNSPage
 
-        if self.page:
-            self.page.run_task(self.page.close_end_drawer)
+        try:
+            if self.page:
+                self.page.run_task(self.page.close_end_drawer)
+        except RuntimeError:
+            pass
         dns_page = DNSPage(self._app_context, on_back=self._on_subpage_back)
         self._navigate_to(dns_page)
 
@@ -538,7 +578,9 @@ class SettingsDrawer(ft.NavigationDrawer):
                 ) = AppUpdateService.check_for_updates()
 
                 if not available and current:
-                    self._show_toast(t("app_update.up_to_date", version=current), "info")
+                    self._show_toast(
+                        t("app_update.up_to_date", version=current), "info"
+                    )
                     page.update()
                     return
 
@@ -553,7 +595,9 @@ class SettingsDrawer(ft.NavigationDrawer):
 
         threading.Thread(target=check_task, daemon=True).start()
 
-    def _show_app_update_dialog(self, page, current: str, latest: str, download_url: str):
+    def _show_app_update_dialog(
+        self, page, current: str, latest: str, download_url: str
+    ):
         """Show app update confirmation dialog."""
         msg = (
             t("app_update.available", current=current, latest=latest)

@@ -68,7 +68,12 @@ class DrawerManager:
         )
 
         # Logs drawer
+        def _on_logs_dismiss(e):
+            if self._main._active_tab != "logs" and hasattr(self._main, "_log_viewer"):
+                self._main._log_viewer.set_visible(False)
+
         self._main._logs_drawer_component = LogsDrawer(self._main._log_viewer, self._main._logs_heartbeat)
+        self._main._logs_drawer_component.on_dismiss = _on_logs_dismiss
 
         # Server bottom sheet
         self._main._server_sheet = ft.BottomSheet(
@@ -127,6 +132,8 @@ class DrawerManager:
 
     async def open_logs_drawer(self, e=None):
         """Open the logs drawer."""
+        if hasattr(self._main, "_log_viewer") and self._main._log_viewer:
+            self._main._log_viewer.set_visible(True)
         if self._main._page.end_drawer != self._main._logs_drawer_component:
             self._main._page.end_drawer = self._main._logs_drawer_component
         await self._main._page.show_end_drawer()

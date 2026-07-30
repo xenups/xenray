@@ -15,8 +15,8 @@ load_dotenv(_project_root / ".env")
 APP_VERSION = os.getenv("APP_VERSION", "0.1.18-beta")
 
 # Window dimensions
-WINDOW_WIDTH = 420
-WINDOW_HEIGHT = 550
+WINDOW_WIDTH = 880
+WINDOW_HEIGHT = 650
 GITHUB_REPO = os.getenv("GITHUB_REPO", "xenups/xenray")
 UPDATE_DOWNLOAD_TIMEOUT = float(os.getenv("UPDATE_DOWNLOAD_TIMEOUT", "60"))
 UPDATE_MIN_FILE_SIZE = int(os.getenv("UPDATE_MIN_FILE_SIZE", "1048576"))

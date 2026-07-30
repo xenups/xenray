@@ -1,4 +1,5 @@
 """Server list item component for individual server display."""
+
 from __future__ import annotations
 
 import json
@@ -52,9 +53,24 @@ class ServerListItem(ft.Container):
         last_ping = "..."
         last_ping_color = ft.Colors.GREY_500
         if cached_ping:
-            last_ping, last_ping_color, _ = cached_ping
+            cached_text, last_ping_color, cached_val = cached_ping
+            if cached_val is not None and cached_val < 999999:
+                last_ping = t("connection.latency_ms", value=cached_val)
+            else:
+                last_ping = cached_text
+        elif profile.get("last_latency_val") is not None:
+            latency_val = profile.get("last_latency_val")
+            last_ping = t("connection.latency_ms", value=latency_val)
+            last_ping_color = self._get_ping_color(latency_val)
         elif profile.get("last_latency"):
-            last_ping = profile["last_latency"]
+            import re
+
+            raw_ping = profile["last_latency"]
+            match = re.search(r"(\d+)", str(raw_ping))
+            if match:
+                last_ping = t("connection.latency_ms", value=int(match.group(1)))
+            else:
+                last_ping = raw_ping
             latency_val = profile.get("last_latency_val", 999999)
             last_ping_color = self._get_ping_color(latency_val)
 
@@ -76,7 +92,9 @@ class ServerListItem(ft.Container):
                 fit=ft.BoxFit.COVER,
                 gapless_playback=True,
                 filter_quality=ft.FilterQuality.HIGH,
-                error_content=ft.Icon(ft.Icons.PUBLIC, size=28, color=ft.Colors.GREY_400),
+                error_content=ft.Icon(
+                    ft.Icons.PUBLIC, size=28, color=ft.Colors.GREY_400
+                ),
             )
         else:
             flag_content = ft.Icon(ft.Icons.PUBLIC, size=28, color=ft.Colors.GREY_400)
@@ -138,7 +156,11 @@ class ServerListItem(ft.Container):
         )
 
         # Selection border logic
-        border_side = ft.BorderSide(2, ft.Colors.BLUE) if is_selected else ft.BorderSide(1, ft.Colors.OUTLINE)
+        border_side = (
+            ft.BorderSide(2, ft.Colors.BLUE)
+            if is_selected
+            else ft.BorderSide(1, ft.Colors.OUTLINE)
+        )
 
         # Main Layout
         from src.ui.helpers.gradient_helper import GradientHelper
@@ -174,7 +196,9 @@ class ServerListItem(ft.Container):
     def _copy_config(self, e):
         """Share config link."""
         try:
-            link = LinkParser.generate_link(self._profile.get("config", {}), self._profile.get("name", "server"))
+            link = LinkParser.generate_link(
+                self._profile.get("config", {}), self._profile.get("name", "server")
+            )
             if not link:
                 link = json.dumps(self._profile.get("config", {}), indent=2)
 
@@ -225,14 +249,18 @@ class ServerListItem(ft.Container):
                 fit=ft.BoxFit.COVER,
                 gapless_playback=True,
                 filter_quality=ft.FilterQuality.HIGH,
-                error_content=ft.Icon(ft.Icons.PUBLIC, size=28, color=ft.Colors.GREY_400),
+                error_content=ft.Icon(
+                    ft.Icons.PUBLIC, size=28, color=ft.Colors.GREY_400
+                ),
             )
             from src.ui.helpers.gradient_helper import GradientHelper
 
             self.gradient = GradientHelper.get_flag_gradient(code)
         else:
             # Update to globe icon
-            self.flag_img.content = ft.Icon(ft.Icons.PUBLIC, size=28, color=ft.Colors.GREY_400)
+            self.flag_img.content = ft.Icon(
+                ft.Icons.PUBLIC, size=28, color=ft.Colors.GREY_400
+            )
             from src.ui.helpers.gradient_helper import GradientHelper
 
             self.gradient = GradientHelper.get_flag_gradient(None)

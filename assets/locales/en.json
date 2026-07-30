@@ -63,7 +63,7 @@
     "advanced": "Advanced",
     "system": "System",
     "connection_mode": "Connection Mode",
-    "mode_description": "VPN or Proxy specific behavior",
+    "mode_description": "Toggle between TUN/VPN and System Proxy",
     "vpn": "VPN",
     "proxy": "Proxy",
     "direct_country": "Direct Country",
@@ -72,6 +72,7 @@
     "port_saved": "SOCKS Port saved: {port} 💾",
     "port_invalid_range": "Invalid Port Range (1024-65535)",
     "port_must_be_number": "Port must be a number",
+    "port_invalid": "Port must be between 1024 and 65535",
     "country_saved": "Direct Country saved: {val} 🌐",
     "routing_rules": "Routing Rules",
     "routing_description": "Manage direct, proxy, and block lists",
@@ -88,6 +89,7 @@
     "version": "v1.0.0 by Xenups",
     "language": "Language",
     "language_description": "Select application language",
+    "language_desc": "Interface display language",
     "reset_close_choice": "Reset Close Preference",
     "reset_close_choice_desc": "Show confirmation dialog again when closing",
     "reset_close_success": "Close preference reset! 🔄",
@@ -102,7 +104,15 @@
     "auto_reconnect_enabled": "Auto-reconnect enabled",
     "auto_reconnect_disabled": "Auto-reconnect disabled (saves battery)",
     "language_restart_msg": "Language changed! Restart app for full effect.",
-    "experimental": "Experimental"
+    "experimental": "Experimental",
+    "connectivity_title": "Connectivity Settings",
+    "routing_title": "Routing & Anti-Leak",
+    "preferences_title": "Application Preferences",
+    "vpn_mode": "TUN / VPN Mode",
+    "vpn_mode_desc": "Full tunnel VPN",
+    "proxy_mode": "System Proxy Mode",
+    "proxy_mode_desc": "SOCKS + HTTP proxy",
+    "recommended": "Recommended"
   },
   "admin": {
     "title": "Admin Rights Required",
@@ -170,7 +180,8 @@
     "ping": "Ping: {latency}",
     "update_complete": "{component} Update Complete!",
     "update_error": "Error: {error}",
-    "admin_required": "Admin rights required for VPN mode"
+    "admin_required": "Admin rights required for VPN mode",
+    "checking": "Checking..."
   },
   "connection": {
     "loading_config": "Loading configuration...",
@@ -231,10 +242,56 @@
     "actions": "ACTIONS",
     "no_dns": "Use System/Default DNS"
   },
+  "dashboard": {
+    "network_traffic": "NETWORK TRAFFIC",
+    "live_statistics": "Live Statistics",
+    "current_node": "CURRENT NODE",
+    "change_server": "Change Server",
+    "uptime": "Uptime: {time}",
+    "upload": "Upload",
+    "download": "Download",
+    "protocol": "Protocol",
+    "encryption": "Encryption",
+    "local_ip": "Local IP",
+    "server_ip": "Server IP",
+    "checking": "Checking...",
+    "secure": "Secure",
+    "system_secure": "System Secure",
+    "system_ready": "SYSTEM READY",
+    "no_internet": "NO INTERNET",
+    "connected": "Connected",
+    "disconnected": "Disconnected",
+    "quick_disconnect": "Quick Disconnect",
+    "quick_connect": "Quick Connect",
+    "cpu": "CPU: {percent}%",
+    "ram": "RAM: {mb}MB",
+    "realtime_wave": "Live Wave Stream & Detailed Traffic Stats",
+    "view_statistics": "Statistics Page 📊"
+  },
   "logs": {
     "title": "Connection Logs",
     "pause": "Pause log update",
-    "resume": "Resume log update"
+    "resume": "Resume log update",
+    "memory": "Memory",
+    "active_threads": "Active Threads",
+    "health_status": "Health Status",
+    "nodes": "Nodes",
+    "optimal_performance": "Optimal Performance",
+    "issues": "Issues",
+    "system_healthy": "System is healthy",
+    "copy": "Copy",
+    "download": "Download",
+    "clear": "Clear",
+    "terminal_title": "XENRAY_CLI :: MAIN_LOGGER"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "statistics": "Statistics",
+    "servers": "Servers",
+    "logs": "Logs",
+    "settings": "Settings",
+    "connect_now": "Connect Now",
+    "disconnect": "Disconnect"
   },
   "header": {
     "toggle_theme": "Toggle Theme",
@@ -293,5 +350,11 @@
       "deleted": "Chain deleted",
       "invalid_chain": "Cannot connect: chain has missing servers"
     }
+  },
+  "servers": {
+    "selected_node": "SELECTED NODE",
+    "search_placeholder": "Search server name, region or IP...",
+    "add": "Add Server",
+    "latency": "LATENCY"
   }
 }
