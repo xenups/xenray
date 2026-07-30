@@ -39,7 +39,7 @@ XRAY_URL_TEMPLATE = "https://github.com/XTLS/Xray-core/releases/download/v{versi
 
 def get_config(arch: int = 64):
     """Get configuration from environment."""
-    xray_version = os.getenv("XRAY_VERSION", "26.7.11")
+    xray_version = os.getenv("XRAY_VERSION", "26.7.28")
 
     return {
         "xray_version": xray_version,
@@ -103,7 +103,13 @@ def cleanup(temp_dir: Path):
 
 def main():
     parser = argparse.ArgumentParser(description="Download Xray binary")
-    parser.add_argument("--arch", type=int, choices=[32, 64], default=64, help="Architecture: 32 or 64 (default: 64)")
+    parser.add_argument(
+        "--arch",
+        type=int,
+        choices=[32, 64],
+        default=64,
+        help="Architecture: 32 or 64 (default: 64)",
+    )
     args = parser.parse_args()
 
     print("=" * 60)

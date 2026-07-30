@@ -107,7 +107,7 @@ If a release has issues:
 Binary versions are controlled in `.env`:
 
 ```env
-XRAY_VERSION=1.8.24          # Latest Windows 7+ compatible
+XRAY_VERSION=26.7.28          # Latest Windows 7+ compatible
 SINGBOX_VERSION=1.10.6       # Latest Windows 7+ compatible
 ARCH=64                      # 64-bit only for now
 ```

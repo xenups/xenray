@@ -12,7 +12,7 @@ _project_root = Path(__file__).parent.parent.parent
 load_dotenv(_project_root / ".env")
 
 # Application version from environment
-APP_VERSION = os.getenv("APP_VERSION", "0.2.1-beta")
+APP_VERSION = os.getenv("APP_VERSION", "0.1.18-beta")
 
 # Window dimensions
 WINDOW_WIDTH = 420
@@ -20,9 +20,11 @@ WINDOW_HEIGHT = 550
 GITHUB_REPO = os.getenv("GITHUB_REPO", "xenups/xenray")
 UPDATE_DOWNLOAD_TIMEOUT = float(os.getenv("UPDATE_DOWNLOAD_TIMEOUT", "60"))
 UPDATE_MIN_FILE_SIZE = int(os.getenv("UPDATE_MIN_FILE_SIZE", "1048576"))
-XRAY_VERSION = os.getenv("XRAY_VERSION", "26.7.11")
+XRAY_VERSION = os.getenv("XRAY_VERSION", "26.7.28")
 # WINTUN_DLL — required for Xray native TUN on Windows
-WINTUN_DLL = os.path.join(os.path.join(os.path.join(Path(__file__).parent.parent.parent, "bin"), "wintun.dll"))
+WINTUN_DLL = os.path.join(
+    os.path.join(os.path.join(Path(__file__).parent.parent.parent, "bin"), "wintun.dll")
+)
 WINTUN_DOWNLOAD_URL = os.getenv(
     "WINTUN_DOWNLOAD_URL",
     "https://www.wintun.net/builds/wintun-0.14.1.zip",
