@@ -21,43 +21,50 @@ class PassiveLogMonitor:
     Features:
     - Tails the log file (handling rotation/recreation)
     - Detects specific error keywords
+    - Distinguishes transient errors (Xray handles internally) from fatal ones
+    - Only triggers reconnect on persistent transient errors (3+ in a window)
     - Debounces alerts to prevent flooding
     - Runs callbacks in separate threads to avoid blocking
     """
 
-    # Error keywords that indicate connection failure (lowercase)
-    ERROR_KEYWORDS = [
-        # MUX and transport errors
+    # Transient errors — Xray handles these internally via retry logic.
+    # A single occurrence is normal; only repeated occurrences trigger action.
+    TRANSIENT_KEYWORDS = [
         "failed to handler mux client connection",
         "transport closed",
         "generic::error",
-        # Connection errors
         "connection reset by peer",
         "connection refused",
         "connection timed out",
-        # Timeout errors
         "read timeout",
         "i/o timeout",
-        "dial tcp",  # catches "dial tcp ... timeout" and "dial tcp ... refused"
-        # Handshake and TLS errors
+        "dial tcp",
         "handshake failed",
         "tls handshake",
-        # Retry and failure errors
-        "all retry attempts failed",
-        "failed to get",  # catches "failed to GET ..."
+        "failed to get",
         "failed to post",
-        # Network errors
+        "wsarecv:",
+    ]
+
+    # Fatal errors — Xray cannot recover from these on its own.
+    # Any single occurrence triggers immediate reconnect.
+    FATAL_KEYWORDS = [
+        "all retry attempts failed",
         "no such host",
         "no route to host",
         "network is unreachable",
-        "wsarecv:",  # Windows socket errors
     ]
+
+    # Combined for matching (we check both categories)
+    ERROR_KEYWORDS = TRANSIENT_KEYWORDS + FATAL_KEYWORDS
 
     # Configuration
     CHECK_INTERVAL = 1.0  # seconds between log checks
     DEBOUNCE_SECONDS = 5.0  # Minimum time between alerts
     MAX_COOLDOWN_SECONDS = 300.0  # 5 minutes max
     BASE_COOLDOWN_SECONDS = 5.0
+    TRANSIENT_THRESHOLD = 3  # Require this many transient errors before alerting
+    TRANSIENT_WINDOW = 30.0  # Within this many seconds
 
     def __init__(self, on_failure_callback: Callable[[], None] = None, log_file_path: str = None):
         """
@@ -80,6 +87,8 @@ class PassiveLogMonitor:
         self._paused_until = 0.0
         self._consecutive_failures = 0
         self._last_error_time = 0.0  # For cross-signal validation
+        self._transient_count = 0
+        self._transient_window_start = 0.0
 
     def has_recent_error(self, window_seconds: float = 30.0) -> bool:
         """
@@ -234,11 +243,34 @@ class PassiveLogMonitor:
         """Process a single log line."""
         lower_line = line.lower()
 
-        for keyword in self.ERROR_KEYWORDS:
+        for keyword in self.FATAL_KEYWORDS:
             if keyword in lower_line:
-                logger.debug(f"[PassiveLogMonitor] Keyword '{keyword}' matched in line")
+                logger.debug(f"[PassiveLogMonitor] Fatal keyword '{keyword}' matched — triggering alert")
                 self._trigger_alert(line.strip())
-                break
+                return
+
+        for keyword in self.TRANSIENT_KEYWORDS:
+            if keyword in lower_line:
+                now = time.time()
+                if now - self._transient_window_start > self.TRANSIENT_WINDOW:
+                    self._transient_count = 1
+                    self._transient_window_start = now
+                else:
+                    self._transient_count += 1
+
+                logger.debug(
+                    f"[PassiveLogMonitor] Transient keyword '{keyword}' matched "
+                    f"({self._transient_count}/{self.TRANSIENT_THRESHOLD})"
+                )
+
+                if self._transient_count >= self.TRANSIENT_THRESHOLD:
+                    logger.warning(
+                        f"[PassiveLogMonitor] {self.TRANSIENT_THRESHOLD} transient errors "
+                        f"in {self.TRANSIENT_WINDOW}s — triggering alert"
+                    )
+                    self._transient_count = 0
+                    self._trigger_alert(line.strip())
+                return
 
     def _trigger_alert(self, log_line: str):
         """Trigger an alert if debounce/cooldown allows."""

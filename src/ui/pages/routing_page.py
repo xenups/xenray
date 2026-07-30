@@ -30,11 +30,11 @@ class RoutingPage(ft.Container):
         return ft.Container(
             content=ft.Row(
                 [
-                    ft.Icon(icon, size=20, color=ft.Colors.PRIMARY),
+                    ft.Icon(icon, size=20, color=ft.Colors.WHITE),
                     ft.Column(
                         [
-                            ft.Text(title, size=13, weight=ft.FontWeight.W_500),
-                            ft.Text(subtitle, size=11, color=ft.Colors.ON_SURFACE_VARIANT),
+                            ft.Text(title, size=14, weight=ft.FontWeight.W_600),
+                            ft.Text(subtitle, size=12, color=ft.Colors.ON_SURFACE_VARIANT),
                         ],
                         spacing=2,
                         expand=True,

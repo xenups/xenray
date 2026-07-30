@@ -128,7 +128,13 @@ class SystrayHandler:
         logger.debug("[TRAY_EVENT] _on_open() called")
         if not self._main:
             return
-        self._main._restore_from_tray()
+        try:
+            if hasattr(self._main, "_restore_from_tray"):
+                self._main._restore_from_tray()
+            elif hasattr(self._main, "restore_from_tray"):
+                self._main.restore_from_tray()
+        except Exception as e:
+            logger.warning(f"[SysTrayHandler] Error in _on_open: {e}")
 
     def _on_toggle_connect(self, icon, item):
         """Toggle connection callback."""

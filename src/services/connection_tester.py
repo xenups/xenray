@@ -15,8 +15,8 @@ from src.core.i18n import t
 from src.core.logger import logger
 
 # Timeout configuration
-TEST_TIMEOUT = 10  # seconds for the whole test
-CONNECT_TIMEOUT = 5  # seconds for HTTP request
+TEST_TIMEOUT = 5  # seconds for the whole test
+CONNECT_TIMEOUT = 2  # seconds for HTTP/TCP request
 
 # SO_MARK is Linux-only; omitted on Windows where sing-box TUN
 # provides bypass via ip_cidr / process_name route rules instead.
@@ -98,22 +98,18 @@ class ConnectionTester:
         country_data is {'code': 'XX', 'name': 'Country'} or None.
         This must be run in a thread.
         """
-        # ── SOCKS proxy mode (bypass TUN interference on Windows) ──
-        # Python's stdlib doesn't support SOCKS5 natively, so we do a
-        # TCP connectivity test to the proxy port. The actual end-to-end
-        # HTTP verification is handled by _verify_post_connection (curl).
         # ── SOCKS proxy mode (existing Xray process) ──
         if socks_port:
             from src.utils.network_utils import NetworkUtils
 
             start_time = time.time()
-            if NetworkUtils.check_proxy_connectivity(socks_port, timeout=5, retries=2):
+            if NetworkUtils.check_proxy_connectivity(socks_port, timeout=2, retries=1):
                 latency = int((time.time() - start_time) * 1000)
                 logger.info(f"[ConnectionTester] SOCKS proxy verified at 127.0.0.1:{socks_port} ({latency}ms)")
                 return (True, t("connection.latency_ms", value=latency), None)
 
             # Fallback to TCP socket check on the proxy port
-            max_retries = 3
+            max_retries = 2
             for attempt in range(max_retries):
                 try:
                     start_time = time.time()
@@ -129,7 +125,7 @@ class ConnectionTester:
                         logger.debug(
                             f"SOCKS connection test attempt {attempt + 1}/{max_retries} failed: {e}, retrying..."
                         )
-                        time.sleep(0.5)
+                        time.sleep(0.2)
                         continue
                     return False, t("connection.conn_error"), None
 
@@ -207,6 +203,7 @@ class ConnectionTester:
                                         "country_code": gdata.get("countryCode"),
                                         "country_name": gdata.get("country"),
                                         "city": gdata.get("city"),
+                                        "ip": gdata.get("query"),
                                     }
                         except Exception:
                             pass  # country fetch is best-effort

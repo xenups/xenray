@@ -1,5 +1,6 @@
 """Country flag utilities for server locations."""
 import re
+from typing import Optional
 
 from loguru import logger
 
@@ -182,9 +183,12 @@ def country_code_to_flag(country_code: str) -> str:
         return DEFAULT_FLAG
 
 
+from src.services.ip_geolocation_service import fetch_country_info_from_ip, fetch_public_exit_ip
+
+
 def get_country_from_ip(ip: str) -> str:
     """
-    Get country flag from IP address using ip-api.com.
+    Get country flag from IP address using IPGeolocationService.
 
     Args:
         ip: IP address to lookup
@@ -192,23 +196,7 @@ def get_country_from_ip(ip: str) -> str:
     Returns:
         Country flag emoji or default globe icon
     """
-    if not ip or not isinstance(ip, str):
-        return DEFAULT_FLAG
-
-    try:
-        import requests
-
-        response = requests.get(f"http://ip-api.com/json/{ip}?fields=countryCode", timeout=IP_API_TIMEOUT)
-        if response.status_code == 200:
-            data = response.json()
-            country_code = data.get("countryCode", "")
-            if country_code:
-                return country_code_to_flag(country_code)
-
-            logger.warning(f"Invalid country code for IP {ip}: {country_code}")
-    except (requests.RequestException, requests.Timeout) as e:
-        logger.debug(f"Failed to get country for IP {ip}: {e}")
-    except Exception as e:
-        logger.error(f"Unexpected error getting country for IP {ip}: {e}")
-
+    code, _ = fetch_country_info_from_ip(ip)
+    if code:
+        return country_code_to_flag(code)
     return DEFAULT_FLAG

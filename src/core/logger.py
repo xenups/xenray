@@ -18,12 +18,12 @@ if sys.stderr:
     )
     logger.add(sys.stderr, format=log_format, level="DEBUG")
 
-# Add file handler
+# Add file handler (thread-safe queue, zero file rotation locks)
 log_file = os.path.join(TMPDIR, "xenray.log")
 logger.add(
     log_file,
-    rotation="1 MB",
-    retention="10 days",
+    enqueue=True,
+    catch=True,
     format=("{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | " "{name}:{function}:{line} - {message}"),
     level="DEBUG",
 )

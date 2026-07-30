@@ -98,7 +98,18 @@
     "auto_reconnect_enabled": "Авто-реконнект включен",
     "auto_reconnect_disabled": "Авто-реконнект выключен (экономия батареи)",
     "language_restart_msg": "Язык изменен! Перезапустите приложение для полного применения.",
-    "experimental": "Экспериментально"
+    "experimental": "Экспериментально",
+    "tun_engine": "Движок TUN",
+    "tun_engine_hint": "Движок режима VPN",
+    "singbox_tun": "sing-box (рекомендуется)",
+    "xray_tun": "Xray",
+    "tun_engine_saved": "Движок TUN изменён на {engine}",
+    "tun_engine_reconnect": "Переподключитесь для применения нового движка TUN",
+    "vpn_mode": "Режим TUN/VPN",
+    "vpn_mode_desc": "Полный туннель VPN",
+    "proxy_mode": "Режим системного прокси",
+    "proxy_mode_desc": "Прокси SOCKS + HTTP",
+    "recommended": "Рекомендуется"
   },
   "admin": {
     "title": "Требуются права администратора",
@@ -231,6 +242,46 @@
     "title": "Логи подключения",
     "pause": "Пауза обновления логов",
     "resume": "Продолжить обновление логов"
+  },
+  "dashboard": {
+    "network_traffic": "СЕТЕВОЙ ТРАФИК",
+    "live_statistics": "Статистика",
+    "current_node": "ТЕКУЩИЙ УЗЕЛ",
+    "change_server": "Сменить узел",
+    "uptime": "Время работы: {time}",
+    "upload": "Отправка",
+    "download": "Загрузка",
+    "protocol": "Протокол",
+    "encryption": "Шифрование",
+    "local_ip": "Локальный IP",
+    "secure": "Безопасно",
+    "system_ready": "СИСТЕМА ГОТОВА",
+    "cpu": "CPU: {percent}%",
+    "ram": "RAM: {mb}МБ"
+  },
+  "logs": {
+    "title": "Логи подключения",
+    "pause": "Пауза",
+    "resume": "Продолжить",
+    "memory": "Память",
+    "active_threads": "Активные потоки",
+    "health_status": "Состояние",
+    "nodes": "Узлов",
+    "optimal_performance": "Оптимальная производительность",
+    "issues": "Проблем",
+    "system_healthy": "Система здорова",
+    "copy": "Копировать",
+    "download": "Скачать",
+    "clear": "Очистить",
+    "terminal_title": "XENRAY_CLI :: MAIN_LOGGER"
+  },
+  "nav": {
+    "dashboard": "Панель",
+    "servers": "Серверы",
+    "logs": "Логи",
+    "settings": "Настройки",
+    "connect_now": "Подключить",
+    "disconnect": "Отключить"
   },
   "header": {
     "toggle_theme": "Сменить тему",

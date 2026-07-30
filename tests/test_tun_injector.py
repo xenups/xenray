@@ -200,7 +200,7 @@ class TestBuildRoutingRules:
             routing_rules={"direct": ["direct.com"], "proxy": [], "block": []},
             proxy_server_ips=[],
         )
-        direct_rule = next(r for r in rules if r.get("outboundTag") == "direct" and "domain" in r)
+        direct_rule = next(r for r in rules if r.get("outboundTag") == "direct" and "domain" in r and "direct.com" in r["domain"])
         assert "direct.com" in direct_rule["domain"]
 
     def test_private_ips_go_direct_when_enabled(self, injector):
@@ -272,7 +272,7 @@ class TestBuildRoutingRules:
             routing_rules={"direct": ["a.com"], "proxy": [], "block": []},
             proxy_server_ips=[],
         )
-        direct_rule = next(r for r in rules if r.get("outboundTag") == "direct" and "domain" in r)
+        direct_rule = next(r for r in rules if r.get("outboundTag") == "direct" and "domain" in r and "a.com" in r["domain"])
         assert "a.com" in direct_rule["domain"]
 
     def test_routing_order_respected(self, injector):

@@ -33,11 +33,10 @@ class TestPassiveLogMonitor(unittest.TestCase):
         self.monitor.start()
         time.sleep(0.2)
 
-        # Append error
+        # Append 3 transient errors to reach TRANSIENT_THRESHOLD
         with open(self.tmp_file, "a") as f:
-            f.write("Some info log\n")
-            f.write("2023/12/24 12:00:00 [Warning] failed to handler mux client connection: closed\n")
-            f.write("More info\n")
+            for i in range(3):
+                f.write(f"2023/12/24 12:00:0{i} [Warning] failed to handler mux client connection: closed\n")
 
         # Callback is now threaded, give it a moment
         for _ in range(10):
@@ -51,13 +50,15 @@ class TestPassiveLogMonitor(unittest.TestCase):
         callback = MagicMock()
         self.monitor._on_failure = callback
         self.monitor.DEBOUNCE_SECONDS = 1.0
+        self.monitor.TRANSIENT_THRESHOLD = 3
 
         self.monitor.start()
         time.sleep(0.2)
 
-        # Append error 1
-        with open(self.tmp_file, "a") as f:
-            f.write("generic::error first\n")
+        # Append 3 transient errors to reach TRANSIENT_THRESHOLD
+        for i in range(3):
+            with open(self.tmp_file, "a") as f:
+                f.write(f"generic::error occurrence {i}\n")
 
         time.sleep(0.3)
         # Wait for callback
@@ -68,9 +69,9 @@ class TestPassiveLogMonitor(unittest.TestCase):
 
         callback.assert_called_once()
 
-        # Append error 2 (within debounce)
+        # Append another error (within debounce)
         with open(self.tmp_file, "a") as f:
-            f.write("generic::error second\n")
+            f.write("generic::error second wave\n")
 
         time.sleep(0.3)
         # Should still be called only once
@@ -78,11 +79,12 @@ class TestPassiveLogMonitor(unittest.TestCase):
 
         # Wait for debounce
         self.monitor.resume()  # Resume normally resets alert time, but here we just wait or force resume
-        # Actually monitor auto-pauses. Let's force resume or wait cooldown
         self.monitor.resume()
 
-        with open(self.tmp_file, "a") as f:
-            f.write("generic::error third\n")
+        # Need 3 more to trigger again
+        for i in range(3):
+            with open(self.tmp_file, "a") as f:
+                f.write(f"generic::error third wave {i}\n")
 
         time.sleep(0.3)
         # Wait for callback
@@ -100,10 +102,11 @@ class TestPassiveLogMonitor(unittest.TestCase):
         self.monitor.start()
         time.sleep(0.2)
 
-        # Rewrite file (simulating rotation/recreation)
+        # Rewrite file (simulating rotation/recreation) with 3 errors
         with open(self.tmp_file, "w") as f:
             f.write("New log start\n")
-            f.write("transport closed error\n")
+            for i in range(3):
+                f.write(f"transport closed error {i}\n")
 
         time.sleep(0.5)
         # Wait for callback
@@ -121,26 +124,29 @@ class TestPassiveLogMonitor(unittest.TestCase):
         self.monitor.start()
         time.sleep(0.1)
 
-        # 1st failure
+        # 1st failure: write 3 transient lines to trigger
         with open(self.tmp_file, "a") as f:
-            f.write("generic::error 1\n")
-        time.sleep(0.2)
+            for i in range(3):
+                f.write(f"generic::error 1.{i}\n")
+        time.sleep(0.3)
 
         self.monitor.pause.assert_called_with(0.1)
         self.monitor.resume()  # Reset pause manually for speed
 
-        # 2nd failure
+        # 2nd failure: 3 more lines
         with open(self.tmp_file, "a") as f:
-            f.write("generic::error 2\n")
-        time.sleep(0.2)
+            for i in range(3):
+                f.write(f"generic::error 2.{i}\n")
+        time.sleep(0.3)
 
         self.monitor.pause.assert_called_with(0.2)
         self.monitor.resume()
 
-        # 3rd failure
+        # 3rd failure: 3 more lines
         with open(self.tmp_file, "a") as f:
-            f.write("generic::error 3\n")
-        time.sleep(0.2)
+            for i in range(3):
+                f.write(f"generic::error 3.{i}\n")
+        time.sleep(0.3)
 
         self.monitor.pause.assert_called_with(0.4)
 

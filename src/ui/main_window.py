@@ -1,22 +1,22 @@
+"""Main Window module - Root application layout and navigation shell."""
+
 from __future__ import annotations
 
-import asyncio
-import os
 from typing import Optional
 
 import flet as ft
+from loguru import logger
 
-# Local modules
 from src.core.app_context import AppContext
-from src.core.connection_manager import ConnectionManager
-from src.core.constants import APPDIR, FONT_URLS, WINDOW_HEIGHT, WINDOW_WIDTH
 from src.core.i18n import t
-from src.core.logger import logger
 from src.core.types import ConnectionMode
-from src.services.network_stats import NetworkStatsService
 from src.ui.builders.ui_builder import UIBuilder
-from src.ui.components.admin_restart_dialog import AdminRestartDialog
-from src.ui.components.close_dialog import CloseDialog
+from src.ui.components.connection_button import ConnectionButton
+from src.ui.components.header import Header
+from src.ui.components.nav_sidebar import NavSidebar
+from src.ui.components.server_card import ServerCard
+from src.ui.components.server_list_item import ServerListItem
+from src.ui.components.status_display import StatusDisplay
 from src.ui.components.toast import ToastManager
 from src.ui.handlers.background_task_handler import BackgroundTaskHandler
 from src.ui.handlers.connection_handler import ConnectionHandler
@@ -26,43 +26,42 @@ from src.ui.handlers.network_stats_handler import NetworkStatsHandler
 from src.ui.handlers.reconnect_event_handler import ReconnectEventHandler
 from src.ui.handlers.systray_handler import SystrayHandler
 from src.ui.handlers.theme_handler import ThemeHandler
-from src.ui.helpers.glow_helper import GlowHelper
+from src.ui.helpers.profile_presenter import ProfilePresenter
 from src.ui.helpers.ui_thread_helper import UIThreadHelper
+from src.ui.helpers.window_state_manager import WindowStateManager
 from src.ui.managers.drawer_manager import DrawerManager
 from src.ui.managers.monitoring_service import MonitoringService
 from src.ui.managers.profile_manager import ProfileManager
+from src.ui.server_list import ServerList
+from src.ui.views.dashboard_view import DashboardView
+from src.ui.views.logs_view import LogsView
+from src.ui.views.settings_view import SettingsView
 from src.utils.process_utils import ProcessUtils
 
 
 class MainWindow:
-    """Main Flet window for XenRay application."""
+    """Main Application Window."""
 
     def __init__(
         self,
         page: ft.Page,
         app_context: AppContext,
-        connection_manager: ConnectionManager,
-        network_stats: NetworkStatsService,
-        network_stats_handler: NetworkStatsHandler,
         latency_monitor_handler: LatencyMonitorHandler,
         connection_handler: ConnectionHandler,
-        reconnect_event_handler: ReconnectEventHandler,
         theme_handler: ThemeHandler,
         installer_handler: InstallerHandler,
         background_task_handler: BackgroundTaskHandler,
         systray_handler: SystrayHandler,
-        profile_manager: ProfileManager,
+        reconnect_event_handler: ReconnectEventHandler,
+        network_stats_handler: NetworkStatsHandler,
         monitoring_service: MonitoringService,
+        profile_manager: ProfileManager,
+        connection_manager=None,
+        network_stats=None,
     ):
         self._page = page
-
-        # Injected Dependencies
+        self._page._main_window = self
         self._app_context = app_context
-        self._connection_manager = connection_manager
-        self._network_stats = network_stats
-
-        # Injected Handlers
-        self._network_stats_handler = network_stats_handler
         self._latency_monitor_handler = latency_monitor_handler
         self._connection_handler = connection_handler
         self._theme_handler = theme_handler
@@ -70,17 +69,17 @@ class MainWindow:
         self._background_task_handler = background_task_handler
         self._systray = systray_handler
         self._reconnect_event_handler = reconnect_event_handler
+        self._network_stats_handler = network_stats_handler
 
-        # Initialize UI thread helper
         self._ui_helper = UIThreadHelper(page)
 
-        # --- State Variables ---
         self._current_mode = ConnectionMode.VPN
         self._is_running = False
         self._connecting = False
+        self._disconnecting = False
         self._selected_profile: Optional[dict] = None
+        self._current_exit_ip: Optional[str] = None
 
-        # --- UI Components Placeholders ---
         self._heartbeat: Optional[ft.Container] = None
         self._server_list = None
         self._server_sheet: Optional[ft.BottomSheet] = None
@@ -92,25 +91,16 @@ class MainWindow:
         self._theme_icon = None
         self._header = None
         self._main_container = None
-        self._log_viewer = None  # Will be initialized by DrawerManager
-        self._earth_glow = None
+        self._log_viewer = None
         self._logs_heartbeat = None
 
-        # --- Management components ---
         self._drawer_manager = DrawerManager(self)
         self._ui_builder = UIBuilder(self)
-        self._glow_helper = GlowHelper(self)
 
-        # --- Toast Manager ---
-        self._toast = None  # Will be initialized after page setup
-
-        # --- Initialization ---
         self._define_callbacks()
-        self._setup_page()
+        self._current_mode = WindowStateManager.setup_page(self._page, self._app_context)
 
-        # Initialize toast manager after page setup
         self._toast = ToastManager(self._page)
-        # Store in page for components to access
         self._page._toast_manager = self._toast
 
         self._profile_manager = profile_manager
@@ -123,10 +113,10 @@ class MainWindow:
             toast_manager=self._toast,
         )
 
-        self._ui_builder.build_ui()  # Delegate to builder
-        self._drawer_manager.setup_drawers()  # Delegate to manager
+        self._ui_builder.build_core_components()
+        self._drawer_manager.setup_drawers()
+        self._ui_builder.build_stitch_views()
 
-        # --- Bind Handlers (Post-UI Build) ---
         self._connection_handler.setup(
             ui_helper=self._ui_helper,
             connection_button=self._connection_button,
@@ -142,19 +132,20 @@ class MainWindow:
             connecting_setter=self._set_connecting,
             selected_profile_getter=lambda: self._selected_profile,
             current_mode_getter=lambda: self._current_mode,
-            update_horizon_glow_callback=self._update_horizon_glow,
             profile_manager_is_running_setter=self._set_profile_manager_running,
             monitoring_service_is_running_setter=self._set_monitoring_service_running,
+            update_horizon_glow_callback=lambda s: None,
+            main_window=self,
+            disconnecting_setter=self._set_disconnecting,
         )
 
-        # Setup reconnect event handler (for passive reconnect UI)
         self._reconnect_event_handler.setup(
             ui_helper=self._ui_helper,
             toast=self._toast,
             status_display=self._status_display,
             connection_button=self._connection_button,
             systray=self._systray,
-            update_horizon_glow_callback=self._update_horizon_glow,
+            update_horizon_glow_callback=lambda s: None,
             is_running_setter=self._set_is_running,
             profile_manager_is_running_setter=self._set_profile_manager_running,
             monitoring_service_is_running_setter=self._set_monitoring_service_running,
@@ -190,7 +181,7 @@ class MainWindow:
             status_display=self._status_display,
             connection_button=self._connection_button,
             logs_drawer_component=self._logs_drawer_component,
-            earth_glow=self._earth_glow,
+            earth_glow=None,
             logs_heartbeat=self._logs_heartbeat,
             heartbeat=self._heartbeat,
             is_running_getter=lambda: self._is_running,
@@ -198,20 +189,36 @@ class MainWindow:
 
         self._background_task_handler.setup(page=self._page)
         self._systray.setup(self)
-
-        # Start background tasks
         self._background_task_handler.start()
 
-        # Initialize UI with selected profile if exists
-        if self._selected_profile:
-            self._update_selected_profile_ui(self._selected_profile)
+        self._restore_last_selected_profile()
 
-    # --- State Helpers (for handlers) ---
     def _set_is_running(self, val: bool):
         self._is_running = val
+        if hasattr(self, "_stitch_dashboard_view") and self._stitch_dashboard_view:
+            self._stitch_dashboard_view.set_connection_state(val, False)
+        if hasattr(self, "_stitch_statistics_view") and self._stitch_statistics_view:
+            self._stitch_statistics_view.set_connection_state(val, False)
+        if hasattr(self, "_nav_sidebar") and self._nav_sidebar:
+            self._nav_sidebar.update_connect_button_text(
+                t("nav.disconnect", default="Disconnect") if val else t("nav.connect_now", default="Connect Now"),
+                val,
+                server_name=self._get_sidebar_server_label(),
+            )
 
     def _set_connecting(self, val: bool):
         self._connecting = val
+        if hasattr(self, "_stitch_dashboard_view") and self._stitch_dashboard_view:
+            self._stitch_dashboard_view.set_connection_state(self._is_running, is_connecting=val, is_disconnecting=self._disconnecting)
+        if hasattr(self, "_stitch_statistics_view") and self._stitch_statistics_view:
+            self._stitch_statistics_view.set_connection_state(self._is_running, is_connecting=val, is_disconnecting=self._disconnecting)
+
+    def _set_disconnecting(self, val: bool):
+        self._disconnecting = val
+        if hasattr(self, "_stitch_dashboard_view") and self._stitch_dashboard_view:
+            self._stitch_dashboard_view.set_connection_state(self._is_running, is_connecting=self._connecting, is_disconnecting=val)
+        if hasattr(self, "_stitch_statistics_view") and self._stitch_statistics_view:
+            self._stitch_statistics_view.set_connection_state(self._is_running, is_connecting=self._connecting, is_disconnecting=val)
 
     def _set_profile_manager_running(self, val: bool):
         self._profile_manager.is_running = val
@@ -219,322 +226,181 @@ class MainWindow:
     def _set_monitoring_service_running(self, val: bool):
         self._monitoring_service.is_running = val
 
-    # -----------------------------
-    # Define callbacks
-    # -----------------------------
+    def _on_nav_tab_changed(self, tab_id: str):
+        if hasattr(self, "_nav_sidebar") and self._nav_sidebar:
+            self._nav_sidebar.set_active_tab(tab_id)
+
+        if tab_id == "dashboard" and hasattr(self, "_stitch_dashboard_view"):
+            self.navigate_to(self._stitch_dashboard_view)
+            if hasattr(self, "_network_stats_handler") and self._network_stats_handler:
+                self._network_stats_handler.update_ui_immediately()
+        elif tab_id == "statistics" and hasattr(self, "_stitch_statistics_view"):
+            self.navigate_to(self._stitch_statistics_view)
+            if hasattr(self, "_network_stats_handler") and self._network_stats_handler:
+                self._network_stats_handler.update_ui_immediately()
+        elif tab_id == "servers" and hasattr(self, "_stitch_servers_view"):
+            self.navigate_to(self._stitch_servers_view)
+        elif tab_id == "logs" and hasattr(self, "_stitch_logs_view"):
+            self.navigate_to(self._stitch_logs_view)
+        elif tab_id == "settings" and hasattr(self, "_stitch_settings_view"):
+            self.navigate_to(self._stitch_settings_view)
+
+    def _get_sidebar_server_label(self) -> str:
+        if not self._selected_profile:
+            return t("dashboard.no_server", default="No Server")
+        name = self._selected_profile.get("name", "Server")
+        code = self._selected_profile.get("country_code", "")
+        return f"{name} ({code.upper()})" if code else name
+
+    def navigate_to(self, view_control: ft.Control):
+        if hasattr(self, "_view_switcher") and self._view_switcher:
+            self._view_switcher.content = view_control
+            try:
+                if self._view_switcher.page:
+                    self._view_switcher.update()
+            except Exception:
+                pass
+
+    def navigate_back(self):
+        if hasattr(self, "_stitch_dashboard_view") and self._stitch_dashboard_view:
+            self.navigate_to(self._stitch_dashboard_view)
+
+    def set_step(self, step_text: str):
+        """Forward micro-state step to DashboardView and StatusDisplay."""
+        if hasattr(self, "_stitch_dashboard_view") and self._stitch_dashboard_view:
+            self._stitch_dashboard_view.set_step(step_text)
+        if hasattr(self, "_status_display") and self._status_display:
+            self._status_display.set_step(step_text)
+
     def _define_callbacks(self):
         self._on_connect_clicked = self._on_connect_clicked_impl
         self._open_server_drawer = self._open_server_drawer_impl
         self._open_logs_drawer = self._open_logs_drawer_impl
         self._open_settings_drawer = self._open_settings_drawer_impl
 
-    # -----------------------------
-    # Page setup
-    # -----------------------------
-    def _setup_page(self):
-        # Window icons already set in main() - just handle theme/styling here
-        self._page.padding = 0
-        self._page.theme_mode = ft.ThemeMode.DARK
-        self._page.theme = ft.Theme(font_family="Roboto")
-        self._page.fonts = FONT_URLS
+    def _restore_last_selected_profile(self):
+        profile = WindowStateManager.get_initial_selected_profile(self._app_context)
+        if profile:
+            self._selected_profile = profile
+            if hasattr(self, "_server_card") and self._server_card:
+                self._update_selected_profile_ui(profile)
 
-        icon_path = os.path.join(APPDIR, "assets", "icon.ico")
-        if os.path.exists(icon_path):
-            self._page.window.icon = icon_path
+    def _restore_from_tray(self):
+        """Restore main application window from system tray (thread-safe)."""
+        def _restore():
+            try:
+                if self._page and hasattr(self._page, "window"):
+                    self._page.window.minimized = False
+                    self._page.window.visible = True
+                    self._page.window.focus()
+                    try:
+                        self._page.update()
+                    except Exception:
+                        pass
+            except Exception as e:
+                logger.warning(f"[MainWindow] Error restoring window from tray: {e}")
 
-        saved_mode = self._app_context.settings.get_connection_mode()
-        saved_theme = self._app_context.settings.get_theme_mode()
+        _restore()
+        if hasattr(self, "_ui_helper") and self._ui_helper and self._ui_helper._page:
+            self._ui_helper.call(_restore)
 
-        self._current_mode = ConnectionMode.VPN if saved_mode == "vpn" else ConnectionMode.PROXY
-        self._page.theme_mode = ft.ThemeMode.DARK if saved_theme == "dark" else ft.ThemeMode.LIGHT
+    restore_from_tray = _restore_from_tray
 
-        # Load last selected profile (from local OR subscriptions)
-        last_profile_id = self._app_context.settings.get_last_selected_profile_id()
-        if last_profile_id:
-            profile = self._app_context.get_profile_by_id(last_profile_id)
-            if profile:
-                self._selected_profile = profile
-                # We can't update UI here as it's not built yet, but we set the state
-                # The components (ServerCard, StatusDisplay) will need to be updated after build or in __init__
-
-    # -----------------------------
-    # Navigation & UI Building
-    # -----------------------------
-    def navigate_to(self, control: ft.Control):
-        """Navigate to a new view (replaces dashboard)."""
-        self._view_switcher.content = control
-        self._view_switcher.update()
-
-    def navigate_back(self, e=None):
-        """Return to dashboard view."""
-        self._view_switcher.content = self._dashboard_view
-        self._view_switcher.update()
-
-    def _create_dashboard_view(self):
-        return ft.Column(
-            [
-                self._header,
-                ft.Container(expand=True),
-                # Connection Button in center
-                self._connection_button,
-                # Status Display directly below button (no gap)
-                self._status_display,
-                ft.Container(expand=True),
-                # Server Card at bottom
-                self._server_card,
-            ],
-            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            alignment=ft.MainAxisAlignment.START,
-            expand=True,
-        )
-
-    # -----------------------------
-    # Logic: Button Clicks & Drawer Opens
-    # -----------------------------
     def _on_connect_clicked_impl(self, e=None):
-        if not self._selected_profile:
-            self._show_toast(t("status.select_server"), "warning")
-            return
-        if self._connecting:
-            self._show_toast(t("status.connection_in_progress"))
-            return
+        from src.core.connection_fsm import ConnectionState
 
-        # Admin Check for VPN Mode
-        if not self._is_running:
-            if self._current_mode == ConnectionMode.VPN:
-                if not ProcessUtils.is_admin():
-                    # CALL THE NEW CLASS METHOD
-                    self._show_admin_restart_dialog()
-                    return  # Stop execution if admin restart is needed
-
-            self._connection_button.set_connecting()
-            self._status_display.set_connecting()
-            self._ui_helper.call(lambda: None)
-            self._connect_async()
-        else:
-            self._disconnect()
-
-    def _show_admin_restart_dialog(self):
-        """Shows an AlertDialog asking the user to restart the app as Admin."""
-        dialog = AdminRestartDialog(on_restart=self._on_admin_restart_confirmed)
-        self._page.show_dialog(dialog)
-
-    def _on_admin_restart_confirmed(self):
-        """Callback from AdminRestartDialog."""
-        # Save "VPN" mode so the app starts in VPN mode after restart
-        self._app_context.settings.set_connection_mode(ConnectionMode.VPN.value)
-        ProcessUtils.restart_as_admin()
+        fsm_state = self._connection_handler.fsm.state
+        if fsm_state in (ConnectionState.CONNECTED, ConnectionState.CONNECTING):
+            self._connection_handler.disconnect()
+        elif fsm_state in (ConnectionState.DISCONNECTED, ConnectionState.ERROR):
+            self._connection_handler.connect_async()
 
     def _open_server_drawer_impl(self, e=None):
-        """Delegate to drawer manager."""
-        self._drawer_manager.open_server_drawer(e)
+        self._drawer_manager.open_server_sheet(e)
 
     async def _open_logs_drawer_impl(self, e=None):
-        """Delegate to drawer manager."""
         await self._drawer_manager.open_logs_drawer(e)
 
     async def _open_settings_drawer_impl(self, e=None):
-        """Delegate to drawer manager."""
         await self._drawer_manager.open_settings_drawer(e)
 
-    # -----------------------------
-    # Logic: Server Selection
-    # -----------------------------
+    def _extract_profile_info(self, profile: dict) -> dict:
+        return ProfilePresenter.extract_profile_info(profile)
+
     def _update_selected_profile_ui(self, profile: dict):
-        """Updates the UI with the selected profile."""
         self._selected_profile = profile
         self._server_card.update_server(profile)
-        if self._server_sheet:
-            try:
-                if self._server_sheet.open:
-                    self._server_sheet.open = False
-                    self._server_sheet.update()
-            except Exception:
-                pass
-        self._page.update()
+        profile_info = self._extract_profile_info(profile)
+        name = profile.get("name", "Unknown Server") if profile else "No Server Selected"
+        latency = profile_info.get("latency", "--")
 
-    def _trigger_reconnect(self):
-        """Handle transparent reconnection when server changes while running."""
-        # Use fast reconnect to avoid Disconnected/Disconnecting flicker
-        self._connection_handler.reconnect()
+        if self._is_running or self._connecting:
+            server_ip = self._current_exit_ip or profile_info.get("server_ip", "--")
+        else:
+            server_ip = profile_info.get("server_ip", "--")
+
+        protocol = profile_info.get("protocol", "Xray / VLESS")
+        encryption = profile_info.get("encryption", "none")
+        country_code = profile_info.get("country_code", "")
+        country_name = profile_info.get("country_name", "")
+
+        if hasattr(self, "_stitch_dashboard_view") and self._stitch_dashboard_view:
+            self._stitch_dashboard_view.update_server_info(
+                name, latency, protocol, encryption, server_ip, country_code, country_name
+            )
+
+        if hasattr(self, "_stitch_servers_view") and self._stitch_servers_view:
+            self._stitch_servers_view.update_hero_node(name, latency, protocol, "", country_code)
+
+        if hasattr(self, "_nav_sidebar") and self._nav_sidebar:
+            label = f"{name} ({country_code.upper()})" if country_code else name
+            self._nav_sidebar.update_connect_button_text(
+                t("nav.disconnect", default="Disconnect")
+                if self._is_running
+                else t("nav.connect_now", default="Connect Now"),
+                self._is_running,
+                server_name=label,
+            )
 
     def _on_server_selected(self, profile: dict):
-        # 1. Update UI Selection
-        self._ui_helper.call(lambda: self._update_selected_profile_ui(profile))
+        self._selected_profile = profile
+        self._app_context.settings.set_last_selected_profile_id(profile.get("id"))
+        self._update_selected_profile_ui(profile)
 
-        try:
-            self._app_context.settings.set_last_selected_profile_id(profile.get("id"))
-        except Exception:
-            pass
+    def _on_server_search(self, query: str = ""):
+        if hasattr(self, "_server_list") and self._server_list:
+            self._server_list.filter_servers(query)
 
-        # 2. Trigger immediate latency check via dedicated handler
-        if not self._is_running and not self._connecting:
-            self._ui_helper.call(self._status_display.set_pre_connection_ping, "...", False)
-            self._latency_monitor_handler.trigger_single_check()
-
-        # 3. Handle live switch if running
-        if self._is_running:
-            self._trigger_reconnect()
-
-    def _safe_update_server_list(self):
-        """Waits for the sheet to be mounted before updating list."""
-
-        async def _wait_and_update():
-            while True:
-                try:
-                    if self._server_list.page is not None:
-                        break
-                except RuntimeError:
-                    pass
-                await asyncio.sleep(0.05)
-
-            try:
-                self._server_list._load_profiles(update_ui=True)
-            except Exception as ex:
-                logger.debug(f"Error loading profiles: {ex}")
-
-        self._page.run_task(_wait_and_update)
-
-    # -----------------------------
-    # Logic: Horizon Glow
-    # -----------------------------
-    def _update_horizon_glow(self, state: str):
-        """Delegate to glow helper."""
-        self._glow_helper.update_horizon_glow(state)
-
-    # -----------------------------
-    # Logic: Connection Management
-    # -----------------------------
-    def _connect_async(self):
-        """Delegate to connection handler."""
-        self._connection_handler.connect_async()
-
-    def _disconnect(self):
-        """Delegate to connection handler."""
-        self._connection_handler.disconnect()
+    def _open_add_server_dialog(self, e=None):
+        if hasattr(self, "_server_list") and self._server_list:
+            self._server_list.show_add_dialog(e)
 
     def _reset_ui_disconnected(self):
-        """Delegate to connection handler."""
+        self._current_exit_ip = None
         self._connection_handler.reset_ui_disconnected()
 
-    # -----------------------------
-    # Logic: Utilities
-    # -----------------------------
     def _toggle_theme(self, e=None):
-        """Delegate to theme handler."""
         self._theme_handler.toggle_theme(e)
 
     def _show_toast(self, message: str, message_type: str = "info"):
-        """Show a toast notification."""
         if self._toast:
             self._toast.show(message, message_type)
 
     def _run_specific_installer(self, component: str):
-        """Delegate to installer handler."""
         self._installer_handler.run_specific_installer(component)
 
     def _on_profile_updated(self, updated_profile: dict):
-        """Called when ServerList updates a profile (e.g. latency test results)."""
         if not self._selected_profile:
             return
-
-        # If the updated profile is the currently selected one, refresh the UI
         if updated_profile.get("id") == self._selected_profile.get("id"):
-            # Update local reference
             self._selected_profile.update(updated_profile)
-            # Update Server Card
             self._ui_helper.call(lambda: self._server_card.update_server(self._selected_profile))
 
     def _on_mode_changed(self, mode: ConnectionMode):
-        from src.utils.process_utils import ProcessUtils
-
         if mode == ConnectionMode.VPN and not ProcessUtils.is_admin():
             self._show_toast(t("status.admin_required"), "warning")
             return
-
         self._current_mode = mode
         self._app_context.settings.set_connection_mode("vpn" if mode == ConnectionMode.VPN else "proxy")
-        self._status_display.set_status(t("status.mode_selected", mode=mode.name.title()))
-        self._ui_helper.call(lambda: None)
-
         if self._is_running:
-            # If already connected, use fast reconnect
             self._connection_handler.reconnect()
-
-    # -----------------------------
-    # Background Tasks
-    # -----------------------------
-
-    # -----------------------------
-    # Close Dialog
-    # -----------------------------
-    def show_close_dialog(self):
-        """Show the close confirmation dialog."""
-        logger.debug("[DEBUG] MainWindow.show_close_dialog() called")
-
-        dialog = CloseDialog(
-            on_exit=self._on_close_dialog_exit,
-            on_minimize=self._minimize_to_tray,
-            app_context=self._app_context,
-        )
-        self._page.show_dialog(dialog)
-
-    def _on_close_dialog_exit(self):
-        """Exit handler — triggers clean shutdown."""
-        self.cleanup()
-        from src.main import signal_exit
-
-        signal_exit()
-        from src.utils.process_utils import ProcessUtils
-
-        ProcessUtils.kill_process_tree()
-        os._exit(0)
-
-    def _minimize_to_tray(self):
-        """Hide window to tray (visible=False is safe with prevent_close=True)."""
-        self._page.window.visible = False
-        self._page.update()
-
-    def _restore_from_tray(self):
-        """Restore window from tray — re-locks dimensions, then reveals."""
-
-        async def _show():
-            try:
-                self._page.window.width = WINDOW_WIDTH
-                self._page.window.height = WINDOW_HEIGHT
-                self._page.window.min_width = WINDOW_WIDTH
-                self._page.window.min_height = WINDOW_HEIGHT
-                self._page.window.max_width = WINDOW_WIDTH
-                self._page.window.max_height = WINDOW_HEIGHT
-                self._page.window.resizable = False
-                self._page.window.visible = True
-                self._page.window.minimized = False
-                self._page.update()
-                await self._page.window.to_front()
-            except Exception:
-                pass
-
-        self._page.run_task(_show)
-
-    # -----------------------------
-    # Cleanup
-    # -----------------------------
-    def cleanup(self):
-        """Cleanup resources before exit."""
-        logger.info("Cleaning up MainWindow resources...")
-        try:
-            self._network_stats.stop()
-        except Exception:
-            pass
-        try:
-            self._connection_manager.disconnect()
-        except Exception:
-            pass
-        try:
-            self._systray.stop()
-        except Exception:
-            pass
-        try:
-            self._reconnect_event_handler.cleanup()
-        except Exception:
-            pass

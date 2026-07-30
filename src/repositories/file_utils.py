@@ -50,3 +50,15 @@ def load_json_file(file_path: str, default=None):
     except Exception as e:
         logger.error(f"Error loading {file_path}: {e}")
         return default
+
+
+def read_file_safe(file_path: str, default: str = "") -> str:
+    """Read contents from file safely with fallback default."""
+    if not os.path.exists(file_path):
+        return default
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            return f.read().strip()
+    except Exception as e:
+        logger.error(f"Error reading {file_path}: {e}")
+        return default

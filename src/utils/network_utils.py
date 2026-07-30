@@ -12,51 +12,53 @@ class NetworkUtils:
     """Utilities for network operations."""
 
     @staticmethod
-    def check_internet_connection(host="8.8.8.8", port=53, timeout=3, retries=3):
+    def check_internet_connection(host=None, port=None, timeout=2, retries=2):
         """
-        Check if there is an active internet connection by connecting to a reliable host.
-        Default is Google DNS (8.8.8.8) on port 53 (DNS).
+        Check if there is an active internet connection by connecting to reliable HTTPS/HTTP endpoints.
+        Uses Cloudflare (1.1.1.1:443) and Google (8.8.8.8:443) to prevent Windows WinError 10013 socket errors.
 
         Args:
-            host: Host to connect to
-            port: Port to connect to
-            timeout: Timeout in seconds for each attempt
-            retries: Number of retry attempts (default: 3)
+            host: Optional specific host to connect to
+            port: Optional specific port to connect to
+            timeout: Timeout in seconds for each attempt (default: 2)
+            retries: Number of retry attempts (default: 2)
 
         Returns:
             True if connection succeeds, False otherwise
         """
+        targets = [(host, port)] if host and port else [("1.1.1.1", 443), ("8.8.8.8", 443), ("1.0.0.1", 80)]
         for attempt in range(retries):
-            try:
-                socket.setdefaulttimeout(timeout)
-                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                    s.connect((host, port))
-                return True
-            except Exception as e:
-                if attempt < retries - 1:
-                    logger.debug(f"Internet check attempt {attempt + 1}/{retries} failed: {e}")
-                    import time
+            for target_host, target_port in targets:
+                try:
+                    socket.setdefaulttimeout(timeout)
+                    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                        s.connect((target_host, target_port))
+                    return True
+                except Exception as e:
+                    logger.debug(f"Internet check attempt {attempt + 1} ({target_host}:{target_port}) failed: {e}")
+                    continue
+            if attempt < retries - 1:
+                import time
 
-                    time.sleep(0.5)  # Brief delay between retries
-                else:
-                    logger.warning(f"Internet connection check failed after {retries} attempts: {e}")
+                time.sleep(0.3)
+        logger.debug(f"Internet connection check failed after {retries} attempts")
         return False
 
     @staticmethod
     def check_proxy_connectivity(
         port: int,
         target_url=None,
-        timeout=5,
-        retries=2,
+        timeout=2,
+        retries=1,
     ) -> bool:
         """
-        Check connectivity through a local SOCKS5 proxy using curl with fallback target URLs.
+        Check connectivity through a local SOCKS5 proxy using concurrent curl requests.
 
         Args:
             port: SOCKS5 proxy port
-            target_url: Optional URL to test connectivity. If None or default, uses robust HTTPS/HTTP fallbacks.
-            timeout: Timeout in seconds for each attempt
-            retries: Number of retry attempts (default: 2)
+            target_url: Optional URL to test connectivity.
+            timeout: Timeout in seconds for each attempt (default: 2)
+            retries: Number of retry attempts (default: 1)
 
         Returns:
             True if connectivity is confirmed through the proxy, False otherwise
@@ -66,8 +68,6 @@ class NetworkUtils:
             logger.warning("curl not found, skipping proxy connectivity check")
             return True
 
-        # Candidate targets: Encrypted HTTPS first (avoids ISP HTTP port 80 resets on DPI/fragmented links),
-        # followed by plain HTTP fallbacks.
         default_targets = [
             "https://cp.cloudflare.com/generate_204",
             "https://www.gstatic.com/generate_204",
@@ -79,30 +79,28 @@ class NetworkUtils:
         else:
             targets = default_targets
 
-        max_time = str(max(timeout, 6))
-        connect_timeout = str(min(timeout, 5))
+        conn_timeout_str = str(min(timeout, 2))
+        max_time_str = str(min(timeout, 2))
 
-        for url in targets:
+        def _test_single_url(url: str) -> bool:
             cmd = [
                 curl_path,
                 "-x",
                 f"socks5h://127.0.0.1:{port}",
                 url,
                 "--connect-timeout",
-                connect_timeout,
+                conn_timeout_str,
                 "--max-time",
-                max_time,
+                max_time_str,
                 "-s",
                 "-o",
                 os.devnull,
                 "-w",
                 "%{http_code}",
             ]
-
             for attempt in range(retries):
                 try:
                     startupinfo = PlatformUtils.get_startupinfo()
-
                     result = subprocess.run(
                         cmd,
                         capture_output=True,
@@ -111,27 +109,23 @@ class NetworkUtils:
                         startupinfo=startupinfo,
                         check=False,
                     )
-
                     if result.returncode == 0:
                         code = result.stdout.strip()
-                        logger.info(f"Proxy check to {url} returned: {code}")
-                        # Any valid HTTP status code (2xx, 3xx, 4xx, 5xx) proves the proxy tunnel is intact
                         if code.isdigit() and int(code) > 0:
+                            logger.info(f"[NetworkUtils] Proxy check to {url} returned: {code}")
                             return True
-                    else:
-                        logger.debug(f"Proxy check to {url} attempt {attempt + 1}/{retries} failed: {result.stderr}")
-
-                    if attempt < retries - 1:
-                        import time
-
-                        time.sleep(0.5)
-
                 except Exception as e:
-                    logger.debug(f"Proxy check error to {url}: {e}")
-                    if attempt < retries - 1:
-                        import time
+                    logger.debug(f"[NetworkUtils] Single proxy check to {url} error: {e}")
+            return False
 
-                        time.sleep(0.5)
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        with ThreadPoolExecutor(max_workers=len(targets)) as executor:
+            futures = [executor.submit(_test_single_url, u) for u in targets]
+            for future in as_completed(futures):
+                if future.result():
+                    executor.shutdown(wait=False, cancel_futures=True)
+                    return True
 
         return False
 

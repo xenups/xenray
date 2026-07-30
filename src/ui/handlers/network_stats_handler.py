@@ -5,6 +5,7 @@ import asyncio
 from typing import Callable, Optional
 
 import flet as ft
+import psutil
 
 from src.core.logger import logger
 from src.services.network_stats import NetworkStatsService
@@ -25,13 +26,16 @@ class NetworkStatsHandler:
 
         # State access required for logic
         self._is_running_getter: Optional[Callable[[], bool]] = None
+        self._uptime_start: float = 0.0
+        self._last_internet_check: float = 0.0
+        self._is_online_cache: bool = True
 
     @staticmethod
     def _page_attached(control) -> bool:
         """Check if a control is mounted to the page (RuntimeError-safe)."""
         try:
-            return control.page is not None
-        except RuntimeError:
+            return control and control.page is not None
+        except (RuntimeError, AttributeError):
             return False
 
     def setup(
@@ -63,25 +67,24 @@ class NetworkStatsHandler:
         """
         while True:
             try:
-                # 1. Lifecycle Check
-                if not self._status_display or not self._page_attached(self._status_display):
+                if not self._page:
                     await asyncio.sleep(1.0)
                     continue
 
-                # 2. Update UI
+                # Poll and update stats
                 self._update_ui()
 
-                # 3. Timing Control
-                await asyncio.sleep(1.5)
+                # Poll interval: 1 second for responsive dashboard stats
+                await asyncio.sleep(1.0)
 
             except Exception as e:
                 logger.error(f"Error in stats UI loop: {e}")
-                await asyncio.sleep(1.5)
+                await asyncio.sleep(1.0)
 
     def update_ui_immediately(self):
         """Triggers an immediate UI update if possible."""
         try:
-            if self._status_display and self._page_attached(self._status_display):
+            if self._page:
                 self._update_ui()
         except Exception as e:
             logger.debug(f"Immediate stats update skipped: {e}")
@@ -90,24 +93,105 @@ class NetworkStatsHandler:
         """Core logic to sync stats with UI components."""
         is_running = self._is_running_getter() if self._is_running_getter else False
 
-        if not is_running:
-            # Reset heartbeat if needed
-            if self._heartbeat and self._page_attached(self._heartbeat) and self._heartbeat.opacity != 0:
-                self._heartbeat.opacity = 0
-                self._heartbeat.update()
-            return
-
-        # Read Shared State
+        # Read Shared State from NetworkStatsService
         stats = self._network_stats.get_stats()
 
-        # Speeds are pre-formatted strings
-        down_str = stats.get("download_speed", "0 B/s")
-        up_str = stats.get("upload_speed", "0 B/s")
+        down_str = stats.get("download_speed", "0.0 MB/s")
+        up_str = stats.get("upload_speed", "0.0 MB/s")
+        session_up = stats.get("session_upload", "0.0 MB")
+        session_down = stats.get("session_download", "0.0 MB")
 
         try:
             total_bps = float(stats.get("total_bps", 0))
+            download_bps = float(stats.get("download_bps", 0))
+            upload_bps = float(stats.get("upload_bps", 0))
         except (ValueError, TypeError):
             total_bps = 0.0
+            download_bps = 0.0
+            upload_bps = 0.0
+
+        mw = self._page._main_window if hasattr(self._page, "_main_window") else None
+
+        # Check direct physical internet connection periodically (every 5s)
+        now = asyncio.get_event_loop().time()
+        if now - self._last_internet_check > 5.0:
+            self._last_internet_check = now
+            from src.utils.network_utils import NetworkUtils
+
+            self._is_online_cache = NetworkUtils.check_internet_connection(timeout=1, retries=1)
+
+        # Update Stitch DashboardView stats continuously
+        if mw and hasattr(mw, "_stitch_dashboard_view") and mw._stitch_dashboard_view:
+            view = mw._stitch_dashboard_view
+            if view:
+                view.update_internet_status(self._is_online_cache)
+                view.update_network_stats(
+                    rate_str=down_str if is_running else "0.0 MB/s",
+                    upload_str=session_up,
+                    download_str=session_down,
+                    download_bps=download_bps if is_running else 0.0,
+                    upload_bps=upload_bps if is_running else 0.0,
+                    total_bps=total_bps if is_running else 0.0,
+                )
+                if is_running:
+                    view.update_glow_intensity(total_bps)
+
+        # Update Stitch StatisticsView stats continuously
+        if mw and hasattr(mw, "_stitch_statistics_view") and mw._stitch_statistics_view:
+            stat_view = mw._stitch_statistics_view
+            if stat_view:
+                stat_view.update_internet_status(self._is_online_cache)
+                stat_view.update_network_stats(
+                    rate_str=down_str if is_running else "0.0 MB/s",
+                    upload_str=session_up,
+                    download_str=session_down,
+                    download_bps=download_bps if is_running else 0.0,
+                    upload_bps=upload_bps if is_running else 0.0,
+                    total_bps=total_bps if is_running else 0.0,
+                )
+        # Update LogsView diagnostic cards
+        if mw and hasattr(mw, "_stitch_logs_view") and mw._stitch_logs_view:
+            lv = mw._stitch_logs_view
+            try:
+                mem = psutil.virtual_memory()
+                lv.update_memory(mem.used / (1024 * 1024), mem.total / (1024 * 1024))
+            except Exception:
+                pass
+            try:
+                cpu_count = psutil.cpu_count()
+                status = "Optimal" if cpu_count > 0 else ""
+                lv.update_threads(cpu_count, status)
+            except Exception:
+                pass
+            try:
+                mem_percent = psutil.virtual_memory().percent
+                if mem_percent > 90:
+                    lv.update_health(1, "High memory usage")
+                else:
+                    lv.update_health(0)
+            except Exception:
+                pass
+
+        if not is_running:
+            self._uptime_start = 0.0
+            if self._heartbeat and self._page_attached(self._heartbeat) and self._heartbeat.opacity != 0:
+                self._heartbeat.opacity = 0
+                try:
+                    self._heartbeat.update()
+                except Exception:
+                    pass
+            return
+
+        # Track uptime
+        if self._uptime_start == 0.0:
+            self._uptime_start = asyncio.get_event_loop().time()
+        elapsed = int(asyncio.get_event_loop().time() - self._uptime_start)
+        hours = elapsed // 3600
+        minutes = (elapsed % 3600) // 60
+        seconds = elapsed % 60
+        uptime_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+        if mw and hasattr(mw, "_stitch_dashboard_view") and mw._stitch_dashboard_view:
+            mw._stitch_dashboard_view.update_uptime(uptime_str)
 
         # Update Connection Button Glow
         if self._connection_button and self._page_attached(self._connection_button):
@@ -117,22 +201,11 @@ class NetworkStatsHandler:
         if self._logs_drawer_component and self._page_attached(self._logs_drawer_component):
             self._logs_drawer_component.update_network_stats(down_str, up_str)
 
-        # Earth Glow Animation
-        if self._earth_glow and self._page_attached(self._earth_glow):
-            total_mbps = total_bps / (1024 * 1024)
-            intensity = min(1.0, total_mbps / 5.0)
-
-            base_opacity = 0.3
-            base_scale = 1.0
-
-            # Clamp opacity to valid range [0.0, 1.0]
-            calculated_opacity = base_opacity + (0.5 * intensity)
-            self._earth_glow.opacity = min(1.0, max(0.0, calculated_opacity))
-            self._earth_glow.scale = base_scale + (0.2 * intensity)
-            self._earth_glow.update()
-
         # Heartbeat logic
         if self._logs_heartbeat and self._page_attached(self._logs_heartbeat):
             is_bright = self._logs_heartbeat.opacity > 0.5
             self._logs_heartbeat.opacity = 0.3 if is_bright else 1.0
-            self._logs_heartbeat.update()
+            try:
+                self._logs_heartbeat.update()
+            except Exception:
+                pass

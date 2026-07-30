@@ -72,8 +72,10 @@ class ActiveConnectivityMonitor:
         self._needs_warmup = False  # True for transports with slow handshake (xhttp)
         self._handshake_complete = True  # Set to False during warmup phase
         self._session_id = 0  # Current session for event validation
+        self._mode = "proxy"
+        self._consecutive_probe_failures = 0
 
-    def start(self, transport_type: str = None, session_id: int = 0):
+    def start(self, transport_type: str = None, session_id: int = 0, mode: str = "proxy"):
         """
         Start the monitoring thread.
 
@@ -81,6 +83,7 @@ class ActiveConnectivityMonitor:
             transport_type: Optional transport type (e.g., 'xhttp', 'ws').
                            Used to apply warmup grace for slow-handshake transports.
             session_id: Connection session ID for event validation.
+            mode: Connection mode ("vpn" or "proxy").
         """
         with self._lock:
             if self._running:
@@ -88,6 +91,8 @@ class ActiveConnectivityMonitor:
 
             self._running = True
             self._session_id = session_id
+            self._mode = mode
+            self._consecutive_probe_failures = 0
             self._stall_samples = 0
             self._is_connected = True
             self._warning_emitted = False
@@ -103,7 +108,7 @@ class ActiveConnectivityMonitor:
 
             warmup_info = f", warmup={transport_type}" if self._needs_warmup else ""
             logger.info(
-                f"[ActiveConnectivityMonitor] Started session {session_id} "
+                f"[ActiveConnectivityMonitor] Started session {session_id} mode={mode} "
                 f"(threshold={self.MIN_TRAFFIC_THRESHOLD}b, "
                 f"fast={self.REQUIRED_SAMPLES}, failsafe={self.MAX_STALL_SAMPLES}{warmup_info})"
             )
@@ -116,6 +121,7 @@ class ActiveConnectivityMonitor:
 
             self._running = False
             self._session_id = 0  # Invalidate session to prevent late events
+            self._consecutive_probe_failures = 0
             self._stop_event.set()
 
             if self._thread and self._thread.is_alive():
@@ -134,7 +140,25 @@ class ActiveConnectivityMonitor:
             logger.error(f"[ActiveConnectivityMonitor] Error in monitor loop: {e}")
 
     def _check_connectivity(self):
-        """Check connectivity using hybrid escalation."""
+        """Check connectivity using hybrid escalation and mandatory TUN health checks."""
+        # Mandatory Health Check Fallback in TUN mode (VPN mode)
+        # Uses a 5-probe threshold (~15s) to tolerate transient Windows network card switches (e.g. USB tethering toggling)
+        if self._mode == "vpn":
+            if not self._verify_connectivity():
+                self._consecutive_probe_failures += 1
+                logger.warning(
+                    f"[ActiveConnectivityMonitor] Mandatory TUN probe check failed ({self._consecutive_probe_failures}/5)"
+                )
+                if self._consecutive_probe_failures >= 5 and self._is_connected:
+                    self._is_connected = False
+                    logger.error(
+                        "[ActiveConnectivityMonitor] Mandatory TUN Health Check failed 5 consecutive times -> ON_CONNECTION_LOST"
+                    )
+                    self._emit_lost()
+                    return
+            else:
+                self._consecutive_probe_failures = 0
+
         snapshot = self._provider.fetch_snapshot()
 
         if snapshot is None:

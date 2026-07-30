@@ -63,17 +63,29 @@ class NetworkValidator:
             system = platform.system()
 
             if system == "Windows":
+                from src.utils.network_interface import NetworkInterfaceDetector
+
+                _, _, _, gateway = NetworkInterfaceDetector.get_primary_interface()
+                if gateway:
+                    return gateway
+
                 result = subprocess.run(
                     ["route", "print", "0.0.0.0"],
                     capture_output=True,
                     text=True,
                     creationflags=subprocess.CREATE_NO_WINDOW,
                 )
+                candidates = []
                 for line in result.stdout.splitlines():
-                    if "0.0.0.0" in line and "0.0.0.0" in line.split()[0]:
-                        parts = line.split()
-                        if len(parts) >= 3:
-                            return parts[2]
+                    parts = line.split()
+                    if len(parts) >= 4 and parts[0] == "0.0.0.0" and parts[1] == "0.0.0.0":
+                        gw = parts[2]
+                        if NetworkInterfaceDetector._is_valid_ip(gw):
+                            metric = int(parts[4]) if len(parts) >= 5 and parts[4].isdigit() else 9999
+                            candidates.append((metric, gw))
+                if candidates:
+                    candidates.sort(key=lambda x: x[0])
+                    return candidates[0][1]
 
             elif system == "Darwin":  # macOS
                 result = subprocess.run(["route", "-n", "get", "default"], capture_output=True, text=True)

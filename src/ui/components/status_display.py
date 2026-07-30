@@ -60,7 +60,11 @@ class StatusDisplay(ft.Container):
         """Triggers a smooth transition to a new label."""
         self._status_label = self._create_label(text, color)
         self._switcher.content = self._status_label
-        self.update()
+        try:
+            if self.page:
+                self.update()
+        except Exception:
+            pass
 
     def set_step(self, msg: str):
         """Updates the status text during connection steps."""

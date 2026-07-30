@@ -93,13 +93,30 @@
     "reset_close_success": "تنظیمات خروج بازنشانی شد! 🔄",
     "add_to_startup": "اجرا هنگام شروع سیستم",
     "add_to_startup_desc": "زن‌ری هنگام ورود به سیستم به صورت خودکار اجرا شود",
+    "startup_saved": "تنظیمات شروع به‌روزرسانی شد",
     "startup_error": "خطا در به‌روزرسانی تنظیمات شروع",
+    "startup_on": "روشن",
+    "startup_off": "خاموش",
     "auto_reconnect": "اتصال مجدد خودکار",
     "auto_reconnect_desc": "اتصال مجدد خودکار هنگام قطع شدن ارتباط",
     "auto_reconnect_enabled": "اتصال مجدد خودکار فعال شد",
     "auto_reconnect_disabled": "اتصال مجدد خودکار غیرفعال شد (به منظور کاهش مصرف باتری)",
     "language_restart_msg": "زبان تغییر کرد! برای اعمال کامل تغییرات، برنامه را ریستارت کنید.",
-    "experimental": "آزمایشی"
+    "experimental": "آزمایشی",
+    "tun_engine": "موتور TUN",
+    "tun_engine_hint": "موتور حالت VPN",
+    "singbox_tun": "sing-box (پیشنهادی)",
+    "xray_tun": "Xray",
+    "tun_engine_saved": "موتور TUN به {engine} تغییر یافت",
+    "tun_engine_reconnect": "برای اعمال موتور TUN جدید، دوباره متصل شوید",
+    "connectivity_title": "تنظیمات اتصال",
+    "routing_title": "مسیریابی و ضدنشت",
+    "preferences_title": "ترجیحات برنامه",
+    "vpn_mode": "حالت TUN/VPN",
+    "vpn_mode_desc": "تونل کامل VPN",
+    "proxy_mode": "حالت پروکسی سیستمی",
+    "proxy_mode_desc": "پروکسی SOCKS + HTTP",
+    "recommended": "پیشنهادی"
   },
   "admin": {
     "title": "نیاز به دسترسی مدیر",
@@ -167,7 +184,8 @@
     "ping": "پینگ: {latency}",
     "update_complete": "به‌روزرسانی {component} کامل شد!",
     "update_error": "خطا: {error}",
-    "admin_required": "برای حالت VPN نیاز به دسترسی مدیریت است"
+    "admin_required": "برای حالت VPN نیاز به دسترسی مدیریت است",
+    "checking": "در حال بررسی..."
   },
   "connection": {
     "loading_config": "در حال بارگذاری پیکربندی...",
@@ -211,9 +229,9 @@
     "block_ads": "مسدود کردن تبلیغات",
     "block_ads_desc": "مسدود کردن دامنه‌های تبلیغاتی رایج",
     "direct_private": "IP‌های خصوصی مستقیم",
-    "direct_private_desc": "عبور مستقیم برای شبکه محلی (10.x, 192.168.x)",
+    "direct_private_desc": "مسیریابی مستقیم شبکه محلی (10.x, 192.168.x)",
     "direct_local": "دامنه‌های محلی مستقیم",
-    "direct_local_desc": "عبور مستقیم برای دامنه‌های .local, .lan, .home"
+    "direct_local_desc": "مسیریابی مستقیم دامنه‌های .local، .lan و .home"
   },
   "dns": {
     "title": "مدیریت DNS",
@@ -222,16 +240,59 @@
     "hint": "8.8.8.8 یا quic://...",
     "add": "افزودن",
     "remove": "حذف",
-    "move_up": "بالا",
+    "move_up": "انتقال به بالا",
     "proto": "پروتکل",
     "address_header": "آدرس",
     "actions": "عملیات",
     "no_dns": "استفاده از DNS پیش‌فرض سیستم"
   },
+  "dashboard": {
+    "network_traffic": "ترافیک شبکه",
+    "live_statistics": "آمار زنده",
+    "current_node": "گره فعلی",
+    "change_server": "تغییر سرور",
+    "uptime": "زمان اتصال: {time}",
+    "upload": "آپلود",
+    "download": "دانلود",
+    "protocol": "پروتکل",
+    "encryption": "رمزنگاری",
+    "local_ip": "IP محلی",
+    "server_ip": "IP سرور",
+    "checking": "در حال بررسی...",
+    "secure": "امان",
+    "system_secure": "سیستم امن است",
+    "system_ready": "سیستم آماده است",
+    "no_internet": "بدون اینترنت",
+    "connected": "متصل",
+    "disconnected": "قطع شده",
+    "quick_disconnect": "قطع سریع",
+    "quick_connect": "اتصال سریع",
+    "cpu": "پردازنده: {percent}%",
+    "ram": "رم: {mb} مگابایت"
+  },
   "logs": {
     "title": "لاگ‌های اتصال",
-    "pause": "مکث به‌روزرسانی لاگ",
-    "resume": "ادامه به‌روزرسانی لاگ"
+    "pause": "توقف به‌روزرسانی لاگ",
+    "resume": "ادامه به‌روزرسانی لاگ",
+    "memory": "حافظه",
+    "active_threads": "رشته‌های فعال",
+    "health_status": "وضعیت سلامت",
+    "nodes": "گره",
+    "optimal_performance": "عملکرد بهینه",
+    "issues": "مشکل",
+    "system_healthy": "سیستم سالم است",
+    "copy": "کپی",
+    "download": "دانلود",
+    "clear": "پاک کردن",
+    "terminal_title": "XENRAY_CLI :: لاگر اصلی"
+  },
+  "nav": {
+    "dashboard": "داشبورد",
+    "servers": "سرورها",
+    "logs": "لاگ‌ها",
+    "settings": "تنظیمات",
+    "connect_now": "اتصال",
+    "disconnect": "قطع اتصال"
   },
   "header": {
     "toggle_theme": "تغییر تم",
@@ -290,5 +351,11 @@
       "deleted": "زنجیره حذف شد",
       "invalid_chain": "اتصال ممکن نیست: زنجیره سرورهای گم‌شده دارد"
     }
+  },
+  "servers": {
+    "selected_node": "سرور انتخاب‌شده",
+    "search_placeholder": "جستجوی نام سرور، منطقه یا IP...",
+    "add": "افزودن سرور",
+    "latency": "تأخیر"
   }
 }

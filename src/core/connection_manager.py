@@ -1,12 +1,13 @@
 """Connection Manager - Facade for connection management with session-scoped lifecycle."""
 
+import os
 import threading
 
 from loguru import logger
 
 from src.core.app_context import AppContext
 from src.core.connection_orchestrator import ConnectionOrchestrator
-from src.core.constants import MODE_PROXY, MODE_VPN, OUTPUT_CONFIG_PATH, PROTOCOL_TUN
+from src.core.constants import MODE_PROXY, MODE_VPN, OUTPUT_CONFIG_PATH, PROTOCOL_TUN, SINGBOX_PID_FILE
 from src.core.i18n import t
 from src.services.xray_service import XrayService
 
@@ -45,6 +46,9 @@ class ConnectionManager:
         legacy_config_service = LegacyConfigService(self._xray_processor)
 
         xray_service = XrayService()
+        xray_service.set_on_crash_callback(
+            lambda code, snippet: self._handle_tun_crash(code, snippet)
+        )
 
         # State
         self._current_connection = None
@@ -60,7 +64,8 @@ class ConnectionManager:
             on_reconnect_event=self._emit_event,
         )
 
-        # Create ConnectionOrchestrator with all dependencies (no singbox_service)
+        # Create ConnectionOrchestrator with all dependencies
+        # (sing-box TUN is self-managed inside the orchestrator)
         self._orchestrator = ConnectionOrchestrator(
             app_context=app_context,
             network_validator=self._monitoring.network_validator,
@@ -71,6 +76,46 @@ class ConnectionManager:
 
         # Connection Adoption: Check if services are already running (CLI persistence)
         self._adopt_existing_connection()
+
+    def _handle_tun_crash(self, returncode: int, log_snippet: str):
+        """Handler triggered by TUNProcessWatcher on unexpected process crash."""
+        logger.error(f"[ConnectionManager] TUN process crash detected (exit code {returncode}): {log_snippet}")
+        reason = t(
+            "status.tun_crashed",
+            default="VPN Connection Lost: TUN engine terminated unexpectedly.",
+        )
+        self.handle_emergency_disconnect(reason)
+
+    def handle_emergency_disconnect(self, reason: str):
+        """Perform emergency cleanup on TUN crash or unrecoverable connection loss."""
+        with self._state_lock:
+            if not self._current_connection and self._session_id == 0:
+                return  # Already disconnected
+            connection = self._current_connection
+            self._current_connection = None
+            self._session_id = 0
+
+        logger.error(f"[ConnectionManager] Triggering emergency disconnect: {reason}")
+
+        # 1. Transition state immediately to DISCONNECTING
+        self._emit_event("disconnecting")
+
+        # 2. Stop monitoring
+        self._monitoring.stop()
+
+        # 3. Perform emergency teardown (clean static routes, flush DNS, restore interfaces)
+        self._orchestrator.teardown_connection(connection)
+
+        # 4. Emit desktop OS Notification
+        from src.utils.notification_utils import send_os_notification
+
+        send_os_notification(
+            t("status.vpn_lost_title", default="VPN Connection Lost"),
+            reason,
+        )
+
+        # 5. Emit disconnected state to UI (updates UI toggle to RED immediately)
+        self._emit_event("disconnected", {"reason": reason, "crashed": True})
 
     def _handle_signal(self, signal):
         """
@@ -120,13 +165,32 @@ class ConnectionManager:
         xray_pid = self._orchestrator._xray_service.pid
 
         if xray_pid:
-            # Single-process architecture: if Xray is running, determine mode from
-            # the saved config (if available) or default to proxy.
+            # Determine mode from running config + sing-box PID
             mode = self._detect_mode_from_running_config()
+
+            # Check if sing-box TUN was also running (sing-box engine)
+            singbox_pid = None
+            try:
+                if os.path.exists(SINGBOX_PID_FILE):
+                    with open(SINGBOX_PID_FILE, "r") as f:
+                        spid = int(f.read().strip())
+                    from src.utils.process_utils import ProcessUtils
+
+                    if ProcessUtils.is_running(spid):
+                        singbox_pid = spid
+            except Exception:
+                pass
+
+            # If sing-box is running, the mode is VPN even if Xray config has no TUN
+            if singbox_pid and mode == MODE_PROXY:
+                mode = MODE_VPN
+                logger.debug("[ConnectionManager] Sing-box TUN running — adopting as VPN mode")
+
             self._session_id += 1
             self._current_connection = {
                 "mode": mode,
                 "xray_pid": xray_pid,
+                "singbox_pid": singbox_pid,
                 "file": t("connection.adopted_connection", default="Adopted Connection"),
                 "session_id": self._session_id,
             }
@@ -204,7 +268,7 @@ class ConnectionManager:
         """Internal reconnect method for AutoReconnectService (no step_callback)."""
         return self.connect(file_path, mode, step_callback=None)
 
-    def disconnect(self) -> bool:
+    def disconnect(self, step_callback=None) -> bool:
         """
         Disconnect current connection.
 
@@ -212,30 +276,31 @@ class ConnectionManager:
         - Immediately cancels all reconnect attempts
         - Stops all monitoring (active and passive)
         - Invalidates current session to prevent late signals/events
-        - No automatic restart is possible after this
+        - Emits real-time step notifications via step_callback
         """
         # Emit disconnecting state FIRST (user-visible)
         self._emit_event("disconnecting")
+        if step_callback:
+            step_callback(t("app.disconnecting", default="Disconnecting..."))
 
         # Stop monitoring via facade (handles all: cancel reconnect, stop monitors)
         # After this, no signals will be forwarded
         self._monitoring.stop()
 
         with self._state_lock:
-            if not self._current_connection:
-                self._emit_event("disconnected")
-                return True
             connection = self._current_connection
             self._current_connection = None
             # Invalidate session to prevent any late signals
             self._session_id = 0
 
-        # Teardown connection
-        self._orchestrator.teardown_connection(connection)
+        # Always teardown connection (reverts proxy/TUN settings & kills running core processes)
+        self._orchestrator.teardown_connection(connection, step_callback=step_callback)
         logger.info("[ConnectionManager] Disconnected successfully (hard override)")
 
         # Emit final state
         self._emit_event("disconnected")
+        if step_callback:
+            step_callback(t("dashboard.disconnected", default="Disconnected"))
         return True
 
     def set_reconnect_event_listener(self, callback):

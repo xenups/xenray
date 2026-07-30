@@ -10,7 +10,16 @@ from src.utils.platform_utils import PlatformUtils
 # Constants
 ROUTE_COMMAND_TIMEOUT = 5  # seconds
 IPCONFIG_COMMAND_TIMEOUT = 5  # seconds
-TUN_INTERFACE_KEYWORDS = {"SING", "TUN", "TAP"}
+TUN_INTERFACE_KEYWORDS = {
+    # TUN/TAP adapters (sing-box, Xray, generic)
+    "SING", "TUN", "TAP", "XENRAY",
+    # VPN / overlay adapters
+    "WIREGUARD", "WINTUN", "TAILSCALE", "ZEROTIER",
+    # Hypervisor / VM virtual adapters
+    "VETHERNET", "VMWARE", "VMNET", "VIRTUALBOX", "HYPER-V",
+    # WSL / Loopback
+    "WSL", "LOOPBACK",
+}
 
 
 class NetworkInterfaceDetector:
@@ -41,12 +50,13 @@ class NetworkInterfaceDetector:
                 logger.error(f"Failed to get route table: {result.stderr}")
                 return None, None, None, None
 
-            # Parse route output to find default gateway
-            # Looking for line like: "0.0.0.0          0.0.0.0     192.168.1.1    192.168.1.10     25"
+            # Parse route output to find default gateway with the lowest metric
+            # Looking for lines like: "0.0.0.0          0.0.0.0     192.168.1.1    192.168.1.10     25"
+            candidates = []
             for line in result.stdout.split("\n"):
                 if "0.0.0.0" in line and line.count("0.0.0.0") >= 2:
                     parts = line.split()
-                    if len(parts) >= 4:
+                    if len(parts) >= 4 and parts[0] == "0.0.0.0" and parts[1] == "0.0.0.0":
                         gateway = parts[2]
                         interface_ip = parts[3]
 
@@ -66,13 +76,25 @@ class NetworkInterfaceDetector:
                                 logger.warning(f"Ignored potential TUN interface: {interface_name}")
                                 continue
 
+                        # Parse metric (if present)
+                        metric = 9999
+                        if len(parts) >= 5 and parts[4].isdigit():
+                            metric = int(parts[4])
+
                         # Calculate subnet (assume /24 for simplicity)
                         subnet = NetworkInterfaceDetector._calculate_subnet(interface_ip)
 
-                        logger.info(
-                            f"Detected primary interface: {interface_name} ({interface_ip}, {subnet}, {gateway})"
-                        )
-                        return interface_name, interface_ip, subnet, gateway
+                        candidates.append((metric, interface_name, interface_ip, subnet, gateway))
+
+            if candidates:
+                # Sort by metric ascending to find primary interface with lowest metric
+                candidates.sort(key=lambda x: x[0])
+                best = candidates[0]
+                interface_name, interface_ip, subnet, gateway = best[1], best[2], best[3], best[4]
+                logger.info(
+                    f"Detected primary interface (metric {best[0]}): {interface_name} ({interface_ip}, {subnet}, {gateway})"
+                )
+                return interface_name, interface_ip, subnet, gateway
 
             logger.warning("Could not detect primary interface from route table")
             return None, None, None, None

@@ -7,7 +7,7 @@ import flet as ft
 
 
 class Toast(ft.Container):
-    """A glassy toast notification that appears at the top center of the screen."""
+    """A glassy toast notification that appears centered at the top of the screen."""
 
     def __init__(
         self,
@@ -15,39 +15,39 @@ class Toast(ft.Container):
         message_type: str = "info",  # "info", "success", "error", "warning"
         duration: int = 3000,  # milliseconds
     ):
-        # Icon map
-        icon_map = {
-            "info": ft.Icons.INFO_ROUNDED,
-            "success": ft.Icons.CHECK_CIRCLE_ROUNDED,
-            "error": ft.Icons.ERROR_ROUNDED,
-            "warning": ft.Icons.WARNING_ROUNDED,
+        color_map = {
+            "info": (ft.Icons.INFO_ROUNDED, ft.Colors.BLUE_400),
+            "success": (ft.Icons.CHECK_CIRCLE_ROUNDED, ft.Colors.GREEN_400),
+            "error": (ft.Icons.ERROR_ROUNDED, ft.Colors.RED_400),
+            "warning": (ft.Icons.WARNING_ROUNDED, ft.Colors.AMBER_400),
         }
 
-        icon = icon_map.get(message_type, ft.Icons.INFO_ROUNDED)
+        icon, icon_color = color_map.get(message_type, (ft.Icons.INFO_ROUNDED, ft.Colors.BLUE_400))
 
         super().__init__(
             content=ft.Row(
                 [
-                    ft.Icon(icon, color=ft.Colors.BLUE_400, size=15),
+                    ft.Icon(icon, color=icon_color, size=18),
                     ft.Text(
                         message,
-                        size=11,
-                        weight=ft.FontWeight.W_500,
+                        size=13,
+                        weight=ft.FontWeight.W_600,
                         color=ft.Colors.WHITE,
                     ),
                 ],
-                spacing=8,
+                spacing=10,
+                alignment=ft.MainAxisAlignment.CENTER,
                 tight=True,
             ),
-            bgcolor=ft.Colors.with_opacity(0.08, ft.Colors.SURFACE),  # More transparent
-            blur=30,  # More blur
-            border_radius=10,
-            padding=ft.Padding.symmetric(horizontal=16, vertical=10),
+            bgcolor=ft.Colors.with_opacity(0.85, "#181825"),
+            border=ft.Border.all(1, ft.Colors.with_opacity(0.2, ft.Colors.WHITE)),
+            border_radius=20,
+            padding=ft.Padding.symmetric(horizontal=20, vertical=12),
             shadow=ft.BoxShadow(
                 spread_radius=0,
-                blur_radius=8,
-                color=ft.Colors.with_opacity(0.2, ft.Colors.BLACK),
-                offset=ft.Offset(0, 2),
+                blur_radius=16,
+                color=ft.Colors.with_opacity(0.4, ft.Colors.BLACK),
+                offset=ft.Offset(0, 4),
             ),
             animate_opacity=300,
             opacity=1,
@@ -71,11 +71,11 @@ class ToastManager:
         """Show a toast notification."""
         toast = Toast(message, message_type, duration)
 
-        # Create a positioned container - positioned above connect button
+        # Centered container over the main content canvas (offsetting left 210px sidebar)
         toast_container = ft.Container(
             content=toast,
-            top=75,  # Position higher - above connect button with margin from header
-            left=0,
+            top=24,
+            left=210,
             right=0,
             alignment=ft.Alignment.TOP_CENTER,
         )

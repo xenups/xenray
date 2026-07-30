@@ -10,3 +10,13 @@ class ConnectionMode(Enum):
 
     def __str__(self):
         return self.value
+
+
+class TunEngine(Enum):
+    """TUN engine implementation options."""
+
+    SING_BOX = "sing-box"
+    XRAY = "xray"
+
+    def __str__(self):
+        return self.value

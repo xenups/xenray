@@ -39,7 +39,7 @@ jobs:
           $version = "${{ github.ref_name }}".TrimStart('v')
           (Get-Content .env) -replace 'APP_VERSION=.*', "APP_VERSION=$version" | Set-Content .env
       
-      - name: Download Xray binary
+      - name: Download Xray and Singbox binaries
         run: poetry run python scripts/download_binaries.py --arch 64
       
       - name: Download Xray geo files
@@ -108,6 +108,7 @@ jobs:
             ### Included
             - XenRay GUI Application
             - Xray Core ${{ env.XRAY_VERSION }}
+            - Sing-box ${{ env.SINGBOX_VERSION }}
             - geoip.dat & geosite.dat (Iran-optimized routing rules)
             - wintun.dll (TUN interface driver)
             - Multilingual support (EN, FA, RU, ZH)
