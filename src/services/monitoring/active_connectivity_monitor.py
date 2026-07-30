@@ -141,17 +141,18 @@ class ActiveConnectivityMonitor:
 
     def _check_connectivity(self):
         """Check connectivity using hybrid escalation and mandatory TUN health checks."""
-        # Mandatory Health Check Fallback in TUN mode
+        # Mandatory Health Check Fallback in TUN mode (VPN mode)
+        # Uses a 5-probe threshold (~15s) to tolerate transient Windows network card switches (e.g. USB tethering toggling)
         if self._mode == "vpn":
             if not self._verify_connectivity():
                 self._consecutive_probe_failures += 1
                 logger.warning(
-                    f"[ActiveConnectivityMonitor] Mandatory TUN probe check failed ({self._consecutive_probe_failures}/2)"
+                    f"[ActiveConnectivityMonitor] Mandatory TUN probe check failed ({self._consecutive_probe_failures}/5)"
                 )
-                if self._consecutive_probe_failures >= 2 and self._is_connected:
+                if self._consecutive_probe_failures >= 5 and self._is_connected:
                     self._is_connected = False
                     logger.error(
-                        "[ActiveConnectivityMonitor] Mandatory TUN Health Check failed 2 consecutive times -> ON_CONNECTION_LOST"
+                        "[ActiveConnectivityMonitor] Mandatory TUN Health Check failed 5 consecutive times -> ON_CONNECTION_LOST"
                     )
                     self._emit_lost()
                     return

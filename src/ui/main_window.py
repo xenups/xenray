@@ -197,6 +197,8 @@ class MainWindow:
         self._is_running = val
         if hasattr(self, "_stitch_dashboard_view") and self._stitch_dashboard_view:
             self._stitch_dashboard_view.set_connection_state(val, False)
+        if hasattr(self, "_stitch_statistics_view") and self._stitch_statistics_view:
+            self._stitch_statistics_view.set_connection_state(val, False)
         if hasattr(self, "_nav_sidebar") and self._nav_sidebar:
             self._nav_sidebar.update_connect_button_text(
                 t("nav.disconnect", default="Disconnect") if val else t("nav.connect_now", default="Connect Now"),
@@ -208,11 +210,15 @@ class MainWindow:
         self._connecting = val
         if hasattr(self, "_stitch_dashboard_view") and self._stitch_dashboard_view:
             self._stitch_dashboard_view.set_connection_state(self._is_running, is_connecting=val, is_disconnecting=self._disconnecting)
+        if hasattr(self, "_stitch_statistics_view") and self._stitch_statistics_view:
+            self._stitch_statistics_view.set_connection_state(self._is_running, is_connecting=val, is_disconnecting=self._disconnecting)
 
     def _set_disconnecting(self, val: bool):
         self._disconnecting = val
         if hasattr(self, "_stitch_dashboard_view") and self._stitch_dashboard_view:
             self._stitch_dashboard_view.set_connection_state(self._is_running, is_connecting=self._connecting, is_disconnecting=val)
+        if hasattr(self, "_stitch_statistics_view") and self._stitch_statistics_view:
+            self._stitch_statistics_view.set_connection_state(self._is_running, is_connecting=self._connecting, is_disconnecting=val)
 
     def _set_profile_manager_running(self, val: bool):
         self._profile_manager.is_running = val
@@ -226,6 +232,10 @@ class MainWindow:
 
         if tab_id == "dashboard" and hasattr(self, "_stitch_dashboard_view"):
             self.navigate_to(self._stitch_dashboard_view)
+            if hasattr(self, "_network_stats_handler") and self._network_stats_handler:
+                self._network_stats_handler.update_ui_immediately()
+        elif tab_id == "statistics" and hasattr(self, "_stitch_statistics_view"):
+            self.navigate_to(self._stitch_statistics_view)
             if hasattr(self, "_network_stats_handler") and self._network_stats_handler:
                 self._network_stats_handler.update_ui_immediately()
         elif tab_id == "servers" and hasattr(self, "_stitch_servers_view"):
@@ -363,7 +373,7 @@ class MainWindow:
 
     def _open_add_server_dialog(self, e=None):
         if hasattr(self, "_server_list") and self._server_list:
-            self._server_list._show_add_profile_dialog(e)
+            self._server_list.show_add_dialog(e)
 
     def _reset_ui_disconnected(self):
         self._current_exit_ip = None

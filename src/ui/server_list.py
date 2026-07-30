@@ -480,6 +480,12 @@ class ServerList(ft.Container):
         self._header.show_main_header()
 
     # --- Add Dialog ---
+    def show_add_dialog(self, e=None):
+        self._show_add_dialog(e)
+
+    def _show_add_profile_dialog(self, e=None):
+        self._show_add_dialog(e)
+
     def _show_add_dialog(self, e=None):
         """Show the add server/subscription dialog."""
         if self._page:

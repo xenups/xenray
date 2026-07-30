@@ -6,6 +6,8 @@ import os
 import socket
 import subprocess
 import time
+import urllib.error
+import urllib.request
 from typing import Callable, List, Optional, Union
 
 from loguru import logger
@@ -16,6 +18,7 @@ from src.core.constants import (
     SINGBOX_LOG_FILE,
     SINGBOX_PID_FILE,
     SINGBOX_RULE_SETS,
+    TMPDIR,
 )
 from src.services.tun_process_watcher import TUNProcessWatcher
 from src.utils.network_interface import NetworkInterfaceDetector
@@ -25,6 +28,18 @@ from src.utils.process_utils import ProcessUtils
 XRAY_READY_RETRY_COUNT = 20
 XRAY_READY_RETRY_DELAY = 0.5
 DNS_RESOLUTION_TIMEOUT = 5.0
+
+# Windows NCSI endpoints — inline domain_suffix rules only (no external rule_set)
+# to prevent "No internet access" taskbar warning and avoid FATAL crashes
+# when rule-set files are missing.
+NCSI_DOMAINS = [
+    "msftconnecttest.com",
+    "msftncsi.com",
+    "ipv6.msftconnecttest.com",
+    "www.msftconnecttest.com",
+    "www.msftncsi.com",
+    "dns.msftncsi.com",
+]
 
 
 class SingboxTunService:
@@ -47,7 +62,11 @@ class SingboxTunService:
             return []
         if isinstance(value, str):
             value = [value]
-        return [item.strip().lower().replace("'", "").replace('"', "") for item in value if isinstance(item, str)]
+        return [
+            item.strip().lower().replace("'", "").replace('"', "")
+            for item in value
+            if isinstance(item, str)
+        ]
 
     def _filter_real_ips(self, lst: List[str]) -> List[str]:
         result = []
@@ -63,7 +82,10 @@ class SingboxTunService:
         return [
             item
             for item in lst
-            if not any(item.endswith(f".{x}") or item == x for x in self._filter_real_ips(lst + [item]))
+            if not any(
+                item.endswith(f".{x}") or item == x
+                for x in self._filter_real_ips(lst + [item])
+            )
         ]
 
     def _resolve_ips(self, endpoints: List[str]) -> List[str]:
@@ -96,7 +118,16 @@ class SingboxTunService:
             logger.info(f"[SingboxTunService] Adding static route: {ip} -> {gateway}")
             platform = PlatformUtils.get_platform()
             if platform == "windows":
-                cmd = ["route", "add", ip, "mask", "255.255.255.255", gateway, "metric", "1"]
+                cmd = [
+                    "route",
+                    "add",
+                    ip,
+                    "mask",
+                    "255.255.255.255",
+                    gateway,
+                    "metric",
+                    "1",
+                ]
             elif platform == "macos":
                 cmd = ["route", "-n", "add", "-host", ip, gateway]
             else:
@@ -129,10 +160,85 @@ class SingboxTunService:
                     startupinfo=PlatformUtils.get_startupinfo(),
                 )
             except (OSError, subprocess.SubprocessError) as e:
-                logger.warning(f"[SingboxTunService] Failed to remove route for {ip}: {e}")
+                logger.warning(
+                    f"[SingboxTunService] Failed to remove route for {ip}: {e}"
+                )
             finally:
                 if ip in self._added_routes:
                     self._added_routes.remove(ip)
+
+    def _download_rule_set(self, url: str, dest: str) -> bool:
+        """Download a single rule set file before sing-box starts."""
+        if os.path.isfile(dest) and os.path.getsize(dest) > 0:
+            return True
+        try:
+            logger.info(f"[SingboxTunService] Pre-downloading rule set: {url}")
+            req = urllib.request.Request(url, headers={"User-Agent": "xenray/1.0"})
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                with open(dest, "wb") as f:
+                    f.write(resp.read())
+            logger.info(f"[SingboxTunService] Rule set cached: {dest}")
+            return True
+        except (urllib.error.URLError, OSError, socket.timeout) as e:
+            logger.warning(
+                f"[SingboxTunService] Failed to pre-download rule set {url}: {e}"
+            )
+            return False
+
+    def _ensure_rule_sets(self, routing_country: str) -> dict:
+        """Pre-download all rule sets for the given country. Returns a mapping of tag -> local path."""
+        if not routing_country or routing_country.lower() == "none":
+            return {}
+        country = routing_country.lower()
+        if country not in SINGBOX_RULE_SETS:
+            return {}
+        rule_dir = os.path.join(TMPDIR, "rule_sets")
+        os.makedirs(rule_dir, exist_ok=True)
+        local_map = {}
+        for idx, url in enumerate(SINGBOX_RULE_SETS[country]):
+            tag = f"{country}-rules-{idx}"
+            fname = url.rstrip("/").split("/")[-1]
+            dest = os.path.join(rule_dir, fname)
+            self._download_rule_set(url, dest)
+            local_map[tag] = dest
+        return local_map
+
+    def _cleanup_stale_adapter(self) -> None:
+        """Remove stale TUN adapters from previous crashes to prevent 'adapter already exists' errors."""
+        tun_name = PlatformUtils.get_tun_interface_name()
+        platform = PlatformUtils.get_platform()
+        if platform != "windows":
+            return
+        try:
+            result = subprocess.run(
+                ["netsh", "interface", "show", "interface"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
+                creationflags=PlatformUtils.get_subprocess_flags(),
+                startupinfo=PlatformUtils.get_startupinfo(),
+            )
+            if tun_name in result.stdout:
+                logger.warning(
+                    f"[SingboxTunService] Stale TUN adapter '{tun_name}' found, removing..."
+                )
+                subprocess.run(
+                    [
+                        "netsh",
+                        "interface",
+                        "set",
+                        "interface",
+                        tun_name,
+                        "admin=disable",
+                    ],
+                    check=False,
+                    timeout=5,
+                    creationflags=PlatformUtils.get_subprocess_flags(),
+                    startupinfo=PlatformUtils.get_startupinfo(),
+                )
+        except (OSError, subprocess.SubprocessError, subprocess.TimeoutExpired) as e:
+            logger.debug(f"[SingboxTunService] Stale adapter cleanup skipped: {e}")
 
     def start(
         self,
@@ -140,16 +246,27 @@ class SingboxTunService:
         proxy_server_ip: Union[str, List[str]] = "",
         routing_country: str = "",
         routing_rules: dict = None,
-        mtu: int = 1420,
+        mtu: int = 1360,
     ) -> Optional[int]:
         """Start sing-box TUN service pointing to Xray SOCKS proxy."""
         try:
-            iface_name, iface_ip, _, gateway = NetworkInterfaceDetector.get_primary_interface()
+            # Pre-flight: remove stale TUN adapters from previous crashes
+            self._cleanup_stale_adapter()
+
+            iface_name, iface_ip, _, gateway = (
+                NetworkInterfaceDetector.get_primary_interface()
+            )
             if not gateway:
                 logger.warning("[SingboxTunService] No gateway detected!")
 
             bypass_list = self._normalize_list(proxy_server_ip)
-            bypass_list.extend(["1.1.1.1", "8.8.8.8", "dns.google", "cloudflare-dns.com"])
+            bypass_list.extend(
+                ["1.1.1.1", "8.8.8.8", "dns.google", "cloudflare-dns.com"]
+            )
+
+            # Add NCSI domains to bypass list so their resolved IPs get
+            # static OS routes pre-TUN, preventing routing loops.
+            bypass_list.extend(NCSI_DOMAINS)
 
             if routing_rules and "direct" in routing_rules:
                 direct_ips = self._filter_real_ips(routing_rules["direct"])
@@ -160,6 +277,9 @@ class SingboxTunService:
                 for ip in resolved_ips:
                     self._add_static_route(ip, gateway)
 
+            # Pre-download rule-sets so sing-box never FATALs on missing files
+            rule_set_local_map = self._ensure_rule_sets(routing_country)
+
             config = self._generate_config(
                 socks_port=xray_socks_port,
                 proxy_server_ip=proxy_server_ip,
@@ -167,6 +287,8 @@ class SingboxTunService:
                 interface_name=iface_name,
                 routing_rules=routing_rules,
                 mtu=mtu,
+                resolved_ips=resolved_ips,
+                rule_set_local_map=rule_set_local_map,
             )
 
             if not self._wait_for_xray_ready(xray_socks_port):
@@ -297,7 +419,9 @@ class SingboxTunService:
         routing_country: str = "",
         interface_name: Optional[str] = None,
         routing_rules: dict = None,
-        mtu: int = 1420,
+        mtu: int = 1360,
+        resolved_ips: Optional[List[str]] = None,
+        rule_set_local_map: Optional[dict] = None,
     ) -> dict:
         """Generate sing-box TUN configuration."""
         proxy_list = self._normalize_list(proxy_server_ip)
@@ -330,13 +454,11 @@ class SingboxTunService:
                 ],
                 "rules": [
                     {"inbound": ["tun-in"], "server": "remote_proxy"},
-                    {"query_type": ["A", "AAAA"], "server": "remote_proxy"},
                 ],
-                "final": "remote_proxy",
+                "final": "bootstrap",
                 "strategy": "prefer_ipv4",
-                "disable_cache": False,
-                "disable_expire": False,
                 "independent_cache": True,
+                "reverse_mapping": True,
             },
             "inbounds": [
                 {
@@ -384,10 +506,14 @@ class SingboxTunService:
                             "python3",
                             "curl.exe",
                             "curl",
+                            "svchost.exe",
                         ],
                         "outbound": "direct",
                     },
-                    {"process_path": [os.path.abspath(SINGBOX_EXECUTABLE)], "outbound": "direct"},
+                    {
+                        "process_path": [os.path.abspath(SINGBOX_EXECUTABLE)],
+                        "outbound": "direct",
+                    },
                     {
                         "inbound": ["tun-in"],
                         "port": [53],
@@ -424,7 +550,20 @@ class SingboxTunService:
 
         insert_index = len([r for r in rules if "process" in r])
 
-        for ip in proxy_ips + ["1.1.1.1", "8.8.8.8"]:
+        # NCSI/localhost bypass — inline domain_suffix rules, no external rule_set dependency.
+        # This prevents Sing-Box FATAL crashes when rule-set files are missing.
+        rules.insert(
+            insert_index, {"domain_suffix": list(NCSI_DOMAINS), "outbound": "direct"}
+        )
+        insert_index += 1
+
+        dns_rules.insert(
+            0, {"domain_suffix": list(NCSI_DOMAINS), "server": "bootstrap"}
+        )
+
+        # Proxy endpoint /32 host routes — both original IPs and pre-resolved domain IPs
+        all_proxy_ips = list(set(proxy_ips + (resolved_ips or [])))
+        for ip in all_proxy_ips + ["1.1.1.1", "8.8.8.8"]:
             rules.insert(insert_index, {"ip_cidr": f"{ip}/32", "outbound": "direct"})
             insert_index += 1
 
@@ -435,12 +574,12 @@ class SingboxTunService:
 
         if routing_rules:
 
-            def is_valid_ip_cidr(val):
+            def normalize_ip_cidr(val):
                 try:
-                    ipaddress.ip_network(val, strict=False)
-                    return True
+                    net = ipaddress.ip_network(val, strict=False)
+                    return str(net)
                 except ValueError:
-                    return False
+                    return None
 
             for action in ["direct", "proxy", "block"]:
                 if action not in routing_rules:
@@ -455,8 +594,9 @@ class SingboxTunService:
                     t = t.strip()
                     if not t:
                         continue
-                    if is_valid_ip_cidr(t):
-                        s_ips.append(t)
+                    cidr_ip = normalize_ip_cidr(t)
+                    if cidr_ip:
+                        s_ips.append(cidr_ip)
                         continue
                     lower_t = t.lower()
                     if lower_t.startswith("geosite:") or lower_t.startswith("geoip:"):
@@ -475,30 +615,45 @@ class SingboxTunService:
                     if outbound_tag == "direct":
                         dns_rules.append({"domain": s_domains, "server": "bootstrap"})
                 if s_domain_suffixes:
-                    rules.append({"domain_suffix": s_domain_suffixes, "outbound": outbound_tag})
+                    rules.append(
+                        {"domain_suffix": s_domain_suffixes, "outbound": outbound_tag}
+                    )
                     if outbound_tag == "direct":
-                        dns_rules.append({"domain_suffix": s_domain_suffixes, "server": "bootstrap"})
+                        dns_rules.append(
+                            {"domain_suffix": s_domain_suffixes, "server": "bootstrap"}
+                        )
 
         if routing_country and routing_country.lower() != "none":
             country = routing_country.lower()
-            logger.info(f"[SingboxTunService] Applying country-based routing for: {country}")
+            logger.info(
+                f"[SingboxTunService] Applying country-based routing for: {country}"
+            )
             if country in SINGBOX_RULE_SETS:
                 if "rule_set" not in cfg["route"]:
                     cfg["route"]["rule_set"] = []
                 for idx, url in enumerate(SINGBOX_RULE_SETS[country]):
                     tag_name = f"{country}-rules-{idx}"
                     fmt = "source" if url.endswith(".json") else "binary"
-                    cfg["route"]["rule_set"].append(
-                        {
-                            "tag": tag_name,
-                            "type": "remote",
-                            "format": fmt,
-                            "url": url,
-                            "download_detour": "direct",
-                            "update_interval": "24h",
-                        }
-                    )
-                    rules.append({"rule_set": tag_name, "outbound": "direct"})
-                    dns_rules.append({"rule_set": tag_name, "server": "bootstrap"})
+                    local_path = (rule_set_local_map or {}).get(tag_name)
+                    if (
+                        local_path
+                        and os.path.isfile(local_path)
+                        and os.path.getsize(local_path) > 0
+                    ):
+                        cfg["route"]["rule_set"].append(
+                            {
+                                "tag": tag_name,
+                                "type": "local",
+                                "path": local_path,
+                                "format": fmt,
+                            }
+                        )
+                        rules.append({"rule_set": tag_name, "outbound": "direct"})
+                        dns_rules.append({"rule_set": tag_name, "server": "bootstrap"})
+                    else:
+                        logger.warning(
+                            f"[SingboxTunService] Rule-set file missing for {tag_name}; "
+                            f"skipping to prevent FATAL crash. URL: {url}"
+                        )
 
         return cfg

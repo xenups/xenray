@@ -139,10 +139,13 @@ class ConnectionOrchestrator:
 
         from src.services.connection_tester import ConnectionTester
 
-        # In proxy mode use the SOCKS port.
-        # In VPN mode traffic goes through TUN, so socks_port=0 is fine
-        # (the tester will use a direct HTTP probe through the TUN interface).
-        socks_port = health_socks_port if (mode == "proxy" and health_socks_port > 0) else 0
+        # Always use the existing Xray SOCKS proxy when available.
+        # The SOCKS inbound listens on 127.0.0.1 which is NOT captured by TUN
+        # routing (localhost is always direct), so this is safe in both modes.
+        # Spawning a second Xray instance (socks_port=0) under active TUN would
+        # cause the test process's outbound traffic to be captured by the TUN
+        # interface and routed back into the primary Xray → deadlock.
+        socks_port = health_socks_port if health_socks_port > 0 else 0
         if socks_port:
             logger.debug(
                 f"[ConnectionOrchestrator] Routing health check through existing SOCKS proxy port {socks_port}"

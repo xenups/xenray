@@ -30,7 +30,7 @@ ARCH = os.getenv("ARCH", "64")
 
 # Application Defaults
 DEFAULT_PROXY_PORT = 10808
-DEFAULT_TUN_ENGINE = "sing-box"
+DEFAULT_TUN_ENGINE = "xray"
 DEFAULT_DNS = "1.1.1.1, 8.8.8.8"
 
 # Application Limits

@@ -35,6 +35,8 @@ async def main(page):
     page.window.minimizable = True
     page.window.maximizable = True
     page.window.prevent_close = True
+    page.window.title_bar_hidden = True
+    page.window.title_bar_buttons_hidden = True
     page.title = "XenRay"
     page.padding = 0
     page.spacing = 0

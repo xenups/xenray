@@ -119,6 +119,12 @@ class XrayConfigProcessor:
         self._config_patcher.safe_patch(new_config)
 
         if mode == MODE_VPN:
+            from src.utils.network_interface import NetworkInterfaceDetector
+
+            iface_name, _, _, _ = NetworkInterfaceDetector.get_primary_interface()
+            if iface_name:
+                self._tun_injector.patch_all_outbounds_interface(new_config, iface_name)
+
             tun_engine = self._app_context.settings.get_tun_engine()
 
             if tun_engine == str(TunEngine.XRAY):
@@ -136,9 +142,10 @@ class XrayConfigProcessor:
                     routing_country=routing_country,
                     routing_rules=routing_rules,
                     proxy_server_ips=proxy_server_ips,
+                    interface_name=iface_name,
                 )
             else:
-                logger.info("[XrayConfigProcessor] Sing-box TUN engine selected — skipping Xray TUN injection")
+                logger.info("[XrayConfigProcessor] Sing-box TUN engine selected — bound Xray outbounds to physical interface")
 
         return new_config
 

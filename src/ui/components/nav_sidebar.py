@@ -10,99 +10,122 @@ from src.ui.theme import AppColors
 
 
 class NavSidebar(ft.Container):
-    """Sidebar navigation drawer matching macOS Apple Dark design specs."""
+    """Sidebar navigation drawer matching Fluent Integrated design specs (image_54.png)."""
 
-    def __init__(self, active_tab: str, on_tab_change: Callable[[str], None], on_connect_click: Callable):
+    def __init__(
+        self,
+        active_tab: str,
+        on_tab_change: Callable[[str], None],
+        on_connect_click: Callable,
+        on_change_server_click: Callable | None = None,
+    ):
         self._active_tab = active_tab
         self._on_tab_change = on_tab_change
         self._on_connect_click = on_connect_click
+        self._on_change_server_click = on_change_server_click
 
         self._nav_items = [
-            ("dashboard", t("nav.dashboard", default="Dashboard"), ft.Icons.GRID_VIEW),
-            ("servers", t("nav.servers", default="Servers"), ft.Icons.DNS),
-            ("logs", t("nav.logs", default="Logs"), ft.Icons.TERMINAL),
-            ("settings", t("nav.settings", default="Settings"), ft.Icons.SETTINGS),
+            ("dashboard", t("nav.dashboard", default="Dashboard"), ft.Icons.GRID_VIEW_ROUNDED),
+            ("statistics", t("nav.statistics", default="Statistics"), ft.Icons.BAR_CHART_ROUNDED),
+            ("servers", t("nav.servers", default="Servers"), ft.Icons.DNS_ROUNDED),
+            ("logs", t("nav.logs", default="Logs"), ft.Icons.TERMINAL_ROUNDED),
+            ("settings", t("nav.settings", default="Settings"), ft.Icons.SETTINGS_ROUNDED),
         ]
 
-        self._buttons_container = ft.Column(spacing=6, expand=True)
+        self._buttons_container = ft.Column(spacing=8, expand=True)
         self._build_nav_buttons()
 
-        # Sleek Compact Quick-Action Card Widget
-        self._quick_server_name = ft.Text(
-            t("server_list.no_server", default="No Server Selected"),
-            size=11,
-            weight=ft.FontWeight.W_700,
-            color=ft.Colors.WHITE,
-            no_wrap=True,
-            overflow=ft.TextOverflow.ELLIPSIS,
-            expand=True,
+        # Permanent Actions Panel Buttons (matching image_54.png)
+        # 1. Change Server Button (purple neon bar)
+        self._change_server_btn = ft.Container(
+            content=ft.Row(
+                [
+                    ft.Icon(ft.Icons.SWAP_HORIZ_ROUNDED, size=16, color=ft.Colors.WHITE),
+                    ft.Text(
+                        t("dashboard.change_server", default="Change Server"),
+                        size=12,
+                        weight=ft.FontWeight.W_600,
+                        color=ft.Colors.WHITE,
+                    ),
+                ],
+                alignment=ft.MainAxisAlignment.CENTER,
+                spacing=8,
+            ),
+            padding=ft.Padding.symmetric(vertical=10, horizontal=14),
+            border_radius=12,
+            bgcolor=ft.Colors.with_opacity(0.12, "#a855f7"),
+            border=ft.Border.all(1.2, ft.Colors.with_opacity(0.6, "#a855f7")),
+            on_click=self._handle_change_server_click,
+            ink=True,
         )
 
+        # 2. Quick Disconnect / Connect Button (red neon bar with lightning icon)
+        self._quick_action_icon = ft.Icon(ft.Icons.BOLT, size=16, color="#f43f5e")
         self._quick_action_text = ft.Text(
-            t("dashboard.quick_connect", default="Quick Connect"),
-            size=11,
+            t("dashboard.quick_disconnect", default="Quick Disconnect"),
+            size=12,
             weight=ft.FontWeight.W_600,
             color=ft.Colors.WHITE,
         )
-        self._quick_action_icon = ft.Icon(ft.Icons.BOLT, size=14, color=AppColors.PRIMARY)
 
-        self._quick_action_btn = ft.OutlinedButton(
+        self._quick_action_btn = ft.Container(
             content=ft.Row(
                 [
                     self._quick_action_icon,
                     self._quick_action_text,
                 ],
                 alignment=ft.MainAxisAlignment.CENTER,
-                spacing=4,
+                spacing=6,
             ),
-            style=ft.ButtonStyle(
-                shape=ft.RoundedRectangleBorder(radius=10),
-                side=ft.BorderSide(1, ft.Colors.with_opacity(0.35, AppColors.PRIMARY)),
-                padding=ft.Padding.symmetric(vertical=8, horizontal=10),
-            ),
-            width=float("inf"),
+            padding=ft.Padding.symmetric(vertical=10, horizontal=14),
+            border_radius=12,
+            bgcolor=ft.Colors.with_opacity(0.15, "#f43f5e"),
+            border=ft.Border.all(1.2, ft.Colors.with_opacity(0.6, "#f43f5e")),
             on_click=self._on_connect_click,
+            ink=True,
         )
 
-        self._quick_card = ft.Container(
-            content=ft.Column(
-                [
-                    ft.Row(
-                        [
-                            ft.Icon(ft.Icons.DNS, size=15, color=ft.Colors.WHITE),
-                            self._quick_server_name,
-                        ],
-                        spacing=6,
-                    ),
-                    ft.Container(height=2),
-                    self._quick_action_btn,
-                ],
-                spacing=4,
-            ),
-            padding=10,
-            border_radius=12,
-            bgcolor=ft.Colors.with_opacity(0.65, AppColors.SURFACE_CONTAINER),
-            border=ft.Border.all(1, AppColors.GLASS_BORDER),
+        self._actions_panel = ft.Column(
+            [
+                self._change_server_btn,
+                self._quick_action_btn,
+            ],
+            spacing=8,
         )
 
         super().__init__(
             content=ft.Column(
                 [
-                    # Top empty area (macOS Apple sidebar style)
-                    ft.Container(height=16),
+                    # Top logo space (XenRey style) - Draggable
+                    ft.WindowDragArea(
+                        content=ft.Container(
+                            content=ft.Row(
+                                [
+                                    ft.Image(src="icon.png", width=22, height=22, fit="contain"),
+                                    ft.Text("XenRay", size=15, weight=ft.FontWeight.W_800, color=ft.Colors.WHITE),
+                                ],
+                                spacing=8,
+                            ),
+                            padding=ft.Padding.only(left=8, top=12, bottom=16),
+                        )
+                    ),
                     # Navigation Options
                     self._buttons_container,
-                    # Bottom Sleek Quick-Action Card Widget
-                    self._quick_card,
+                    # Bottom Permanent Actions Panel
+                    self._actions_panel,
                 ],
                 spacing=0,
                 expand=True,
             ),
             width=210,
             padding=14,
-            bgcolor=AppColors.SURFACE_CONTAINER_LOW,
-            border=ft.Border.only(right=ft.BorderSide(1, AppColors.GLASS_BORDER)),
+            bgcolor=ft.Colors.with_opacity(0.4, "#0b0518"),
+            border=ft.Border.only(right=ft.BorderSide(1, ft.Colors.with_opacity(0.12, "#a855f7"))),
         )
+
+    def _handle_change_server_click(self, e):
+        if self._on_change_server_click:
+            self._on_change_server_click(e)
 
     def set_active_tab(self, tab_id: str):
         """Set the current active navigation tab."""
@@ -115,20 +138,25 @@ class NavSidebar(ft.Container):
             pass
 
     def update_connect_button_text(self, text: str, is_running: bool, server_name: str = ""):
-        """Update the bottom quick action card state and active server display."""
+        """Update the bottom quick action button state matching connected / disconnected status."""
         btn_text = (
             t("dashboard.quick_disconnect", default="Quick Disconnect")
             if is_running
             else t("dashboard.quick_connect", default="Quick Connect")
         )
         self._quick_action_text.value = btn_text
-        icon_color = AppColors.ERROR if is_running else AppColors.PRIMARY
-        self._quick_action_icon.color = icon_color
-        self._quick_action_btn.style.side = ft.BorderSide(1, ft.Colors.with_opacity(0.4, icon_color))
-        if server_name:
-            self._quick_server_name.value = server_name
+        if is_running:
+            self._quick_action_icon.color = "#f43f5e"
+            self._quick_action_btn.bgcolor = ft.Colors.with_opacity(0.15, "#f43f5e")
+            self._quick_action_btn.border = ft.Border.all(1.2, ft.Colors.with_opacity(0.6, "#f43f5e"))
+        else:
+            self._quick_action_icon.color = "#c084fc"
+            self._quick_action_btn.bgcolor = ft.Colors.with_opacity(0.12, "#a855f7")
+            self._quick_action_btn.border = ft.Border.all(1.2, ft.Colors.with_opacity(0.5, "#a855f7"))
+
         try:
-            self._quick_card.update()
+            if self._quick_action_btn.page:
+                self._quick_action_btn.update()
         except Exception:
             pass
 
@@ -142,7 +170,7 @@ class NavSidebar(ft.Container):
                         ft.Icon(
                             icon,
                             size=18,
-                            color=AppColors.PRIMARY if is_active else AppColors.ON_SURFACE_VARIANT,
+                            color="#c084fc" if is_active else AppColors.ON_SURFACE_VARIANT,
                         ),
                         ft.Text(
                             label,
@@ -151,12 +179,18 @@ class NavSidebar(ft.Container):
                             color=ft.Colors.WHITE if is_active else AppColors.ON_SURFACE_VARIANT,
                         ),
                     ],
-                    spacing=10,
+                    spacing=12,
                 ),
                 padding=ft.Padding.symmetric(horizontal=14, vertical=10),
-                border_radius=10,
-                bgcolor=ft.Colors.with_opacity(0.15, AppColors.PRIMARY) if is_active else ft.Colors.TRANSPARENT,
-                border=ft.Border.only(left=ft.BorderSide(3, AppColors.PRIMARY)) if is_active else None,
+                border_radius=12,
+                bgcolor=ft.Colors.with_opacity(0.2, "#6d28d9") if is_active else ft.Colors.TRANSPARENT,
+                border=ft.Border.all(1.2, ft.Colors.with_opacity(0.5, "#a855f7")) if is_active else None,
+                shadow=ft.BoxShadow(
+                    spread_radius=0,
+                    blur_radius=12,
+                    color=ft.Colors.with_opacity(0.3, "#7c3aed"),
+                    offset=ft.Offset(0, 0),
+                ) if is_active else None,
                 on_click=lambda e, tid=tab_id: self._on_tab_change(tid),
             )
             self._buttons_container.controls.append(btn)

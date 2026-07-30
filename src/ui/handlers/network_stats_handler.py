@@ -135,6 +135,20 @@ class NetworkStatsHandler:
                 )
                 if is_running:
                     view.update_glow_intensity(total_bps)
+
+        # Update Stitch StatisticsView stats continuously
+        if mw and hasattr(mw, "_stitch_statistics_view") and mw._stitch_statistics_view:
+            stat_view = mw._stitch_statistics_view
+            if stat_view:
+                stat_view.update_internet_status(self._is_online_cache)
+                stat_view.update_network_stats(
+                    rate_str=down_str if is_running else "0.0 MB/s",
+                    upload_str=session_up,
+                    download_str=session_down,
+                    download_bps=download_bps if is_running else 0.0,
+                    upload_bps=upload_bps if is_running else 0.0,
+                    total_bps=total_bps if is_running else 0.0,
+                )
         # Update LogsView diagnostic cards
         if mw and hasattr(mw, "_stitch_logs_view") and mw._stitch_logs_view:
             lv = mw._stitch_logs_view

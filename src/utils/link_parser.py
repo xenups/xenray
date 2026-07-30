@@ -436,11 +436,13 @@ class LinkParser:
             if not sni:
                 raise ValueError("Reality configuration missing required 'sni' parameter")
 
+            sid_list = _maybe_split("sid", sid_raw) if sid_raw else [""]
             reality_settings: Dict[str, Any] = {
                 "show": False,
                 "serverName": sni,
                 "publicKey": pbk,
-                "shortIds": _maybe_split("sid", sid_raw) if sid_raw else [""],
+                "shortId": sid_list[0] if sid_list else "",
+                "shortIds": sid_list,
                 "fingerprint": fp or DEFAULT_FINGERPRINT,
             }
             spx = get_param("spx")

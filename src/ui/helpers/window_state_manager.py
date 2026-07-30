@@ -21,6 +21,9 @@ class WindowStateManager:
         page.theme_mode = ft.ThemeMode.DARK
         page.theme = ft.Theme()
 
+        page.window.title_bar_hidden = True
+        page.window.title_bar_buttons_hidden = True
+
         icon_path = os.path.join(APPDIR, "assets", "icon.ico")
         if os.path.exists(icon_path):
             page.window.icon = icon_path

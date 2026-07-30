@@ -16,6 +16,7 @@ from src.ui.views.dashboard_view import DashboardView
 from src.ui.views.logs_view import LogsView
 from src.ui.views.servers_view import ServersView
 from src.ui.views.settings_view import SettingsView
+from src.ui.views.statistics_view import StatisticsView
 
 if TYPE_CHECKING:
     from src.ui.main_window import MainWindow
@@ -56,7 +57,12 @@ class UIBuilder:
         self._main._stitch_dashboard_view = DashboardView(
             on_toggle_click=self._main._on_connect_clicked,
             on_change_server_click=lambda e: self._main._on_nav_tab_changed("servers"),
+            on_open_statistics_click=lambda e: self._main._on_nav_tab_changed("statistics"),
             connection_button=self._main._connection_button,
+        )
+
+        self._main._stitch_statistics_view = StatisticsView(
+            on_back_click=lambda e: self._main._on_nav_tab_changed("dashboard"),
         )
 
         self._main._stitch_servers_view = ServersView(
@@ -95,6 +101,7 @@ class UIBuilder:
             active_tab="dashboard",
             on_tab_change=self._main._on_nav_tab_changed,
             on_connect_click=self._main._on_connect_clicked,
+            on_change_server_click=lambda e: self._main._on_nav_tab_changed("servers"),
         )
 
         # Legacy dashboard view fallback
@@ -111,29 +118,84 @@ class UIBuilder:
             expand=True,
         )
 
-        # Background — deep gradient (v0.1.7-beta style)
-        self._main._background = ft.Container(
-            gradient=ft.LinearGradient(
-                begin=ft.Alignment.TOP_LEFT,
-                end=ft.Alignment.BOTTOM_RIGHT,
-                colors=[
-                    AppColors.BACKGROUND_GRADIENT_START,
-                    AppColors.BACKGROUND_GRADIENT_CENTER,
-                    AppColors.BACKGROUND_GRADIENT_END,
-                ],
+        # Background — deep gradient with WindowDragArea for frameless window movement
+        self._main._background = ft.WindowDragArea(
+            content=ft.Container(
+                gradient=ft.LinearGradient(
+                    begin=ft.Alignment.TOP_LEFT,
+                    end=ft.Alignment.BOTTOM_RIGHT,
+                    colors=[
+                        AppColors.BACKGROUND_GRADIENT_START,
+                        AppColors.BACKGROUND_GRADIENT_CENTER,
+                        AppColors.BACKGROUND_GRADIENT_END,
+                    ],
+                ),
+                expand=True,
             ),
             expand=True,
         )
 
-        # Dual-Pane layout container: Left Sidebar + Right Content Canvas
+        # Top Header Drag Bar with Window Control Buttons (Dedicated top row)
+        top_header_bar = ft.Container(
+            content=ft.WindowDragArea(
+                content=ft.Row(
+                    [
+                        ft.Container(expand=True),
+                        ft.Row(
+                            [
+                                ft.IconButton(
+                                    icon=ft.Icons.MINIMIZE_ROUNDED,
+                                    icon_size=14,
+                                    icon_color=ft.Colors.with_opacity(0.65, ft.Colors.WHITE),
+                                    tooltip="Minimize",
+                                    on_click=lambda e: self._handle_window_minimize(),
+                                ),
+                                ft.IconButton(
+                                    icon=ft.Icons.CROP_SQUARE_ROUNDED,
+                                    icon_size=13,
+                                    icon_color=ft.Colors.with_opacity(0.65, ft.Colors.WHITE),
+                                    tooltip="Maximize / Restore",
+                                    on_click=lambda e: self._handle_window_maximize(),
+                                ),
+                                ft.IconButton(
+                                    icon=ft.Icons.CLOSE_ROUNDED,
+                                    icon_size=14,
+                                    icon_color=ft.Colors.with_opacity(0.8, "#f43f5e"),
+                                    tooltip="Close",
+                                    on_click=lambda e: self._handle_window_close(),
+                                ),
+                            ],
+                            spacing=2,
+                        ),
+                    ],
+                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                ),
+                expand=True,
+            ),
+            height=32,
+            padding=ft.Padding.only(right=8, left=12),
+        )
+
+        # Right content column with top drag header bar & view switcher
+        right_content_column = ft.Column(
+            [
+                top_header_bar,
+                ft.Container(
+                    content=self._main._view_switcher,
+                    expand=True,
+                ),
+            ],
+            spacing=0,
+            expand=True,
+        )
+
+        # Dual-Pane layout container: Full-Height Left Sidebar + Right Content Canvas Column
         self._main._main_content = ft.Container(
             content=ft.Row(
                 [
                     self._main._nav_sidebar,
-                    ft.Container(
-                        content=self._main._view_switcher,
-                        expand=True,
-                    ),
+                    right_content_column,
                 ],
                 spacing=0,
                 expand=True,
@@ -161,3 +223,21 @@ class UIBuilder:
         """Build and configure all UI components."""
         self.build_core_components()
         self.build_stitch_views()
+
+    def _handle_window_minimize(self):
+        page = self._main._page
+        page.window.minimized = True
+        page.update()
+
+    def _handle_window_maximize(self):
+        page = self._main._page
+        is_max = getattr(page.window, "maximized", False)
+        page.window.maximized = not is_max
+        page.update()
+
+    def _handle_window_close(self):
+        page = self._main._page
+        if hasattr(self._main, "show_close_dialog"):
+            self._main.show_close_dialog()
+        else:
+            page.window.close()

@@ -93,7 +93,10 @@
     "reset_close_success": "تنظیمات خروج بازنشانی شد! 🔄",
     "add_to_startup": "اجرا هنگام شروع سیستم",
     "add_to_startup_desc": "زن‌ری هنگام ورود به سیستم به صورت خودکار اجرا شود",
+    "startup_saved": "تنظیمات شروع به‌روزرسانی شد",
     "startup_error": "خطا در به‌روزرسانی تنظیمات شروع",
+    "startup_on": "روشن",
+    "startup_off": "خاموش",
     "auto_reconnect": "اتصال مجدد خودکار",
     "auto_reconnect_desc": "اتصال مجدد خودکار هنگام قطع شدن ارتباط",
     "auto_reconnect_enabled": "اتصال مجدد خودکار فعال شد",
@@ -110,7 +113,7 @@
     "routing_title": "مسیریابی و ضدنشت",
     "preferences_title": "ترجیحات برنامه",
     "vpn_mode": "حالت TUN/VPN",
-    "vpn_mode_desc": "تور ماهواره‌ای کامل",
+    "vpn_mode_desc": "تونل کامل VPN",
     "proxy_mode": "حالت پروکسی سیستمی",
     "proxy_mode_desc": "پروکسی SOCKS + HTTP",
     "recommended": "پیشنهادی"
@@ -181,7 +184,8 @@
     "ping": "پینگ: {latency}",
     "update_complete": "به‌روزرسانی {component} کامل شد!",
     "update_error": "خطا: {error}",
-    "admin_required": "برای حالت VPN نیاز به دسترسی مدیریت است"
+    "admin_required": "برای حالت VPN نیاز به دسترسی مدیریت است",
+    "checking": "در حال بررسی..."
   },
   "connection": {
     "loading_config": "در حال بارگذاری پیکربندی...",
@@ -225,51 +229,53 @@
     "block_ads": "مسدود کردن تبلیغات",
     "block_ads_desc": "مسدود کردن دامنه‌های تبلیغاتی رایج",
     "direct_private": "IP‌های خصوصی مستقیم",
-    "connection_in_progress": "اتصال در حال انجام است...",
-    "connection_failed": "اتصال ناموفق",
-    "mode_selected": "حالت {mode} انتخاب شد",
-    "ping": "پینگ: {latency}",
-    "update_complete": "به‌روزرسانی {component} کامل شد!",
-    "update_error": "خطا: {error}",
-    "admin_required": "برای حالت VPN نیاز به دسترسی مدیریت است"
+    "direct_private_desc": "مسیریابی مستقیم شبکه محلی (10.x, 192.168.x)",
+    "direct_local": "دامنه‌های محلی مستقیم",
+    "direct_local_desc": "مسیریابی مستقیم دامنه‌های .local، .lan و .home"
   },
-  "connection": {
-    "loading_config": "در حال بارگذاری پیکربندی...",
-    "stopping_existing": "در حال قطع اتصال قبلی...",
-    "processing_config": "در حال پردازش پیکربندی...",
-    "starting_xray": "در حال راه‌اندازی Xray...",
-    "initializing_vpn": "در حال راه‌اندازی تونل VPN...",
-    "finalizing": "در حال نهایی کردن اتصال...",
-    "ping_prefix": "پینگ:",
-    "latency_ms": "{value} میلی‌ثانیه",
-    "timeout": "تایم‌اوت",
-    "conn_error": "خطای اتصال",
-    "core_failed": "خطای هسته",
-    "invalid_config": "پیکربندی نامعتبر",
-    "error": "خطا",
-    "checking_network": "در حال بررسی اتصال شبکه...",
-    "no_internet": "اتصال اینترنت برقرار نیست!",
-    "connected_no_internet": "متصل شد اما اینترنت در دسترس نیست",
-    "verifying_latency": "در حال تأیید تأخیر اتصال...",
-    "falling_back": "در حال بازگشت به تن�      "expand": "نمایش جزئیات",
-      "collapse": "پنهان کردن جزئیات",
-      "invalid": "پروفایل‌های گم‌شده",
-      "broken_tooltip": "برخی سرورهای این زنجیره حذف شده‌اند"
-    },
-    "toast": {
-      "created": "زنجیره '{name}' ایجاد شد! 🔗",
-      "updated": "زنجیره به‌روزرسانی شد",
-      "deleted": "زنجیره حذف شد",
-      "invalid_chain": "اتصال ممکن نیست: زنجیره سرورهای گم‌شده دارد"
-    }
+  "dns": {
+    "title": "مدیریت DNS",
+    "subtitle": "سرورهای DNS بالادست",
+    "address": "آدرس",
+    "hint": "8.8.8.8 یا quic://...",
+    "add": "افزودن",
+    "remove": "حذف",
+    "move_up": "انتقال به بالا",
+    "proto": "پروتکل",
+    "address_header": "آدرس",
+    "actions": "عملیات",
+    "no_dns": "استفاده از DNS پیش‌فرض سیستم"
   },
-  "servers": {
-    "selected_node": "سرور انتخاب‌شده",
-    "search_placeholder": "جستجوی نام سرور، منطقه یا IP...",
-    "add": "افزودن سرور",
-    "latency": "تأخیر"
-  }
-}ds": "رشته‌های فعال",
+  "dashboard": {
+    "network_traffic": "ترافیک شبکه",
+    "live_statistics": "آمار زنده",
+    "current_node": "گره فعلی",
+    "change_server": "تغییر سرور",
+    "uptime": "زمان اتصال: {time}",
+    "upload": "آپلود",
+    "download": "دانلود",
+    "protocol": "پروتکل",
+    "encryption": "رمزنگاری",
+    "local_ip": "IP محلی",
+    "server_ip": "IP سرور",
+    "checking": "در حال بررسی...",
+    "secure": "امان",
+    "system_secure": "سیستم امن است",
+    "system_ready": "سیستم آماده است",
+    "no_internet": "بدون اینترنت",
+    "connected": "متصل",
+    "disconnected": "قطع شده",
+    "quick_disconnect": "قطع سریع",
+    "quick_connect": "اتصال سریع",
+    "cpu": "پردازنده: {percent}%",
+    "ram": "رم: {mb} مگابایت"
+  },
+  "logs": {
+    "title": "لاگ‌های اتصال",
+    "pause": "توقف به‌روزرسانی لاگ",
+    "resume": "ادامه به‌روزرسانی لاگ",
+    "memory": "حافظه",
+    "active_threads": "رشته‌های فعال",
     "health_status": "وضعیت سلامت",
     "nodes": "گره",
     "optimal_performance": "عملکرد بهینه",
@@ -290,50 +296,6 @@
   },
   "header": {
     "toggle_theme": "تغییر تم",
-    "logs": "لاگ‌ها",
-    "settings": "تنظیمات"
-  },
-  "tray": {
-    "open": "باز کردن زن‌ری",
-    "exit": "خروج",
-    "connect": "اتصال",
-    "disconnect": "قطع اتصال",
-    "connected_to": "متصل: {server}"
-  },
-  "close_dialog": {
-    "title": "خروج از برنامه",
-    "message": "آیا می‌خواهید از زن‌ری خارج شوید یا آن را به منوی سیستم انتقال دهید؟",
-    "exit": "خروج",
-    "minimize": "کوچک‌نمایی",
-    "cancel": "انصراف",
-    "remember": "همیشه به منوی سیستم انتقال بده"
-  },
-  "chain": {
-    "title": "ایجاد زنجیره",
-    "edit_title": "ویرایش زنجیره",
-    "subtitle": "زنجیره‌سازی چند سرور",
-    "name_label": "نام زنجیره",
-    "name_hint": "مثال: WireGuard → Reality",
-    "order_label": "ترتیب زنجیره (ورود → خروج)",
-    "add_item": "افزودن به زنجیره",
-    "remove_item": "حذف",
-    "save": "ذخیره زنجیره",
-    "cancel": "انصراف",
-    "entry_label": "ورودی",
-    "exit_label": "→ اینترنت",
-    "select_outbound": "انتخاب سرور",
-    "info_hint": "اول = ورودی، آخر = اینترنت",
-    "validation": {
-      "min_items": "زنجیره باید حداقل ۲ آیتم داشته باشد",
-      "circular": "سرور تکراری در زنجیره",
-      "invalid_protocol": "{protocol} نمی‌تواند در زنجیره استفاده شود",
-      "missing_profile": "سرور یافت نشد",
-      "no_nesting": "زنجیره‌ها نمی‌توانند شامل زنجیره دیگر باشند",
-      "has_dialer_proxy": "آخرین سرور از قبل dialerProxy دارد"
-    },
-    "list_item": {
-      "chain_label": "زنجیره",
-      "servers_count": "{count} سرور",
     "logs": "لاگ‌ها",
     "settings": "تنظیمات"
   },
