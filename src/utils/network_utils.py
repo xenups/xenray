@@ -35,16 +35,12 @@ class NetworkUtils:
                 return True
             except Exception as e:
                 if attempt < retries - 1:
-                    logger.debug(
-                        f"Internet check attempt {attempt + 1}/{retries} failed: {e}"
-                    )
+                    logger.debug(f"Internet check attempt {attempt + 1}/{retries} failed: {e}")
                     import time
 
                     time.sleep(0.5)  # Brief delay between retries
                 else:
-                    logger.warning(
-                        f"Internet connection check failed after {retries} attempts: {e}"
-                    )
+                    logger.warning(f"Internet connection check failed after {retries} attempts: {e}")
         return False
 
     @staticmethod
@@ -130,9 +126,7 @@ class NetworkUtils:
         return False
 
     @staticmethod
-    def detect_optimal_mtu(
-        host="8.8.8.8", min_mtu=1280, max_mtu=1480, timeout=2, mtu_mode="auto"
-    ) -> int:
+    def detect_optimal_mtu(host="8.8.8.8", min_mtu=1280, max_mtu=1480, timeout=2, mtu_mode="auto") -> int:
         """
         Detect optimal MTU using ping with Don't Fragment flag.
         Uses binary search to find the largest non-fragmented MTU.
@@ -168,9 +162,7 @@ class NetworkUtils:
             return default_mtu
 
         # Auto mode: perform ICMP-based detection
-        logger.info(
-            f"MTU mode: auto - detecting optimal MTU (range: {min_mtu}-{max_mtu})..."
-        )
+        logger.info(f"MTU mode: auto - detecting optimal MTU (range: {min_mtu}-{max_mtu})...")
 
         # Platform-specific ping commands
         system = platform.system().lower()

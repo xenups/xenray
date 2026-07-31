@@ -51,9 +51,7 @@ def _is_registry_enabled() -> bool:
     try:
         import winreg
 
-        key = winreg.OpenKey(
-            winreg.HKEY_CURRENT_USER, REGISTRY_PATH, 0, winreg.KEY_READ
-        )
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, REGISTRY_PATH, 0, winreg.KEY_READ)
         try:
             value, _ = winreg.QueryValueEx(key, APP_NAME)
             winreg.CloseKey(key)
@@ -70,9 +68,7 @@ def _enable_via_registry() -> tuple[bool, str]:
     try:
         import winreg
 
-        key = winreg.OpenKey(
-            winreg.HKEY_CURRENT_USER, REGISTRY_PATH, 0, winreg.KEY_SET_VALUE
-        )
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, REGISTRY_PATH, 0, winreg.KEY_SET_VALUE)
         _, _, launch_command = _get_launch_details()
         winreg.SetValueEx(key, APP_NAME, 0, winreg.REG_SZ, launch_command)
         winreg.CloseKey(key)
@@ -88,9 +84,7 @@ def _disable_via_registry() -> tuple[bool, str]:
     try:
         import winreg
 
-        key = winreg.OpenKey(
-            winreg.HKEY_CURRENT_USER, REGISTRY_PATH, 0, winreg.KEY_SET_VALUE
-        )
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, REGISTRY_PATH, 0, winreg.KEY_SET_VALUE)
         try:
             winreg.DeleteValue(key, APP_NAME)
         except FileNotFoundError:
@@ -164,9 +158,7 @@ def _enable_via_task_scheduler() -> tuple[bool, str]:
         )
 
         if result.returncode == 0:
-            logger.info(
-                f"[TaskScheduler] Enabled startup via Task Scheduler (CWD: {cwd}, User: {user_id})"
-            )
+            logger.info(f"[TaskScheduler] Enabled startup via Task Scheduler (CWD: {cwd}, User: {user_id})")
             return True, "Startup enabled via Task Scheduler"
         else:
             logger.error(f"[TaskScheduler] Task Scheduler failed: {result.stderr}")
@@ -202,9 +194,7 @@ def register_task() -> tuple[bool, str]:
         success, msg = _enable_via_task_scheduler()
         if success:
             return True, msg
-        logger.warning(
-            "[TaskScheduler] Admin Task Scheduler failed, falling back to Registry"
-        )
+        logger.warning("[TaskScheduler] Admin Task Scheduler failed, falling back to Registry")
 
     # Fallback to Registry (or default for non-admin)
     return _enable_via_registry()
