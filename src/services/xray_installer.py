@@ -1,7 +1,9 @@
 """Xray Installer Service."""
+
 import os
 import subprocess
 import tempfile
+import time
 import zipfile
 from typing import Callable, Optional
 
@@ -200,6 +202,8 @@ class XrayInstallerService:
     def _extract_core(zip_path: str) -> bool:
         """
         Extract Xray core from zip file.
+        Retries extraction if a file is locked (e.g. wintun.dll held by a
+        terminating process), with a short delay between attempts.
 
         Returns:
             True if successful, False otherwise
@@ -209,8 +213,20 @@ class XrayInstallerService:
                 logger.error(f"Zip file not found: {zip_path}")
                 return False
 
-            with zipfile.ZipFile(zip_path, "r") as zip_ref:
-                zip_ref.extractall(BIN_DIR)
+            max_retries = 5
+            retry_delay = 1.0  # seconds
+
+            for attempt in range(1, max_retries + 1):
+                try:
+                    with zipfile.ZipFile(zip_path, "r") as zip_ref:
+                        zip_ref.extractall(BIN_DIR)
+                    break  # success
+                except (OSError, IOError) as e:
+                    logger.warning(f"Extraction attempt {attempt}/{max_retries} failed: {e}")
+                    if attempt < max_retries:
+                        time.sleep(retry_delay)
+                    else:
+                        raise
 
             # Clean up temp file
             try:
@@ -287,7 +303,10 @@ class XrayInstallerService:
                     # Fallback: try any wintun.dll in the archive
                     dll_entries = [n for n in names if n.endswith("wintun.dll")]
                     if dll_entries:
-                        with zf.open(dll_entries[0]) as src, open(WINTUN_DLL, "wb") as dst:
+                        with (
+                            zf.open(dll_entries[0]) as src,
+                            open(WINTUN_DLL, "wb") as dst,
+                        ):
                             dst.write(src.read())
                         logger.info(f"[XrayInstaller] wintun.dll (fallback) extracted from {dll_entries[0]}")
                     else:
@@ -337,18 +356,25 @@ class XrayInstallerService:
     def check_for_updates() -> tuple[bool, Optional[str], Optional[str]]:
         """
         Check for updates via GitHub API.
+        Fetches the releases list (including pre-releases) and extracts
+        the latest version tag from the first element, then compares
+        using strict semantic version parsing.
+
         Returns: (update_available, current_version, latest_version)
         """
         current_version = XrayInstallerService.get_local_version()
         try:
-            url = "https://api.github.com/repos/XTLS/Xray-core/releases/latest"
+            url = "https://api.github.com/repos/XTLS/Xray-core/releases"
             response = requests.get(url, timeout=(10, 15))
             response.raise_for_status()
 
             data = response.json()
-            tag_name = data.get("tag_name", "")  # e.g., "v1.8.4" or "1.8.4"
+            if not data or not isinstance(data, list):
+                logger.error("Unexpected response format from GitHub API")
+                return False, current_version, None
 
-            # Normalize version strings (remove 'v' prefix from both versions)
+            tag_name = data[0].get("tag_name", "")  # e.g., "v1.8.4" or "v26.7.11"
+
             latest_version = tag_name.lstrip("v")
             current_version_normalized = current_version.lstrip("v") if current_version else None
 
@@ -358,9 +384,17 @@ class XrayInstallerService:
                 logger.info("No current version found, update available")
                 return True, None, latest_version
 
-            if current_version_normalized != latest_version:
-                logger.info(f"Update available: {current_version_normalized} -> {latest_version}")
-                return True, current_version_normalized, latest_version
+            try:
+                from packaging.version import parse as parse_version
+
+                if parse_version(latest_version) > parse_version(current_version_normalized):
+                    logger.info(f"Update available: {current_version_normalized} -> {latest_version}")
+                    return True, current_version_normalized, latest_version
+            except Exception:
+                logger.warning("Semantic version parsing failed, falling back to string comparison")
+                if current_version_normalized != latest_version:
+                    logger.info(f"Update available (string cmp): {current_version_normalized} -> {latest_version}")
+                    return True, current_version_normalized, latest_version
 
             logger.info("Already up to date")
             return False, current_version_normalized, latest_version

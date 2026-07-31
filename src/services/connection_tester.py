@@ -1,4 +1,5 @@
 """Connection Tester Service."""
+
 import json
 import os
 import socket
@@ -107,7 +108,7 @@ class ConnectionTester:
             from src.utils.network_utils import NetworkUtils
 
             start_time = time.time()
-            if NetworkUtils.check_proxy_connectivity(socks_port, timeout=5, retries=2):
+            if NetworkUtils.check_proxy_connectivity(socks_port):
                 latency = int((time.time() - start_time) * 1000)
                 logger.info(f"[ConnectionTester] SOCKS proxy verified at 127.0.0.1:{socks_port} ({latency}ms)")
                 return (True, t("connection.latency_ms", value=latency), None)
@@ -168,7 +169,7 @@ class ConnectionTester:
                 creationflags=PlatformUtils.get_subprocess_flags(),
             )
 
-            time.sleep(0.5)
+            time.sleep(2.5)
 
             if process.poll() is not None:
                 return False, t("connection.core_failed"), None
@@ -211,7 +212,11 @@ class ConnectionTester:
                         except Exception:
                             pass  # country fetch is best-effort
 
-                    return (True, t("connection.latency_ms", value=latency), country_data)
+                    return (
+                        True,
+                        t("connection.latency_ms", value=latency),
+                        country_data,
+                    )
 
                 except requests.exceptions.Timeout:
                     if attempt < max_retries - 1:

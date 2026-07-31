@@ -211,7 +211,7 @@ def unregister_task() -> tuple[bool, str]:
         return False, "Only supported on Windows"
 
     # Always try to remove both to be clean
-    reg_success, reg_msg = _disable_via_registry()
+    reg_success, _ = _disable_via_registry()
 
     task_success = False
     try:

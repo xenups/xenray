@@ -1,4 +1,5 @@
 """Process utilities."""
+
 import ctypes
 import os
 import subprocess
@@ -194,6 +195,32 @@ class ProcessUtils:
         except Exception as e:
             logger.error(f"Unexpected error running command {' '.join(cmd)}: {e}")
             return None
+
+    @staticmethod
+    def kill_process_by_name(name: str) -> bool:
+        """
+        Kill all processes with the given name.
+
+        Args:
+            name: Process name (e.g. "xray.exe")
+
+        Returns:
+            True if at least one matching process was killed, False otherwise
+        """
+        try:
+            killed_any = False
+            for proc in psutil.process_iter(["pid", "name"]):
+                try:
+                    if proc.info["name"] and proc.info["name"].lower() == name.lower():
+                        logger.info(f"Killing process {proc.info['name']} (PID: {proc.info['pid']})")
+                        proc.kill()
+                        killed_any = True
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass
+            return killed_any
+        except Exception as e:
+            logger.error(f"Failed to kill process by name '{name}': {e}")
+            return False
 
     @staticmethod
     def kill_process_tree(pid: Optional[int] = None) -> None:

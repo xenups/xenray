@@ -321,7 +321,7 @@ class ConnectionHandler:
         return success
 
     def _verify_post_connection(self) -> bool:
-        """Verify connection is working after establishment."""
+        """Lightweight post-connection check after fragment warmup."""
         from src.utils.network_utils import NetworkUtils
 
         time.sleep(2.0)  # Allow fragmented/finalmask connection streams to stabilize
@@ -329,26 +329,15 @@ class ConnectionHandler:
         if self._status_display:
             self._ui_call(lambda: self._status_display.set_step(t("connection.checking_network")))
 
-        mode = self._current_mode_getter() if self._current_mode_getter else ConnectionMode.PROXY
-        is_vpn = mode == ConnectionMode.VPN or mode == "vpn"
+        is_ok = NetworkUtils.check_internet_connection()
 
-        proxy_port = self._app_context.settings.get_proxy_port()
-        is_ok = NetworkUtils.check_proxy_connectivity(proxy_port, timeout=5, retries=2)
-
-        # In VPN mode, traffic flows through TUN, so also check direct internet connectivity
-        if not is_ok and is_vpn:
-            is_ok = NetworkUtils.check_internet_connection(host="8.8.8.8", timeout=4)
-
-        # Retry once after additional stabilization if initial attempt missed due to fragment warmup
         if not is_ok:
-            logger.info("[ConnectionHandler] Initial post-connection check pending, retrying after warmup...")
+            logger.warning("[ConnectionHandler] Post-connection internet check failed, one more attempt...")
             time.sleep(1.5)
-            is_ok = NetworkUtils.check_proxy_connectivity(proxy_port, timeout=6, retries=2)
-            if not is_ok and is_vpn:
-                is_ok = NetworkUtils.check_internet_connection(host="8.8.8.8", timeout=5)
+            is_ok = NetworkUtils.check_internet_connection()
 
         if not is_ok:
-            logger.error("[ConnectionHandler] Post-connection check failed after warmup retries")
+            logger.error("[ConnectionHandler] Post-connection check failed")
             self._set_connecting(False)
             self._connection_manager.disconnect()
             self._ui_call(self.reset_ui_disconnected)

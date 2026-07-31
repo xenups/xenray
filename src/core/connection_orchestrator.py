@@ -106,7 +106,11 @@ class ConnectionOrchestrator:
             return False, None
 
     def _verify_connection_health(
-        self, config: dict, step_callback, mode: str = "proxy", health_socks_port: int = 0
+        self,
+        config: dict,
+        step_callback,
+        mode: str = "proxy",
+        health_socks_port: int = 0,
     ) -> bool:
         """Verify the connection is actually working before declaring success."""
         if step_callback:
@@ -114,10 +118,7 @@ class ConnectionOrchestrator:
 
         from src.services.connection_tester import ConnectionTester
 
-        # In proxy mode use the SOCKS port.
-        # In VPN mode traffic goes through TUN, so socks_port=0 is fine
-        # (the tester will use a direct HTTP probe through the TUN interface).
-        socks_port = health_socks_port if (mode == "proxy" and health_socks_port > 0) else 0
+        socks_port = health_socks_port if health_socks_port > 0 else 0
         if socks_port:
             logger.debug(
                 f"[ConnectionOrchestrator] Routing health check through existing SOCKS proxy port {socks_port}"

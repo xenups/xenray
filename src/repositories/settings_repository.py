@@ -1,4 +1,5 @@
 """Settings Repository - Concrete JSON-backed storage for application settings."""
+
 import os
 from typing import Optional
 
@@ -7,7 +8,6 @@ from src.repositories.file_utils import atomic_write
 
 # Defaults
 DEFAULT_PROXY_PORT = 10805
-DEFAULT_DNS = "8.8.8.8, 1.1.1.1"
 
 
 class SettingsRepository:
@@ -107,25 +107,12 @@ class SettingsRepository:
         if not country_code or country_code in {"ir", "cn", "ru", "none"}:
             self._write("routing_country.txt", country_code or "")
 
-    # --- Custom DNS ---
-    def get_custom_dns(self) -> str:
-        val = self._read("custom_dns.txt")
-        return val if val else DEFAULT_DNS
-
-    def set_custom_dns(self, dns_string: str) -> None:
-        if isinstance(dns_string, str):
-            self._write("custom_dns.txt", dns_string)
-
     # --- Close Preference ---
     def get_remember_close_choice(self) -> bool:
         return self._read("remember_close.txt").lower() == "true"
 
     def set_remember_close_choice(self, enabled: bool) -> None:
         self._write("remember_close.txt", "true" if enabled else "false")
-
-    # --- Startup Preference ---
-    def get_startup_enabled(self) -> bool:
-        return self._read("startup_enabled.txt").lower() == "true"
 
     def set_startup_enabled(self, enabled: bool) -> None:
         self._write("startup_enabled.txt", "true" if enabled else "false")
@@ -146,3 +133,10 @@ class SettingsRepository:
     def set_last_selected_profile_id(self, profile_id: str) -> None:
         if profile_id:
             self._write("last_profile.txt", profile_id)
+
+    # --- Cipher Suites (global default for TLS/REALITY) ---
+    def get_cipher_suites(self) -> str:
+        return self._read("cipher_suites.txt", "")
+
+    def set_cipher_suites(self, value: str) -> None:
+        self._write("cipher_suites.txt", value)

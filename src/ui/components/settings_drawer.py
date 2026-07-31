@@ -1,4 +1,5 @@
 """Settings drawer component with i18n support."""
+
 from __future__ import annotations
 
 import os

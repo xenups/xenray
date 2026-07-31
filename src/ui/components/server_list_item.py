@@ -1,10 +1,12 @@
 """Server list item component for individual server display."""
+
 from __future__ import annotations
 
 import json
 from typing import Callable, Optional
 
 import flet as ft
+from loguru import logger
 
 from src.core.i18n import t
 from src.utils.link_parser import LinkParser
@@ -178,15 +180,13 @@ class ServerListItem(ft.Container):
             if not link:
                 link = json.dumps(self._profile.get("config", {}), indent=2)
 
-            if self.page:
-                self.page.set_clipboard(link)
-                # Use toast manager if available
+            if link and self.page:
+                self.page.run_task(self.page.clipboard.set, link)
                 if hasattr(self.page, "_toast_manager"):
                     self.page._toast_manager.success(t("server_list.link_copied"), 2000)
                 self.page.update()
-        except Exception:
-            # Silently fail if clipboard or link generation fails
-            pass
+        except Exception as ex:
+            logger.error(f"[ServerListItem] Share failed for {self._profile.get('name')}: {ex}")
 
     def _delete_item(self, e):
         """Delete item."""

@@ -1,4 +1,5 @@
 """Unit tests for AppContext."""
+
 import json
 import os
 from unittest.mock import patch
@@ -25,9 +26,17 @@ class TestAppContext:
         last_file_path = str(temp_config_dir / "last_entry.txt")
 
         # Patch constants where they are imported
-        with patch("src.core.app_context.RECENT_FILES_PATH", recent_files_path), patch(
-            "src.repositories.recent_files_repository.RECENT_FILES_PATH", recent_files_path
-        ), patch("src.repositories.recent_files_repository.LAST_FILE_PATH", last_file_path):
+        with (
+            patch("src.core.app_context.RECENT_FILES_PATH", recent_files_path),
+            patch(
+                "src.repositories.recent_files_repository.RECENT_FILES_PATH",
+                recent_files_path,
+            ),
+            patch(
+                "src.repositories.recent_files_repository.LAST_FILE_PATH",
+                last_file_path,
+            ),
+        ):
             manager = AppContext.create()
             # The __init__ will set _config_dir based on patched RECENT_FILES_PATH
             return manager
@@ -147,10 +156,6 @@ class TestAppContext:
         assert ctx.settings.get_routing_country() == "ir"
         ctx.settings.set_routing_country("invalid")  # Should be ignored or default
         assert ctx.settings.get_routing_country() == "ir"
-
-        # Custom DNS
-        ctx.settings.set_custom_dns("1.1.1.1")
-        assert ctx.settings.get_custom_dns() == "1.1.1.1"
 
         # Connection Mode
         ctx.settings.set_connection_mode("proxy")

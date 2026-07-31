@@ -184,7 +184,7 @@ def connect(
 @app.command()
 def disconnect():
     """Disconnect from current VPN connection."""
-    app_context, conn_mgr = _init_core()
+    _, conn_mgr = _init_core()
 
     if not conn_mgr._current_connection:
         typer.echo("ℹ️  Not connected")
@@ -198,7 +198,7 @@ def disconnect():
 @app.command()
 def status():
     """Show current connection status."""
-    app_context, conn_mgr = _init_core()
+    _, conn_mgr = _init_core()
 
     # Check if connection exists (handles adoption automatically)
     if conn_mgr._current_connection:
