@@ -112,9 +112,7 @@ class XrayConfigProcessor:
         self._dns_configurator.configure(new_config)
 
         default_cipher = self._app_context.settings.get_cipher_suites()
-        self._config_patcher.safe_patch(
-            new_config, default_cipher_suites=default_cipher
-        )
+        self._config_patcher.safe_patch(new_config, default_cipher_suites=default_cipher)
 
         if mode == MODE_VPN:
             is_quic = self.is_quic_transport(new_config)
@@ -135,9 +133,7 @@ class XrayConfigProcessor:
 
         return new_config
 
-    def build_chain_config(
-        self, chain_profile: dict
-    ) -> tuple[bool, Optional[dict], str]:
+    def build_chain_config(self, chain_profile: dict) -> tuple[bool, Optional[dict], str]:
         """Build a complete Xray configuration for a chain of servers."""
         try:
             items = chain_profile.get("items", [])
@@ -163,11 +159,7 @@ class XrayConfigProcessor:
                 node_config = node.get("config", {})
                 outbounds = node_config.get(CONFIG_OUTBOUNDS, [])
                 proxy_out = next(
-                    (
-                        o
-                        for o in outbounds
-                        if o.get(CONFIG_PROTOCOL) in self.CHAINABLE_PROTOCOLS
-                    ),
+                    (o for o in outbounds if o.get(CONFIG_PROTOCOL) in self.CHAINABLE_PROTOCOLS),
                     None,
                 )
 
@@ -211,9 +203,7 @@ class XrayConfigProcessor:
         if not config or not isinstance(config, dict):
             return False, "Config must be a non-empty dictionary"
 
-        if CONFIG_OUTBOUNDS not in config or not isinstance(
-            config[CONFIG_OUTBOUNDS], list
-        ):
+        if CONFIG_OUTBOUNDS not in config or not isinstance(config[CONFIG_OUTBOUNDS], list):
             return False, "Config must have 'outbounds' list"
 
         if len(config[CONFIG_OUTBOUNDS]) == 0:
@@ -256,9 +246,7 @@ class XrayConfigProcessor:
                     CONFIG_DEST_OVERRIDE: list(SNIFF_DEST_OVERRIDE),
                     CONFIG_METADATA_ONLY: False,
                 }
-                logger.debug(
-                    "[XrayConfigProcessor] Injected Sniffing settings into Xray SOCKS inbound."
-                )
+                logger.debug("[XrayConfigProcessor] Injected Sniffing settings into Xray SOCKS inbound.")
 
         return user_port
 
@@ -314,9 +302,7 @@ class XrayConfigProcessor:
         if not config.get(CONFIG_INBOUNDS):
             config[CONFIG_INBOUNDS] = []
 
-        socks_exists = any(
-            ib.get(CONFIG_PROTOCOL) == PROTOCOL_SOCKS for ib in config[CONFIG_INBOUNDS]
-        )
+        socks_exists = any(ib.get(CONFIG_PROTOCOL) == PROTOCOL_SOCKS for ib in config[CONFIG_INBOUNDS])
         if not socks_exists:
             config[CONFIG_INBOUNDS].append(
                 {
@@ -332,9 +318,7 @@ class XrayConfigProcessor:
                     },
                 }
             )
-            logger.info(
-                f"[XrayConfigProcessor] Added SOCKS inbound on port {user_port}"
-            )
+            logger.info(f"[XrayConfigProcessor] Added SOCKS inbound on port {user_port}")
         else:
             for inbound in config[CONFIG_INBOUNDS]:
                 if inbound.get(CONFIG_PROTOCOL) == PROTOCOL_SOCKS:
@@ -345,9 +329,7 @@ class XrayConfigProcessor:
                         CONFIG_METADATA_ONLY: False,
                     }
 
-        http_exists = any(
-            ib.get(CONFIG_PROTOCOL) == PROTOCOL_HTTP for ib in config[CONFIG_INBOUNDS]
-        )
+        http_exists = any(ib.get(CONFIG_PROTOCOL) == PROTOCOL_HTTP for ib in config[CONFIG_INBOUNDS])
         if not http_exists:
             config[CONFIG_INBOUNDS].append(
                 {
@@ -357,9 +339,7 @@ class XrayConfigProcessor:
                     CONFIG_PROTOCOL: PROTOCOL_HTTP,
                 }
             )
-            logger.info(
-                f"[XrayConfigProcessor] Added HTTP inbound on port {user_port + 4}"
-            )
+            logger.info(f"[XrayConfigProcessor] Added HTTP inbound on port {user_port + 4}")
 
     # ------------------------------------------------------------------
     # DISABLED — pre-resolution was breaking ECH / Reality / SNI
@@ -419,13 +399,9 @@ class XrayConfigProcessor:
                 if selected_ip:
                     server_obj[CONFIG_ADDRESS] = selected_ip
 
-                logger.info(
-                    f"[XrayConfigProcessor] Resolved {address} -> {selected_ip} (replaced in outbound config)"
-                )
+                logger.info(f"[XrayConfigProcessor] Resolved {address} -> {selected_ip} (replaced in outbound config)")
             except Exception as e:
-                logger.warning(
-                    f"[XrayConfigProcessor] Failed to resolve {address}: {e}"
-                )
+                logger.warning(f"[XrayConfigProcessor] Failed to resolve {address}: {e}")
 
     def _resolve_outbound_addresses(self, config: dict):
         """Bootstrap DNS resolution (DISABLED — kept for reference)."""
@@ -444,9 +420,7 @@ class XrayConfigProcessor:
 
             address = server_obj[CONFIG_ADDRESS]
             if is_ip(address):
-                logger.debug(
-                    f"[XrayConfigProcessor] Address {address} is already an IP, skipping resolution"
-                )
+                logger.debug(f"[XrayConfigProcessor] Address {address} is already an IP, skipping resolution")
                 continue
 
             try:

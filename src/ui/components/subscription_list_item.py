@@ -49,9 +49,7 @@ class SubscriptionListItem(ft.Container):
         foreground_content = ft.Row(
             [
                 ft.Container(
-                    content=ft.Icon(
-                        ft.Icons.FOLDER_OPEN_ROUNDED, color=ft.Colors.BLUE_400, size=24
-                    ),
+                    content=ft.Icon(ft.Icons.FOLDER_OPEN_ROUNDED, color=ft.Colors.BLUE_400, size=24),
                     padding=ft.Padding.only(left=5, right=10),
                 ),
                 ft.Column(
@@ -101,9 +99,7 @@ class SubscriptionListItem(ft.Container):
             if self.page:
                 self.page.run_task(self.page.clipboard.set, url)
                 if hasattr(self.page, "_toast_manager"):
-                    self.page._toast_manager.success(
-                        t("server_list.subscription_link_copied"), 2000
-                    )
+                    self.page._toast_manager.success(t("server_list.subscription_link_copied"), 2000)
                 self.page.update()
         except Exception:
             pass

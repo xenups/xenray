@@ -39,9 +39,7 @@ class ConnectionOrchestrator:
         self._xray_service = xray_service
         self._legacy_config_service = legacy_config_service
 
-    def establish_connection(
-        self, file_path: str, mode: str, step_callback=None
-    ) -> tuple[bool, Optional[dict]]:
+    def establish_connection(self, file_path: str, mode: str, step_callback=None) -> tuple[bool, Optional[dict]]:
         """
         Orchestrate full connection workflow with legacy migration and fallback.
 
@@ -64,12 +62,8 @@ class ConnectionOrchestrator:
             configs_to_try = []
 
             if is_legacy:
-                logger.info(
-                    "[ConnectionOrchestrator] Legacy config detected, preparing migration"
-                )
-                migrated_config = self._legacy_config_service.migrate_config(
-                    original_config
-                )
+                logger.info("[ConnectionOrchestrator] Legacy config detected, preparing migration")
+                migrated_config = self._legacy_config_service.migrate_config(original_config)
                 configs_to_try.append(("migrated", migrated_config))
                 configs_to_try.append(("original", original_config))
             else:
@@ -82,16 +76,12 @@ class ConnectionOrchestrator:
             # 4. Attempt connection with retry/fallback
             for label, config in configs_to_try:
                 if label == "original":
-                    logger.warning(
-                        "[ConnectionOrchestrator] Falling back to original legacy configuration"
-                    )
+                    logger.warning("[ConnectionOrchestrator] Falling back to original legacy configuration")
                     if step_callback:
                         step_callback(t("connection.falling_back"))
 
                 # Process configuration (TUN inbound is injected here for VPN mode)
-                processed_config, socks_port = self._prepare_configuration(
-                    config, mode, step_callback
-                )
+                processed_config, socks_port = self._prepare_configuration(config, mode, step_callback)
                 if not processed_config:
                     continue
 
@@ -101,17 +91,11 @@ class ConnectionOrchestrator:
                     continue
 
                 # Verify connection health
-                if self._verify_connection_health(
-                    processed_config, step_callback, mode, socks_port
-                ):
-                    connection_info = self._finalize_connection(
-                        file_path, mode, xray_pid, step_callback
-                    )
+                if self._verify_connection_health(processed_config, step_callback, mode, socks_port):
+                    connection_info = self._finalize_connection(file_path, mode, xray_pid, step_callback)
                     return True, connection_info
                 else:
-                    logger.error(
-                        f"[ConnectionOrchestrator] {label.capitalize()} config failed health check"
-                    )
+                    logger.error(f"[ConnectionOrchestrator] {label.capitalize()} config failed health check")
                     self.teardown_connection({"xray_pid": xray_pid})
 
             logger.error("[ConnectionOrchestrator] All connection attempts failed")
@@ -140,17 +124,13 @@ class ConnectionOrchestrator:
                 f"[ConnectionOrchestrator] Routing health check through existing SOCKS proxy port {socks_port}"
             )
 
-        success, latency, _ = ConnectionTester.test_connection_sync(
-            config, socks_port=socks_port
-        )
+        success, latency, _ = ConnectionTester.test_connection_sync(config, socks_port=socks_port)
 
         if success:
             logger.info(f"[ConnectionOrchestrator] Connection verified: {latency}")
             return True
 
-        logger.warning(
-            f"[ConnectionOrchestrator] Connection verification failed: {latency}"
-        )
+        logger.warning(f"[ConnectionOrchestrator] Connection verification failed: {latency}")
         return False
 
     def teardown_connection(self, connection_info: dict):
@@ -169,9 +149,7 @@ class ConnectionOrchestrator:
 
         logger.info("Connection torn down successfully")
 
-    def _load_and_validate_config(
-        self, file_path: str, step_callback
-    ) -> Optional[dict]:
+    def _load_and_validate_config(self, file_path: str, step_callback) -> Optional[dict]:
         """Load and validate configuration file."""
         if step_callback:
             step_callback(t("status.loading_config"))
@@ -184,9 +162,7 @@ class ConnectionOrchestrator:
             return None
 
         if not isinstance(config, dict):
-            logger.error(
-                f"Invalid config format: expected dict, got {type(config).__name__}"
-            )
+            logger.error(f"Invalid config format: expected dict, got {type(config).__name__}")
             if step_callback:
                 step_callback(t("status.invalid_config"))
             return None
@@ -206,9 +182,7 @@ class ConnectionOrchestrator:
 
         return True
 
-    def _prepare_configuration(
-        self, config: dict, mode: str, step_callback
-    ) -> tuple[Optional[dict], Optional[int]]:
+    def _prepare_configuration(self, config: dict, mode: str, step_callback) -> tuple[Optional[dict], Optional[int]]:
         """
         Process and save configuration using XrayConfigProcessor.
 

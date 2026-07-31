@@ -10,13 +10,7 @@ from typing import Callable, Optional
 import requests
 from loguru import logger
 
-from src.core.constants import (
-    BIN_DIR,
-    WINTUN_DLL,
-    WINTUN_DOWNLOAD_URL,
-    XRAY_EXECUTABLE,
-    XRAY_VERSION,
-)
+from src.core.constants import BIN_DIR, WINTUN_DLL, WINTUN_DOWNLOAD_URL, XRAY_EXECUTABLE, XRAY_VERSION
 from src.utils.platform_utils import PlatformUtils
 
 # Constants
@@ -126,9 +120,7 @@ class XrayInstallerService:
 
         # Prefer the explicitly requested version, fall back to pinned constant
         version = (target_version or XRAY_VERSION).lstrip("v")
-        url = (
-            f"https://github.com/XTLS/Xray-core/releases/download/v{version}/{filename}"
-        )
+        url = f"https://github.com/XTLS/Xray-core/releases/download/v{version}/{filename}"
 
         zip_path = os.path.join(tempfile.gettempdir(), "xray_update.zip")
 
@@ -169,13 +161,8 @@ class XrayInstallerService:
                                 progress_callback(f"Downloading... {pct}%")
 
                 # Verify downloaded file
-                if (
-                    not os.path.exists(zip_path)
-                    or os.path.getsize(zip_path) < MIN_FILE_SIZE
-                ):
-                    logger.error(
-                        f"Downloaded file too small or missing (attempt {attempt})"
-                    )
+                if not os.path.exists(zip_path) or os.path.getsize(zip_path) < MIN_FILE_SIZE:
+                    logger.error(f"Downloaded file too small or missing (attempt {attempt})")
                     continue
 
                 logger.info(f"Download complete: {os.path.getsize(zip_path)} bytes")
@@ -188,9 +175,7 @@ class XrayInstallerService:
             except requests.exceptions.ConnectionError as e:
                 logger.warning(f"Connection error (attempt {attempt}): {e}")
                 if progress_callback:
-                    progress_callback(
-                        f"Connection error, retrying... ({attempt}/{MAX_RETRIES})"
-                    )
+                    progress_callback(f"Connection error, retrying... ({attempt}/{MAX_RETRIES})")
             except requests.exceptions.HTTPError as e:
                 logger.error(f"HTTP error: {e}")
                 if progress_callback:
@@ -237,9 +222,7 @@ class XrayInstallerService:
                         zip_ref.extractall(BIN_DIR)
                     break  # success
                 except (OSError, IOError) as e:
-                    logger.warning(
-                        f"Extraction attempt {attempt}/{max_retries} failed: {e}"
-                    )
+                    logger.warning(f"Extraction attempt {attempt}/{max_retries} failed: {e}")
                     if attempt < max_retries:
                         time.sleep(retry_delay)
                     else:
@@ -291,9 +274,7 @@ class XrayInstallerService:
 
         try:
             wintun_zip = os.path.join(tempfile.gettempdir(), "wintun.zip")
-            logger.info(
-                f"[XrayInstaller] Downloading wintun from {WINTUN_DOWNLOAD_URL}"
-            )
+            logger.info(f"[XrayInstaller] Downloading wintun from {WINTUN_DOWNLOAD_URL}")
             response = requests.get(
                 WINTUN_DOWNLOAD_URL,
                 stream=True,
@@ -327,13 +308,9 @@ class XrayInstallerService:
                             open(WINTUN_DLL, "wb") as dst,
                         ):
                             dst.write(src.read())
-                        logger.info(
-                            f"[XrayInstaller] wintun.dll (fallback) extracted from {dll_entries[0]}"
-                        )
+                        logger.info(f"[XrayInstaller] wintun.dll (fallback) extracted from {dll_entries[0]}")
                     else:
-                        logger.error(
-                            "[XrayInstaller] wintun.dll not found in downloaded archive"
-                        )
+                        logger.error("[XrayInstaller] wintun.dll not found in downloaded archive")
                         return False
 
             if progress_callback:
@@ -341,9 +318,7 @@ class XrayInstallerService:
             return True
 
         except Exception as e:
-            logger.warning(
-                f"[XrayInstaller] Failed to download wintun.dll: {e} (VPN mode may not work)"
-            )
+            logger.warning(f"[XrayInstaller] Failed to download wintun.dll: {e} (VPN mode may not work)")
             if progress_callback:
                 progress_callback(f"wintun.dll download failed: {e}")
             return False
@@ -401,13 +376,9 @@ class XrayInstallerService:
             tag_name = data[0].get("tag_name", "")  # e.g., "v1.8.4" or "v26.7.11"
 
             latest_version = tag_name.lstrip("v")
-            current_version_normalized = (
-                current_version.lstrip("v") if current_version else None
-            )
+            current_version_normalized = current_version.lstrip("v") if current_version else None
 
-            logger.info(
-                f"Version check — current: {current_version_normalized}, latest: {latest_version}"
-            )
+            logger.info(f"Version check — current: {current_version_normalized}, latest: {latest_version}")
 
             if not current_version_normalized:
                 logger.info("No current version found, update available")
@@ -416,21 +387,13 @@ class XrayInstallerService:
             try:
                 from packaging.version import parse as parse_version
 
-                if parse_version(latest_version) > parse_version(
-                    current_version_normalized
-                ):
-                    logger.info(
-                        f"Update available: {current_version_normalized} -> {latest_version}"
-                    )
+                if parse_version(latest_version) > parse_version(current_version_normalized):
+                    logger.info(f"Update available: {current_version_normalized} -> {latest_version}")
                     return True, current_version_normalized, latest_version
             except Exception:
-                logger.warning(
-                    "Semantic version parsing failed, falling back to string comparison"
-                )
+                logger.warning("Semantic version parsing failed, falling back to string comparison")
                 if current_version_normalized != latest_version:
-                    logger.info(
-                        f"Update available (string cmp): {current_version_normalized} -> {latest_version}"
-                    )
+                    logger.info(f"Update available (string cmp): {current_version_normalized} -> {latest_version}")
                     return True, current_version_normalized, latest_version
 
             logger.info("Already up to date")

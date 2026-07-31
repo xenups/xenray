@@ -100,9 +100,7 @@ class LegacyConfigService:
                 logger.info("[LegacyConfigService] Migrating 'splithttp' to 'xhttp'")
                 stream_settings[CONFIG_NETWORK] = NETWORK_XHTTP
                 if "splithttpSettings" in stream_settings:
-                    stream_settings[STREAM_XHTTP_SETTINGS] = stream_settings.pop(
-                        "splithttpSettings"
-                    )
+                    stream_settings[STREAM_XHTTP_SETTINGS] = stream_settings.pop("splithttpSettings")
 
                 # Apply XHTTP stability settings during migration
                 xhttp_settings = stream_settings.setdefault(STREAM_XHTTP_SETTINGS, {})
@@ -114,18 +112,14 @@ class LegacyConfigService:
                 for key in list(xhttp_settings.keys()):
                     if key in XHTTP_EXTRA_KEYS:
                         extra[key] = xhttp_settings.pop(key)
-                        logger.info(
-                            f"[LegacyConfigService] Migrated xhttpSettings.{key} into extra dict"
-                        )
+                        logger.info(f"[LegacyConfigService] Migrated xhttpSettings.{key} into extra dict")
                 if extra:
                     xhttp_settings["extra"] = extra
 
                 # Set mode to packet-up for best CDN compatibility
                 if not xhttp_settings.get(STREAM_MODE):
                     xhttp_settings[STREAM_MODE] = "packet-up"
-                    logger.info(
-                        "[LegacyConfigService] Set xhttpSettings.mode = packet-up for stability"
-                    )
+                    logger.info("[LegacyConfigService] Set xhttpSettings.mode = packet-up for stability")
 
                 # Add XMUX connection cycling settings
                 if "xmux" not in xhttp_settings:
@@ -134,9 +128,7 @@ class LegacyConfigService:
                         "hMaxReusableSecs": "1800-3000",
                         "hMaxRequestTimes": "600-900",
                     }
-                    logger.info(
-                        "[LegacyConfigService] Added XMUX settings for connection stability"
-                    )
+                    logger.info("[LegacyConfigService] Added XMUX settings for connection stability")
 
     def _ensure_outbound_parameters(self, config: Dict[str, Any]):
         """Ensure critical parameters are present or have safe defaults."""
@@ -154,17 +146,13 @@ class LegacyConfigService:
             # 1. Validate and Default Network
             network = stream_settings.get(CONFIG_NETWORK)
             if not network or network not in VALID_NETWORKS:
-                logger.warning(
-                    f"[LegacyConfigService] Invalid network '{network}', defaulting to '{DEFAULT_NETWORK}'"
-                )
+                logger.warning(f"[LegacyConfigService] Invalid network '{network}', defaulting to '{DEFAULT_NETWORK}'")
                 stream_settings[CONFIG_NETWORK] = DEFAULT_NETWORK
 
             # 2. Validate Security (log warning, but don't override - preserve existing behavior)
             security = stream_settings.get("security")
             if security and security not in VALID_SECURITY:
-                logger.warning(
-                    f"[LegacyConfigService] Unknown security '{security}', preserving as-is"
-                )
+                logger.warning(f"[LegacyConfigService] Unknown security '{security}', preserving as-is")
 
             # 3. Transport Specific Defaults (Shared Logic)
             self._fill_transport_defaults(outbound)

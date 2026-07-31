@@ -29,9 +29,7 @@ VALID_NETWORKS = {
 }
 VALID_SECURITY = {"none", "tls", "reality"}
 VALID_ENCRYPTION = {"none", "zero"}
-UUID_PATTERN = re.compile(
-    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE
-)
+UUID_PATTERN = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE)
 
 # ── Dynamic Mapping Router: type system ────────────────────────────
 
@@ -116,9 +114,7 @@ def _get_cipher_suites(get_param) -> str:
 def _validate_fingerprint(fp: str) -> str:
     """Warn if fingerprint is not in the known set; still pass it through."""
     if fp and fp not in VALID_FINGERPRINTS:
-        logger.warning(
-            f"Unknown fingerprint: {fp} (valid: {sorted(VALID_FINGERPRINTS)})"
-        )
+        logger.warning(f"Unknown fingerprint: {fp} (valid: {sorted(VALID_FINGERPRINTS)})")
     return fp
 
 
@@ -161,9 +157,7 @@ def _cast_value(raw: str) -> Any:
 
 def _maybe_split(key: str, raw: str) -> Any:
     """Split a comma-separated value into a typed list if the key is splittable."""
-    stripped = (
-        key.removeprefix("fm_tcp_").removeprefix("fm_udp_").removeprefix("fm_quic_")
-    )
+    stripped = key.removeprefix("fm_tcp_").removeprefix("fm_udp_").removeprefix("fm_quic_")
     if key in SPLIT_FIELDS or stripped in SPLIT_FIELDS:
         parts = [p.strip() for p in raw.split(",") if p.strip()]
         return [_cast_value(p) for p in parts]
@@ -195,17 +189,13 @@ def _route_fm_params(raw_params: Dict[str, str]) -> Dict[str, Any]:
             # FinalMask settings are always strings (Int32Range, etc.) — no type casting
             # But comma-separated values always become lists (matches Xray JSON schema)
             parts = [p.strip() for p in raw.split(",") if p.strip()]
-            tcp_group.setdefault("settings", {})[suffix] = (
-                parts if len(parts) > 1 else raw
-            )
+            tcp_group.setdefault("settings", {})[suffix] = parts if len(parts) > 1 else raw
         elif key == "fm_udp_type":
             udp_group["type"] = raw
         elif key.startswith("fm_udp_"):
             suffix = _to_camel(key[7:])
             parts = [p.strip() for p in raw.split(",") if p.strip()]
-            udp_group.setdefault("settings", {})[suffix] = (
-                parts if len(parts) > 1 else raw
-            )
+            udp_group.setdefault("settings", {})[suffix] = parts if len(parts) > 1 else raw
         elif key.startswith("fm_quic_"):
             suffix = _to_camel(key[8:])
             parts = [p.strip() for p in raw.split(",") if p.strip()]
@@ -407,9 +397,7 @@ class LinkParser:
             values = raw_params.get(key)
             return values[0] if values and len(values) > 0 else default
 
-        name = (
-            urllib.parse.unquote(parsed.fragment) if parsed.fragment else "VLESS Server"
-        )
+        name = urllib.parse.unquote(parsed.fragment) if parsed.fragment else "VLESS Server"
 
         encryption = get_param("encryption", DEFAULT_ENCRYPTION)
 
@@ -431,9 +419,7 @@ class LinkParser:
                     {
                         "address": address,
                         "port": port,
-                        "users": [
-                            {"id": user_id, "encryption": encryption, "flow": flow}
-                        ],
+                        "users": [{"id": user_id, "encryption": encryption, "flow": flow}],
                     }
                 ]
             },
@@ -483,9 +469,7 @@ class LinkParser:
                             if isinstance(ech_sockopt, dict):
                                 tls_settings["echSockopt"] = ech_sockopt
                         except (json.JSONDecodeError, ValueError):
-                            logger.warning(
-                                f"Failed to parse echSockopt: {ech_sockopt_raw}"
-                            )
+                            logger.warning(f"Failed to parse echSockopt: {ech_sockopt_raw}")
                     logger.info(f"[TLS] ECH enabled with config: {ech_decoded}")
                 except Exception as e:
                     logger.warning(f"Failed to configure ECH: {e}")
@@ -498,13 +482,9 @@ class LinkParser:
             sid_raw = get_param("sid", "")
 
             if not pbk:
-                raise ValueError(
-                    "Reality configuration missing required 'pbk' parameter"
-                )
+                raise ValueError("Reality configuration missing required 'pbk' parameter")
             if not sni:
-                raise ValueError(
-                    "Reality configuration missing required 'sni' parameter"
-                )
+                raise ValueError("Reality configuration missing required 'sni' parameter")
 
             reality_settings: Dict[str, Any] = {
                 "show": False,
@@ -536,17 +516,13 @@ class LinkParser:
                     for key in ("tcp", "udp", "quicParams"):
                         if key in fm_json:
                             finalmask[key] = fm_json[key]
-                    logger.info(
-                        f"[FinalMask] Applied JSON fm param: {list(fm_json.keys())}"
-                    )
+                    logger.info(f"[FinalMask] Applied JSON fm param: {list(fm_json.keys())}")
             except (json.JSONDecodeError, ValueError) as e:
                 logger.warning(f"Failed to parse JSON fm param: {e}")
 
         if finalmask:
             outbound["streamSettings"]["finalmask"] = finalmask
-            logger.info(
-                f"[FinalMask] Configured traffic camouflage: {list(finalmask.keys())}"
-            )
+            logger.info(f"[FinalMask] Configured traffic camouflage: {list(finalmask.keys())}")
 
         # ── Transport-specific settings ──
         host_param = get_param("host")
@@ -575,9 +551,7 @@ class LinkParser:
                     extra_json = json.loads(urllib.parse.unquote(extra_raw))
                     if isinstance(extra_json, dict):
                         xhttp_settings["extra"] = extra_json
-                        logger.info(
-                            f"[XHTTP] Applied extra JSON: {list(extra_json.keys())}"
-                        )
+                        logger.info(f"[XHTTP] Applied extra JSON: {list(extra_json.keys())}")
                 except (json.JSONDecodeError, ValueError) as e:
                     logger.warning(f"Failed to parse extra JSON: {e}")
 
@@ -670,11 +644,7 @@ class LinkParser:
             val = params.get(key)
             return val[0] if val and len(val) > 0 else default
 
-        name = (
-            urllib.parse.unquote(parsed.fragment)
-            if parsed.fragment
-            else "Hysteria2 Server"
-        )
+        name = urllib.parse.unquote(parsed.fragment) if parsed.fragment else "Hysteria2 Server"
 
         sni = get_param("sni") or get_param("peer") or address
         insecure = get_param("insecure") == "1" or get_param("allowInsecure") == "1"
@@ -852,11 +822,7 @@ class LinkParser:
             val = params.get(key)
             return val[0] if val and len(val) > 0 else default
 
-        name = (
-            urllib.parse.unquote(parsed.fragment)
-            if parsed.fragment
-            else "Trojan Server"
-        )
+        name = urllib.parse.unquote(parsed.fragment) if parsed.fragment else "Trojan Server"
 
         sni = get_param("sni") or get_param("peer") or address
         allow_insecure = get_param("allowInsecure", get_param("insecure", "0")) == "1"
@@ -904,9 +870,7 @@ class LinkParser:
                 "headers": {"Host": get_param("host") or address},
             }
         elif network == "grpc":
-            outbound["streamSettings"]["grpcSettings"] = {
-                "serviceName": get_param("serviceName", "")
-            }
+            outbound["streamSettings"]["grpcSettings"] = {"serviceName": get_param("serviceName", "")}
 
         return {"name": name, "config": LinkParser._build_config(outbound)}
 
@@ -1017,9 +981,7 @@ class LinkParser:
                     params.append(f"mode={mode}")
                 extra = xh.get("extra")
                 if extra:
-                    params.append(
-                        f"extra={urllib.parse.quote(json.dumps(extra), safe='')}"
-                    )
+                    params.append(f"extra={urllib.parse.quote(json.dumps(extra), safe='')}")
         elif network == "grpc":
             grpc = stream.get("grpcSettings", {})
             service = grpc.get("serviceName", "")
@@ -1042,17 +1004,13 @@ class LinkParser:
                 params.append(f"ech={urllib.parse.quote(str(ech), safe='')}")
             ech_sockopt = tls.get("echSockopt")
             if ech_sockopt and isinstance(ech_sockopt, dict):
-                params.append(
-                    f"echSockopt={urllib.parse.quote(json.dumps(ech_sockopt), safe='')}"
-                )
+                params.append(f"echSockopt={urllib.parse.quote(json.dumps(ech_sockopt), safe='')}")
         elif security == "reality":
             reality = stream.get("realitySettings", {})
             params.append(f"sni={reality.get('serverName', '')}")
             params.append(f"pbk={reality.get('publicKey', '')}")
             sid_list = reality.get("shortIds", [])
-            params.append(
-                f"sid={','.join(sid_list) if isinstance(sid_list, list) else sid_list}"
-            )
+            params.append(f"sid={','.join(sid_list) if isinstance(sid_list, list) else sid_list}")
             if reality.get("fingerprint"):
                 params.append(f"fp={reality.get('fingerprint')}")
             if reality.get("spiderX"):
@@ -1065,15 +1023,11 @@ class LinkParser:
         flat_fm = _expand_fm_to_params(finalmask)
         if flat_fm:
             # Check if flat representation is faithful; otherwise use JSON fm param
-            test_fm = _route_fm_params(
-                {p.split("=", 1)[0]: p.split("=", 1)[1] for p in flat_fm if "=" in p}
-            )
+            test_fm = _route_fm_params({p.split("=", 1)[0]: p.split("=", 1)[1] for p in flat_fm if "=" in p})
             if test_fm == finalmask:
                 params.extend(flat_fm)
             else:
-                params.append(
-                    f"fm={urllib.parse.quote(json.dumps(finalmask), safe='')}"
-                )
+                params.append(f"fm={urllib.parse.quote(json.dumps(finalmask), safe='')}")
 
         query = "&".join(params)
         fragment = urllib.parse.quote(name)
