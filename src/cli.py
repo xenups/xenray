@@ -76,7 +76,9 @@ def _select_profile(app_context, profile_number: Optional[int]) -> dict:
             )
             raise typer.Exit(1)
         selected_profile = profiles_data[profile_number - 1]
-        typer.echo(f"📋 Using profile #{profile_number}: {selected_profile.get('name', 'Unknown')}")
+        typer.echo(
+            f"📋 Using profile #{profile_number}: {selected_profile.get('name', 'Unknown')}"
+        )
     else:
         # Use default (last selected) profile
         last_profile_id = app_context.settings.get_last_selected_profile_id()
@@ -88,7 +90,9 @@ def _select_profile(app_context, profile_number: Optional[int]) -> dict:
         else:
             selected_profile = profiles_data[0]
 
-        typer.echo(f"📋 Using default profile #1: {selected_profile.get('name', 'Unknown')}")
+        typer.echo(
+            f"📋 Using default profile #1: {selected_profile.get('name', 'Unknown')}"
+        )
 
     return selected_profile
 
@@ -124,7 +128,9 @@ def connect(
     profile_number: Optional[int] = typer.Argument(
         None, help="Profile number (from list command) or leave empty for default"
     ),
-    mode: str = typer.Option("vpn", "--mode", "-m", help="Connection mode: proxy or vpn"),
+    mode: str = typer.Option(
+        "vpn", "--mode", "-m", help="Connection mode: proxy or vpn"
+    ),
 ):
     """Connect to a VPN server using a profile number or default profile."""
 
@@ -153,7 +159,9 @@ def connect(
 
         if success:
             # Save as last selected profile
-            app_context.settings.set_last_selected_profile_id(selected_profile.get("id"))
+            app_context.settings.set_last_selected_profile_id(
+                selected_profile.get("id")
+            )
 
             typer.echo("✅ Connected successfully!")
             typer.echo(f"   Profile: {selected_profile.get('name', 'Unknown')}")
@@ -164,12 +172,16 @@ def connect(
             from src.services.connection_tester import ConnectionTester
             from src.utils.country_flags import country_code_to_flag
 
-            p_success, p_result, p_country = ConnectionTester.test_connection_sync(profile_config, fetch_country=True)
+            p_success, p_result, p_country = ConnectionTester.test_connection_sync(
+                profile_config, fetch_country=True
+            )
             if p_success:
                 typer.echo(f"   Latency: {p_result}")
                 if p_country:
                     flag = country_code_to_flag(p_country.get("country_code"))
-                    typer.echo(f"   Location: {flag} {p_country.get('country_name')} ({p_country.get('country_code')})")
+                    typer.echo(
+                        f"   Location: {flag} {p_country.get('country_name')} ({p_country.get('country_code')})"
+                    )
                     typer.echo(f"   City: {p_country.get('city')}")
             else:
                 typer.echo(f"   ⚠️  Ping test failed: {p_result}")
@@ -184,7 +196,7 @@ def connect(
 @app.command()
 def disconnect():
     """Disconnect from current VPN connection."""
-    app_context, conn_mgr = _init_core()
+    _, conn_mgr = _init_core()
 
     if not conn_mgr._current_connection:
         typer.echo("ℹ️  Not connected")
@@ -198,7 +210,7 @@ def disconnect():
 @app.command()
 def status():
     """Show current connection status."""
-    app_context, conn_mgr = _init_core()
+    _, conn_mgr = _init_core()
 
     # Check if connection exists (handles adoption automatically)
     if conn_mgr._current_connection:
@@ -284,7 +296,9 @@ def list_profiles():
 
 @app.command()
 def add(
-    share_link: str = typer.Argument(..., help="Share link (vless://, vmess://, trojan://, ss://, hysteria2://)"),
+    share_link: str = typer.Argument(
+        ..., help="Share link (vless://, vmess://, trojan://, ss://, hysteria2://)"
+    ),
     name: Optional[str] = typer.Option(
         None,
         "--name",
@@ -338,8 +352,12 @@ def ping(
         None,
         help="Profile number (from list command) to test a specific profile, or leave empty to test all",
     ),
-    limit: int = typer.Option(10, "--limit", "-l", help="Maximum profiles to test when pinging all"),
-    concurrency: int = typer.Option(3, "--concurrency", "-c", help="Batch workers for list ping"),
+    limit: int = typer.Option(
+        10, "--limit", "-l", help="Maximum profiles to test when pinging all"
+    ),
+    concurrency: int = typer.Option(
+        3, "--concurrency", "-c", help="Batch workers for list ping"
+    ),
 ):
     """Test latency for profiles. Defaults to batch testing the entire list."""
     app_context, _ = _init_core()
@@ -356,7 +374,9 @@ def ping(
         from src.services.connection_tester import ConnectionTester
         from src.utils.country_flags import country_code_to_flag
 
-        success, result_str, country_data = ConnectionTester.test_connection_sync(profile_config, fetch_country=True)
+        success, result_str, country_data = ConnectionTester.test_connection_sync(
+            profile_config, fetch_country=True
+        )
         if success:
             typer.echo(f"✅ Success! {result_str}")
             if country_data:
@@ -377,7 +397,9 @@ def ping(
         return
 
     profiles_to_test = profiles_data[:limit]
-    typer.echo(f"⚡ Batch testing {len(profiles_to_test)} profiles (concurrency: {concurrency})...\n")
+    typer.echo(
+        f"⚡ Batch testing {len(profiles_to_test)} profiles (concurrency: {concurrency})...\n"
+    )
 
     from concurrent.futures import ThreadPoolExecutor
 
@@ -390,7 +412,9 @@ def ping(
         name = profile.get("name", "Unnamed")
         if not config:
             return idx, name, False, "Invalid Config", None
-        success, result, country = ConnectionTester.test_connection_sync(config, fetch_country=True)
+        success, result, country = ConnectionTester.test_connection_sync(
+            config, fetch_country=True
+        )
         return idx, name, success, result, country
 
     with ThreadPoolExecutor(max_workers=concurrency) as executor:

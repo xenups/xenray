@@ -53,7 +53,9 @@ class SettingsRow(ft.Container):
         if sublabel_control:
             label_column.controls.append(sublabel_control)
         elif sublabel:
-            label_column.controls.append(ft.Text(sublabel, size=11, color=ft.Colors.ON_SURFACE_VARIANT))
+            label_column.controls.append(
+                ft.Text(sublabel, size=11, color=ft.Colors.ON_SURFACE_VARIANT)
+            )
 
         super().__init__(
             content=ft.Row(
@@ -81,7 +83,11 @@ class SettingsListTile(ft.ListTile):
         on_click: Optional[Callable] = None,
         show_chevron: bool = True,
     ):
-        trailing = ft.Icon(ft.Icons.CHEVRON_RIGHT, size=18, color=ft.Colors.OUTLINE) if show_chevron else None
+        trailing = (
+            ft.Icon(ft.Icons.CHEVRON_RIGHT, size=18, color=ft.Colors.OUTLINE)
+            if show_chevron
+            else None
+        )
 
         super().__init__(
             leading=ft.Icon(icon, color=ft.Colors.ON_SURFACE_VARIANT),
@@ -188,7 +194,9 @@ class PortInputRow(ft.Container):
         super().__init__(
             content=ft.Row(
                 [
-                    ft.Icon(ft.Icons.INPUT, size=24, color=ft.Colors.ON_SURFACE_VARIANT),
+                    ft.Icon(
+                        ft.Icons.INPUT, size=24, color=ft.Colors.ON_SURFACE_VARIANT
+                    ),
                     ft.Text(
                         t("settings.socks_port"),
                         size=12,
@@ -243,7 +251,9 @@ class CountryDropdownRow(ft.Container):
         super().__init__(
             content=ft.Row(
                 [
-                    ft.Icon(ft.Icons.PUBLIC, size=24, color=ft.Colors.ON_SURFACE_VARIANT),
+                    ft.Icon(
+                        ft.Icons.PUBLIC, size=24, color=ft.Colors.ON_SURFACE_VARIANT
+                    ),
                     ft.Text(
                         t("settings.direct_country"),
                         size=12,
@@ -281,7 +291,10 @@ class LanguageDropdownRow(ft.Container):
             text_size=12,
             content_padding=8,
             value=current_value if current_value else "en",
-            options=[ft.dropdown.Option(lang_code, f"{name}") for lang_code, flag_code, name in self._languages],
+            options=[
+                ft.dropdown.Option(lang_code, f"{name}")
+                for lang_code, flag_code, name in self._languages
+            ],
             border_color=ft.Colors.OUTLINE_VARIANT,
             focused_border_color=ft.Colors.PRIMARY,
             on_select=on_change,
@@ -309,7 +322,7 @@ class LanguageDropdownRow(ft.Container):
 
         def wrapped_on_change(e):
             selected = self._dropdown.value
-            for lang_code, flag_code, name in self._languages:
+            for lang_code, flag_code, _ in self._languages:
                 if lang_code == selected:
                     self._flag_image.src = f"/flags/{flag_code}.svg"
                     self._flag_image.update()
@@ -403,7 +416,9 @@ class StartupToggleRow(ft.Container):
                     ft.Icon(ft.Icons.ROCKET_LAUNCH, color=ft.Colors.ON_SURFACE_VARIANT),
                     ft.Column(
                         [
-                            ft.Text(t("settings.add_to_startup"), weight=ft.FontWeight.W_500),
+                            ft.Text(
+                                t("settings.add_to_startup"), weight=ft.FontWeight.W_500
+                            ),
                             self._sublabel,
                         ],
                         spacing=2,
@@ -423,9 +438,9 @@ class StartupToggleRow(ft.Container):
         enabled = self._switch.value
 
         if enabled:
-            success, msg = self._on_register()
+            success, _ = self._on_register()
         else:
-            success, msg = self._on_unregister()
+            success, _ = self._on_unregister()
 
         if success:
             self._app_context.settings.set_startup_enabled(enabled)
@@ -470,7 +485,9 @@ class AutoReconnectToggleRow(ft.Container):
             on_change=self._handle_toggle,
         )
 
-        self._sublabel = ft.Text(t("settings.experimental"), size=11, color=ft.Colors.ON_SURFACE_VARIANT)
+        self._sublabel = ft.Text(
+            t("settings.experimental"), size=11, color=ft.Colors.ON_SURFACE_VARIANT
+        )
 
         super().__init__(
             content=ft.Row(
@@ -478,7 +495,9 @@ class AutoReconnectToggleRow(ft.Container):
                     ft.Icon(ft.Icons.AUTORENEW, color=ft.Colors.ON_SURFACE_VARIANT),
                     ft.Column(
                         [
-                            ft.Text(t("settings.auto_reconnect"), weight=ft.FontWeight.W_500),
+                            ft.Text(
+                                t("settings.auto_reconnect"), weight=ft.FontWeight.W_500
+                            ),
                             self._sublabel,
                         ],
                         spacing=2,

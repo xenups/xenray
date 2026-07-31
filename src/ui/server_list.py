@@ -1,4 +1,5 @@
 """Thread-safe Server List component for XenRay."""
+
 from __future__ import annotations
 
 import threading
@@ -50,7 +51,9 @@ class ServerList(ft.Container):
         # State
         self._page: Optional[ft.Page] = None
         self._current_list_view = None
-        self._selected_profile_id = self._app_context.settings.get_last_selected_profile_id()  # Load last selected
+        self._selected_profile_id = (
+            self._app_context.settings.get_last_selected_profile_id()
+        )  # Load last selected
         self._active_subscription = None
 
         # Item tracking for updates
@@ -146,7 +149,9 @@ class ServerList(ft.Container):
         """Handle sort mode change."""
         self._app_context.settings.set_sort_mode(mode)
         if self._active_subscription:
-            self._enter_subscription_view(self._active_subscription, preserve_tests=True)
+            self._enter_subscription_view(
+                self._active_subscription, preserve_tests=True
+            )
         else:
             self._load_profiles(update_ui=True)
 
@@ -182,7 +187,11 @@ class ServerList(ft.Container):
             # If in subscription view, refresh that instead
             if self._active_subscription:
                 fresh_sub = next(
-                    (s for s in self._subscriptions if s["id"] == self._active_subscription["id"]),
+                    (
+                        s
+                        for s in self._subscriptions
+                        if s["id"] == self._active_subscription["id"]
+                    ),
                     None,
                 )
                 if fresh_sub:
@@ -215,12 +224,16 @@ class ServerList(ft.Container):
                     new_list_view.controls.append(chain_item)
                     self._item_map[chain.get("id")] = chain_item
                 except Exception as e:
-                    logger.error(f"Failed to create ChainListItem for {chain.get('name')}: {e}")
+                    logger.error(
+                        f"Failed to create ChainListItem for {chain.get('name')}: {e}"
+                    )
 
             # Add subscriptions
             for sub in self._subscriptions:
                 new_list_view.controls.append(
-                    SubscriptionListItem(sub, self._enter_subscription_view, self._delete_subscription)
+                    SubscriptionListItem(
+                        sub, self._enter_subscription_view, self._delete_subscription
+                    )
                 )
 
             # Add profiles
@@ -324,7 +337,7 @@ class ServerList(ft.Container):
             return
 
         profiles = []
-        for profile_id, item in self._item_map.items():
+        for _, item in self._item_map.items():
             profiles.append(item._profile)
 
         if not profiles:
@@ -336,9 +349,13 @@ class ServerList(ft.Container):
         """Called when a latency test starts for a profile."""
         item = self._item_map.get(profile.get("id"))
         if item:
-            self._ui(lambda: item.update_ping(t("server_list.testing"), ft.Colors.BLUE_400))
+            self._ui(
+                lambda: item.update_ping(t("server_list.testing"), ft.Colors.BLUE_400)
+            )
 
-    def _on_latency_test_complete(self, profile: dict, success: bool, result: str, country_data: Optional[dict]):
+    def _on_latency_test_complete(
+        self, profile: dict, success: bool, result: str, country_data: Optional[dict]
+    ):
         """Called when a latency test completes for a profile."""
         pid = profile.get("id")
         item = self._item_map.get(pid)
@@ -371,7 +388,9 @@ class ServerList(ft.Container):
         if pid:
             latency_data = {
                 "last_latency": result if success else None,
-                "last_latency_val": self._latency_tester.get_cached_result(pid)[2] if success else None,
+                "last_latency_val": self._latency_tester.get_cached_result(pid)[2]
+                if success
+                else None,
             }
             if self._active_subscription:
                 profile.update(latency_data)  # Update reference inside subscription
@@ -382,7 +401,11 @@ class ServerList(ft.Container):
     def _on_all_latency_tests_complete(self):
         """Called when all latency tests are done."""
         if self._active_subscription:
-            self._ui(lambda: self._enter_subscription_view(self._active_subscription, preserve_tests=True))
+            self._ui(
+                lambda: self._enter_subscription_view(
+                    self._active_subscription, preserve_tests=True
+                )
+            )
         else:
             self._load_profiles(update_ui=True)
 
