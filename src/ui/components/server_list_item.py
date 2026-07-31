@@ -1,10 +1,13 @@
 """Server list item component for individual server display."""
+
 from __future__ import annotations
 
 import json
 from typing import Callable, Optional
 
 import flet as ft
+
+from loguru import logger
 
 from src.core.i18n import t
 from src.utils.link_parser import LinkParser
@@ -76,7 +79,9 @@ class ServerListItem(ft.Container):
                 fit=ft.BoxFit.COVER,
                 gapless_playback=True,
                 filter_quality=ft.FilterQuality.HIGH,
-                error_content=ft.Icon(ft.Icons.PUBLIC, size=28, color=ft.Colors.GREY_400),
+                error_content=ft.Icon(
+                    ft.Icons.PUBLIC, size=28, color=ft.Colors.GREY_400
+                ),
             )
         else:
             flag_content = ft.Icon(ft.Icons.PUBLIC, size=28, color=ft.Colors.GREY_400)
@@ -138,7 +143,11 @@ class ServerListItem(ft.Container):
         )
 
         # Selection border logic
-        border_side = ft.BorderSide(2, ft.Colors.BLUE) if is_selected else ft.BorderSide(1, ft.Colors.OUTLINE)
+        border_side = (
+            ft.BorderSide(2, ft.Colors.BLUE)
+            if is_selected
+            else ft.BorderSide(1, ft.Colors.OUTLINE)
+        )
 
         # Main Layout
         from src.ui.helpers.gradient_helper import GradientHelper
@@ -174,19 +183,21 @@ class ServerListItem(ft.Container):
     def _copy_config(self, e):
         """Share config link."""
         try:
-            link = LinkParser.generate_link(self._profile.get("config", {}), self._profile.get("name", "server"))
+            link = LinkParser.generate_link(
+                self._profile.get("config", {}), self._profile.get("name", "server")
+            )
             if not link:
                 link = json.dumps(self._profile.get("config", {}), indent=2)
 
-            if self.page:
-                self.page.set_clipboard(link)
-                # Use toast manager if available
+            if link and self.page:
+                self.page.run_task(self.page.clipboard.set, link)
                 if hasattr(self.page, "_toast_manager"):
                     self.page._toast_manager.success(t("server_list.link_copied"), 2000)
                 self.page.update()
-        except Exception:
-            # Silently fail if clipboard or link generation fails
-            pass
+        except Exception as ex:
+            logger.error(
+                f"[ServerListItem] Share failed for {self._profile.get('name')}: {ex}"
+            )
 
     def _delete_item(self, e):
         """Delete item."""
@@ -225,14 +236,18 @@ class ServerListItem(ft.Container):
                 fit=ft.BoxFit.COVER,
                 gapless_playback=True,
                 filter_quality=ft.FilterQuality.HIGH,
-                error_content=ft.Icon(ft.Icons.PUBLIC, size=28, color=ft.Colors.GREY_400),
+                error_content=ft.Icon(
+                    ft.Icons.PUBLIC, size=28, color=ft.Colors.GREY_400
+                ),
             )
             from src.ui.helpers.gradient_helper import GradientHelper
 
             self.gradient = GradientHelper.get_flag_gradient(code)
         else:
             # Update to globe icon
-            self.flag_img.content = ft.Icon(ft.Icons.PUBLIC, size=28, color=ft.Colors.GREY_400)
+            self.flag_img.content = ft.Icon(
+                ft.Icons.PUBLIC, size=28, color=ft.Colors.GREY_400
+            )
             from src.ui.helpers.gradient_helper import GradientHelper
 
             self.gradient = GradientHelper.get_flag_gradient(None)

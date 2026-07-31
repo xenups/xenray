@@ -1,4 +1,5 @@
 """Comprehensive tests for LinkParser — Dynamic Mapping Router, all protocols, FinalMask, ECH."""
+
 import base64
 import json
 import urllib.parse
@@ -60,7 +61,11 @@ class TestStringSplitting:
         assert _maybe_split("path", "/ws") == "/ws"
 
     def test_split_fm_lengths(self):
-        assert _maybe_split("fm_tcp_lengths", "3-5,6-8,10-20") == ["3-5", "6-8", "10-20"]
+        assert _maybe_split("fm_tcp_lengths", "3-5,6-8,10-20") == [
+            "3-5",
+            "6-8",
+            "10-20",
+        ]
 
     def test_split_empty_part(self):
         assert _maybe_split("alpn", "h2,,http/1.1") == ["h2", "http/1.1"]
@@ -171,8 +176,15 @@ class TestFinalMaskRouting:
     def test_expand_round_trip(self):
         # Use a finalmask with only multi-value lists (single values remain strings)
         fm = {
-            "tcp": [{"type": "fragment", "settings": {"lengths": ["3-5", "6-8"], "maxSplit": "3-6"}}],
-            "udp": [{"type": "noise", "settings": {"reset": "30-60", "rand": "1-8192"}}],
+            "tcp": [
+                {
+                    "type": "fragment",
+                    "settings": {"lengths": ["3-5", "6-8"], "maxSplit": "3-6"},
+                }
+            ],
+            "udp": [
+                {"type": "noise", "settings": {"reset": "30-60", "rand": "1-8192"}}
+            ],
             "quicParams": {"congestion": "force-brutal", "brutalUp": "60 mbps"},
         }
         params = _expand_fm_to_params(fm)
@@ -281,13 +293,17 @@ class TestParseVLESS:
     def test_ws_host_derived_from_sni(self):
         link = "vless://uuid@cdn.com:443?type=ws&security=tls&sni=real.com"
         result = LinkParser.parse_link(link)
-        host = result["config"]["outbounds"][0]["streamSettings"]["wsSettings"]["headers"]["Host"]
+        host = result["config"]["outbounds"][0]["streamSettings"]["wsSettings"][
+            "headers"
+        ]["Host"]
         assert host == "real.com"
 
     def test_ws_host_fallback_address(self):
         link = "vless://uuid@example.com:443?type=ws"
         result = LinkParser.parse_link(link)
-        host = result["config"]["outbounds"][0]["streamSettings"]["wsSettings"]["headers"]["Host"]
+        host = result["config"]["outbounds"][0]["streamSettings"]["wsSettings"][
+            "headers"
+        ]["Host"]
         assert host == "example.com"
 
     def test_grpc(self):
@@ -354,11 +370,15 @@ class TestParseVLESS:
 
     def test_reality_missing_pbk(self):
         with pytest.raises(ValueError, match="pbk"):
-            LinkParser.parse_link("vless://uuid@example.com:443?security=reality&sni=target.com")
+            LinkParser.parse_link(
+                "vless://uuid@example.com:443?security=reality&sni=target.com"
+            )
 
     def test_reality_missing_sni(self):
         with pytest.raises(ValueError, match="sni"):
-            LinkParser.parse_link("vless://uuid@example.com:443?security=reality&pbk=pub")
+            LinkParser.parse_link(
+                "vless://uuid@example.com:443?security=reality&pbk=pub"
+            )
 
     @pytest.mark.parametrize(
         "fmt",
@@ -375,7 +395,9 @@ class TestParseVLESS:
         encoded = fmt.replace("+", "%2B").replace("/", "%2F").replace("=", "%3D")
         link = f"vless://uuid@example.com:443?security=tls&ech={encoded}#ECH"
         result = LinkParser.parse_link(link)
-        ech = result["config"]["outbounds"][0]["streamSettings"]["tlsSettings"]["echConfigList"]
+        ech = result["config"]["outbounds"][0]["streamSettings"]["tlsSettings"][
+            "echConfigList"
+        ]
         assert ech == fmt
 
     def test_ech_with_sockopt(self):
@@ -383,13 +405,18 @@ class TestParseVLESS:
         url_encoded = urllib.parse.quote(sockopt)
         link = f"vless://uuid@example.com:443?security=tls&ech=udp://1.1.1.1&echSockopt={url_encoded}#ECH"
         result = LinkParser.parse_link(link)
-        so = result["config"]["outbounds"][0]["streamSettings"]["tlsSettings"]["echSockopt"]
+        so = result["config"]["outbounds"][0]["streamSettings"]["tlsSettings"][
+            "echSockopt"
+        ]
         assert so["tcpFastOpen"] is True
 
     def test_invalid_ech_sockopt(self):
         link = "vless://uuid@example.com:443?security=tls&ech=udp://1.1.1.1&echSockopt=not-json"
         result = LinkParser.parse_link(link)
-        assert "echSockopt" not in result["config"]["outbounds"][0]["streamSettings"]["tlsSettings"]
+        assert (
+            "echSockopt"
+            not in result["config"]["outbounds"][0]["streamSettings"]["tlsSettings"]
+        )
 
     def test_tls_no_alpn(self):
         link = "vless://uuid@example.com:443?security=tls&sni=sni.com"
@@ -400,13 +427,17 @@ class TestParseVLESS:
     def test_vless_flow(self):
         link = "vless://uuid@example.com:443?flow=xtls-rprx-vision"
         result = LinkParser.parse_link(link)
-        flow = result["config"]["outbounds"][0]["settings"]["vnext"][0]["users"][0]["flow"]
+        flow = result["config"]["outbounds"][0]["settings"]["vnext"][0]["users"][0][
+            "flow"
+        ]
         assert flow == "xtls-rprx-vision"
 
     def test_encryption(self):
         link = "vless://uuid@example.com:443?encryption=aes-128-gcm"
         result = LinkParser.parse_link(link)
-        enc = result["config"]["outbounds"][0]["settings"]["vnext"][0]["users"][0]["encryption"]
+        enc = result["config"]["outbounds"][0]["settings"]["vnext"][0]["users"][0][
+            "encryption"
+        ]
         assert enc == "aes-128-gcm"
 
     def test_vless_error_empty_string(self):
@@ -420,7 +451,9 @@ class TestParseVLESS:
     def test_vless_no_at_sign_uses_placeholder(self):
         # Links without UUID should use zero-UUID placeholder, not raise
         result = LinkParser.parse_link("vless://example.com")
-        uuid = result["config"]["outbounds"][0]["settings"]["vnext"][0]["users"][0]["id"]
+        uuid = result["config"]["outbounds"][0]["settings"]["vnext"][0]["users"][0][
+            "id"
+        ]
         assert uuid == "00000000-0000-0000-0000-000000000000"
 
     def test_vless_error_empty_address(self):
@@ -479,7 +512,9 @@ class TestParseVLESSFinalMask:
             "&fm_quic_brutal_down=0#Brutal"
         )
         result = LinkParser.parse_link(link)
-        qp = result["config"]["outbounds"][0]["streamSettings"]["finalmask"]["quicParams"]
+        qp = result["config"]["outbounds"][0]["streamSettings"]["finalmask"][
+            "quicParams"
+        ]
         assert qp["congestion"] == "force-brutal"
         assert qp["brutalUp"] == "60 mbps"
         # FinalMask values are raw strings (no type casting)
@@ -541,28 +576,34 @@ class TestParseXHTTP:
         result = LinkParser.parse_link(link)
         xh = result["config"]["outbounds"][0]["streamSettings"]["xhttpSettings"]
         assert xh["mode"] == "packet-up"
-        assert xh["noSSEHeader"] is True
-        assert xh["xPaddingBytes"] == 256
-        assert xh["scMaxBufferedPosts"] == 50
-        assert xh["xmux"]["maxConcurrency"] == 16
-        assert xh["xmux"]["hMaxReusableSecs"] == 1800
+        assert xh["extra"]["noSSEHeader"] is True
+        assert xh["extra"]["xPaddingBytes"] == 256
+        assert xh["extra"]["scMaxBufferedPosts"] == 50
+        assert xh["extra"]["xmux"]["maxConcurrency"] == 16
+        assert xh["extra"]["xmux"]["hMaxReusableSecs"] == 1800
 
     def test_xhttp_host_derived_from_sni(self):
         link = "vless://uuid@cdn.com:443?type=splithttp&security=tls&sni=real.com"
         result = LinkParser.parse_link(link)
-        host = result["config"]["outbounds"][0]["streamSettings"]["xhttpSettings"]["host"]
+        host = result["config"]["outbounds"][0]["streamSettings"]["xhttpSettings"][
+            "host"
+        ]
         assert host == "real.com"
 
     def test_xhttp_host_fallback_address(self):
         link = "vless://uuid@example.com:443?type=splithttp"
         result = LinkParser.parse_link(link)
-        host = result["config"]["outbounds"][0]["streamSettings"]["xhttpSettings"]["host"]
+        host = result["config"]["outbounds"][0]["streamSettings"]["xhttpSettings"][
+            "host"
+        ]
         assert host == "example.com"
 
     def test_xhttp_explicit_host(self):
         link = "vless://uuid@cdn.com:443?type=splithttp&security=tls&sni=sni.com&host=custom.com"
         result = LinkParser.parse_link(link)
-        host = result["config"]["outbounds"][0]["streamSettings"]["xhttpSettings"]["host"]
+        host = result["config"]["outbounds"][0]["streamSettings"]["xhttpSettings"][
+            "host"
+        ]
         assert host == "custom.com"
 
 
@@ -582,7 +623,9 @@ class TestParseHysteria2:
     def test_with_obfs(self):
         link = "hysteria2://pass@host:443?obfs=salamander&obfs-password=obfpass#Obfs"
         result = LinkParser.parse_link(link)
-        obfs = result["config"]["outbounds"][0]["settings"]["vnext"][0]["users"][0]["obfs"]
+        obfs = result["config"]["outbounds"][0]["settings"]["vnext"][0]["users"][0][
+            "obfs"
+        ]
         assert obfs["type"] == "salamander"
         assert obfs["password"] == "obfpass"
 
@@ -596,7 +639,9 @@ class TestParseHysteria2:
     def test_sni_fallback_to_address(self):
         link = "hysteria2://pass@example.com:443"
         result = LinkParser.parse_link(link)
-        sni = result["config"]["outbounds"][0]["streamSettings"]["tlsSettings"]["serverName"]
+        sni = result["config"]["outbounds"][0]["streamSettings"]["tlsSettings"][
+            "serverName"
+        ]
         assert sni == "example.com"
 
     def test_error_no_password(self):
@@ -611,7 +656,14 @@ class TestParseHysteria2:
 
 class TestParseVMess:
     def _make_link(self, **data):
-        d = {"v": "2", "ps": "Test", "add": "example.com", "port": "443", "id": "uuid", **data}
+        d = {
+            "v": "2",
+            "ps": "Test",
+            "add": "example.com",
+            "port": "443",
+            "id": "uuid",
+            **data,
+        }
         return f"vmess://{base64.b64encode(json.dumps(d).encode()).decode()}"
 
     def test_basic(self):
@@ -629,7 +681,9 @@ class TestParseVMess:
         assert ws["headers"]["Host"] == "vhost"
 
     def test_tls(self):
-        link = self._make_link(tls="tls", sni="sni.com", alpn="h2,http/1.1", fp="chrome")
+        link = self._make_link(
+            tls="tls", sni="sni.com", alpn="h2,http/1.1", fp="chrome"
+        )
         result = LinkParser.parse_link(link)
         tls = result["config"]["outbounds"][0]["streamSettings"]["tlsSettings"]
         assert tls["serverName"] == "sni.com"
@@ -722,7 +776,11 @@ class TestGenerateVLESS:
         base = {
             "tag": "proxy",
             "protocol": "vless",
-            "settings": {"vnext": [{"address": "example.com", "port": 443, "users": [{"id": "uuid"}]}]},
+            "settings": {
+                "vnext": [
+                    {"address": "example.com", "port": 443, "users": [{"id": "uuid"}]}
+                ]
+            },
             "streamSettings": {"network": "tcp", "security": "none"},
         }
         base.update(overrides)
@@ -739,7 +797,11 @@ class TestGenerateVLESS:
             streamSettings={
                 "network": "tcp",
                 "security": "tls",
-                "tlsSettings": {"serverName": "sni.com", "fingerprint": "chrome", "alpn": ["h2"]},
+                "tlsSettings": {
+                    "serverName": "sni.com",
+                    "fingerprint": "chrome",
+                    "alpn": ["h2"],
+                },
             }
         )
         link = LinkParser._generate_vless(ob, "TLS")
@@ -751,7 +813,13 @@ class TestGenerateVLESS:
     def test_generate_reality(self):
         ob = self._make_outbound(
             settings={
-                "vnext": [{"address": "r.com", "port": 443, "users": [{"id": "uuid", "flow": "xtls-rprx-vision"}]}]
+                "vnext": [
+                    {
+                        "address": "r.com",
+                        "port": 443,
+                        "users": [{"id": "uuid", "flow": "xtls-rprx-vision"}],
+                    }
+                ]
             },
             streamSettings={
                 "network": "grpc",
@@ -808,7 +876,12 @@ class TestGenerateVLESS:
                 "security": "tls",
                 "tlsSettings": {"serverName": "sni.com"},
                 "finalmask": {
-                    "tcp": [{"type": "fragment", "settings": {"lengths": ["3-5", "6-8"], "maxSplit": "3-6"}}],
+                    "tcp": [
+                        {
+                            "type": "fragment",
+                            "settings": {"lengths": ["3-5", "6-8"], "maxSplit": "3-6"},
+                        }
+                    ],
                     "quicParams": {"congestion": "force-brutal"},
                 },
             }
@@ -828,7 +901,11 @@ class TestGenerateVMess:
                 {
                     "tag": "proxy",
                     "protocol": "vmess",
-                    "settings": {"vnext": [{"address": "v.com", "port": 443, "users": [{"id": "uuid"}]}]},
+                    "settings": {
+                        "vnext": [
+                            {"address": "v.com", "port": 443, "users": [{"id": "uuid"}]}
+                        ]
+                    },
                     "streamSettings": {"network": "tcp", **stream},
                 }
             ]
@@ -839,7 +916,9 @@ class TestGenerateVMess:
         assert link.startswith("vmess://")
 
     def test_generate_tls(self):
-        cfg = self._make_config(security="tls", tlsSettings={"serverName": "sni", "alpn": ["h2"]})
+        cfg = self._make_config(
+            security="tls", tlsSettings={"serverName": "sni", "alpn": ["h2"]}
+        )
         link = LinkParser.generate_link(cfg, "VTLS")
         decoded = json.loads(base64.b64decode(link[8:]).decode())
         assert decoded["tls"] == "tls"
@@ -847,7 +926,9 @@ class TestGenerateVMess:
         assert decoded["alpn"] == "h2"
 
     def test_generate_ws(self):
-        cfg = self._make_config(network="ws", wsSettings={"path": "/ws", "headers": {"Host": "vhost"}})
+        cfg = self._make_config(
+            network="ws", wsSettings={"path": "/ws", "headers": {"Host": "vhost"}}
+        )
         link = LinkParser.generate_link(cfg, "VWS")
         decoded = json.loads(base64.b64decode(link[8:]).decode())
         assert decoded["net"] == "ws"
@@ -869,8 +950,16 @@ class TestGenerateTrojan:
                 {
                     "tag": "proxy",
                     "protocol": "trojan",
-                    "settings": {"servers": [{"address": "tj.com", "port": 443, "password": "pass"}]},
-                    "streamSettings": {"network": "tcp", "security": "tls", "tlsSettings": {"serverName": "sni"}},
+                    "settings": {
+                        "servers": [
+                            {"address": "tj.com", "port": 443, "password": "pass"}
+                        ]
+                    },
+                    "streamSettings": {
+                        "network": "tcp",
+                        "security": "tls",
+                        "tlsSettings": {"serverName": "sni"},
+                    },
                 }
             ]
         }
@@ -884,7 +973,9 @@ class TestGenerateTrojan:
                 {
                     "tag": "proxy",
                     "protocol": "trojan",
-                    "settings": {"servers": [{"address": "w.com", "port": 443, "password": "p"}]},
+                    "settings": {
+                        "servers": [{"address": "w.com", "port": 443, "password": "p"}]
+                    },
                     "streamSettings": {
                         "network": "ws",
                         "security": "tls",
@@ -905,7 +996,9 @@ class TestGenerateTrojan:
                 {
                     "tag": "proxy",
                     "protocol": "trojan",
-                    "settings": {"servers": [{"address": "g.com", "port": 443, "password": "p"}]},
+                    "settings": {
+                        "servers": [{"address": "g.com", "port": 443, "password": "p"}]
+                    },
                     "streamSettings": {
                         "network": "grpc",
                         "grpcSettings": {"serviceName": "serv"},
@@ -922,7 +1015,11 @@ class TestGenerateTrojan:
                 {
                     "tag": "proxy",
                     "protocol": "trojan",
-                    "settings": {"servers": [{"address": "tj.com", "port": 443, "password": "pass"}]},
+                    "settings": {
+                        "servers": [
+                            {"address": "tj.com", "port": 443, "password": "pass"}
+                        ]
+                    },
                     "streamSettings": {"network": "tcp"},
                 }
             ]
@@ -938,8 +1035,18 @@ class TestGenerateHysteria2:
                 {
                     "tag": "proxy",
                     "protocol": "hysteria2",
-                    "settings": {"vnext": [{"address": "hy.com", "port": 443, "users": [{"password": "pass"}]}]},
-                    "streamSettings": {"tlsSettings": {"serverName": "sni", "allowInsecure": True}},
+                    "settings": {
+                        "vnext": [
+                            {
+                                "address": "hy.com",
+                                "port": 443,
+                                "users": [{"password": "pass"}],
+                            }
+                        ]
+                    },
+                    "streamSettings": {
+                        "tlsSettings": {"serverName": "sni", "allowInsecure": True}
+                    },
                 }
             ]
         }
@@ -959,7 +1066,15 @@ class TestGenerateHysteria2:
                             {
                                 "address": "hy.com",
                                 "port": 443,
-                                "users": [{"password": "pass", "obfs": {"type": "salamander", "password": "obfpass"}}],
+                                "users": [
+                                    {
+                                        "password": "pass",
+                                        "obfs": {
+                                            "type": "salamander",
+                                            "password": "obfpass",
+                                        },
+                                    }
+                                ],
                             }
                         ]
                     },
@@ -992,11 +1107,18 @@ class TestGenerateEdgeCases:
                 {
                     "tag": "proxy",
                     "protocol": "vless",
-                    "settings": {"vnext": [{"address": "a.com", "port": 443, "users": [{"id": "uuid"}]}]},
+                    "settings": {
+                        "vnext": [
+                            {"address": "a.com", "port": 443, "users": [{"id": "uuid"}]}
+                        ]
+                    },
                     "streamSettings": {
                         "network": "ws",
                         "security": "tls",
-                        "tlsSettings": {"serverName": "sni", "echConfigList": "udp://1.1.1.1"},
+                        "tlsSettings": {
+                            "serverName": "sni",
+                            "echConfigList": "udp://1.1.1.1",
+                        },
                         "wsSettings": {"path": "/ws", "headers": {"Host": "vhost"}},
                     },
                 }
@@ -1011,11 +1133,18 @@ class TestGenerateEdgeCases:
                 {
                     "tag": "proxy",
                     "protocol": "vless",
-                    "settings": {"vnext": [{"address": "a.com", "port": 443, "users": [{"id": "uuid"}]}]},
+                    "settings": {
+                        "vnext": [
+                            {"address": "a.com", "port": 443, "users": [{"id": "uuid"}]}
+                        ]
+                    },
                     "streamSettings": {
                         "network": "tcp",
                         "security": "tls",
-                        "tlsSettings": {"serverName": "sni", "echConfig": ["cfg1", "cfg2"]},
+                        "tlsSettings": {
+                            "serverName": "sni",
+                            "echConfig": ["cfg1", "cfg2"],
+                        },
                     },
                 }
             ]
@@ -1039,9 +1168,7 @@ class TestRoundTrip:
         return ob1, ob2, generated
 
     def test_tcp_tls(self):
-        link = (
-            "vless://uuid@example.com:443?security=tls&sni=sni.com&fp=chrome&alpn=h2,http/1.1&flow=xtls-rprx-vision#RT"
-        )
+        link = "vless://uuid@example.com:443?security=tls&sni=sni.com&fp=chrome&alpn=h2,http/1.1&flow=xtls-rprx-vision#RT"
         _, ob2, gen = self._rt(link)
         assert ob2["settings"]["vnext"][0]["users"][0]["flow"] == "xtls-rprx-vision"
 
@@ -1088,6 +1215,37 @@ class TestRoundTrip:
         assert ob2["streamSettings"]["tlsSettings"]["serverName"] == "sni.com"
         assert ob2["streamSettings"]["tlsSettings"]["allowInsecure"] is True
 
+    def test_xhttp_extra(self):
+        link = (
+            "vless://uuid@example.com:443?type=xhttp"
+            "&mode=auto&path=/calling&host=sni.com"
+            "&noSSEHeader=true&xPaddingBytes=100-1000"
+            "&scMaxEachGetBytes=1048576&scMaxEachPostBytes=500000&scMinPostsIntervalMs=10"
+            "&downloadProxy=true&uplinkHTTPMethod=POST&downlinkHTTPMethod=GET"
+            "#XHTTPExtra"
+        )
+        ob1, ob2, gen = self._rt(link)
+        xh1 = ob1["streamSettings"]["xhttpSettings"]
+        xh2 = ob2["streamSettings"]["xhttpSettings"]
+
+        assert xh1["mode"] == "auto"
+        assert xh1["path"] == "/calling"
+        assert xh1["host"] == "sni.com"
+        assert xh1["extra"]["noSSEHeader"] is True
+        assert xh1["extra"]["xPaddingBytes"] == "100-1000"
+        assert xh1["extra"]["scMaxEachGetBytes"] == 1048576
+        assert xh1["extra"]["downloadProxy"] is True
+        assert xh1["extra"]["uplinkHTTPMethod"] == "POST"
+        assert xh1["extra"]["downlinkHTTPMethod"] == "GET"
+
+        assert xh2["mode"] == xh1["mode"]
+        assert xh2["extra"]["noSSEHeader"] is True
+        assert xh2["extra"]["downloadProxy"] is True
+
+        # Verify link has extra JSON and mode params
+        assert "mode=auto" in gen
+        assert "extra=" in gen
+
 
 # ===================================================================
 # Parse link dispatcher
@@ -1129,7 +1287,9 @@ class TestParseLink:
 
 class TestBuildConfig:
     def test_structure(self):
-        cfg = LinkParser._build_config({"tag": "proxy", "protocol": "vless", "settings": {}})
+        cfg = LinkParser._build_config(
+            {"tag": "proxy", "protocol": "vless", "settings": {}}
+        )
         assert "log" in cfg
         assert "inbounds" in cfg
         assert len(cfg["outbounds"]) == 3
@@ -1138,7 +1298,9 @@ class TestBuildConfig:
         assert "routing" in cfg
 
     def test_routing_rules(self):
-        cfg = LinkParser._build_config({"tag": "proxy", "protocol": "vless", "settings": {}})
+        cfg = LinkParser._build_config(
+            {"tag": "proxy", "protocol": "vless", "settings": {}}
+        )
         rules = cfg["routing"]["rules"]
         assert len(rules) == 3
         assert any(r.get("ip") == ["geoip:private"] for r in rules)

@@ -98,7 +98,12 @@
     "auto_reconnect_enabled": "自动重连已开启",
     "auto_reconnect_disabled": "自动重连已关闭 (省电模式)",
     "language_restart_msg": "语言已更改！重启应用以完全生效。",
-    "experimental": "实验性"
+    "experimental": "实验性",
+    "cipher_suites": "TLS 加密套件",
+    "cipher_suites_desc": "TLS/REALITY 连接的默认加密套件",
+    "cipher_suites_hint": "留空使用 Xray 默认值",
+    "cipher_suites_saved": "加密套件已保存！💾",
+    "cipher_suites_example": "例如: TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384"
   },
   "admin": {
     "title": "需要管理员权限",

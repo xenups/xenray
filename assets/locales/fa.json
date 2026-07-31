@@ -99,7 +99,12 @@
     "auto_reconnect_enabled": "اتصال مجدد خودکار فعال شد",
     "auto_reconnect_disabled": "اتصال مجدد خودکار غیرفعال شد (به منظور کاهش مصرف باتری)",
     "language_restart_msg": "زبان تغییر کرد! برای اعمال کامل تغییرات، برنامه را ریستارت کنید.",
-    "experimental": "آزمایشی"
+    "experimental": "آزمایشی",
+    "cipher_suites": "راه‌های رمزنگاری TLS",
+    "cipher_suites_desc": "راه‌های رمزنگاری پیش‌فرض برای اتصالات TLS/REALITY",
+    "cipher_suites_hint": "خالی بگذارید برای مقادیر پیش‌فرض Xray",
+    "cipher_suites_saved": "راه‌های رمزنگاری ذخیره شد! 💾",
+    "cipher_suites_example": "مثال: TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384"
   },
   "admin": {
     "title": "نیاز به دسترسی مدیر",

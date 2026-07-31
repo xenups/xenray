@@ -1,4 +1,5 @@
 """Connection Tester Service."""
+
 import json
 import os
 import socket
@@ -107,9 +108,11 @@ class ConnectionTester:
             from src.utils.network_utils import NetworkUtils
 
             start_time = time.time()
-            if NetworkUtils.check_proxy_connectivity(socks_port, timeout=5, retries=2):
+            if NetworkUtils.check_proxy_connectivity(socks_port):
                 latency = int((time.time() - start_time) * 1000)
-                logger.info(f"[ConnectionTester] SOCKS proxy verified at 127.0.0.1:{socks_port} ({latency}ms)")
+                logger.info(
+                    f"[ConnectionTester] SOCKS proxy verified at 127.0.0.1:{socks_port} ({latency}ms)"
+                )
                 return (True, t("connection.latency_ms", value=latency), None)
 
             # Fallback to TCP socket check on the proxy port
@@ -117,7 +120,9 @@ class ConnectionTester:
             for attempt in range(max_retries):
                 try:
                     start_time = time.time()
-                    s = socket.create_connection(("127.0.0.1", socks_port), timeout=CONNECT_TIMEOUT)
+                    s = socket.create_connection(
+                        ("127.0.0.1", socks_port), timeout=CONNECT_TIMEOUT
+                    )
                     s.close()
                     latency = int((time.time() - start_time) * 1000)
                     logger.info(
@@ -168,7 +173,7 @@ class ConnectionTester:
                 creationflags=PlatformUtils.get_subprocess_flags(),
             )
 
-            time.sleep(0.5)
+            time.sleep(2.5)
 
             if process.poll() is not None:
                 return False, t("connection.core_failed"), None
@@ -186,7 +191,9 @@ class ConnectionTester:
             for attempt in range(max_retries):
                 try:
                     start_time = time.time()
-                    response = requests.get(target_url, proxies=proxies, timeout=CONNECT_TIMEOUT)
+                    response = requests.get(
+                        target_url, proxies=proxies, timeout=CONNECT_TIMEOUT
+                    )
 
                     country_data = None
                     latency = int((time.time() - start_time) * 1000)
@@ -199,7 +206,9 @@ class ConnectionTester:
                     # We got bytes back through the chain (Xray → proxy → internet).
                     if fetch_country and response.status_code < 300:
                         try:
-                            geo_resp = requests.get("http://ip-api.com/json", proxies=proxies, timeout=3)
+                            geo_resp = requests.get(
+                                "http://ip-api.com/json", proxies=proxies, timeout=3
+                            )
                             if geo_resp.status_code == 200:
                                 gdata = geo_resp.json()
                                 if gdata.get("status") == "success":
@@ -211,11 +220,17 @@ class ConnectionTester:
                         except Exception:
                             pass  # country fetch is best-effort
 
-                    return (True, t("connection.latency_ms", value=latency), country_data)
+                    return (
+                        True,
+                        t("connection.latency_ms", value=latency),
+                        country_data,
+                    )
 
                 except requests.exceptions.Timeout:
                     if attempt < max_retries - 1:
-                        logger.debug(f"Connection test attempt {attempt + 1}/{max_retries} timed out, retrying...")
+                        logger.debug(
+                            f"Connection test attempt {attempt + 1}/{max_retries} timed out, retrying..."
+                        )
                         time.sleep(0.5)
                         continue
                     else:
@@ -223,7 +238,9 @@ class ConnectionTester:
 
                 except requests.exceptions.RequestException:
                     if attempt < max_retries - 1:
-                        logger.debug(f"Connection test attempt {attempt + 1}/{max_retries} failed, retrying...")
+                        logger.debug(
+                            f"Connection test attempt {attempt + 1}/{max_retries} failed, retrying..."
+                        )
                         time.sleep(0.5)
                         continue
                     else:
@@ -255,7 +272,9 @@ class ConnectionTester:
         """Run test in a dedicated thread and invoke callback(success, result_str, country_data)."""
 
         def _wrapper():
-            success, result, country_data = ConnectionTester.test_connection_sync(profile_config, fetch_country)
+            success, result, country_data = ConnectionTester.test_connection_sync(
+                profile_config, fetch_country
+            )
             if callback:
                 callback(success, result, country_data)
 

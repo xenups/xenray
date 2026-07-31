@@ -98,7 +98,12 @@
     "auto_reconnect_enabled": "Авто-реконнект включен",
     "auto_reconnect_disabled": "Авто-реконнект выключен (экономия батареи)",
     "language_restart_msg": "Язык изменен! Перезапустите приложение для полного применения.",
-    "experimental": "Экспериментально"
+    "experimental": "Экспериментально",
+    "cipher_suites": "Наборы шифров TLS",
+    "cipher_suites_desc": "Наборы шифров по умолчанию для TLS/REALITY",
+    "cipher_suites_hint": "Оставьте пустым для стандартных наборов Xray",
+    "cipher_suites_saved": "Наборы шифров сохранены! 💾",
+    "cipher_suites_example": "например: TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384"
   },
   "admin": {
     "title": "Требуются права администратора",

@@ -57,7 +57,9 @@ class ConnectionHandler:
         self._current_mode_getter: Optional[Callable[[], ConnectionMode]] = None
         self._update_horizon_glow_callback: Optional[Callable[[str], None]] = None
         self._profile_manager_is_running_setter: Optional[Callable[[bool], None]] = None
-        self._monitoring_service_is_running_setter: Optional[Callable[[bool], None]] = None
+        self._monitoring_service_is_running_setter: Optional[Callable[[bool], None]] = (
+            None
+        )
 
     def setup(
         self,
@@ -96,7 +98,9 @@ class ConnectionHandler:
         self._current_mode_getter = current_mode_getter
         self._update_horizon_glow_callback = update_horizon_glow_callback
         self._profile_manager_is_running_setter = profile_manager_is_running_setter
-        self._monitoring_service_is_running_setter = monitoring_service_is_running_setter
+        self._monitoring_service_is_running_setter = (
+            monitoring_service_is_running_setter
+        )
 
     # -------------------------------------------------------------------------
     # Public API
@@ -184,7 +188,9 @@ class ConnectionHandler:
     def _show_connected_ui(self, profile_data: dict = None):
         """Show connected state in UI."""
         if self._status_display:
-            self._ui_call(lambda: self._status_display.set_connected(country_data=profile_data))
+            self._ui_call(
+                lambda: self._status_display.set_connected(country_data=profile_data)
+            )
         if self._connection_button:
             self._ui_call(self._connection_button.set_connected)
         if self._update_horizon_glow_callback:
@@ -192,7 +198,9 @@ class ConnectionHandler:
         if self._systray:
             self._systray.update_state()
 
-    def _show_toast(self, msg_key: str, toast_type: str = "error", duration: int = 3000):
+    def _show_toast(
+        self, msg_key: str, toast_type: str = "error", duration: int = 3000
+    ):
         """Show toast notification."""
         if self._toast:
             method = getattr(self._toast, toast_type, self._toast.error)
@@ -259,8 +267,14 @@ class ConnectionHandler:
 
     def _prepare_connection(self) -> tuple:
         """Prepare connection parameters."""
-        profile = self._selected_profile_getter() if self._selected_profile_getter else None
-        mode = self._current_mode_getter() if self._current_mode_getter else ConnectionMode.PROXY
+        profile = (
+            self._selected_profile_getter() if self._selected_profile_getter else None
+        )
+        mode = (
+            self._current_mode_getter()
+            if self._current_mode_getter
+            else ConnectionMode.PROXY
+        )
         mode_str = "vpn" if mode == ConnectionMode.VPN else "proxy"
 
         os.makedirs(TMPDIR, exist_ok=True)
@@ -291,11 +305,15 @@ class ConnectionHandler:
             processor = XrayConfigProcessor(self._app_context)
             success, chain_config, error_or_tag = processor.build_chain_config(profile)
             if not success:
-                logger.error(f"[ConnectionHandler] Failed to build chain config: {error_or_tag}")
+                logger.error(
+                    f"[ConnectionHandler] Failed to build chain config: {error_or_tag}"
+                )
                 profile_config = {}
             else:
                 profile_config = chain_config
-                logger.info(f"[ConnectionHandler] Generated chain config with {len(profile.get('items', []))} items")
+                logger.info(
+                    f"[ConnectionHandler] Generated chain config with {len(profile.get('items', []))} items"
+                )
         else:
             profile_config = profile.get("config") if profile else {}
 
@@ -311,7 +329,9 @@ class ConnectionHandler:
             if self._status_display:
                 self._ui_call(lambda: self._status_display.set_step(msg))
 
-        success = self._connection_manager.connect(config_path, mode_str, step_callback=on_step)
+        success = self._connection_manager.connect(
+            config_path, mode_str, step_callback=on_step
+        )
 
         if not success:
             self._set_connecting(False)
@@ -321,34 +341,34 @@ class ConnectionHandler:
         return success
 
     def _verify_post_connection(self) -> bool:
-        """Verify connection is working after establishment."""
+        """Lightweight post-connection check after fragment warmup."""
         from src.utils.network_utils import NetworkUtils
 
         time.sleep(2.0)  # Allow fragmented/finalmask connection streams to stabilize
 
         if self._status_display:
-            self._ui_call(lambda: self._status_display.set_step(t("connection.checking_network")))
+            self._ui_call(
+                lambda: self._status_display.set_step(t("connection.checking_network"))
+            )
 
-        mode = self._current_mode_getter() if self._current_mode_getter else ConnectionMode.PROXY
+        mode = (
+            self._current_mode_getter()
+            if self._current_mode_getter
+            else ConnectionMode.PROXY
+        )
         is_vpn = mode == ConnectionMode.VPN or mode == "vpn"
 
-        proxy_port = self._app_context.settings.get_proxy_port()
-        is_ok = NetworkUtils.check_proxy_connectivity(proxy_port, timeout=5, retries=2)
+        is_ok = NetworkUtils.check_internet_connection()
 
-        # In VPN mode, traffic flows through TUN, so also check direct internet connectivity
-        if not is_ok and is_vpn:
-            is_ok = NetworkUtils.check_internet_connection(host="8.8.8.8", timeout=4)
-
-        # Retry once after additional stabilization if initial attempt missed due to fragment warmup
         if not is_ok:
-            logger.info("[ConnectionHandler] Initial post-connection check pending, retrying after warmup...")
+            logger.warning(
+                "[ConnectionHandler] Post-connection internet check failed, one more attempt..."
+            )
             time.sleep(1.5)
-            is_ok = NetworkUtils.check_proxy_connectivity(proxy_port, timeout=6, retries=2)
-            if not is_ok and is_vpn:
-                is_ok = NetworkUtils.check_internet_connection(host="8.8.8.8", timeout=5)
+            is_ok = NetworkUtils.check_internet_connection()
 
         if not is_ok:
-            logger.error("[ConnectionHandler] Post-connection check failed after warmup retries")
+            logger.error("[ConnectionHandler] Post-connection check failed")
             self._set_connecting(False)
             self._connection_manager.disconnect()
             self._ui_call(self.reset_ui_disconnected)

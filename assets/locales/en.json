@@ -102,7 +102,12 @@
     "auto_reconnect_enabled": "Auto-reconnect enabled",
     "auto_reconnect_disabled": "Auto-reconnect disabled (saves battery)",
     "language_restart_msg": "Language changed! Restart app for full effect.",
-    "experimental": "Experimental"
+    "experimental": "Experimental",
+    "cipher_suites": "TLS Cipher Suites",
+    "cipher_suites_desc": "Default cipher suites for TLS/REALITY connections",
+    "cipher_suites_hint": "Leave empty for Xray defaults",
+    "cipher_suites_saved": "Cipher suites saved! 💾",
+    "cipher_suites_example": "e.g. TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384"
   },
   "admin": {
     "title": "Admin Rights Required",

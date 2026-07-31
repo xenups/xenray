@@ -1,4 +1,5 @@
 """Settings Repository - Concrete JSON-backed storage for application settings."""
+
 import os
 from typing import Optional
 
@@ -146,3 +147,10 @@ class SettingsRepository:
     def set_last_selected_profile_id(self, profile_id: str) -> None:
         if profile_id:
             self._write("last_profile.txt", profile_id)
+
+    # --- Cipher Suites (global default for TLS/REALITY) ---
+    def get_cipher_suites(self) -> str:
+        return self._read("cipher_suites.txt", "")
+
+    def set_cipher_suites(self, value: str) -> None:
+        self._write("cipher_suites.txt", value)

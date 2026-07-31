@@ -1,7 +1,9 @@
 """Safe stream setting fallbacks for Xray configuration."""
+
 from loguru import logger
 
 from src.core.constants import (
+    CIPHER_SUITES,
     CONFIG_NETWORK,
     CONFIG_SETTINGS,
     CONFIG_STREAM_SETTINGS,
@@ -21,6 +23,7 @@ from src.core.constants import (
     STREAM_WS_SETTINGS,
     STREAM_XHTTP_SETTINGS,
     TLS_SETTINGS,
+    XHTTP_EXTRA_KEYS,
 )
 from src.services.config_utils import get_server_object, is_ip
 
@@ -30,7 +33,7 @@ class ConfigPatcher:
 
     SUPPORTED_PROTOCOLS = ["vless", "vmess", "trojan", "shadowsocks", "hysteria2"]
 
-    def safe_patch(self, config: dict):
+    def safe_patch(self, config: dict, default_cipher_suites: str = ""):
         """Apply context-aware fallbacks only if fields are missing."""
         fallback_count = 0
         for outbound in config.get("outbounds", []):
@@ -45,13 +48,19 @@ class ConfigPatcher:
 
             domain = server_obj["address"]
 
-            applied = self._apply_stream_fallbacks(outbound, domain)
+            applied = self._apply_stream_fallbacks(
+                outbound, domain, default_cipher_suites
+            )
             if applied:
                 fallback_count += 1
         if fallback_count > 0:
-            logger.info(f"[ConfigPatcher] Applied safe fallbacks to {fallback_count} outbound(s)")
+            logger.info(
+                f"[ConfigPatcher] Applied safe fallbacks to {fallback_count} outbound(s)"
+            )
 
-    def _apply_stream_fallbacks(self, outbound: dict, domain: str) -> bool:
+    def _apply_stream_fallbacks(
+        self, outbound: dict, domain: str, default_cipher_suites: str = ""
+    ) -> bool:
         """Safe fallbacks for stream settings (SNI/Host) if missing."""
         applied = False
         stream_settings = outbound.setdefault(CONFIG_STREAM_SETTINGS, {})
@@ -64,32 +73,63 @@ class ConfigPatcher:
             if not sec_settings.get(STREAM_SERVER_NAME):
                 if not is_ip(domain):
                     sec_settings[STREAM_SERVER_NAME] = domain
-                    logger.info(f"[ConfigPatcher] Fallback: Set {field}.serverName = {domain}")
+                    logger.info(
+                        f"[ConfigPatcher] Fallback: Set {field}.serverName = {domain}"
+                    )
                     applied = True
+            if default_cipher_suites and not sec_settings.get(CIPHER_SUITES):
+                sec_settings[CIPHER_SUITES] = default_cipher_suites
+                logger.info(
+                    f"[ConfigPatcher] Fallback: Set {field}.cipherSuites = {default_cipher_suites}"
+                )
+                applied = True
 
         if network == NETWORK_WS:
             ws_settings = stream_settings.setdefault(STREAM_WS_SETTINGS, {})
             headers = ws_settings.setdefault(STREAM_HEADERS, {})
             if not headers.get(HEADER_HOST) and not is_ip(domain):
                 headers[HEADER_HOST] = domain
-                logger.info(f"[ConfigPatcher] Fallback: Set wsSettings.headers.Host = {domain}")
+                logger.info(
+                    f"[ConfigPatcher] Fallback: Set wsSettings.headers.Host = {domain}"
+                )
                 applied = True
         elif network == NETWORK_HTTPUPGRADE:
             hu_settings = stream_settings.setdefault(STREAM_HTTPUPGRADE_SETTINGS, {})
             if not hu_settings.get(STREAM_HOST) and not is_ip(domain):
                 hu_settings[STREAM_HOST] = domain
-                logger.info(f"[ConfigPatcher] Fallback: Set httpupgradeSettings.host = {domain}")
+                logger.info(
+                    f"[ConfigPatcher] Fallback: Set httpupgradeSettings.host = {domain}"
+                )
                 applied = True
         elif network == NETWORK_XHTTP:
             xhttp_settings = stream_settings.setdefault(STREAM_XHTTP_SETTINGS, {})
+
+            # Migrate root-level advanced fields into the extra dict
+            extra = xhttp_settings.get("extra")
+            if not isinstance(extra, dict):
+                extra = {}
+            for key in list(xhttp_settings.keys()):
+                if key in XHTTP_EXTRA_KEYS:
+                    extra[key] = xhttp_settings.pop(key)
+                    logger.info(
+                        f"[ConfigPatcher] Migrated xhttpSettings.{key} into extra dict"
+                    )
+                    applied = True
+            if extra:
+                xhttp_settings["extra"] = extra
+
             if not xhttp_settings.get(STREAM_HOST) and not is_ip(domain):
                 xhttp_settings[STREAM_HOST] = domain
-                logger.info(f"[ConfigPatcher] Fallback: Set xhttpSettings.host = {domain}")
+                logger.info(
+                    f"[ConfigPatcher] Fallback: Set xhttpSettings.host = {domain}"
+                )
                 applied = True
 
             if not xhttp_settings.get(STREAM_MODE):
                 xhttp_settings[STREAM_MODE] = "packet-up"
-                logger.info("[ConfigPatcher] Set xhttpSettings.mode = packet-up for stability")
+                logger.info(
+                    "[ConfigPatcher] Set xhttpSettings.mode = packet-up for stability"
+                )
                 applied = True
 
         return applied

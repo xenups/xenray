@@ -7,6 +7,8 @@ from typing import Any, Dict, List, Optional
 
 from loguru import logger
 
+from src.core.constants import VALID_FINGERPRINTS, XHTTP_EXTRA_KEYS
+
 # Constants
 DEFAULT_PORT = 443
 DEFAULT_NETWORK = "tcp"
@@ -27,7 +29,9 @@ VALID_NETWORKS = {
 }
 VALID_SECURITY = {"none", "tls", "reality"}
 VALID_ENCRYPTION = {"none", "zero"}
-UUID_PATTERN = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE)
+UUID_PATTERN = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE
+)
 
 # ── Dynamic Mapping Router: type system ────────────────────────────
 
@@ -48,10 +52,15 @@ SPLIT_FIELDS = {
 XHTTP_PARAMS = {
     "mode",
     "noSSEHeader",
+    "downloadProxy",
+    "uplinkHTTPMethod",
+    "downlinkHTTPMethod",
     "xPaddingBytes",
+    "scMaxEachGetBytes",
+    "scMaxEachPostBytes",
+    "scMinPostsIntervalMs",
     "scStreamUpServerSecs",
     "scMaxBufferedPosts",
-    "scMaxEachPostBytes",
     "scMaxConcurrentPosts",
     "xmuxMaxConcurrency",
     "xmuxMaxConnections",
@@ -80,6 +89,11 @@ SUFFIX_CAMEL_MAP = {
     "xmux_c_max_reuse_times": "xmuxCMaxReuseTimes",
     "xmux_h_max_reusable_secs": "xmuxHMaxReusableSecs",
     "xmux_h_max_request_times": "xmuxHMaxRequestTimes",
+    "download_proxy": "downloadProxy",
+    "uplink_http_method": "uplinkHTTPMethod",
+    "downlink_http_method": "downlinkHTTPMethod",
+    "sc_max_each_get_bytes": "scMaxEachGetBytes",
+    "sc_min_posts_interval_ms": "scMinPostsIntervalMs",
 }
 
 
@@ -89,6 +103,40 @@ def _to_camel(suffix: str) -> str:
         return SUFFIX_CAMEL_MAP[suffix]
     parts = suffix.split("_")
     return parts[0] + "".join(p.capitalize() for p in parts[1:])
+
+
+def _get_cipher_suites(get_param) -> str:
+    """Read cipherSuites from 'cs' or 'cipherSuites' query param (cs takes precedence)."""
+    cs = get_param("cs")
+    if cs:
+        return cs
+    return get_param("cipherSuites") or ""
+
+
+def _validate_fingerprint(fp: str) -> str:
+    """Warn if fingerprint is not in the known set; still pass it through."""
+    if fp and fp not in VALID_FINGERPRINTS:
+        logger.warning(
+            f"Unknown fingerprint: {fp} (valid: {sorted(VALID_FINGERPRINTS)})"
+        )
+    return fp
+
+
+def _nest_xhttp_extra(xhttp: dict) -> dict:
+    """
+    Move fields that belong in the 'extra' dict out of the root level.
+    Root-level fields are: host, mode, path, extra.
+    Everything else (noSSEHeader, xPaddingBytes, etc.) goes into extra.
+    """
+    extra = xhttp.pop("extra", None)
+    if not isinstance(extra, dict):
+        extra = {}
+    for key in list(xhttp.keys()):
+        if key in XHTTP_EXTRA_KEYS:
+            extra[key] = xhttp.pop(key)
+    if extra:
+        xhttp["extra"] = extra
+    return xhttp
 
 
 def _cast_value(raw: str) -> Any:
@@ -113,7 +161,9 @@ def _cast_value(raw: str) -> Any:
 
 def _maybe_split(key: str, raw: str) -> Any:
     """Split a comma-separated value into a typed list if the key is splittable."""
-    stripped = key.removeprefix("fm_tcp_").removeprefix("fm_udp_").removeprefix("fm_quic_")
+    stripped = (
+        key.removeprefix("fm_tcp_").removeprefix("fm_udp_").removeprefix("fm_quic_")
+    )
     if key in SPLIT_FIELDS or stripped in SPLIT_FIELDS:
         parts = [p.strip() for p in raw.split(",") if p.strip()]
         return [_cast_value(p) for p in parts]
@@ -145,13 +195,17 @@ def _route_fm_params(raw_params: Dict[str, str]) -> Dict[str, Any]:
             # FinalMask settings are always strings (Int32Range, etc.) — no type casting
             # But comma-separated values always become lists (matches Xray JSON schema)
             parts = [p.strip() for p in raw.split(",") if p.strip()]
-            tcp_group.setdefault("settings", {})[suffix] = parts if len(parts) > 1 else raw
+            tcp_group.setdefault("settings", {})[suffix] = (
+                parts if len(parts) > 1 else raw
+            )
         elif key == "fm_udp_type":
             udp_group["type"] = raw
         elif key.startswith("fm_udp_"):
             suffix = _to_camel(key[7:])
             parts = [p.strip() for p in raw.split(",") if p.strip()]
-            udp_group.setdefault("settings", {})[suffix] = parts if len(parts) > 1 else raw
+            udp_group.setdefault("settings", {})[suffix] = (
+                parts if len(parts) > 1 else raw
+            )
         elif key.startswith("fm_quic_"):
             suffix = _to_camel(key[8:])
             parts = [p.strip() for p in raw.split(",") if p.strip()]
@@ -353,7 +407,9 @@ class LinkParser:
             values = raw_params.get(key)
             return values[0] if values and len(values) > 0 else default
 
-        name = urllib.parse.unquote(parsed.fragment) if parsed.fragment else "VLESS Server"
+        name = (
+            urllib.parse.unquote(parsed.fragment) if parsed.fragment else "VLESS Server"
+        )
 
         encryption = get_param("encryption", DEFAULT_ENCRYPTION)
 
@@ -363,7 +419,7 @@ class LinkParser:
             security = DEFAULT_SECURITY
 
         sni = get_param("sni")
-        fp = get_param("fp")
+        fp = _validate_fingerprint(get_param("fp") or "")
         flow = get_param("flow", "")
         allow_insecure = get_param("allowInsecure", get_param("insecure", "0")) == "1"
 
@@ -375,7 +431,9 @@ class LinkParser:
                     {
                         "address": address,
                         "port": port,
-                        "users": [{"id": user_id, "encryption": encryption, "flow": flow}],
+                        "users": [
+                            {"id": user_id, "encryption": encryption, "flow": flow}
+                        ],
                     }
                 ]
             },
@@ -393,7 +451,10 @@ class LinkParser:
 
         # ── TLS settings ──
         if security == "tls":
-            tls_settings: Dict[str, Any] = {"serverName": sni or address, "allowInsecure": allow_insecure}
+            tls_settings: Dict[str, Any] = {
+                "serverName": sni or address,
+                "allowInsecure": allow_insecure,
+            }
             alpn_raw = get_param("alpn")
             if alpn_raw:
                 alpn_list = _maybe_split("alpn", alpn_raw)
@@ -401,6 +462,9 @@ class LinkParser:
                     tls_settings["alpn"] = alpn_list
             if fp:
                 tls_settings["fingerprint"] = fp
+            cipher = _get_cipher_suites(get_param)
+            if cipher:
+                tls_settings["cipherSuites"] = cipher
 
             # ECH (Encrypted Client Hello)
             ech = get_param("ech")
@@ -419,7 +483,9 @@ class LinkParser:
                             if isinstance(ech_sockopt, dict):
                                 tls_settings["echSockopt"] = ech_sockopt
                         except (json.JSONDecodeError, ValueError):
-                            logger.warning(f"Failed to parse echSockopt: {ech_sockopt_raw}")
+                            logger.warning(
+                                f"Failed to parse echSockopt: {ech_sockopt_raw}"
+                            )
                     logger.info(f"[TLS] ECH enabled with config: {ech_decoded}")
                 except Exception as e:
                     logger.warning(f"Failed to configure ECH: {e}")
@@ -432,9 +498,13 @@ class LinkParser:
             sid_raw = get_param("sid", "")
 
             if not pbk:
-                raise ValueError("Reality configuration missing required 'pbk' parameter")
+                raise ValueError(
+                    "Reality configuration missing required 'pbk' parameter"
+                )
             if not sni:
-                raise ValueError("Reality configuration missing required 'sni' parameter")
+                raise ValueError(
+                    "Reality configuration missing required 'sni' parameter"
+                )
 
             reality_settings: Dict[str, Any] = {
                 "show": False,
@@ -446,6 +516,9 @@ class LinkParser:
             spx = get_param("spx")
             if spx:
                 reality_settings["spiderX"] = spx
+            cipher = _get_cipher_suites(get_param)
+            if cipher:
+                reality_settings["cipherSuites"] = cipher
 
             outbound["streamSettings"]["realitySettings"] = reality_settings
 
@@ -463,13 +536,17 @@ class LinkParser:
                     for key in ("tcp", "udp", "quicParams"):
                         if key in fm_json:
                             finalmask[key] = fm_json[key]
-                    logger.info(f"[FinalMask] Applied JSON fm param: {list(fm_json.keys())}")
+                    logger.info(
+                        f"[FinalMask] Applied JSON fm param: {list(fm_json.keys())}"
+                    )
             except (json.JSONDecodeError, ValueError) as e:
                 logger.warning(f"Failed to parse JSON fm param: {e}")
 
         if finalmask:
             outbound["streamSettings"]["finalmask"] = finalmask
-            logger.info(f"[FinalMask] Configured traffic camouflage: {list(finalmask.keys())}")
+            logger.info(
+                f"[FinalMask] Configured traffic camouflage: {list(finalmask.keys())}"
+            )
 
         # ── Transport-specific settings ──
         host_param = get_param("host")
@@ -497,14 +574,14 @@ class LinkParser:
                 try:
                     extra_json = json.loads(urllib.parse.unquote(extra_raw))
                     if isinstance(extra_json, dict):
-                        # Merge with existing — extra JSON values take precedence
-                        for ek, ev in extra_json.items():
-                            # Convert Xray JSON field names to xhttp param naming
-                            # e.g. noSSEHeader from JSON → keep as-is (already camelCase)
-                            xhttp_settings[ek] = ev
-                        logger.info(f"[XHTTP] Applied extra JSON: {list(extra_json.keys())}")
+                        xhttp_settings["extra"] = extra_json
+                        logger.info(
+                            f"[XHTTP] Applied extra JSON: {list(extra_json.keys())}"
+                        )
                 except (json.JSONDecodeError, ValueError) as e:
                     logger.warning(f"Failed to parse extra JSON: {e}")
+
+            _nest_xhttp_extra(xhttp_settings)
 
             outbound["streamSettings"]["xhttpSettings"] = xhttp_settings
 
@@ -593,12 +670,21 @@ class LinkParser:
             val = params.get(key)
             return val[0] if val and len(val) > 0 else default
 
-        name = urllib.parse.unquote(parsed.fragment) if parsed.fragment else "Hysteria2 Server"
+        name = (
+            urllib.parse.unquote(parsed.fragment)
+            if parsed.fragment
+            else "Hysteria2 Server"
+        )
 
         sni = get_param("sni") or get_param("peer") or address
         insecure = get_param("insecure") == "1" or get_param("allowInsecure") == "1"
         obfs_type = get_param("obfs", "none")
         obfs_password = get_param("obfs-password", "")
+
+        tls_settings: Dict[str, Any] = {"serverName": sni, "allowInsecure": insecure}
+        cipher = _get_cipher_suites(get_param)
+        if cipher:
+            tls_settings["cipherSuites"] = cipher
 
         outbound = {
             "tag": "proxy",
@@ -614,7 +700,7 @@ class LinkParser:
             },
             "streamSettings": {
                 "security": "tls",
-                "tlsSettings": {"serverName": sni, "allowInsecure": insecure},
+                "tlsSettings": tls_settings,
             },
         }
 
@@ -663,7 +749,8 @@ class LinkParser:
         tls = data.get("tls", "")
         sni = data.get("sni", "")
         alpn = data.get("alpn", "")
-        fp = data.get("fp", "")
+        fp = _validate_fingerprint(data.get("fp", ""))
+        cipher_suites = data.get("cipherSuites", "")
 
         if security == "auto":
             security = "auto"
@@ -707,6 +794,8 @@ class LinkParser:
                 )
             if fp:
                 ss["tlsSettings"]["fingerprint"] = fp
+            if cipher_suites:
+                ss["tlsSettings"]["cipherSuites"] = cipher_suites
 
         if network == "ws":
             ss["wsSettings"] = {"path": path, "headers": {"Host": host} if host else {}}
@@ -763,7 +852,11 @@ class LinkParser:
             val = params.get(key)
             return val[0] if val and len(val) > 0 else default
 
-        name = urllib.parse.unquote(parsed.fragment) if parsed.fragment else "Trojan Server"
+        name = (
+            urllib.parse.unquote(parsed.fragment)
+            if parsed.fragment
+            else "Trojan Server"
+        )
 
         sni = get_param("sni") or get_param("peer") or address
         allow_insecure = get_param("allowInsecure", get_param("insecure", "0")) == "1"
@@ -787,8 +880,11 @@ class LinkParser:
         }
 
         if outbound["streamSettings"]["security"] == "tls":
-            tls_settings: Dict[str, Any] = {"serverName": sni, "allowInsecure": allow_insecure}
-            fp = get_param("fp")
+            tls_settings: Dict[str, Any] = {
+                "serverName": sni,
+                "allowInsecure": allow_insecure,
+            }
+            fp = _validate_fingerprint(get_param("fp") or "")
             if fp:
                 tls_settings["fingerprint"] = fp
             alpn_raw = get_param("alpn")
@@ -796,6 +892,9 @@ class LinkParser:
                 alpn_list = _maybe_split("alpn", alpn_raw)
                 if isinstance(alpn_list, list) and alpn_list:
                     tls_settings["alpn"] = alpn_list
+            cipher = _get_cipher_suites(get_param)
+            if cipher:
+                tls_settings["cipherSuites"] = cipher
             outbound["streamSettings"]["tlsSettings"] = tls_settings
 
         network = outbound["streamSettings"]["network"]
@@ -805,7 +904,9 @@ class LinkParser:
                 "headers": {"Host": get_param("host") or address},
             }
         elif network == "grpc":
-            outbound["streamSettings"]["grpcSettings"] = {"serviceName": get_param("serviceName", "")}
+            outbound["streamSettings"]["grpcSettings"] = {
+                "serviceName": get_param("serviceName", "")
+            }
 
         return {"name": name, "config": LinkParser._build_config(outbound)}
 
@@ -911,15 +1012,14 @@ class LinkParser:
                 host = xh.get("host", "")
                 if host:
                     params.append(f"host={host}")
-                # Collect non-core xhttp fields into extra JSON param
-                XH_CORE = {"path", "host"}
-                extra_fields = {k: v for k, v in xh.items() if k not in XH_CORE}
-                if extra_fields:
-                    params.append(f"extra={urllib.parse.quote(json.dumps(extra_fields), safe='')}")
-                # Mode from extra or direct
                 mode = xh.get("mode")
-                if mode and "mode" not in extra_fields:
+                if mode:
                     params.append(f"mode={mode}")
+                extra = xh.get("extra")
+                if extra:
+                    params.append(
+                        f"extra={urllib.parse.quote(json.dumps(extra), safe='')}"
+                    )
         elif network == "grpc":
             grpc = stream.get("grpcSettings", {})
             service = grpc.get("serviceName", "")
@@ -933,6 +1033,8 @@ class LinkParser:
                 params.append(f"fp={tls.get('fingerprint')}")
             if tls.get("alpn"):
                 params.append(f"alpn={','.join(tls['alpn'])}")
+            if tls.get("cipherSuites"):
+                params.append(f"cs={tls['cipherSuites']}")
             ech = tls.get("echConfigList") or tls.get("echConfig")
             if ech:
                 if isinstance(ech, list):
@@ -940,28 +1042,38 @@ class LinkParser:
                 params.append(f"ech={urllib.parse.quote(str(ech), safe='')}")
             ech_sockopt = tls.get("echSockopt")
             if ech_sockopt and isinstance(ech_sockopt, dict):
-                params.append(f"echSockopt={urllib.parse.quote(json.dumps(ech_sockopt), safe='')}")
+                params.append(
+                    f"echSockopt={urllib.parse.quote(json.dumps(ech_sockopt), safe='')}"
+                )
         elif security == "reality":
             reality = stream.get("realitySettings", {})
             params.append(f"sni={reality.get('serverName', '')}")
             params.append(f"pbk={reality.get('publicKey', '')}")
             sid_list = reality.get("shortIds", [])
-            params.append(f"sid={','.join(sid_list) if isinstance(sid_list, list) else sid_list}")
+            params.append(
+                f"sid={','.join(sid_list) if isinstance(sid_list, list) else sid_list}"
+            )
             if reality.get("fingerprint"):
                 params.append(f"fp={reality.get('fingerprint')}")
             if reality.get("spiderX"):
                 params.append(f"spx={reality.get('spiderX')}")
+            if reality.get("cipherSuites"):
+                params.append(f"cs={reality['cipherSuites']}")
 
         # FinalMask — prefer JSON fm param when it contains structured data (e.g. noisy array)
         finalmask = stream.get("finalmask", {})
         flat_fm = _expand_fm_to_params(finalmask)
         if flat_fm:
             # Check if flat representation is faithful; otherwise use JSON fm param
-            test_fm = _route_fm_params({p.split("=", 1)[0]: p.split("=", 1)[1] for p in flat_fm if "=" in p})
+            test_fm = _route_fm_params(
+                {p.split("=", 1)[0]: p.split("=", 1)[1] for p in flat_fm if "=" in p}
+            )
             if test_fm == finalmask:
                 params.extend(flat_fm)
             else:
-                params.append(f"fm={urllib.parse.quote(json.dumps(finalmask), safe='')}")
+                params.append(
+                    f"fm={urllib.parse.quote(json.dumps(finalmask), safe='')}"
+                )
 
         query = "&".join(params)
         fragment = urllib.parse.quote(name)
@@ -991,6 +1103,7 @@ class LinkParser:
             "tls": "",
             "sni": "",
             "alpn": "",
+            "fp": "",
         }
 
         net = data["net"]
@@ -1001,6 +1114,10 @@ class LinkParser:
             data["sni"] = tls.get("serverName", "")
             if tls.get("alpn"):
                 data["alpn"] = ",".join(tls["alpn"])
+            if tls.get("fingerprint"):
+                data["fp"] = tls["fingerprint"]
+            if tls.get("cipherSuites"):
+                data["cipherSuites"] = tls["cipherSuites"]
 
         if net == "ws":
             ws = stream.get("wsSettings", {})
@@ -1035,6 +1152,8 @@ class LinkParser:
         if security == "tls":
             tls = stream.get("tlsSettings", {})
             params.append(f"sni={tls.get('serverName', '')}")
+            if tls.get("cipherSuites"):
+                params.append(f"cs={tls['cipherSuites']}")
 
         if network == "ws":
             ws = stream.get("wsSettings", {})
@@ -1071,6 +1190,8 @@ class LinkParser:
             params.append(f"sni={sni}")
         if insecure == "1":
             params.append("insecure=1")
+        if tls.get("cipherSuites"):
+            params.append(f"cs={tls['cipherSuites']}")
 
         obfs = user.get("obfs")
         if obfs:

@@ -217,7 +217,42 @@ STREAM_HEADERS = "headers"
 STREAM_HOST = "host"
 HEADER_HOST = "Host"  # HTTP header name (capital H)
 STREAM_MODE = "mode"
+STREAM_EXTRA = "extra"
 STREAM_SERVER_NAME = "serverName"
+CIPHER_SUITES = "cipherSuites"
+
+# xhttpSettings advanced fields that belong inside the "extra" dict
+XHTTP_EXTRA_KEYS = {
+    "noSSEHeader",
+    "downloadProxy",
+    "uplinkHTTPMethod",
+    "downlinkHTTPMethod",
+    "xPaddingBytes",
+    "scMaxEachGetBytes",
+    "scMaxEachPostBytes",
+    "scMinPostsIntervalMs",
+    "headers",
+    "scStreamUpServerSecs",
+    "scMaxBufferedPosts",
+    "scMaxConcurrentPosts",
+    "xmux",
+}
+
+# Valid TLS fingerprint values for Xray-core
+# "unsafe" disables uTLS client hello mimicry (plain Go TLS)
+VALID_FINGERPRINTS = {
+    "chrome",
+    "firefox",
+    "safari",
+    "ios",
+    "android",
+    "edge",
+    "360",
+    "qq",
+    "random",
+    "randomized",
+    "unsafe",
+}
 STREAM_PATH = "path"
 
 # Config dict keys
