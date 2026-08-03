@@ -1,4 +1,5 @@
 """Tests for DNS configuration in XrayConfigProcessor."""
+
 from unittest.mock import Mock
 
 import pytest
@@ -68,7 +69,11 @@ class TestConfigureDns:
     def test_doh_preserves_existing_prefix(self, dns_configurator, mock_dns):
         """DoH server already starting with https:// is not double-prefixed."""
         mock_dns.load.return_value = [
-            {"address": "https://custom.dns/endpoint", "protocol": "doh", "domains": []},
+            {
+                "address": "https://custom.dns/endpoint",
+                "protocol": "doh",
+                "domains": [],
+            },
         ]
         config = {}
         dns_configurator.configure(config)
@@ -221,6 +226,116 @@ class TestConfigureDnsFallback:
 # ---------------------------------------------------------------------------
 
 
+class TestConfigureVpnDns:
+    """Tests for DnsConfigurator.configure() in VPN mode (leak-free Remote DNS)."""
+
+    def test_vpn_remote_server_via_proxy(self, dns_configurator, mock_dns):
+        """General remote DNS is a standard UDP IP detoured through the proxy."""
+        mock_dns.load.return_value = [
+            {"address": "1.1.1.1", "protocol": "udp", "domains": []},
+        ]
+        config = {}
+        dns_configurator.configure(config, mode="vpn")
+        servers = config["dns"]["servers"]
+        remote = next(s for s in servers if s.get("detour") == "proxy")
+        assert remote["address"] == "1.1.1.1"
+        assert "https+local://" not in remote["address"]
+        assert "dns-query" not in remote["address"]
+
+    def test_vpn_default_remote_no_doh(self, dns_configurator, mock_dns):
+        """Empty DNS config falls back to plain UDP 1.1.1.1 via proxy (no DoH)."""
+        mock_dns.load.return_value = []
+        config = {}
+        dns_configurator.configure(config, mode="vpn")
+        servers = config["dns"]["servers"]
+        remote = next(s for s in servers if s.get("detour") == "proxy")
+        assert remote["address"] == "1.1.1.1"
+        assert "https+local://" not in remote["address"]
+
+    def test_vpn_bootstrap_server_restricted_domains(self, dns_configurator, mock_dns):
+        """Direct/bootstrap DNS is restricted to NCSI + proxy server + user direct domains."""
+        mock_dns.load.return_value = [
+            {"address": "1.1.1.1", "protocol": "udp", "domains": []},
+        ]
+        config = {}
+        dns_configurator.configure(
+            config,
+            mode="vpn",
+            proxy_server_ips=["proxy.example.com"],
+            routing_rules={"direct": ["direct.com"], "proxy": [], "block": []},
+        )
+        servers = config["dns"]["servers"]
+        bootstrap = next(s for s in servers if s.get("detour") == "direct")
+        assert "proxy.example.com" in bootstrap["domains"]
+        assert "direct.com" in bootstrap["domains"]
+        assert "msftconnecttest.com" in bootstrap["domains"]
+
+    def test_vpn_bootstrap_address_differs_from_remote(self, dns_configurator, mock_dns):
+        """Bootstrap direct server uses a different IP than the remote proxy server."""
+        mock_dns.load.return_value = [
+            {"address": "1.1.1.1", "protocol": "udp", "domains": []},
+        ]
+        config = {}
+        dns_configurator.configure(config, mode="vpn")
+        servers = config["dns"]["servers"]
+        remote = next(s for s in servers if s.get("detour") == "proxy")
+        bootstrap = next(s for s in servers if s.get("detour") == "direct")
+        assert remote["address"] != bootstrap["address"]
+
+    def test_vpn_query_strategy_use_ip(self, dns_configurator, mock_dns):
+        """VPN mode sets queryStrategy to UseIP."""
+        mock_dns.load.return_value = []
+        config = {}
+        dns_configurator.configure(config, mode="vpn")
+        assert config["dns"]["queryStrategy"] == "UseIP"
+
+    def test_vpn_direct_server_always_has_domains(self, dns_configurator, mock_dns):
+        """Direct/bootstrap servers must always carry strict domain bounds (never a catch-all)."""
+        mock_dns.load.return_value = []
+        config = {}
+        dns_configurator.configure(config, mode="vpn")
+        servers = config["dns"]["servers"]
+        for s in servers:
+            if s.get("detour") == "direct":
+                assert s.get("domains"), f"Direct server {s['address']} must have a domains restriction"
+                assert len(s["domains"]) > 0
+
+    def test_vpn_general_resolution_only_via_proxy(self, dns_configurator, mock_dns):
+        """Catch-all resolvers (no domains) must be proxy-only — never direct."""
+        mock_dns.load.return_value = [
+            {"address": "9.9.9.9", "protocol": "udp", "domains": []},
+        ]
+        config = {}
+        dns_configurator.configure(config, mode="vpn")
+        servers = config["dns"]["servers"]
+        catch_alls = [s for s in servers if not s.get("domains")]
+        assert catch_alls, "Expected at least one catch-all remote resolver"
+        assert all(s.get("detour") == "proxy" for s in catch_alls)
+
+    def test_vpn_no_localhost_server(self, dns_configurator, mock_dns):
+        """Server-side resolution relies on AsIs domainStrategy, not a 'localhost' DNS server."""
+        mock_dns.load.return_value = []
+        config = {}
+        dns_configurator.configure(config, mode="vpn")
+        servers = config["dns"]["servers"]
+        assert all(s.get("address") != "localhost" for s in servers if isinstance(s, dict))
+
+    def test_vpn_strips_doh_prefix(self, dns_configurator, mock_dns):
+        """DoH entries are reduced to bare IP for remote UDP DNS (no DoH)."""
+        mock_dns.load.return_value = [
+            {
+                "address": "https+local://1.1.1.1/dns-query",
+                "protocol": "doh",
+                "domains": [],
+            },
+        ]
+        config = {}
+        dns_configurator.configure(config, mode="vpn")
+        servers = config["dns"]["servers"]
+        remote = next(s for s in servers if s.get("detour") == "proxy")
+        assert remote["address"] == "1.1.1.1"
+
+
 class TestBuildTunDnsServers:
     """Tests for DnsConfigurator.build_tun_servers()."""
 
@@ -232,29 +347,32 @@ class TestBuildTunDnsServers:
         servers = dns_configurator.build_tun_servers()
         assert "9.9.9.9" in servers
 
-    def test_doh(self, dns_configurator, mock_dns):
-        """DoH address gets protocol prefix."""
+    def test_doh_domain_filtered(self, dns_configurator, mock_dns):
+        """DoH domain name address is filtered out (not an IP)."""
         mock_dns.load.return_value = [
             {"address": "dns.cloudflare.com", "protocol": "doh", "domains": []},
         ]
         servers = dns_configurator.build_tun_servers()
-        assert "https://dns.cloudflare.com/dns-query" in servers
+        assert "dns.cloudflare.com" not in servers
+        assert servers == ["1.1.1.1"]
 
-    def test_dot(self, dns_configurator, mock_dns):
-        """DoT address gets tls:// prefix."""
+    def test_dot_domain_filtered(self, dns_configurator, mock_dns):
+        """DoT domain name address is filtered out."""
         mock_dns.load.return_value = [
             {"address": "dns.google", "protocol": "dot", "domains": []},
         ]
         servers = dns_configurator.build_tun_servers()
-        assert "tls://dns.google" in servers
+        assert "dns.google" not in servers
+        assert servers == ["1.1.1.1"]
 
-    def test_doq(self, dns_configurator, mock_dns):
-        """DoQ address gets quic:// prefix."""
+    def test_doq_domain_filtered(self, dns_configurator, mock_dns):
+        """DoQ domain name address is filtered out."""
         mock_dns.load.return_value = [
             {"address": "dns.nextdns.io", "protocol": "doq", "domains": []},
         ]
         servers = dns_configurator.build_tun_servers()
-        assert "quic://dns.nextdns.io" in servers
+        assert "dns.nextdns.io" not in servers
+        assert servers == ["1.1.1.1"]
 
     def test_empty_address_skipped(self, dns_configurator, mock_dns):
         """Empty address entries are filtered out."""
@@ -270,15 +388,15 @@ class TestBuildTunDnsServers:
         """Empty DNS list falls back to default servers."""
         mock_dns.load.return_value = []
         servers = dns_configurator.build_tun_servers()
-        assert "1.1.1.1" in servers
-        assert "8.8.8.8" in servers
+        assert servers == ["1.1.1.1"]
 
     def test_multiple_servers(self, dns_configurator, mock_dns):
-        """Multiple DNS entries are all included."""
+        """Multiple DNS entries are included if they are valid IPs."""
         mock_dns.load.return_value = [
             {"address": "9.9.9.9", "protocol": "udp", "domains": []},
             {"address": "dns.google", "protocol": "dot", "domains": []},
         ]
         servers = dns_configurator.build_tun_servers()
         assert "9.9.9.9" in servers
-        assert "tls://dns.google" in servers
+        assert "dns.google" not in servers
+        assert len(servers) == 1

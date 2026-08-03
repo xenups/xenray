@@ -5,6 +5,7 @@ import shutil
 import socket
 import subprocess
 
+from src.core.constants import DNS_IP_GOOGLE
 from src.core.logger import logger
 from src.utils.platform_utils import PlatformUtils
 
@@ -13,7 +14,7 @@ class NetworkUtils:
     """Utilities for network operations."""
 
     @staticmethod
-    def check_internet_connection(host="8.8.8.8", port=53, timeout=3, retries=3):
+    def check_internet_connection(host=DNS_IP_GOOGLE, port=53, timeout=3, retries=3):
         """
         Check if there is an active internet connection by connecting to a reliable host.
         Default is Google DNS (8.8.8.8) on port 53 (DNS).
@@ -126,7 +127,7 @@ class NetworkUtils:
         return False
 
     @staticmethod
-    def detect_optimal_mtu(host="8.8.8.8", min_mtu=1280, max_mtu=1480, timeout=2, mtu_mode="auto") -> int:
+    def detect_optimal_mtu(host=DNS_IP_GOOGLE, min_mtu=1280, max_mtu=1480, timeout=2, mtu_mode="auto") -> int:
         """
         Detect optimal MTU using ping with Don't Fragment flag.
         Uses binary search to find the largest non-fragmented MTU.

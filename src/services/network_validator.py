@@ -9,6 +9,8 @@ from typing import Optional
 
 from loguru import logger
 
+from src.core.constants import DNS_IP_CLOUDFLARE, DNS_IP_GOOGLE, DNS_IP_OPENDNS
+
 
 class NetworkValidator:
     """
@@ -32,9 +34,9 @@ class NetworkValidator:
 
         # Check actual connectivity to high-availability hosts
         test_hosts = [
-            ("8.8.8.8", 53),  # Google DNS
-            ("1.1.1.1", 53),  # Cloudflare DNS
-            ("208.67.222.222", 53),  # OpenDNS
+            (DNS_IP_GOOGLE, 53),
+            (DNS_IP_CLOUDFLARE, 53),
+            (DNS_IP_OPENDNS, 53),
         ]
 
         for host, port in test_hosts:
