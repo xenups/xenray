@@ -183,8 +183,7 @@ class XrayService:
         cmd_nrpt = [
             "powershell",
             "-Command",
-            f"Add-DnsClientNrptRule -Namespace '.' -NameServers '{primary_dns}' "
-            "-Comment 'XenRay TUN DNS'",
+            f"Add-DnsClientNrptRule -Namespace '.' -NameServers '{primary_dns}' " "-Comment 'XenRay TUN DNS'",
         ]
         subprocess.run(cmd_nrpt, check=False, creationflags=creation_flags)
 
