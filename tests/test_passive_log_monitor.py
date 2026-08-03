@@ -1,13 +1,27 @@
 """
 Unit tests for PassiveLogMonitor.
 """
+
 import os
 import tempfile
 import time
 import unittest
 from unittest.mock import MagicMock
 
+from loguru import logger as loguru_logger
+
 from src.services.monitoring import PassiveLogMonitor
+
+
+def _capture_warnings():
+    """Install a loguru sink that collects WARNING+ records, returns (records, handler_id)."""
+    records = []
+
+    def collector(message):
+        records.append(message.record["message"])
+
+    handler_id = loguru_logger.add(collector, level="WARNING")
+    return records, handler_id
 
 
 class TestPassiveLogMonitor(unittest.TestCase):
@@ -113,6 +127,50 @@ class TestPassiveLogMonitor(unittest.TestCase):
             time.sleep(0.1)
 
         callback.assert_called_once()
+
+    def test_dns_fallback_logs_warning_not_failure(self):
+        callback = MagicMock()
+        self.monitor._on_failure = callback
+        records, handler_id = _capture_warnings()
+        try:
+            self.monitor._process_line(
+                "2023/12/24 12:00:00 [Warning] app/dns: failed to resolve domain example.com, using 1.1.1.1"
+            )
+        finally:
+            loguru_logger.remove(handler_id)
+
+        callback.assert_not_called()
+        assert len(records) == 1
+        assert "[DNS Warning]" in records[0]
+        assert "example.com" in records[0]
+        assert "Falling back to secondary Remote DNS" in records[0]
+
+    def test_dns_fallback_other_keywords(self):
+        callback = MagicMock()
+        self.monitor._on_failure = callback
+        self.monitor.DEBOUNCE_SECONDS = 0.0
+        records, handler_id = _capture_warnings()
+        try:
+            self.monitor._process_line("[Warning] DNS fallback triggered for proxy.example.org")
+            self.monitor._process_line("[Warning] app/dns: failed to lookup ip for dns.google")
+        finally:
+            loguru_logger.remove(handler_id)
+
+        callback.assert_not_called()
+        assert len(records) == 2
+
+    def test_dns_fallback_debounced(self):
+        callback = MagicMock()
+        self.monitor._on_failure = callback
+        self.monitor.DEBOUNCE_SECONDS = 10.0
+        records, handler_id = _capture_warnings()
+        try:
+            self.monitor._process_line("failed to resolve domain one.com")
+            self.monitor._process_line("failed to resolve domain two.com")
+        finally:
+            loguru_logger.remove(handler_id)
+
+        assert len(records) == 1
 
     def test_exponential_backoff(self):
         self.monitor.BASE_COOLDOWN_SECONDS = 0.1

@@ -12,7 +12,7 @@ _project_root = Path(__file__).parent.parent.parent
 load_dotenv(_project_root / ".env")
 
 # Application version from environment
-APP_VERSION = os.getenv("APP_VERSION", "0.2.2-beta")
+APP_VERSION = os.getenv("APP_VERSION", "0.2.3-beta")
 
 # Window dimensions
 WINDOW_WIDTH = 420
@@ -106,23 +106,31 @@ FONT_URLS = {
     ),
 }
 
+# Canonical well-known DNS server IPs (no hardcoded IPs in business logic)
+DNS_IP_CLOUDFLARE = "1.1.1.1"
+DNS_IP_CLOUDFLARE_ALT = "1.0.0.1"
+DNS_IP_GOOGLE = "8.8.8.8"
+DNS_IP_GOOGLE_ALT = "8.8.4.4"
+DNS_IP_OPENDNS = "208.67.222.222"
+
 # DNS Providers (from environment)
 DNS_PROVIDERS = {
     "local_resolver": {
         "tag": "bootstrap",
         "type": "udp",
-        "server": os.getenv("DNS_LOCAL_SERVER", "8.8.8.8"),
+        "server": os.getenv("DNS_LOCAL_SERVER", DNS_IP_GOOGLE),
         "detour": "direct",
     },
     "proxy_resolver": {
         "tag": "remote_proxy",
         "type": "udp",
-        "server": os.getenv("DNS_REMOTE_SERVER", "1.1.1.1"),
+        "server": os.getenv("DNS_REMOTE_SERVER", DNS_IP_CLOUDFLARE),
         "detour": "proxy",
     },
     "bypass_list": os.getenv(
         "DNS_BYPASS_LIST",
-        "8.8.8.8,8.8.4.4,1.1.1.1,1.0.0.1,dns.google,cloudflare-dns.com",
+        f"{DNS_IP_GOOGLE},{DNS_IP_GOOGLE_ALT},{DNS_IP_CLOUDFLARE},{DNS_IP_CLOUDFLARE_ALT},"
+        f"dns.google,cloudflare-dns.com",
     ).split(","),
 }
 
