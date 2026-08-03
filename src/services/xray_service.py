@@ -53,7 +53,9 @@ class XrayService:
             cmd_remove = [
                 "powershell",
                 "-Command",
-                "Get-DnsClientNrptRule | Where-Object { $_.Namespace -eq '.' -and $_.Comment -like '*XenRay*' } | Remove-DnsClientNrptRule -Force",
+                "Get-DnsClientNrptRule | "
+                "Where-Object { $_.Namespace -eq '.' -and $_.Comment -like '*XenRay*' } | "
+                "Remove-DnsClientNrptRule -Force",
             ]
             subprocess.run(cmd_remove, check=False, creationflags=creation_flags)
 
@@ -181,7 +183,8 @@ class XrayService:
         cmd_nrpt = [
             "powershell",
             "-Command",
-            f"Add-DnsClientNrptRule -Namespace '.' -NameServers '{primary_dns}' -Comment 'XenRay TUN DNS'",
+            f"Add-DnsClientNrptRule -Namespace '.' -NameServers '{primary_dns}' "
+            "-Comment 'XenRay TUN DNS'",
         ]
         subprocess.run(cmd_nrpt, check=False, creationflags=creation_flags)
 
