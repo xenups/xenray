@@ -143,9 +143,8 @@ class ConnectionOrchestrator:
         NOTE: Monitoring is stopped by ConnectionManager via ConnectionMonitoringService
               before this method is called.
         """
-        # Stop Xray (single process — handles both proxy and TUN)
-        if connection_info.get("xray_pid"):
-            self._xray_service.stop()
+        # Always call stop to ensure Xray process is stopped and NRPT/DNS settings are cleaned up
+        self._xray_service.stop()
 
         logger.info("Connection torn down successfully")
 

@@ -192,6 +192,10 @@ def disconnect():
 
     typer.echo("🔄 Disconnecting...")
     conn_mgr.disconnect()
+    try:
+        conn_mgr.cleanup()
+    except Exception:
+        pass
     typer.echo("✅ Disconnected")
 
 

@@ -238,6 +238,12 @@ class ConnectionManager:
         self._emit_event("disconnected")
         return True
 
+    def cleanup(self):
+        """Cleanup connection resources on exit."""
+        self.disconnect()
+        # Explicitly teardown connection with empty dict to force service stop and NRPT rule cleanup
+        self._orchestrator.teardown_connection({})
+
     def set_reconnect_event_listener(self, callback):
         """
         Set a callback to be notified of connection state changes.

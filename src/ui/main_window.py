@@ -527,7 +527,7 @@ class MainWindow:
         except Exception:
             pass
         try:
-            self._connection_manager.disconnect()
+            self._connection_manager.cleanup()
         except Exception:
             pass
         try:
