@@ -321,10 +321,17 @@ class ConnectionHandler:
         return success
 
     def _verify_post_connection(self) -> bool:
-        """Lightweight post-connection check after fragment warmup."""
+        """Lightweight post-connection sanity check after fragment warmup (soft).
+
+        The connection was already verified by the orchestrator's health check
+        before ``establish_connection`` returned. This re-check is advisory only:
+        curl probes through the tunnel (especially sing-box ``strict_route`` WFP
+        mode) can return false negatives once the TUN filters fully engage, so a
+        failure here is logged but never tears down a healthy connection.
+        """
         from src.utils.network_utils import NetworkUtils
 
-        time.sleep(2.0)  # Allow fragmented/finalmask connection streams to stabilize
+        time.sleep(2.0)  # Allow the tunnel + fragmented/finalmask streams to stabilize
 
         if self._status_display:
             self._ui_call(lambda: self._status_display.set_step(t("connection.checking_network")))
@@ -332,21 +339,21 @@ class ConnectionHandler:
         mode = self._current_mode_getter() if self._current_mode_getter else ConnectionMode.PROXY
         proxy_port = self._app_context.settings.get_proxy_port() if self._app_context else 0
 
-        is_ok = self._post_connection_check(NetworkUtils, mode, proxy_port)
+        # Quick re-check with one retry to ride out a transient stall. The outcome
+        # is advisory — the connection stays connected regardless.
+        for attempt in range(2):
+            if self._post_connection_check(NetworkUtils, mode, proxy_port):
+                return True
+            if attempt < 1:
+                logger.debug("[ConnectionHandler] Post-connection check transient failure, retrying...")
+                time.sleep(1.0)
 
-        if not is_ok:
-            logger.warning("[ConnectionHandler] Post-connection check failed, one more attempt...")
-            time.sleep(1.5)
-            is_ok = self._post_connection_check(NetworkUtils, mode, proxy_port)
-
-        if not is_ok:
-            logger.error("[ConnectionHandler] Post-connection check failed")
-            self._set_connecting(False)
-            self._connection_manager.disconnect()
-            self._ui_call(self.reset_ui_disconnected)
-            self._show_toast("connection.connected_no_internet", "warning")
-            return False
-
+        # Soft failure: keep the connection. The orchestrator's health check
+        # already verified it moments ago, so a flaky probe must not tear it down.
+        logger.warning(
+            "[ConnectionHandler] Post-connection re-check failed but connection kept "
+            "(already verified by health check)"
+        )
         return True
 
     @staticmethod
@@ -360,7 +367,9 @@ class ConnectionHandler:
         instead, which works for both the Xray and sing-box TUN engines.
         """
         if mode == ConnectionMode.VPN:
-            return network_utils.check_proxy_connectivity(proxy_port) if proxy_port else False
+            if not proxy_port:
+                return False
+            return network_utils.check_proxy_connectivity(proxy_port, timeout=3.0, retries=2)
         return network_utils.check_internet_connection()
 
     def _finalize_connection(self, profile: dict):

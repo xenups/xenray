@@ -1,4 +1,9 @@
-"""Connection Orchestrator - Coordinates connection workflow."""
+"""Connection Orchestrator - Coordinates connection workflow.
+
+Clean-architecture refactor (SRP + DRY) of the connection lifecycle. The public
+API (constructor, ``establish_connection``, ``teardown_connection``) is
+unchanged; only the internals are decomposed into single-responsibility steps.
+"""
 
 import json
 from typing import Optional
@@ -7,10 +12,19 @@ from loguru import logger
 
 from src.core.constants import CORE_SINGBOX, CORE_XRAY, MODE_PROXY, MODE_VPN, OUTPUT_CONFIG_PATH
 from src.core.i18n import t
+from src.services.connection_tester import ConnectionTester
+from src.utils.network_utils import NetworkUtils
+from src.utils.process_utils import purge_all_logs_on_connect
 
 
 class ConnectionOrchestrator:
     """Orchestrates connection establishment and teardown workflow."""
+
+    # Single-attempt outcomes returned by ``_attempt_single_connection``.
+    ATTEMPT_SKIPPED = "skipped"  # config prep or Xray start failed -> try next
+    ATTEMPT_ABORTED = "aborted"  # sing-box failed; Xray already stopped -> try next
+    ATTEMPT_FAILED = "failed"  # health check failed; resources torn down -> try next
+    ATTEMPT_SUCCESS = "success"  # connection established
 
     def __init__(
         self,
@@ -44,6 +58,10 @@ class ConnectionOrchestrator:
         self._legacy_config_service = legacy_config_service
         self._singbox_service = singbox_service
 
+    # ------------------------------------------------------------------
+    # Engine resolution
+    # ------------------------------------------------------------------
+
     def get_core_engine(self) -> str:
         """Return the active core (proxy) engine. Always 'xray' in XenRay architecture."""
         return CORE_XRAY
@@ -66,6 +84,9 @@ class ConnectionOrchestrator:
             return False
         return self.get_tun_engine() == CORE_SINGBOX
 
+    # ------------------------------------------------------------------
+    # High-level flow orchestrator
+    # ------------------------------------------------------------------
 
     def establish_connection(self, file_path: str, mode: str, step_callback=None) -> tuple[bool, Optional[dict]]:
         """
@@ -81,8 +102,6 @@ class ConnectionOrchestrator:
         """
         try:
             # 0. Clean/purge all log files so each new connection starts with a fresh log slate
-            from src.utils.process_utils import purge_all_logs_on_connect
-
             purge_all_logs_on_connect()
 
             # 1. Load and validate configuration
@@ -90,17 +109,8 @@ class ConnectionOrchestrator:
             if not original_config:
                 return False, None
 
-            # 2. Check if migration is needed and prepare migrated config
-            is_legacy = self._legacy_config_service.is_legacy(original_config)
-            configs_to_try = []
-
-            if is_legacy:
-                logger.info("[ConnectionOrchestrator] Legacy config detected, preparing migration")
-                migrated_config = self._legacy_config_service.migrate_config(original_config)
-                configs_to_try.append(("migrated", migrated_config))
-                configs_to_try.append(("original", original_config))
-            else:
-                configs_to_try.append(("standard", original_config))
+            # 2. Build the ordered candidate list (legacy migration + original fallback)
+            configs_to_try = self._resolve_candidate_configs(original_config)
 
             # 3. Pre-connection checks
             if not self._pre_connection_checks(step_callback):
@@ -111,42 +121,13 @@ class ConnectionOrchestrator:
             if use_singbox:
                 logger.info("[ConnectionOrchestrator] Sing-box TUN engine selected (dual-engine mode)")
 
-            # 5. Attempt connection with retry/fallback
+            # 5. Attempt each candidate until one succeeds
             for label, config in configs_to_try:
-                if label == "original":
-                    logger.warning("[ConnectionOrchestrator] Falling back to original legacy configuration")
-                    if step_callback:
-                        step_callback(t("connection.falling_back"))
-
-                # Process configuration (TUN inbound is injected here for VPN mode
-                # when the Xray engine is active; sing-box TUN only needs the
-                # Xray proxy config).
-                process_mode = MODE_PROXY if use_singbox else mode
-                processed_config, socks_port = self._prepare_configuration(config, process_mode, step_callback)
-                if not processed_config:
-                    continue
-
-                # Start Xray service (proxy + VPN/TUN for Xray engine; SOCKS-only
-                # proxy for the sing-box TUN engine).
-                xray_pid = self._start_xray(step_callback)
-                if not xray_pid:
-                    continue
-
-                # Start sing-box TUN engine when selected
-                singbox_pid = None
-                if use_singbox:
-                    singbox_pid = self._start_singbox(processed_config, socks_port, step_callback)
-                    if not singbox_pid:
-                        self._xray_service.stop()
-                        continue
-
-                # Verify connection health
-                if self._verify_connection_health(processed_config, step_callback, mode, socks_port):
-                    connection_info = self._finalize_connection(file_path, mode, xray_pid, singbox_pid, step_callback)
-                    return True, connection_info
-                else:
-                    logger.error(f"[ConnectionOrchestrator] {label.capitalize()} config failed health check")
-                    self.teardown_connection({"xray_pid": xray_pid, "singbox_pid": singbox_pid})
+                status, payload = self._attempt_single_connection(
+                    label, config, mode, use_singbox, file_path, step_callback
+                )
+                if status == self.ATTEMPT_SUCCESS:
+                    return True, payload
 
             logger.error("[ConnectionOrchestrator] All connection attempts failed")
             return False, None
@@ -155,33 +136,97 @@ class ConnectionOrchestrator:
             logger.error(f"Connection orchestration failed: {e}")
             return False, None
 
-    def _verify_connection_health(
+    # ------------------------------------------------------------------
+    # Single-attempt pipeline
+    # ------------------------------------------------------------------
+
+    def _attempt_single_connection(
         self,
+        label: str,
         config: dict,
+        mode: str,
+        use_singbox: bool,
+        file_path: str,
         step_callback,
-        mode: str = "proxy",
-        health_socks_port: int = 0,
-    ) -> bool:
-        """Verify the connection is actually working before declaring success."""
-        if step_callback:
-            step_callback(t("connection.verifying_latency"))
+    ) -> tuple[str, Optional[dict]]:
+        """Run one connection attempt end-to-end.
 
-        from src.services.connection_tester import ConnectionTester
+        Mirrors the original fallback semantics:
+        - Config preparation or Xray start failure is a non-fatal skip (the
+          original legacy config is tried next when migrating).
+        - sing-box start failure stops the just-started Xray proxy.
+        - Health-check failure tears the whole attempt down before continuing.
 
-        socks_port = health_socks_port if health_socks_port > 0 else 0
-        if socks_port:
-            logger.debug(
-                f"[ConnectionOrchestrator] Routing health check through existing SOCKS proxy port {socks_port}"
-            )
+        Returns ``(ATTEMPT_*, connection_info_or_None)``.
+        """
+        if label == "original":
+            logger.warning("[ConnectionOrchestrator] Falling back to original legacy configuration")
+            if step_callback:
+                step_callback(t("connection.falling_back"))
 
-        success, latency, _ = ConnectionTester.test_connection_sync(config, socks_port=socks_port)
+        xray_pid = None
+        singbox_pid = None
 
-        if success:
-            logger.info(f"[ConnectionOrchestrator] Connection verified: {latency}")
-            return True
+        try:
+            # Process configuration (TUN inbound is injected here for VPN mode
+            # when the Xray engine is active; sing-box TUN only needs the
+            # Xray proxy config).
+            process_mode = MODE_PROXY if use_singbox else mode
+            processed_config, socks_port = self._prepare_configuration(config, process_mode, step_callback)
+            if not processed_config:
+                return self.ATTEMPT_SKIPPED, None
 
-        logger.warning(f"[ConnectionOrchestrator] Connection verification failed: {latency}")
-        return False
+            # Start Xray service (proxy + VPN/TUN for Xray engine; SOCKS-only
+            # proxy for the sing-box TUN engine).
+            xray_pid = self._start_xray(step_callback)
+            if not xray_pid:
+                return self.ATTEMPT_SKIPPED, None
+
+            # Start sing-box TUN engine when selected
+            if use_singbox:
+                singbox_pid = self._start_singbox(processed_config, socks_port, step_callback)
+                if not singbox_pid:
+                    self._xray_service.stop()
+                    return self.ATTEMPT_ABORTED, None
+
+            # Verify connection health
+            if self._verify_connection_health(processed_config, step_callback, socks_port):
+                connection_info = self._finalize_connection(file_path, mode, xray_pid, singbox_pid, step_callback)
+                return self.ATTEMPT_SUCCESS, connection_info
+
+            logger.error(f"[ConnectionOrchestrator] {label.capitalize()} config failed health check")
+            self.teardown_connection({"xray_pid": xray_pid, "singbox_pid": singbox_pid})
+            return self.ATTEMPT_FAILED, None
+
+        except Exception:
+            # Ensure no orphaned PIDs or active TUN adapters remain if an
+            # intermediate pipeline step raised unexpectedly.
+            logger.warning(f"[ConnectionOrchestrator] Cleaning up resources after failed attempt ({label})")
+            self._safe_teardown({"xray_pid": xray_pid, "singbox_pid": singbox_pid})
+            raise
+
+    # ------------------------------------------------------------------
+    # Candidate resolution (DRY: single source of truth for fallback list)
+    # ------------------------------------------------------------------
+
+    def _resolve_candidate_configs(self, original_config: dict) -> list:
+        """Build the ordered list of (label, config) candidates to attempt.
+
+        Legacy configs produce [("migrated", migrated), ("original", original)];
+        modern configs produce [("standard", original)].
+        """
+        is_legacy = self._legacy_config_service.is_legacy(original_config)
+
+        if is_legacy:
+            logger.info("[ConnectionOrchestrator] Legacy config detected, preparing migration")
+            migrated_config = self._legacy_config_service.migrate_config(original_config)
+            return [("migrated", migrated_config), ("original", original_config)]
+
+        return [("standard", original_config)]
+
+    # ------------------------------------------------------------------
+    # Resource cleanup
+    # ------------------------------------------------------------------
 
     def teardown_connection(self, connection_info: dict):
         """
@@ -199,6 +244,42 @@ class ConnectionOrchestrator:
         self._xray_service.stop()
 
         logger.info("Connection torn down successfully")
+
+    def _safe_teardown(self, connection_info: dict):
+        """Teardown that never raises — used from exception cleanup paths."""
+        try:
+            self.teardown_connection(connection_info)
+        except Exception as e:
+            logger.error(f"[ConnectionOrchestrator] Teardown after failed attempt raised: {e}")
+
+    # ------------------------------------------------------------------
+    # Connection steps (single responsibility helpers)
+    # ------------------------------------------------------------------
+
+    def _verify_connection_health(
+        self,
+        config: dict,
+        step_callback,
+        health_socks_port: int = 0,
+    ) -> bool:
+        """Verify the connection is actually working before declaring success."""
+        if step_callback:
+            step_callback(t("connection.verifying_latency"))
+
+        socks_port = health_socks_port if health_socks_port > 0 else 0
+        if socks_port:
+            logger.debug(
+                f"[ConnectionOrchestrator] Routing health check through existing SOCKS proxy port {socks_port}"
+            )
+
+        success, latency, _ = ConnectionTester.test_connection_sync(config, socks_port=socks_port)
+
+        if success:
+            logger.info(f"[ConnectionOrchestrator] Connection verified: {latency}")
+            return True
+
+        logger.warning(f"[ConnectionOrchestrator] Connection verification failed: {latency}")
+        return False
 
     def _load_and_validate_config(self, file_path: str, step_callback) -> Optional[dict]:
         """Load and validate configuration file."""
@@ -277,8 +358,6 @@ class ConnectionOrchestrator:
         """Start the sing-box TUN engine, routing into Xray's SOCKS proxy."""
         if step_callback:
             step_callback(t("connection.initializing_vpn"))
-
-        from src.utils.network_utils import NetworkUtils
 
         # Detect MTU using XrayConfigProcessor
         is_quic = self._xray_processor.is_quic_transport(processed_config)
