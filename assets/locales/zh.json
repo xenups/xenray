@@ -103,7 +103,13 @@
     "cipher_suites_desc": "TLS/REALITY 连接的默认加密套件",
     "cipher_suites_hint": "留空使用 Xray 默认值",
     "cipher_suites_saved": "加密套件已保存！💾",
-    "cipher_suites_example": "例如: TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384"
+    "cipher_suites_example": "例如: TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384",
+    "core_engine": "核心引擎",
+    "core_engine_desc": "代理与出站引擎 (Xray-core)",
+    "core_saved": "核心引擎已设置为 {val} ⚡",
+    "tun_engine": "TUN 引擎",
+    "tun_engine_desc": "选择 TUN 适配器引擎 (Xray / Sing-box)",
+    "tun_saved": "TUN 引擎已设置为 {val} 🛠️"
   },
   "admin": {
     "title": "需要管理员权限",

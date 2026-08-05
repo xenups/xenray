@@ -4,6 +4,7 @@ from unittest.mock import Mock
 
 import pytest
 
+from src.core.constants import TUN_GATEWAY_IPV4, TUN_ROUTE_IPV4
 from src.services.tun_injector import TunInjector
 
 
@@ -46,9 +47,21 @@ class TestInject:
         assert tun["tag"] == "tun"
         assert tun["settings"]["mtu"] == 1400
         assert tun["settings"]["dns"] == ["1.1.1.1", "8.8.8.8"]
-        assert tun["settings"]["gateway"] == ["10.0.0.1/16"]
+        assert tun["settings"]["gateway"] == [TUN_GATEWAY_IPV4]
+        assert tun["settings"]["autoSystemRoutingTable"] == [TUN_ROUTE_IPV4]
         assert tun["sniffing"]["enabled"] is True
         assert tun["sniffing"]["destOverride"] == ["fakedns", "http", "tls", "quic"]
+
+    def test_tun_inbound_ipv4_only(self, injector):
+        """TUN adapter is IPv4-only: single IPv4 subnet and default route."""
+        config = {"inbounds": [], "routing": {"rules": []}}
+        injector.inject(config, dns_servers=["1.1.1.1"])
+        tun = next(ib for ib in config["inbounds"] if ib["protocol"] == "tun")
+        gateway = tun["settings"]["gateway"]
+        routes = tun["settings"]["autoSystemRoutingTable"]
+        assert gateway == [TUN_GATEWAY_IPV4]
+        assert routes == [TUN_ROUTE_IPV4]
+        assert not any(":" in g for g in gateway), "No IPv6 gateway subnets allowed"
 
     def test_tun_prepended_to_inbounds(self, injector):
         config = {

@@ -584,3 +584,113 @@ class CipherSuitesInputRow(ft.Container):
     def set_border_color(self, color):
         self._field.border_color = color
         self._field.update()
+
+
+class CoreDropdownRow(ft.Container):
+    """Core engine selection row (fixed to Xray-core as Outbound/Proxy Engine)."""
+
+    def __init__(self, current_value: str, on_change: Callable):
+        self._dropdown = ft.Dropdown(
+            width=120,
+            text_size=12,
+            content_padding=8,
+            value="xray",
+            options=[
+                ft.dropdown.Option("xray", "Xray-core"),
+            ],
+            disabled=True,
+            border_color=ft.Colors.OUTLINE_VARIANT,
+            focused_border_color=ft.Colors.PRIMARY,
+            on_select=on_change,
+        )
+
+        super().__init__(
+            content=ft.Row(
+                [
+                    ft.Icon(ft.Icons.MEMORY, size=24, color=ft.Colors.ON_SURFACE_VARIANT),
+                    ft.Column(
+                        [
+                            ft.Text(
+                                t("settings.core_engine"),
+                                size=12,
+                                weight=ft.FontWeight.W_500,
+                            ),
+                            ft.Text(
+                                t("settings.core_engine_desc"),
+                                size=11,
+                                color=ft.Colors.ON_SURFACE_VARIANT,
+                            ),
+                        ],
+                        spacing=2,
+                        expand=True,
+                    ),
+                    self._dropdown,
+                ],
+                spacing=8,
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
+            padding=ft.Padding.symmetric(horizontal=10, vertical=8),
+            border_radius=8,
+            bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE),
+        )
+
+    @property
+    def value(self) -> str:
+        return "xray"
+
+
+
+class TunEngineDropdownRow(ft.Container):
+    """TUN implementation selection row (Xray / Sing-box)."""
+
+    def __init__(self, current_value: str, on_change: Callable):
+        self._dropdown = ft.Dropdown(
+            width=120,
+            text_size=12,
+            content_padding=8,
+            value=current_value if current_value in ("xray", "singbox") else "singbox",
+            options=[
+                ft.dropdown.Option("singbox", "Sing-box TUN"),
+                ft.dropdown.Option("xray", "Xray TUN"),
+            ],
+            border_color=ft.Colors.OUTLINE_VARIANT,
+            focused_border_color=ft.Colors.PRIMARY,
+            on_select=on_change,
+        )
+
+        super().__init__(
+            content=ft.Row(
+                [
+                    ft.Icon(ft.Icons.ROUTER, size=24, color=ft.Colors.ON_SURFACE_VARIANT),
+                    ft.Column(
+                        [
+                            ft.Text(
+                                t("settings.tun_engine"),
+                                size=12,
+                                weight=ft.FontWeight.W_500,
+                            ),
+                            ft.Text(
+                                t("settings.tun_engine_desc"),
+                                size=11,
+                                color=ft.Colors.ON_SURFACE_VARIANT,
+                            ),
+                        ],
+                        spacing=2,
+                        expand=True,
+                    ),
+                    self._dropdown,
+                ],
+                spacing=8,
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
+            padding=ft.Padding.symmetric(horizontal=10, vertical=8),
+            border_radius=8,
+            bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE),
+        )
+
+    @property
+    def value(self) -> str:
+        return self._dropdown.value
+

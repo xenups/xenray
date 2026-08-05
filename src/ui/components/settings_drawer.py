@@ -27,6 +27,7 @@ from src.ui.components.settings_sections import (
     SettingsListTile,
     SettingsSection,
     StartupToggleRow,
+    TunEngineDropdownRow,
 )
 from src.utils.process_utils import ProcessUtils
 
@@ -56,6 +57,10 @@ class SettingsDrawer(ft.NavigationDrawer):
 
         # Components
         self._mode_switch_row = ModeSwitchRow(is_proxy, self._handle_mode_change)
+        self._tun_dropdown_row = TunEngineDropdownRow(
+            self._app_context.settings.get_tun_engine(),
+            self._save_tun_engine,
+        )
         self._port_row = PortInputRow(
             self._app_context.settings.get_proxy_port(),
             self._save_port,
@@ -122,6 +127,7 @@ class SettingsDrawer(ft.NavigationDrawer):
                             t("settings.connection"),
                             [
                                 self._mode_switch_row,
+                                self._tun_dropdown_row,
                                 self._port_row,
                                 self._country_row,
                             ],
@@ -354,6 +360,20 @@ class SettingsDrawer(ft.NavigationDrawer):
         val = self._country_row.value
         self._app_context.settings.set_routing_country(val)
         self._show_toast(t("settings.country_saved", val=val), "success")
+        page.update()
+
+
+
+    def _save_tun_engine(self, e):
+        """Save the TUN implementation setting."""
+        page = self.page
+        if not page:
+            return
+
+        val = self._tun_dropdown_row.value
+        self._app_context.settings.set_tun_engine(val)
+        display_name = "Xray TUN" if val == "xray" else "Sing-box TUN"
+        self._show_toast(t("settings.tun_saved", val=display_name), "success")
         page.update()
 
     def _save_language(self, e):

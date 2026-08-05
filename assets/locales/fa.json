@@ -104,7 +104,13 @@
     "cipher_suites_desc": "راه‌های رمزنگاری پیش‌فرض برای اتصالات TLS/REALITY",
     "cipher_suites_hint": "خالی بگذارید برای مقادیر پیش‌فرض Xray",
     "cipher_suites_saved": "راه‌های رمزنگاری ذخیره شد! 💾",
-    "cipher_suites_example": "مثال: TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384"
+    "cipher_suites_example": "مثال: TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384",
+    "core_engine": "هسته اصلی",
+    "core_engine_desc": "موتور پروکسی و خروجی (Xray-core)",
+    "core_saved": "هسته اصلی تغییر یافت به {val} ⚡",
+    "tun_engine": "موتور TUN",
+    "tun_engine_desc": "انتخاب آداپتور TUN (Xray / Sing-box)",
+    "tun_saved": "موتور TUN تغییر یافت به {val} 🛠️"
   },
   "admin": {
     "title": "نیاز به دسترسی مدیر",

@@ -140,3 +140,31 @@ class SettingsRepository:
 
     def set_cipher_suites(self, value: str) -> None:
         self._write("cipher_suites.txt", value)
+
+    # --- Core Engine (Xray) ---
+    def get_core_type(self) -> str:
+        """Core engine is strictly locked to Xray in XenRay architecture."""
+        return "xray"
+
+    def get_core_engine(self) -> str:
+        """Alias for get_core_type(). Always returns 'xray'."""
+        return "xray"
+
+    def set_core_type(self, core_type: str) -> None:
+        """Core engine selection is locked to xray."""
+        self._write("core_type.txt", "xray")
+
+    def set_core_engine(self, core_type: str) -> None:
+        """Alias for set_core_type()."""
+        self._write("core_type.txt", "xray")
+
+    # --- TUN Engine (Xray TUN / Sing-box TUN) ---
+    def get_tun_engine(self) -> str:
+        val = self._read("tun_engine.txt", "singbox").lower()
+        return val if val in {"xray", "singbox"} else "singbox"
+
+    def set_tun_engine(self, engine: str) -> None:
+        if engine in {"xray", "singbox"}:
+            self._write("tun_engine.txt", engine)
+
+

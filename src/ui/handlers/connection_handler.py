@@ -329,12 +329,15 @@ class ConnectionHandler:
         if self._status_display:
             self._ui_call(lambda: self._status_display.set_step(t("connection.checking_network")))
 
-        is_ok = NetworkUtils.check_internet_connection()
+        mode = self._current_mode_getter() if self._current_mode_getter else ConnectionMode.PROXY
+        proxy_port = self._app_context.settings.get_proxy_port() if self._app_context else 0
+
+        is_ok = self._post_connection_check(NetworkUtils, mode, proxy_port)
 
         if not is_ok:
-            logger.warning("[ConnectionHandler] Post-connection internet check failed, one more attempt...")
+            logger.warning("[ConnectionHandler] Post-connection check failed, one more attempt...")
             time.sleep(1.5)
-            is_ok = NetworkUtils.check_internet_connection()
+            is_ok = self._post_connection_check(NetworkUtils, mode, proxy_port)
 
         if not is_ok:
             logger.error("[ConnectionHandler] Post-connection check failed")
@@ -345,6 +348,20 @@ class ConnectionHandler:
             return False
 
         return True
+
+    @staticmethod
+    def _post_connection_check(network_utils, mode, proxy_port: int) -> bool:
+        """Verify the connection through the correct path for the active mode.
+
+        In VPN/TUN mode all traffic is captured by the tunnel, so a raw direct
+        socket check (e.g. to 8.8.8.8:53) is blocked by the TUN engine — the
+        sing-box ``strict_route`` WFP filter rejects it with WinError 10013
+        (WSAEACCES). Verify through the SOCKS proxy (the tunnel's egress path)
+        instead, which works for both the Xray and sing-box TUN engines.
+        """
+        if mode == ConnectionMode.VPN:
+            return network_utils.check_proxy_connectivity(proxy_port) if proxy_port else False
+        return network_utils.check_internet_connection()
 
     def _finalize_connection(self, profile: dict):
         """Finalize successful connection."""

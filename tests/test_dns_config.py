@@ -4,6 +4,7 @@ from unittest.mock import Mock
 
 import pytest
 
+from src.core.constants import DNS_IP_CLOUDFLARE
 from src.services.dns_configurator import DnsConfigurator
 
 # ---------------------------------------------------------------------------
@@ -156,10 +157,10 @@ class TestConfigureDns:
         assert "tls://dns.google" in servers
 
     def test_query_strategy_default(self, dns_configurator, mock_dns):
-        """queryStrategy is set to UseIP by default."""
+        """Proxy mode uses UseIPv4 as the safe default (no AAAA timeouts)."""
         config = {}
         dns_configurator.configure(config)
-        assert config["dns"]["queryStrategy"] == "UseIP"
+        assert config["dns"]["queryStrategy"] == "UseIPv4"
 
     def test_query_strategy_preserved(self, dns_configurator, mock_dns):
         """Existing queryStrategy is not overridden."""
@@ -282,12 +283,12 @@ class TestConfigureVpnDns:
         bootstrap = next(s for s in servers if s.get("detour") == "direct")
         assert remote["address"] != bootstrap["address"]
 
-    def test_vpn_query_strategy_use_ip(self, dns_configurator, mock_dns):
-        """VPN mode sets queryStrategy to UseIP."""
+    def test_vpn_query_strategy_ipv4_only(self, dns_configurator, mock_dns):
+        """VPN mode forces UseIPv4 query strategy (IPv6 disabled on the TUN)."""
         mock_dns.load.return_value = []
         config = {}
         dns_configurator.configure(config, mode="vpn")
-        assert config["dns"]["queryStrategy"] == "UseIP"
+        assert config["dns"]["queryStrategy"] == "UseIPv4"
 
     def test_vpn_direct_server_always_has_domains(self, dns_configurator, mock_dns):
         """Direct/bootstrap servers must always carry strict domain bounds (never a catch-all)."""
@@ -337,7 +338,7 @@ class TestConfigureVpnDns:
 
 
 class TestBuildTunDnsServers:
-    """Tests for DnsConfigurator.build_tun_servers()."""
+    """Tests for DnsConfigurator.build_tun_servers() (IPv4-only)."""
 
     def test_udp(self, dns_configurator, mock_dns):
         """UDP address is returned as bare address."""
@@ -354,7 +355,7 @@ class TestBuildTunDnsServers:
         ]
         servers = dns_configurator.build_tun_servers()
         assert "dns.cloudflare.com" not in servers
-        assert servers == ["1.1.1.1"]
+        assert servers == [DNS_IP_CLOUDFLARE]
 
     def test_dot_domain_filtered(self, dns_configurator, mock_dns):
         """DoT domain name address is filtered out."""
@@ -363,7 +364,7 @@ class TestBuildTunDnsServers:
         ]
         servers = dns_configurator.build_tun_servers()
         assert "dns.google" not in servers
-        assert servers == ["1.1.1.1"]
+        assert servers == [DNS_IP_CLOUDFLARE]
 
     def test_doq_domain_filtered(self, dns_configurator, mock_dns):
         """DoQ domain name address is filtered out."""
@@ -372,7 +373,7 @@ class TestBuildTunDnsServers:
         ]
         servers = dns_configurator.build_tun_servers()
         assert "dns.nextdns.io" not in servers
-        assert servers == ["1.1.1.1"]
+        assert servers == [DNS_IP_CLOUDFLARE]
 
     def test_empty_address_skipped(self, dns_configurator, mock_dns):
         """Empty address entries are filtered out."""
@@ -385,13 +386,13 @@ class TestBuildTunDnsServers:
         assert "" not in servers
 
     def test_empty_list_uses_defaults(self, dns_configurator, mock_dns):
-        """Empty DNS list falls back to default servers."""
+        """Empty DNS list falls back to the default IPv4 server."""
         mock_dns.load.return_value = []
         servers = dns_configurator.build_tun_servers()
-        assert servers == ["1.1.1.1"]
+        assert servers == [DNS_IP_CLOUDFLARE]
 
     def test_multiple_servers(self, dns_configurator, mock_dns):
-        """Multiple DNS entries are included if they are valid IPs."""
+        """Multiple DNS entries are included if they are valid IPv4 addresses."""
         mock_dns.load.return_value = [
             {"address": "9.9.9.9", "protocol": "udp", "domains": []},
             {"address": "dns.google", "protocol": "dot", "domains": []},
@@ -400,3 +401,14 @@ class TestBuildTunDnsServers:
         assert "9.9.9.9" in servers
         assert "dns.google" not in servers
         assert len(servers) == 1
+
+    def test_ipv6_resolver_dropped(self, dns_configurator, mock_dns):
+        """IPv6 resolvers are excluded from the TUN adapter DNS (IPv4-only)."""
+        mock_dns.load.return_value = [
+            {"address": "9.9.9.9", "protocol": "udp", "domains": []},
+            {"address": "2606:4700:4700::1111", "protocol": "udp", "domains": []},
+        ]
+        servers = dns_configurator.build_tun_servers()
+        assert "9.9.9.9" in servers
+        assert "2606:4700:4700::1111" not in servers
+        assert all(":" not in s for s in servers), "No IPv6 resolvers allowed"

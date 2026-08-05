@@ -98,3 +98,93 @@ class TestConnectionOrchestrator:
 
         assert success is False
         assert info is None
+
+
+class TestConnectionOrchestratorEngineSwitch:
+    """Tests for XrayService / SingBoxService engine switching."""
+
+    @pytest.fixture
+    def dual_engine_orchestrator(self):
+        mocks = {
+            "app_context": MagicMock(),
+            "net_val": MagicMock(),
+            "xray_proc": MagicMock(),
+            "xray_svc": MagicMock(),
+            "legacy": MagicMock(),
+            "singbox_svc": MagicMock(),
+        }
+        mocks["legacy"].is_legacy.return_value = False
+        mocks["app_context"].load_config.return_value = ({"outbounds": []}, None)
+        mocks["net_val"].check_internet_connection.return_value = True
+        mocks["xray_proc"].process_config.return_value = {"processed": True}
+        mocks["xray_proc"].get_socks_port.return_value = 1080
+        mocks["xray_svc"].start.return_value = 1234
+        mocks["singbox_svc"].start.return_value = 5678
+
+        orch = ConnectionOrchestrator(
+            mocks["app_context"],
+            mocks["net_val"],
+            mocks["xray_proc"],
+            mocks["xray_svc"],
+            mocks["legacy"],
+            singbox_service=mocks["singbox_svc"],
+        )
+        return orch, mocks
+
+    @patch("src.services.connection_tester.ConnectionTester.test_connection_sync")
+    @patch("builtins.open", new_callable=mock_open)
+    @patch("src.utils.network_utils.NetworkUtils.detect_optimal_mtu", return_value=1420)
+    def test_vpn_uses_singbox_engine(self, mock_mtu, mock_file, mock_conn_test, dual_engine_orchestrator):
+        """Selecting the sing-box TUN engine starts both Xray and sing-box."""
+        orch, mocks = dual_engine_orchestrator
+        mocks["app_context"].settings.get_tun_engine.return_value = "singbox"
+        mock_conn_test.return_value = (True, "50ms", None)
+
+        success, info = orch.establish_connection("config.json", mode="vpn")
+
+        assert success is True
+        assert info["xray_pid"] == 1234
+        assert info["singbox_pid"] == 5678
+        mocks["xray_svc"].start.assert_called_once()
+        mocks["singbox_svc"].start.assert_called_once()
+        # Xray config is processed as a proxy (no native TUN injection)
+        mocks["xray_proc"].process_config.assert_called_once_with({"outbounds": []}, mode="proxy")
+
+    @patch("src.services.connection_tester.ConnectionTester.test_connection_sync")
+    @patch("builtins.open", new_callable=mock_open)
+    @patch("src.utils.network_utils.NetworkUtils.detect_optimal_mtu", return_value=1420)
+    def test_vpn_uses_xray_engine_by_default(self, mock_mtu, mock_file, mock_conn_test, dual_engine_orchestrator):
+        """Default Xray TUN engine does not start sing-box."""
+        orch, mocks = dual_engine_orchestrator
+        mocks["app_context"].settings.get_tun_engine.return_value = "xray"
+        mock_conn_test.return_value = (True, "50ms", None)
+
+        success, info = orch.establish_connection("config.json", mode="vpn")
+
+        assert success is True
+        assert info["singbox_pid"] is None
+        mocks["xray_svc"].start.assert_called_once()
+        mocks["singbox_svc"].start.assert_not_called()
+
+    @patch("src.services.connection_tester.ConnectionTester.test_connection_sync")
+    @patch("builtins.open", new_callable=mock_open)
+    @patch("src.utils.network_utils.NetworkUtils.detect_optimal_mtu", return_value=1420)
+    def test_singbox_failure_stops_xray(self, mock_mtu, mock_file, mock_conn_test, dual_engine_orchestrator):
+        """If sing-box fails to start, Xray is stopped and the attempt fails."""
+        orch, mocks = dual_engine_orchestrator
+        mocks["app_context"].settings.get_tun_engine.return_value = "singbox"
+        mocks["singbox_svc"].start.return_value = None  # sing-box fails
+
+        success, info = orch.establish_connection("config.json", mode="vpn")
+
+        assert success is False
+        mocks["xray_svc"].stop.assert_called_once()
+
+    def test_teardown_stops_singbox_then_xray(self, dual_engine_orchestrator):
+        """Teardown stops the sing-box TUN engine and the Xray proxy."""
+        orch, mocks = dual_engine_orchestrator
+
+        orch.teardown_connection({"xray_pid": 1234, "singbox_pid": 5678})
+
+        mocks["singbox_svc"].stop.assert_called_once()
+        mocks["xray_svc"].stop.assert_called_once()

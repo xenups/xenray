@@ -48,9 +48,16 @@ def _init_core():
     logger.remove()
     logger.add(sys.stderr, level="INFO")
     # Still log to file at DEBUG if needed
-    from src.core.constants import EARLY_LOG_FILE
+    from src.core.constants import EARLY_LOG_FILE, LOG_BACKUP_COUNT
 
-    logger.add(EARLY_LOG_FILE, level="DEBUG", rotation="10 MB")
+    logger.add(
+        EARLY_LOG_FILE,
+        level="DEBUG",
+        # Strict 5 MB rotation ("5 MiB" == 5 * 1024 * 1024) with max 3 backups.
+        rotation="5 MiB",
+        retention=LOG_BACKUP_COUNT,
+        encoding="utf-8",
+    )
 
     # Initialize core managers
     app_context = AppContext.create()

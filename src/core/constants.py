@@ -21,6 +21,7 @@ GITHUB_REPO = os.getenv("GITHUB_REPO", "xenups/xenray")
 UPDATE_DOWNLOAD_TIMEOUT = float(os.getenv("UPDATE_DOWNLOAD_TIMEOUT", "60"))
 UPDATE_MIN_FILE_SIZE = int(os.getenv("UPDATE_MIN_FILE_SIZE", "1048576"))
 XRAY_VERSION = os.getenv("XRAY_VERSION", "26.7.28")
+SINGBOX_VERSION = os.getenv("SINGBOX_VERSION", "1.13.14")
 # WINTUN_DLL — required for Xray native TUN on Windows
 WINTUN_DLL = os.path.join(os.path.join(os.path.join(Path(__file__).parent.parent.parent, "bin"), "wintun.dll"))
 WINTUN_DOWNLOAD_URL = os.getenv(
@@ -34,6 +35,7 @@ MAX_RECENT_FILES = int(os.getenv("MAX_RECENT_FILES", "20"))
 
 # Placeholder PIDs
 PLACEHOLDER_XRAY_PID = int(os.getenv("PLACEHOLDER_XRAY_PID", "-999999"))
+PLACEHOLDER_SINGBOX_PID = int(os.getenv("PLACEHOLDER_SINGBOX_PID", "-999997"))
 
 # Temporary directory (cross-platform)
 if PlatformUtils.get_platform() == "windows":
@@ -51,6 +53,7 @@ EARLY_LOG_FILE = os.path.join(TMPDIR, "xenray_app.log")
 XRAY_LOG_FILE = os.path.join(TMPDIR, "xenray_xray.log")
 OUTPUT_CONFIG_PATH = os.path.join(TMPDIR, "xenray_config.json")
 XRAY_PID_FILE = os.path.join(TMPDIR, "xray.pid")
+SINGBOX_PID_FILE = os.path.join(TMPDIR, "singbox.pid")
 
 # Configuration directory
 CONFIG_DIR = os.path.expanduser("~/.config/xenray")
@@ -83,6 +86,7 @@ else:
 
 # Executable paths with platform-specific extensions
 XRAY_EXECUTABLE = os.path.join(BIN_DIR, f"xray{PlatformUtils.get_binary_suffix()}")
+SINGBOX_EXECUTABLE = os.path.join(BIN_DIR, f"sing-box{PlatformUtils.get_binary_suffix()}")
 
 # Xray geo files directory (geoip.dat, geosite.dat in assets/rules or bin/)
 RULES_DIR = os.path.join(ASSETS_DIR, "rules")
@@ -93,6 +97,17 @@ else:
 
 # Temp root for Xray
 TEMP_ROOT = TMPDIR
+
+# Sing-box runtime files
+SINGBOX_CONFIG_PATH = os.path.join(TMPDIR, "singbox_config.json")
+SINGBOX_LOG_FILE = os.path.join(TMPDIR, "xenray_singbox.log")
+
+# ---------------------------------------------------------------------------
+# Log rotation limits — strict 5 MB ceiling on every log file, at most 3
+# historical rotated backups (e.g. <file>.1, <file>.2, <file>.3).
+# ---------------------------------------------------------------------------
+LOG_MAX_BYTES = 5 * 1024 * 1024  # exactly 5 MB
+LOG_BACKUP_COUNT = 3
 
 # Fonts (from environment)
 FONT_URLS = {
@@ -113,6 +128,28 @@ DNS_IP_GOOGLE = "8.8.8.8"
 DNS_IP_GOOGLE_ALT = "8.8.4.4"
 DNS_IP_OPENDNS = "208.67.222.222"
 
+# TUN adapter gateway/subnet address — strictly IPv4-only.
+#
+# IPv6 is disabled deliberately to avoid system-stack prefix binding errors
+# ("need one more IPv6 address...") and IPv6-related latency spikes. The TUN
+# adapter exposes a single IPv4 subnet; DNS force-resolves in IPv4-only mode.
+TUN_GATEWAY_IPV4 = "10.0.0.1/16"
+
+# TUN system routing table capture — IPv4 default route only (IPv6 is disabled).
+TUN_ROUTE_IPV4 = "0.0.0.0/0"
+
+# Windows NCSI probe domains — must always resolve via the direct (local) path
+# so Windows network connectivity detection keeps working inside the VPN.
+# Shared constant to avoid DRY violations between dns_configurator and tun_injector.
+NCSI_BYPASS_DOMAINS: list = [
+    "msftconnecttest.com",
+    "msftncsi.com",
+    "www.msftconnecttest.com",
+    "www.msftncsi.com",
+    "ipv6.msftconnecttest.com",
+    "ipv6.msftncsi.com",
+]
+
 # DNS Providers (from environment)
 DNS_PROVIDERS = {
     "local_resolver": {
@@ -132,6 +169,37 @@ DNS_PROVIDERS = {
         f"{DNS_IP_GOOGLE},{DNS_IP_GOOGLE_ALT},{DNS_IP_CLOUDFLARE},{DNS_IP_CLOUDFLARE_ALT},"
         f"dns.google,cloudflare-dns.com",
     ).split(","),
+}
+
+# Sing-box Rule Sets (from environment) — remote .srs bundles used for
+# country-based direct routing when the Sing-box TUN engine is selected.
+SINGBOX_RULE_SETS: dict = {
+    "ir": [
+        os.getenv(
+            "SINGBOX_RULESET_IR_GEOIP",
+            "https://raw.githubusercontent.com/Chocolate4U/Iran-sing-box-rules/rule-set/geoip-ir.srs",  # noqa: E501
+        ),
+        os.getenv(
+            "SINGBOX_RULESET_IR_GEOSITE",
+            "https://raw.githubusercontent.com/Chocolate4U/Iran-sing-box-rules/rule-set/geosite-ir.srs",  # noqa: E501
+        ),
+    ],
+    "cn": [
+        os.getenv(
+            "SINGBOX_RULESET_ADS_GEOSITE",
+            "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-category-ads-all.srs",  # noqa: E501
+        ),
+        os.getenv(
+            "SINGBOX_RULESET_CN_GEOIP",
+            "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs",  # noqa: E501
+        ),
+    ],
+    "ru": [
+        os.getenv(
+            "SINGBOX_RULESET_RU",
+            "https://github.com/legiz-ru/sb-rule-sets/raw/main/ru-bundle.srs",
+        )
+    ],
 }
 
 # Xray country geoip/geosite codes used for per-country direct routing
@@ -163,6 +231,10 @@ PROTOCOL_LOOPBACK = "loopback"
 # Connection modes
 MODE_VPN = "vpn"
 MODE_PROXY = "proxy"
+
+# Core / TUN engine identifiers
+CORE_XRAY = "xray"
+CORE_SINGBOX = "singbox"
 
 # Outbound / inbound tags
 TAG_DIRECT = "direct"

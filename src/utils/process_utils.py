@@ -7,8 +7,63 @@ from typing import List, Optional
 
 import psutil
 
+from src.core.constants import LOG_BACKUP_COUNT, LOG_MAX_BYTES
 from src.core.logger import logger
 from src.utils.platform_utils import PlatformUtils
+
+
+def rotate_oversized_log_file(
+    log_file: str,
+    max_bytes: int = LOG_MAX_BYTES,
+    backup_count: int = LOG_BACKUP_COUNT,
+) -> None:
+    """Rotate a log file if it already exceeds ``max_bytes``.
+
+    Mirrors ``logging.handlers.RotatingFileHandler`` semantics for raw subprocess
+    log files: the current file becomes ``<file>.1``, existing backups shift up
+    (``<file>.1`` -> ``<file>.2``, ...), the oldest backup is dropped, and the
+    main file is truncated. Called BEFORE a core binary is launched so its
+    appended stdout/stderr never grows an already-oversized log past the 5 MB
+    ceiling.
+    """
+    if not os.path.exists(log_file):
+        return
+    try:
+        size = os.path.getsize(log_file)
+    except OSError:
+        return
+    if size < max_bytes:
+        return
+
+    logger.info(f"[ProcessUtils] Rotating oversized log ({size} bytes >= {max_bytes}): {log_file}")
+
+    # Drop the oldest backup.
+    oldest = f"{log_file}.{backup_count}"
+    if os.path.exists(oldest):
+        try:
+            os.remove(oldest)
+        except OSError:
+            pass
+
+    # Shift backups down: .N-1 -> .N, ..., .1 -> .2.
+    for i in range(backup_count - 1, 0, -1):
+        src = f"{log_file}.{i}"
+        dst = f"{log_file}.{i + 1}"
+        if os.path.exists(src):
+            try:
+                os.replace(src, dst)
+            except OSError:
+                pass
+
+    # Move the current file to .1 and start a fresh empty file.
+    try:
+        os.replace(log_file, f"{log_file}.1")
+    except OSError:
+        pass
+    try:
+        open(log_file, "w", encoding="utf-8").close()
+    except OSError:
+        pass
 
 
 class ProcessUtils:
@@ -114,12 +169,16 @@ class ProcessUtils:
         stderr_handle = None
         try:
             if stdout_file:
+                # Enforce the 5 MB ceiling before appending subprocess output.
+                rotate_oversized_log_file(stdout_file)
                 stdout_handle = open(stdout_file, "a", encoding="utf-8")
                 stdout = stdout_handle
             else:
                 stdout = subprocess.PIPE
 
             if stderr_file:
+                # Enforce the 5 MB ceiling before appending subprocess output.
+                rotate_oversized_log_file(stderr_file)
                 stderr_handle = open(stderr_file, "a", encoding="utf-8")
                 stderr = stderr_handle
             else:

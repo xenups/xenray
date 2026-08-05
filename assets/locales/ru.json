@@ -103,7 +103,13 @@
     "cipher_suites_desc": "Наборы шифров по умолчанию для TLS/REALITY",
     "cipher_suites_hint": "Оставьте пустым для стандартных наборов Xray",
     "cipher_suites_saved": "Наборы шифров сохранены! 💾",
-    "cipher_suites_example": "например: TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384"
+    "cipher_suites_example": "например: TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384",
+    "core_engine": "Основное ядро",
+    "core_engine_desc": "Движок прокси и исходящих (Xray-core)",
+    "core_saved": "Основное ядро изменено на {val} ⚡",
+    "tun_engine": "Движок TUN",
+    "tun_engine_desc": "Выбор адаптера TUN (Xray / Sing-box)",
+    "tun_saved": "Движок TUN изменен на {val} 🛠️"
   },
   "admin": {
     "title": "Требуются права администратора",

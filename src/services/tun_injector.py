@@ -11,14 +11,18 @@ from src.core.constants import (
     DOMAIN_ASIS,
     GEOIP_PREFIX,
     GEOSITE_PREFIX,
+    NCSI_BYPASS_DOMAINS,
     PROTOCOL_TUN,
     RULE_FIELD,
     TAG_BLOCK,
     TAG_DIRECT,
     TAG_PROXY,
+    TUN_GATEWAY_IPV4,
+    TUN_ROUTE_IPV4,
     XRAY_COUNTRY_GEOIP,
 )
 from src.services.config_utils import is_ip
+from src.services.dns_configurator import DnsConfigurator
 
 
 class TunInjector:
@@ -48,9 +52,12 @@ class TunInjector:
             "settings": {
                 "name": "xenray-tun",
                 "mtu": mtu,
-                "gateway": ["10.0.0.1/16"],
+                # IPv4-only subnet — IPv6 is disabled on the TUN to avoid
+                # system-stack prefix binding errors and IPv6 latency spikes.
+                "gateway": [TUN_GATEWAY_IPV4],
                 "dns": dns_servers,
-                "autoSystemRoutingTable": ["0.0.0.0/0", "::/0"],
+                # Capture the IPv4 default route only (IPv6 disabled).
+                "autoSystemRoutingTable": [TUN_ROUTE_IPV4],
             },
             "sniffing": {
                 "enabled": True,
@@ -85,15 +92,10 @@ class TunInjector:
                 addr = s
                 detour = ""
 
-            # Clean protocol prefix and path/port
-            cleaned = addr
-            for prefix in ["https://", "https+local://", "tls://", "quic://"]:
-                if cleaned.startswith(prefix):
-                    cleaned = cleaned[len(prefix) :]
-            if "/" in cleaned:
-                cleaned = cleaned.split("/")[0]
-            if ":" in cleaned:
-                cleaned = cleaned.split(":")[0]
+            # Use the shared helper which correctly handles IPv6 addresses
+            # (bare multi-colon addresses are not split on ':'), DoH/DoT/DoQ
+            # scheme prefixes, and URL paths.
+            cleaned = DnsConfigurator._to_bare_address(addr)
 
             if detour == TAG_DIRECT:
                 direct_dns_targets.append(cleaned)
@@ -178,15 +180,13 @@ class TunInjector:
             )
 
         # 4. NCSI probe domains -> direct (without external geosite dependency)
-        ncsi_domains = [
-            "msftconnecttest.com",
-            "msftncsi.com",
-            "www.msftconnecttest.com",
-            "www.msftncsi.com",
-            "ipv6.msftconnecttest.com",
-            "ipv6.msftncsi.com",
-        ]
-        rules.append({"type": RULE_FIELD, "domain": ncsi_domains, "outboundTag": TAG_DIRECT})
+        rules.append(
+            {
+                "type": RULE_FIELD,
+                "domain": list(NCSI_BYPASS_DOMAINS),
+                "outboundTag": TAG_DIRECT,
+            }
+        )
 
         if proxy_server_ips:
             ips = [addr for addr in proxy_server_ips if is_ip(addr)]

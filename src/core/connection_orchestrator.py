@@ -5,7 +5,7 @@ from typing import Optional
 
 from loguru import logger
 
-from src.core.constants import OUTPUT_CONFIG_PATH
+from src.core.constants import CORE_SINGBOX, CORE_XRAY, MODE_PROXY, MODE_VPN, OUTPUT_CONFIG_PATH
 from src.core.i18n import t
 
 
@@ -19,6 +19,7 @@ class ConnectionOrchestrator:
         xray_processor,
         xray_service,
         legacy_config_service,
+        singbox_service=None,
     ):
         """
         Initialize ConnectionOrchestrator with injected dependencies.
@@ -29,6 +30,9 @@ class ConnectionOrchestrator:
             xray_processor: XrayConfigProcessor instance
             xray_service: XrayService instance
             legacy_config_service: LegacyConfigService instance
+            singbox_service: Optional SingboxService instance — when set and the
+                user selects the sing-box TUN engine, VPN mode runs Xray as the
+                proxy and sing-box as the TUN engine (dual-engine).
 
         NOTE: Monitoring (log_monitor, active_monitor, auto_reconnect) is handled
               by ConnectionMonitoringService in ConnectionManager.
@@ -38,6 +42,30 @@ class ConnectionOrchestrator:
         self._xray_processor = xray_processor
         self._xray_service = xray_service
         self._legacy_config_service = legacy_config_service
+        self._singbox_service = singbox_service
+
+    def get_core_engine(self) -> str:
+        """Return the active core (proxy) engine. Always 'xray' in XenRay architecture."""
+        return CORE_XRAY
+
+    def get_tun_engine(self) -> str:
+        """Return the selected TUN engine ('xray' or 'singbox') from settings."""
+        return self._resolve_tun_engine()
+
+    def _resolve_tun_engine(self) -> str:
+        """Return the selected TUN engine ('xray' or 'singbox') from settings."""
+        try:
+            engine = self._app_context.settings.get_tun_engine()
+        except Exception:
+            engine = CORE_SINGBOX
+        return engine if engine in (CORE_XRAY, CORE_SINGBOX) else CORE_SINGBOX
+
+    def _uses_singbox_tun(self, mode: str) -> bool:
+        """True when VPN mode should use the sing-box TUN engine."""
+        if mode != MODE_VPN or self._singbox_service is None:
+            return False
+        return self.get_tun_engine() == CORE_SINGBOX
+
 
     def establish_connection(self, file_path: str, mode: str, step_callback=None) -> tuple[bool, Optional[dict]]:
         """
@@ -73,30 +101,47 @@ class ConnectionOrchestrator:
             if not self._pre_connection_checks(step_callback):
                 return False, None
 
-            # 4. Attempt connection with retry/fallback
+            # 4. Determine engine: sing-box TUN runs Xray (proxy) + sing-box (TUN)
+            use_singbox = self._uses_singbox_tun(mode)
+            if use_singbox:
+                logger.info("[ConnectionOrchestrator] Sing-box TUN engine selected (dual-engine mode)")
+
+            # 5. Attempt connection with retry/fallback
             for label, config in configs_to_try:
                 if label == "original":
                     logger.warning("[ConnectionOrchestrator] Falling back to original legacy configuration")
                     if step_callback:
                         step_callback(t("connection.falling_back"))
 
-                # Process configuration (TUN inbound is injected here for VPN mode)
-                processed_config, socks_port = self._prepare_configuration(config, mode, step_callback)
+                # Process configuration (TUN inbound is injected here for VPN mode
+                # when the Xray engine is active; sing-box TUN only needs the
+                # Xray proxy config).
+                process_mode = MODE_PROXY if use_singbox else mode
+                processed_config, socks_port = self._prepare_configuration(config, process_mode, step_callback)
                 if not processed_config:
                     continue
 
-                # Start Xray service (single process handles both proxy and VPN/TUN)
+                # Start Xray service (proxy + VPN/TUN for Xray engine; SOCKS-only
+                # proxy for the sing-box TUN engine).
                 xray_pid = self._start_xray(step_callback)
                 if not xray_pid:
                     continue
 
+                # Start sing-box TUN engine when selected
+                singbox_pid = None
+                if use_singbox:
+                    singbox_pid = self._start_singbox(processed_config, socks_port, step_callback)
+                    if not singbox_pid:
+                        self._xray_service.stop()
+                        continue
+
                 # Verify connection health
                 if self._verify_connection_health(processed_config, step_callback, mode, socks_port):
-                    connection_info = self._finalize_connection(file_path, mode, xray_pid, step_callback)
+                    connection_info = self._finalize_connection(file_path, mode, xray_pid, singbox_pid, step_callback)
                     return True, connection_info
                 else:
                     logger.error(f"[ConnectionOrchestrator] {label.capitalize()} config failed health check")
-                    self.teardown_connection({"xray_pid": xray_pid})
+                    self.teardown_connection({"xray_pid": xray_pid, "singbox_pid": singbox_pid})
 
             logger.error("[ConnectionOrchestrator] All connection attempts failed")
             return False, None
@@ -143,7 +188,9 @@ class ConnectionOrchestrator:
         NOTE: Monitoring is stopped by ConnectionManager via ConnectionMonitoringService
               before this method is called.
         """
-        # Always call stop to ensure Xray process is stopped and NRPT/DNS settings are cleaned up
+        # Stop sing-box TUN engine first, then Xray proxy.
+        if self._singbox_service is not None:
+            self._singbox_service.stop()
         self._xray_service.stop()
 
         logger.info("Connection torn down successfully")
@@ -221,11 +268,44 @@ class ConnectionOrchestrator:
         logger.debug(f"Xray started with PID {xray_pid}")
         return xray_pid
 
+    def _start_singbox(self, processed_config: dict, socks_port: int, step_callback) -> Optional[int]:
+        """Start the sing-box TUN engine, routing into Xray's SOCKS proxy."""
+        if step_callback:
+            step_callback(t("connection.initializing_vpn"))
+
+        from src.utils.network_utils import NetworkUtils
+
+        # Detect MTU using XrayConfigProcessor
+        is_quic = self._xray_processor.is_quic_transport(processed_config)
+        mtu_mode = "quic_safe" if is_quic else "auto"
+        optimal_mtu = NetworkUtils.detect_optimal_mtu(mtu_mode=mtu_mode)
+        logger.info(f"[ConnectionOrchestrator] Using MTU for TUN interface: {optimal_mtu}")
+
+        # Get routing configuration using XrayConfigProcessor
+        routing_country = self._app_context.settings.get_routing_country()
+        proxy_server_ip = self._xray_processor.get_proxy_server_ip(processed_config)
+        routing_rules = self._app_context.routing.load_rules()
+
+        singbox_pid = self._singbox_service.start(
+            xray_socks_port=socks_port,
+            proxy_server_ip=proxy_server_ip,
+            routing_country=routing_country,
+            routing_rules=routing_rules,
+            mtu=optimal_mtu,
+        )
+
+        if not singbox_pid:
+            logger.error("[ConnectionOrchestrator] Failed to start Sing-box")
+            return None
+
+        return singbox_pid
+
     def _finalize_connection(
         self,
         file_path: str,
         mode: str,
         xray_pid: int,
+        singbox_pid: Optional[int],
         step_callback,
     ) -> dict:
         """Finalize connection and return connection info."""
@@ -235,6 +315,7 @@ class ConnectionOrchestrator:
         connection_info = {
             "mode": mode,
             "xray_pid": xray_pid,
+            "singbox_pid": singbox_pid,
             "file": file_path,
         }
 

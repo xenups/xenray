@@ -107,7 +107,13 @@
     "cipher_suites_desc": "Default cipher suites for TLS/REALITY connections",
     "cipher_suites_hint": "Leave empty for Xray defaults",
     "cipher_suites_saved": "Cipher suites saved! 💾",
-    "cipher_suites_example": "e.g. TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384"
+    "cipher_suites_example": "e.g. TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384",
+    "core_engine": "Core Engine",
+    "core_engine_desc": "Proxy & outbound engine (Xray-core)",
+    "core_saved": "Core Engine set to {val} ⚡",
+    "tun_engine": "TUN Engine",
+    "tun_engine_desc": "TUN adapter engine (Xray / Sing-box)",
+    "tun_saved": "TUN Engine set to {val} 🛠️"
   },
   "admin": {
     "title": "Admin Rights Required",
