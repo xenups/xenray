@@ -32,6 +32,8 @@ ARCH = os.getenv("ARCH", "64")
 
 # Application Limits
 MAX_RECENT_FILES = int(os.getenv("MAX_RECENT_FILES", "20"))
+LOG_MAX_BYTES = int(os.getenv("LOG_MAX_BYTES", "5242880"))  # 5 MB ceiling
+LOG_BACKUP_COUNT = int(os.getenv("LOG_BACKUP_COUNT", "3"))
 
 # Placeholder PIDs
 PLACEHOLDER_XRAY_PID = int(os.getenv("PLACEHOLDER_XRAY_PID", "-999999"))

@@ -80,6 +80,11 @@ class ConnectionOrchestrator:
             (success, connection_info) tuple
         """
         try:
+            # 0. Clean/purge all log files so each new connection starts with a fresh log slate
+            from src.utils.process_utils import purge_all_logs_on_connect
+
+            purge_all_logs_on_connect()
+
             # 1. Load and validate configuration
             original_config = self._load_and_validate_config(file_path, step_callback)
             if not original_config:

@@ -12,19 +12,126 @@ from src.core.logger import logger
 from src.utils.platform_utils import PlatformUtils
 
 
+def truncate_log_file_inplace(
+    log_file: str,
+    max_bytes: int = LOG_MAX_BYTES,
+    keep_bytes: int = 512 * 1024,
+) -> bool:
+    """Truncate a log file in-place, retaining the last ``keep_bytes`` of lines.
+
+    Safe for Windows even when an active subprocess holds a write lock on the file.
+    """
+    if not os.path.exists(log_file):
+        return False
+    try:
+        size = os.path.getsize(log_file)
+        if size < max_bytes:
+            return False
+
+        logger.info(f"[ProcessUtils] In-place truncating oversized log ({size} bytes >= {max_bytes}): {log_file}")
+        with open(log_file, "r+", encoding="utf-8", errors="ignore") as f:
+            f.seek(0, os.SEEK_END)
+            curr_size = f.tell()
+            if curr_size < max_bytes:
+                return False
+
+            read_pos = max(0, curr_size - keep_bytes)
+            f.seek(read_pos)
+            if read_pos > 0:
+                f.readline()  # Skip incomplete partial line
+
+            tail_content = f.read()
+            f.seek(0)
+            f.write("[... Log truncated at 5 MB ceiling ...]\n" + tail_content)
+            f.truncate()
+            f.flush()
+        return True
+    except Exception as e:
+        logger.warning(f"[ProcessUtils] In-place log truncation failed for {log_file}: {e}")
+        return False
+
+
+def cleanup_tmp_log_dir(max_bytes: int = LOG_MAX_BYTES) -> None:
+    """Scan TMPDIR and remove all legacy log backups and truncate any oversized active logs."""
+    from src.core.constants import TMPDIR
+
+    if not os.path.exists(TMPDIR):
+        return
+
+    try:
+        for file_name in os.listdir(TMPDIR):
+            file_path = os.path.join(TMPDIR, file_name)
+            if not os.path.isfile(file_path):
+                continue
+            try:
+                # 1. Unconditionally purge old rotated backup files (.1, .2, .3, .old, .bak)
+                if file_name.endswith((".1", ".2", ".3", ".old", ".bak")) or ".log." in file_name:
+                    try:
+                        os.remove(file_path)
+                        logger.info(f"[ProcessUtils] Deleted old rotated log backup: {file_name}")
+                    except OSError:
+                        pass
+                    continue
+
+                # 2. Truncate any active log file exceeding max_bytes (5 MB)
+                size = os.path.getsize(file_path)
+                if size >= max_bytes:
+                    truncate_log_file_inplace(file_path, max_bytes=max_bytes, keep_bytes=64 * 1024)
+            except OSError:
+                pass
+    except Exception as e:
+        logger.debug(f"[ProcessUtils] Error during temp log directory cleanup: {e}")
+
+
+def purge_all_logs_on_connect() -> None:
+    """Clear/truncate all *.log files and purge backup files in TMPDIR on new connection.
+
+    Ensures every new connection starts with a fresh, clean log file.
+    """
+    from src.core.constants import TMPDIR
+
+    if not os.path.exists(TMPDIR):
+        return
+
+    logger.info("[ProcessUtils] Clearing all log files on new connection attempt...")
+    try:
+        for file_name in os.listdir(TMPDIR):
+            file_path = os.path.join(TMPDIR, file_name)
+            if not os.path.isfile(file_path):
+                continue
+            try:
+                # 1. Unconditionally remove rotated backup files (.1, .2, .3, .old, .bak)
+                if file_name.endswith((".1", ".2", ".3", ".old", ".bak")) or ".log." in file_name:
+                    try:
+                        os.remove(file_path)
+                    except OSError:
+                        pass
+                    continue
+
+                # 2. Clear/truncate all *.log files
+                if file_name.endswith(".log"):
+                    try:
+                        with open(file_path, "w", encoding="utf-8") as f:
+                            f.write("[... Log cleared on new connection start ...]\n")
+                            f.flush()
+                    except OSError:
+                        # Fallback if locked by open handle
+                        truncate_log_file_inplace(file_path, max_bytes=0, keep_bytes=0)
+            except OSError:
+                pass
+    except Exception as e:
+        logger.debug(f"[ProcessUtils] Error clearing log files on connect: {e}")
+
+
 def rotate_oversized_log_file(
     log_file: str,
     max_bytes: int = LOG_MAX_BYTES,
     backup_count: int = LOG_BACKUP_COUNT,
 ) -> None:
-    """Rotate a log file if it already exceeds ``max_bytes``.
+    """Rotate a log file if it exceeds ``max_bytes``.
 
-    Mirrors ``logging.handlers.RotatingFileHandler`` semantics for raw subprocess
-    log files: the current file becomes ``<file>.1``, existing backups shift up
-    (``<file>.1`` -> ``<file>.2``, ...), the oldest backup is dropped, and the
-    main file is truncated. Called BEFORE a core binary is launched so its
-    appended stdout/stderr never grows an already-oversized log past the 5 MB
-    ceiling.
+    If file renaming fails (e.g. Windows file lock by running subprocess),
+    falls back to safe in-place tail truncation so the log file never exceeds 5 MB.
     """
     if not os.path.exists(log_file):
         return
@@ -37,7 +144,7 @@ def rotate_oversized_log_file(
 
     logger.info(f"[ProcessUtils] Rotating oversized log ({size} bytes >= {max_bytes}): {log_file}")
 
-    # Drop the oldest backup.
+    # Drop oldest backup.
     oldest = f"{log_file}.{backup_count}"
     if os.path.exists(oldest):
         try:
@@ -51,19 +158,22 @@ def rotate_oversized_log_file(
         dst = f"{log_file}.{i + 1}"
         if os.path.exists(src):
             try:
-                os.replace(src, dst)
+                # If backup file itself is oversized, purge it instead of shifting
+                if os.path.exists(src) and os.path.getsize(src) >= max_bytes:
+                    os.remove(src)
+                else:
+                    os.replace(src, dst)
             except OSError:
                 pass
 
-    # Move the current file to .1 and start a fresh empty file.
+    # Try moving current file to .1 and starting a fresh file
     try:
         os.replace(log_file, f"{log_file}.1")
-    except OSError:
-        pass
-    try:
         open(log_file, "w", encoding="utf-8").close()
     except OSError:
-        pass
+        # Windows file lock by running subprocess — fallback to in-place tail truncation!
+        truncate_log_file_inplace(log_file, max_bytes=max_bytes)
+
 
 
 class ProcessUtils:

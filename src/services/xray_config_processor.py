@@ -102,7 +102,7 @@ class XrayConfigProcessor:
         """
         new_config = copy.deepcopy(config)
 
-        new_config["log"] = {"loglevel": "debug", "access": "", "error": ""}
+        new_config["log"] = {"loglevel": "warning", "access": "", "error": ""}
 
         os.environ["XRAY_LOCATION_ASSET"] = XRAY_LOCATION_ASSET
 

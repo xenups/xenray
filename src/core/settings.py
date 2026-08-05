@@ -98,13 +98,14 @@ class Settings:
 
     @staticmethod
     def create_log_files():
-        """Rotate any oversized subprocess log files at startup.
+        """Sweep and purge/rotate any oversized log or backup files at startup.
 
-        Enforces the 5 MB ceiling before a core binary is launched so a leftover
-        oversized log from a previous session never grows further.
+        Enforces the 5 MB ceiling before a core binary is launched so leftover
+        oversized logs or rotated backup files from previous sessions are purged.
         """
         from src.core.constants import SINGBOX_LOG_FILE, XRAY_LOG_FILE
-        from src.utils.process_utils import rotate_oversized_log_file
+        from src.utils.process_utils import cleanup_tmp_log_dir, rotate_oversized_log_file
 
+        cleanup_tmp_log_dir()
         for log_file in [XRAY_LOG_FILE, SINGBOX_LOG_FILE]:
             rotate_oversized_log_file(log_file)

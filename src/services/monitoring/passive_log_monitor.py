@@ -194,6 +194,20 @@ class PassiveLogMonitor:
                     current_size = stat.st_size
                     current_ctime = stat.st_ctime if os.name == "nt" else 0
 
+                    # Enforce 5 MB ceiling in real time while subprocess streams logs
+                    from src.core.constants import LOG_MAX_BYTES
+                    from src.utils.process_utils import truncate_log_file_inplace
+
+                    if current_size >= LOG_MAX_BYTES:
+                        if file_obj:
+                            file_obj.close()
+                        truncate_log_file_inplace(file_path, max_bytes=LOG_MAX_BYTES)
+                        file_obj = open(file_path, "r", encoding="utf-8", errors="ignore")
+                        file_obj.seek(0, os.SEEK_END)
+                        inode = current_inode
+                        last_ctime = current_ctime
+                        continue
+
                     # First time opening
                     if file_obj is None:
                         file_obj = open(file_path, "r", encoding="utf-8", errors="ignore")

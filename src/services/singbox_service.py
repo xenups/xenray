@@ -755,7 +755,7 @@ class SingboxService:
             process_names.append(current_exe)
 
         cfg = {
-            "log": {"level": "info", "timestamp": True},
+            "log": {"level": "warn", "timestamp": True},
             "dns": {
                 "servers": [
                     {
