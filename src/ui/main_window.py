@@ -9,7 +9,7 @@ import flet as ft
 # Local modules
 from src.core.app_context import AppContext
 from src.core.connection_manager import ConnectionManager
-from src.core.constants import APPDIR, FONT_URLS, WINDOW_HEIGHT, WINDOW_WIDTH
+from src.core.constants import FONT_URLS, WINDOW_HEIGHT, WINDOW_WIDTH
 from src.core.i18n import t
 from src.core.logger import logger
 from src.core.types import ConnectionMode
@@ -17,6 +17,7 @@ from src.services.network_stats import NetworkStatsService
 from src.ui.builders.ui_builder import UIBuilder
 from src.ui.components.admin_restart_dialog import AdminRestartDialog
 from src.ui.components.close_dialog import CloseDialog
+from src.ui.components.lan_sharing_card import LanSharingCard
 from src.ui.components.toast import ToastManager
 from src.ui.handlers.background_task_handler import BackgroundTaskHandler
 from src.ui.handlers.connection_handler import ConnectionHandler
@@ -89,6 +90,7 @@ class MainWindow:
         self._server_card = None
         self._connection_button = None
         self._status_display = None
+        self._lan_sharing_card = None
         self._theme_icon = None
         self._header = None
         self._main_container = None
@@ -145,6 +147,11 @@ class MainWindow:
             update_horizon_glow_callback=self._update_horizon_glow,
             profile_manager_is_running_setter=self._set_profile_manager_running,
             monitoring_service_is_running_setter=self._set_monitoring_service_running,
+        )
+
+        # Wire LAN sharing card visibility into the connection lifecycle.
+        self._connection_handler._lan_card_callback = lambda show: (
+            self._lan_sharing_card.set_visible(show) if self._lan_sharing_card else None
         )
 
         # Setup reconnect event handler (for passive reconnect UI)
@@ -238,7 +245,9 @@ class MainWindow:
         self._page.theme = ft.Theme(font_family="Roboto")
         self._page.fonts = FONT_URLS
 
-        icon_path = os.path.join(APPDIR, "assets", "icon.ico")
+        from src.main import get_absolute_icon_path
+
+        icon_path = get_absolute_icon_path()
         if os.path.exists(icon_path):
             self._page.window.icon = icon_path
 
@@ -271,14 +280,28 @@ class MainWindow:
         self._view_switcher.update()
 
     def _create_dashboard_view(self):
+        if not self._lan_sharing_card:
+            self._lan_sharing_card = LanSharingCard(self._app_context)
+
+        # Central block containing Power Button & Status Display with top margin offset
+        center_block = ft.Container(
+            content=ft.Column(
+                [
+                    self._connection_button,
+                    self._status_display,
+                ],
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                alignment=ft.MainAxisAlignment.CENTER,
+                spacing=0,
+            ),
+            margin=ft.Margin.only(top=20),
+        )
+
         return ft.Column(
             [
                 self._header,
                 ft.Container(expand=True),
-                # Connection Button in center
-                self._connection_button,
-                # Status Display directly below button (no gap)
-                self._status_display,
+                center_block,
                 ft.Container(expand=True),
                 # Server Card at bottom
                 self._server_card,
@@ -536,5 +559,11 @@ class MainWindow:
             pass
         try:
             self._reconnect_event_handler.cleanup()
+        except Exception:
+            pass
+        try:
+            from src.utils.firewall_manager import FirewallManager
+
+            FirewallManager.remove_lan_firewall_rule()
         except Exception:
             pass

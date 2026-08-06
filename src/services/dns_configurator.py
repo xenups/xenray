@@ -16,7 +16,8 @@ from src.core.constants import (
     DNS_IP_CLOUDFLARE,
     DNS_IP_GOOGLE,
     DNS_UDP,
-    DNS_USE_IP,
+    DNS_USE_IPV4,
+    NCSI_BYPASS_DOMAINS,
     TAG_DIRECT,
     TAG_PROXY,
 )
@@ -54,14 +55,9 @@ class DnsConfigurator:
             # 2. Bootstrap/Direct (detour=TAG_DIRECT): restricted to the proxy
             #    server's own domain, explicit user direct bypass domains and
             #    Windows NCSI probe domains.
-            bootstrap_domains = [
-                "msftconnecttest.com",
-                "msftncsi.com",
-                "www.msftconnecttest.com",
-                "www.msftncsi.com",
-                "ipv6.msftconnecttest.com",
-                "ipv6.msftncsi.com",
-            ]
+            # NCSI probe domains — must always resolve via the direct path so that
+            # Windows connectivity detection continues to work inside the VPN.
+            bootstrap_domains = list(NCSI_BYPASS_DOMAINS)
 
             # Add proxy server domains to bootstrap DNS so they can be resolved directly
             if proxy_server_ips:
@@ -121,7 +117,9 @@ class DnsConfigurator:
                 )
 
             config[CONFIG_DNS][CONFIG_SERVERS] = servers_list
-            config[CONFIG_DNS][CONFIG_QUERY_STRATEGY] = DNS_USE_IP
+            # IPv4-only resolution: query A records exclusively. IPv6 is disabled
+            # on the TUN stack, so UseIPv4 avoids AAAA timeouts and IPv6 latency.
+            config[CONFIG_DNS][CONFIG_QUERY_STRATEGY] = DNS_USE_IPV4
             logger.info(f"[DnsConfigurator] Configured leak-free DNS (VPN mode) with {len(servers_list)} servers")
             return
 
@@ -159,7 +157,9 @@ class DnsConfigurator:
         config[CONFIG_DNS][CONFIG_SERVERS] = servers if servers else [DNS_IP_CLOUDFLARE, DNS_IP_GOOGLE]
 
         if CONFIG_QUERY_STRATEGY not in config[CONFIG_DNS]:
-            config[CONFIG_DNS][CONFIG_QUERY_STRATEGY] = DNS_USE_IP
+            # Proxy mode: UseIPv4 is the safe default. UseIP causes AAAA
+            # timeouts on IPv4-only ISPs without adding user-visible benefit.
+            config[CONFIG_DNS][CONFIG_QUERY_STRATEGY] = DNS_USE_IPV4
 
         logger.info(
             f"[DnsConfigurator] Configured {len(config[CONFIG_DNS][CONFIG_SERVERS])} DNS server(s) with fallback"
@@ -182,7 +182,12 @@ class DnsConfigurator:
         return bare
 
     def build_tun_servers(self) -> list:
-        """Build DNS server list for TUN inbound from user configuration."""
+        """Build the IPv4-only DNS server list for the TUN inbound.
+
+        Windows/Wintun adapter DNS settings only accept bare IP addresses, so
+        DoH/DoT/DoQ hosts are dropped. IPv6 is disabled on the TUN stack, so no
+        IPv6 resolver is added — AAAA queries are not answered by the adapter.
+        """
         dns_config = self._app_context.dns.load()
         servers = []
         for item in dns_config:
@@ -190,6 +195,11 @@ class DnsConfigurator:
             if not addr:
                 continue
             # Windows/Wintun adapter DNS settings only accept bare IP addresses.
-            if is_ip(addr):
+            if is_ip(addr) and ":" not in addr:
                 servers.append(addr)
-        return servers if servers else [DNS_IP_CLOUDFLARE]
+
+        if not servers:
+            servers = [DNS_IP_CLOUDFLARE]
+
+        # Deduplicate while preserving order
+        return list(dict.fromkeys(servers))

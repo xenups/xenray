@@ -8,6 +8,7 @@ from src.core.app_context import AppContext
 from src.core.connection_orchestrator import ConnectionOrchestrator
 from src.core.constants import MODE_PROXY, MODE_VPN, OUTPUT_CONFIG_PATH, PROTOCOL_TUN
 from src.core.i18n import t
+from src.services.singbox_service import SingboxService
 from src.services.xray_service import XrayService
 
 
@@ -45,6 +46,7 @@ class ConnectionManager:
         legacy_config_service = LegacyConfigService(self._xray_processor)
 
         xray_service = XrayService()
+        singbox_service = SingboxService()
 
         # State
         self._current_connection = None
@@ -60,13 +62,15 @@ class ConnectionManager:
             on_reconnect_event=self._emit_event,
         )
 
-        # Create ConnectionOrchestrator with all dependencies (no singbox_service)
+        # Create ConnectionOrchestrator with all dependencies. The TUN engine is
+        # selected dynamically at connect time (Xray native TUN vs sing-box TUN).
         self._orchestrator = ConnectionOrchestrator(
             app_context=app_context,
             network_validator=self._monitoring.network_validator,
             xray_processor=self._xray_processor,
             xray_service=xray_service,
             legacy_config_service=legacy_config_service,
+            singbox_service=singbox_service,
         )
 
         # Connection Adoption: Check if services are already running (CLI persistence)
@@ -118,15 +122,18 @@ class ConnectionManager:
     def _adopt_existing_connection(self):
         """Adopt an already running connection (from PID files)."""
         xray_pid = self._orchestrator._xray_service.pid
+        singbox_pid = self._orchestrator._singbox_service.pid if self._orchestrator._singbox_service else None
 
-        if xray_pid:
-            # Single-process architecture: if Xray is running, determine mode from
-            # the saved config (if available) or default to proxy.
+        if xray_pid or singbox_pid:
+            # Single-process (Xray) or dual-engine (Xray proxy + sing-box TUN)
+            # architecture: determine mode from the saved config if available,
+            # or default to proxy.
             mode = self._detect_mode_from_running_config()
             self._session_id += 1
             self._current_connection = {
                 "mode": mode,
                 "xray_pid": xray_pid,
+                "singbox_pid": singbox_pid,
                 "file": t("connection.adopted_connection", default="Adopted Connection"),
                 "session_id": self._session_id,
             }
@@ -240,9 +247,9 @@ class ConnectionManager:
 
     def cleanup(self):
         """Cleanup connection resources on exit."""
+        # disconnect() already calls teardown_connection() — do not call it again
+        # (would double-stop services and log confusing duplicate 'Stopped' messages).
         self.disconnect()
-        # Explicitly teardown connection with empty dict to force service stop and NRPT rule cleanup
-        self._orchestrator.teardown_connection({})
 
     def set_reconnect_event_listener(self, callback):
         """

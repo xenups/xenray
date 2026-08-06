@@ -2,6 +2,14 @@
 
 All notable changes to XenRay will be documented in this file.
 
+## [0.2.5-beta] - 2026-08-06
+
+### Changed
+- **Version Bump**: Updated application version across project to `0.2.5-beta`.
+- **Flet v0.86.1 Window Controller & Taskbar Icon**:
+  - Registered explicit Windows AppUserModelID (`xenray.desktop.client.v1`) before Flet app initialization for native process icon grouping.
+  - Resolved absolute icon file paths for both development and compiled PyInstaller (`sys._MEIPASS`) environments via `get_absolute_icon_path()`.
+
 ## [0.2.2-beta] - 2026-07-31
 
 ### Added

@@ -1,4 +1,5 @@
 import json as _json
+import threading
 from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
@@ -73,6 +74,11 @@ class TestXrayService:
             with patch("time.sleep", return_value=None):
                 with patch("src.services.xray_service.subprocess.run", side_effect=fake_run):
                     pid = xray_service.start("config.json")
+                    # TUN DNS is configured in a daemon thread; wait for it so the
+                    # recorded netsh commands are complete before asserting.
+                    for thread in threading.enumerate():
+                        if thread.name == "xenray-tun-dns":
+                            thread.join(timeout=10)
         return pid, calls
 
     @patch("src.utils.platform_utils.PlatformUtils.get_platform", return_value="windows")
@@ -103,3 +109,20 @@ class TestXrayService:
         netsh_cmds = [c for c in calls if c and c[0] == "netsh"]
         assert any(c[3] == "set" and c[7] == DNS_IP_CLOUDFLARE for c in netsh_cmds)
         assert any(c[3] == "add" and c[6] == DNS_IP_GOOGLE and c[7] == "index=2" for c in netsh_cmds)
+
+    @patch("src.utils.platform_utils.PlatformUtils.get_platform", return_value="windows")
+    @patch("src.utils.process_utils.ProcessUtils.is_running", return_value=True)
+    @patch("src.utils.process_utils.ProcessUtils.run_command")
+    @patch("os.path.isfile", return_value=True)
+    def test_start_tun_dns_dual_stack_sets_ipv6(
+        self, mock_isfile, mock_run, mock_is_running, mock_platform, xray_service
+    ):
+        """Dual-stack TUN DNS pins IPv6 resolver on the adapter via netsh ipv6."""
+        ipv6 = "2606:4700:4700::1111"
+        pid, calls = self._run_windows_tun_start(xray_service, [DNS_IP_CLOUDFLARE, ipv6], mock_run)
+
+        assert pid == 1234
+        netsh_cmds = [c for c in calls if c and c[0] == "netsh"]
+        assert any(c[1:4] == ["interface", "ipv6", "set"] and c[7] == ipv6 for c in netsh_cmds)
+        # IPv4 DNS still pinned separately
+        assert any(c[1:4] == ["interface", "ip", "set"] and c[7] == DNS_IP_CLOUDFLARE for c in netsh_cmds)

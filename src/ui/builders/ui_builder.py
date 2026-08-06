@@ -7,6 +7,7 @@ import flet as ft
 
 from src.ui.components.connection_button import ConnectionButton
 from src.ui.components.header import Header
+from src.ui.components.lan_sharing_card import LanSharingCard
 from src.ui.components.server_card import ServerCard
 from src.ui.components.status_display import StatusDisplay
 from src.ui.theme import AppColors
@@ -23,11 +24,15 @@ class UIBuilder:
 
     def build_ui(self):
         """Build and configure all UI components."""
+        # LAN Proxy Sharing Top Bar Badge
+        self._main._lan_sharing_card = LanSharingCard(self._main._app_context)
+
         # Header
         self._main._header = Header(
             self._main._page,
             self._main._open_logs_drawer,
             self._main._open_settings_drawer,
+            lan_sharing_card=self._main._lan_sharing_card,
         )
 
         # Heartbeat indicator

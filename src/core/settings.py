@@ -1,6 +1,11 @@
 """Application settings."""
+
+import logging
+import logging.handlers
 import os
 import sys
+
+from src.core.constants import LOG_BACKUP_COUNT, LOG_MAX_BYTES
 
 
 class Settings:
@@ -21,6 +26,10 @@ class Settings:
         """
         Setup logging to both stdout and file.
 
+        The file side uses a ``RotatingFileHandler`` with a strict 5 MB ceiling
+        (``maxBytes = 5 * 1024 * 1024``) and ``backupCount = 3`` so the early-log
+        file can never grow beyond 5 MB regardless of how much the process prints.
+
         Args:
             log_file_path: Path to log file
         """
@@ -30,11 +39,16 @@ class Settings:
                 self.terminal = sys.__stdout__
                 self.log = None
                 try:
-                    self.log = open(logfile_path, "w", buffering=1)
+                    self.log = logging.handlers.RotatingFileHandler(
+                        logfile_path,
+                        maxBytes=LOG_MAX_BYTES,
+                        backupCount=LOG_BACKUP_COUNT,
+                        encoding="utf-8",
+                    )
                 except Exception:
                     # If we can't open log file (e.g. locked by another instance),
                     # we proceed without file logging to avoid crash.
-                    pass
+                    self.log = None
 
             def write(self, message):
                 if self.terminal:
@@ -44,7 +58,17 @@ class Settings:
                         pass
                 if self.log:
                     try:
-                        self.log.write(message)
+                        stream = self.log.stream
+                        if stream is not None:
+                            # Rotate BEFORE writing if this message would push the
+                            # file past the 5 MB ceiling (mirrors shouldRollover).
+                            msg_bytes = len(message.encode("utf-8", errors="replace"))
+                            if self.log.maxBytes > 0 and stream.tell() + msg_bytes >= self.log.maxBytes:
+                                self.log.doRollover()
+                                stream = self.log.stream  # re-fetch after rotation
+                            if stream is not None:
+                                stream.write(message)
+                                stream.flush()
                     except Exception:
                         pass
 
@@ -55,7 +79,10 @@ class Settings:
                     except Exception:
                         pass
                 if self.log:
-                    self.log.flush()
+                    try:
+                        self.log.flush()
+                    except Exception:
+                        pass
 
         sys.stdout = TeeOutput(log_file_path)
         # Only redirect stderr if it exists (might be None in windowed mode)
@@ -71,18 +98,14 @@ class Settings:
 
     @staticmethod
     def create_log_files():
-        """Create/clear log files if they don't exist or are too large (>1MB)."""
-        from src.core.constants import XRAY_LOG_FILE
+        """Sweep and purge/rotate any oversized log or backup files at startup.
 
-        max_size = 1 * 1024 * 1024  # 1MB limit
+        Enforces the 5 MB ceiling before a core binary is launched so leftover
+        oversized logs or rotated backup files from previous sessions are purged.
+        """
+        from src.core.constants import SINGBOX_LOG_FILE, XRAY_LOG_FILE
+        from src.utils.process_utils import cleanup_tmp_log_dir, rotate_oversized_log_file
 
-        for log_file in [XRAY_LOG_FILE]:
-            should_clear = False
-            if not os.path.exists(log_file):
-                should_clear = True
-            elif os.path.getsize(log_file) > max_size:
-                should_clear = True
-
-            if should_clear:
-                with open(log_file, "w"):
-                    pass
+        cleanup_tmp_log_dir()
+        for log_file in [XRAY_LOG_FILE, SINGBOX_LOG_FILE]:
+            rotate_oversized_log_file(log_file)

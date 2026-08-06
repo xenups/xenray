@@ -31,6 +31,7 @@ class AutoReconnectService:
         connection_tester,
         connect_fn: Callable[[str, str], bool],
         event_emitter: Callable[[str, dict], None],
+        internet_check: Optional[Callable[[Optional[dict]], bool]] = None,
     ):
         """
         Initialize AutoReconnectService.
@@ -41,12 +42,16 @@ class AutoReconnectService:
             connection_tester: ConnectionTester class/instance for health checks
             connect_fn: Function to establish connection (file_path, mode) -> success
             event_emitter: Function to emit events (event_type, data)
+            internet_check: Optional mode-aware internet availability check that
+                receives the current connection dict. Falls back to
+                network_validator.check_internet_connection() when omitted.
         """
         self._network_validator = network_validator
         self._config_loader = config_loader
         self._connection_tester = connection_tester
         self._connect_fn = connect_fn
         self._event_emitter = event_emitter
+        self._internet_check = internet_check
         self._lock = threading.Lock()
 
         # Session-scoped cancellation
@@ -107,7 +112,12 @@ class AutoReconnectService:
         if not self._validate_session(session_id, "internet_check"):
             return False
 
-        if not self._network_validator.check_internet_connection():
+        if self._internet_check:
+            internet_ok = self._internet_check(current_connection)
+        else:
+            internet_ok = self._network_validator.check_internet_connection()
+
+        if not internet_ok:
             logger.warning("[AutoReconnectService] Internet is offline")
             self._emit_safe("reconnect_failed", session_id, {"reason": "no_internet"})
             return False
