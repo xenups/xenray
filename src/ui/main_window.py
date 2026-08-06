@@ -9,7 +9,7 @@ import flet as ft
 # Local modules
 from src.core.app_context import AppContext
 from src.core.connection_manager import ConnectionManager
-from src.core.constants import APPDIR, FONT_URLS, WINDOW_HEIGHT, WINDOW_WIDTH
+from src.core.constants import FONT_URLS, WINDOW_HEIGHT, WINDOW_WIDTH
 from src.core.i18n import t
 from src.core.logger import logger
 from src.core.types import ConnectionMode

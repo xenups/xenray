@@ -46,10 +46,14 @@ class XrayService:
         atexit.register(self._guaranteed_cleanup)
         try:
             signal.signal(signal.SIGTERM, self._signal_handler)
-            signal.signal(signal.SIGBREAK, self._signal_handler)  # Windows Ctrl+Break
         except (OSError, ValueError):
-            # SIGBREAK is Windows-only; SIGTERM may be unavailable in some envs
             pass
+
+        if hasattr(signal, "SIGBREAK"):
+            try:
+                signal.signal(signal.SIGBREAK, self._signal_handler)  # type: ignore[attr-defined]
+            except (OSError, ValueError, AttributeError):
+                pass
 
     # ------------------------------------------------------------------
     # Signal / atexit handlers

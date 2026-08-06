@@ -1,8 +1,16 @@
 """Main application entry point."""
 
+import asyncio
 import ctypes
 import os
 import sys
+
+import flet as ft
+
+from src.core.constants import EARLY_LOG_FILE, WINDOW_HEIGHT, WINDOW_WIDTH
+from src.core.logger import logger
+from src.core.settings import Settings
+from src.ui.theme import AppColors
 
 # 1. Register AppUserModelID for Windows Process Grouping (Must run BEFORE ft.app/ft.run)
 if sys.platform == "win32":
@@ -32,18 +40,6 @@ def resolve_asset_path(relative_path: str) -> str:
         else (os.path.join(sys._MEIPASS, relative_path) if hasattr(sys, "_MEIPASS") else os.path.abspath(relative_path))
     )
 
-
-if __name__ == "__main__":
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-import asyncio
-
-import flet as ft
-
-from src.core.constants import EARLY_LOG_FILE, WINDOW_HEIGHT, WINDOW_WIDTH
-from src.core.logger import logger
-from src.core.settings import Settings
-from src.ui.theme import AppColors
 
 _shutdown_event = asyncio.Event()
 
@@ -235,5 +231,6 @@ def run():
 if __name__ == "__main__":
     import multiprocessing
 
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     multiprocessing.freeze_support()
     run()

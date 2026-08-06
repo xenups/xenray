@@ -3,7 +3,6 @@
 import socket
 from unittest.mock import MagicMock, patch
 
-import flet as ft
 import pytest
 
 from src.core.constants import LAN_FIREWALL_RULE_NAME, LAN_PRIVATE_RANGES
