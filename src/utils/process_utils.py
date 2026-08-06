@@ -175,7 +175,6 @@ def rotate_oversized_log_file(
         truncate_log_file_inplace(log_file, max_bytes=max_bytes)
 
 
-
 class ProcessUtils:
     """Utility class for process management."""
 

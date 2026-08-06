@@ -22,6 +22,7 @@ from src.ui.components.settings_sections import (
     AutoReconnectToggleRow,
     CountryDropdownRow,
     LanguageDropdownRow,
+    LanShareToggleRow,
     ModeSwitchRow,
     PortInputRow,
     SettingsListTile,
@@ -90,6 +91,12 @@ class SettingsDrawer(ft.NavigationDrawer):
             toast_callback=self._show_toast,
         )
 
+        # LAN proxy sharing toggle (self-contained component)
+        self._lan_share_row = LanShareToggleRow(
+            app_context=self._app_context,
+            toast_callback=self._show_toast,
+        )
+
         # Version text ref — populated lazily in background to avoid
         # blocking subprocess calls (xray -version) at init time.
         self._xray_version_text = ft.Text(
@@ -130,6 +137,7 @@ class SettingsDrawer(ft.NavigationDrawer):
                                 self._tun_dropdown_row,
                                 self._port_row,
                                 self._country_row,
+                                self._lan_share_row,
                             ],
                         ),
                         ft.Divider(
@@ -361,8 +369,6 @@ class SettingsDrawer(ft.NavigationDrawer):
         self._app_context.settings.set_routing_country(val)
         self._show_toast(t("settings.country_saved", val=val), "success")
         page.update()
-
-
 
     def _save_tun_engine(self, e):
         """Save the TUN implementation setting."""

@@ -272,8 +272,14 @@ class XrayConfigProcessor:
     # ------------------------------------------------------------------
 
     def _ensure_inbounds(self, config: dict):
-        """Ensure inbounds exist with user's configured ports."""
+        """Ensure inbounds exist with user's configured ports.
+
+        When LAN proxy sharing is enabled (``allow_lan``), SOCKS/HTTP inbounds
+        listen on ``0.0.0.0`` so other LAN devices can reach them; otherwise they
+        stay bound to ``127.0.0.1``.
+        """
         user_port = self._app_context.settings.get_proxy_port()
+        listen = "0.0.0.0" if self._app_context.settings.get_allow_lan() else "127.0.0.1"
 
         if not config.get(CONFIG_INBOUNDS):
             config[CONFIG_INBOUNDS] = []
@@ -284,7 +290,7 @@ class XrayConfigProcessor:
                 {
                     CONFIG_TAG: PROTOCOL_SOCKS,
                     CONFIG_PORT: user_port,
-                    "listen": "127.0.0.1",
+                    "listen": listen,
                     CONFIG_PROTOCOL: PROTOCOL_SOCKS,
                     CONFIG_SETTINGS: {"udp": True},
                     CONFIG_SNIFFING: {
@@ -294,11 +300,12 @@ class XrayConfigProcessor:
                     },
                 }
             )
-            logger.info(f"[XrayConfigProcessor] Added SOCKS inbound on port {user_port}")
+            logger.info(f"[XrayConfigProcessor] Added SOCKS inbound on port {user_port} (listen {listen})")
         else:
             for inbound in config[CONFIG_INBOUNDS]:
                 if inbound.get(CONFIG_PROTOCOL) == PROTOCOL_SOCKS:
                     inbound[CONFIG_PORT] = user_port
+                    inbound["listen"] = listen
                     inbound[CONFIG_SNIFFING] = {
                         CONFIG_ENABLED: True,
                         CONFIG_DEST_OVERRIDE: list(SNIFF_DEST_OVERRIDE),
@@ -311,11 +318,15 @@ class XrayConfigProcessor:
                 {
                     CONFIG_TAG: PROTOCOL_HTTP,
                     CONFIG_PORT: user_port + 4,
-                    "listen": "127.0.0.1",
+                    "listen": listen,
                     CONFIG_PROTOCOL: PROTOCOL_HTTP,
                 }
             )
-            logger.info(f"[XrayConfigProcessor] Added HTTP inbound on port {user_port + 4}")
+            logger.info(f"[XrayConfigProcessor] Added HTTP inbound on port {user_port + 4} (listen {listen})")
+        else:
+            for inbound in config[CONFIG_INBOUNDS]:
+                if inbound.get(CONFIG_PROTOCOL) == PROTOCOL_HTTP:
+                    inbound["listen"] = listen
 
     # DISABLED — pre-resolution was breaking ECH / Reality / SNI
     # (Methods _add_outbound_dns_entries and _resolve_outbound_addresses removed)

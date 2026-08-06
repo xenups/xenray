@@ -191,6 +191,8 @@ class ConnectionOrchestrator:
 
             # Verify connection health
             if self._verify_connection_health(processed_config, step_callback, socks_port):
+                # When LAN sharing is enabled, open the firewall for LAN devices.
+                self._ensure_lan_firewall_rule(socks_port)
                 connection_info = self._finalize_connection(file_path, mode, xray_pid, singbox_pid, step_callback)
                 return self.ATTEMPT_SUCCESS, connection_info
 
@@ -243,7 +245,35 @@ class ConnectionOrchestrator:
             self._singbox_service.stop()
         self._xray_service.stop()
 
+        # Remove the LAN-sharing firewall rule (idempotent; no-op when not set).
+        self._remove_lan_firewall_rule()
+
         logger.info("Connection torn down successfully")
+
+    def _ensure_lan_firewall_rule(self, socks_port: int) -> None:
+        """Create the inbound firewall rule for LAN proxy sharing if enabled.
+
+        Called on a successful connection so LAN devices can reach the SOCKS and
+        HTTP proxy ports. Failure is non-fatal (best-effort).
+        """
+        if not self._app_context.settings.get_allow_lan() or not socks_port:
+            return
+        try:
+            from src.utils.firewall_manager import FirewallManager
+
+            FirewallManager.add_lan_firewall_rule([socks_port, socks_port + 4])
+        except Exception as e:
+            logger.warning(f"[ConnectionOrchestrator] Failed to apply LAN firewall rule: {e}")
+
+    @staticmethod
+    def _remove_lan_firewall_rule() -> None:
+        """Remove the LAN-sharing firewall rule (best-effort, never raises)."""
+        try:
+            from src.utils.firewall_manager import FirewallManager
+
+            FirewallManager.remove_lan_firewall_rule()
+        except Exception as e:
+            logger.warning(f"[ConnectionOrchestrator] Failed to remove LAN firewall rule: {e}")
 
     def _safe_teardown(self, connection_info: dict):
         """Teardown that never raises — used from exception cleanup paths."""
@@ -369,6 +399,7 @@ class ConnectionOrchestrator:
         routing_country = self._app_context.settings.get_routing_country()
         proxy_server_ip = self._xray_processor.get_proxy_server_ip(processed_config)
         routing_rules = self._app_context.routing.load_rules()
+        allow_lan = self._app_context.settings.get_allow_lan()
 
         singbox_pid = self._singbox_service.start(
             xray_socks_port=socks_port,
@@ -376,6 +407,7 @@ class ConnectionOrchestrator:
             routing_country=routing_country,
             routing_rules=routing_rules,
             mtu=optimal_mtu,
+            allow_lan=allow_lan,
         )
 
         if not singbox_pid:

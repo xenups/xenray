@@ -58,6 +58,7 @@ class ConnectionHandler:
         self._update_horizon_glow_callback: Optional[Callable[[str], None]] = None
         self._profile_manager_is_running_setter: Optional[Callable[[bool], None]] = None
         self._monitoring_service_is_running_setter: Optional[Callable[[bool], None]] = None
+        self._lan_card_callback: Optional[Callable[[bool], None]] = None
 
     def setup(
         self,
@@ -191,6 +192,15 @@ class ConnectionHandler:
             self._ui_call(lambda: self._update_horizon_glow_callback("connected"))
         if self._systray:
             self._systray.update_state()
+        self._update_lan_card()
+
+    def _update_lan_card(self, show: bool = True):
+        """Show/hide the LAN sharing card based on connection + allow_lan state."""
+        if not self._lan_card_callback:
+            return
+        if show and self._app_context:
+            show = bool(self._app_context.settings.get_allow_lan())
+        self._ui_call(lambda: self._lan_card_callback(show))
 
     def _show_toast(self, msg_key: str, toast_type: str = "error", duration: int = 3000):
         """Show toast notification."""
@@ -214,6 +224,7 @@ class ConnectionHandler:
                 self._latency_monitor_handler.trigger_single_check()
         except Exception as e:
             logger.warning(f"[ConnectionHandler] Error resetting UI: {e}")
+        self._update_lan_card(show=False)
 
     # -------------------------------------------------------------------------
     # Connection Task (broken into smaller methods)

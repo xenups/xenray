@@ -12,7 +12,7 @@ _project_root = Path(__file__).parent.parent.parent
 load_dotenv(_project_root / ".env")
 
 # Application version from environment
-APP_VERSION = os.getenv("APP_VERSION", "0.2.4-beta")
+APP_VERSION = os.getenv("APP_VERSION", "0.2.5-beta")
 
 # Window dimensions
 WINDOW_WIDTH = 420
@@ -237,6 +237,16 @@ MODE_PROXY = "proxy"
 # Core / TUN engine identifiers
 CORE_XRAY = "xray"
 CORE_SINGBOX = "singbox"
+
+# LAN proxy sharing
+# -----------------
+# Inbound allow rule created in Windows Defender Firewall so LAN devices can
+# reach XenRay's SOCKS/HTTP proxy ports.
+LAN_FIREWALL_RULE_NAME = "XenRay Inbound LAN Proxy"
+# Private LAN ranges given OS static routes (via the physical gateway) when LAN
+# sharing is enabled — prevents LAN-device packets from being captured by the
+# TUN adapter and looped back through the tunnel.
+LAN_PRIVATE_RANGES = ["192.168.0.0/16", "10.0.0.0/8", "172.16.0.0/12"]
 
 # Outbound / inbound tags
 TAG_DIRECT = "direct"

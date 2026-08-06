@@ -167,4 +167,10 @@ class SettingsRepository:
         if engine in {"xray", "singbox"}:
             self._write("tun_engine.txt", engine)
 
+    # --- LAN Proxy Sharing ---
+    def get_allow_lan(self) -> bool:
+        """Allow other LAN devices to use XenRay's SOCKS/HTTP proxy endpoints."""
+        return self._read("allow_lan.txt").lower() == "true"
 
+    def set_allow_lan(self, enabled: bool) -> None:
+        self._write("allow_lan.txt", "true" if enabled else "false")

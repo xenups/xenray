@@ -62,6 +62,7 @@ class SingboxService:
         self._pid: Optional[int] = None
         self._log_handle = None
         self._added_routes: List[str] = []
+        self._added_lan_routes: List[str] = []
         # RLock (reentrant) so that atexit/_guaranteed_cleanup can safely call
         # stop() even when a concurrent stop() is already in progress on the same
         # thread (e.g. interpreter shutdown while teardown is running).
@@ -473,6 +474,89 @@ class SingboxService:
                 if ip in self._added_routes:
                     self._added_routes.remove(ip)
 
+        self._cleanup_lan_routes()
+
+    def _add_lan_routes(self, gateway: str) -> None:
+        """Add static routes for private LAN ranges via the physical gateway.
+
+        Required for LAN proxy sharing: without these, packets from LAN devices
+        would be captured by the TUN adapter and looped back through the tunnel
+        instead of reaching the physical LAN interface.
+        """
+        from src.core.constants import LAN_PRIVATE_RANGES
+
+        for cidr in LAN_PRIVATE_RANGES:
+            try:
+                network = ipaddress.ip_network(cidr, strict=False)
+            except ValueError:
+                logger.warning(f"[SingboxService] Skipping invalid LAN range: {cidr}")
+                continue
+            self._add_cidr_route(network, gateway)
+
+    def _add_cidr_route(self, network, gateway: str) -> None:
+        """Add a network (CIDR) static route via the physical gateway."""
+        key = str(network)
+        if key in self._added_lan_routes:
+            return
+        platform = PlatformUtils.get_platform()
+
+        if platform == "windows":
+            cmd = [
+                "route",
+                "add",
+                str(network.network_address),
+                "mask",
+                str(network.netmask),
+                gateway,
+                "metric",
+                "1",
+            ]
+        elif platform == "macos":
+            cmd = ["route", "-n", "add", "-net", str(network), gateway]
+        else:  # Linux
+            cmd = ["ip", "route", "add", str(network), "via", gateway]
+
+        try:
+            logger.info(f"[SingboxService] Adding LAN route: {network} → {gateway}")
+            subprocess.run(
+                cmd,
+                check=False,
+                capture_output=True,
+                creationflags=PlatformUtils.get_subprocess_flags(),
+                startupinfo=PlatformUtils.get_startupinfo(),
+            )
+            self._added_lan_routes.append(key)
+        except (OSError, subprocess.SubprocessError) as e:
+            logger.error(f"[SingboxService] Failed to add LAN route {network}: {e}")
+
+    def _cleanup_lan_routes(self) -> None:
+        """Remove all LAN range static routes added for LAN sharing."""
+        platform = PlatformUtils.get_platform()
+
+        for key in self._added_lan_routes[:]:
+            try:
+                network = ipaddress.ip_network(key, strict=False)
+                if platform == "windows":
+                    cmd = ["route", "delete", str(network.network_address)]
+                elif platform == "macos":
+                    cmd = ["route", "-n", "delete", "-net", str(network)]
+                else:  # Linux
+                    cmd = ["ip", "route", "del", str(network)]
+
+                logger.debug(f"[SingboxService] Removing LAN route: {key}")
+                subprocess.run(
+                    cmd,
+                    check=False,
+                    capture_output=True,
+                    creationflags=PlatformUtils.get_subprocess_flags(),
+                    startupinfo=PlatformUtils.get_startupinfo(),
+                )
+            except (OSError, subprocess.SubprocessError) as e:
+                logger.warning(f"[SingboxService] Failed to remove LAN route {key}: {e}")
+            finally:
+                if key in self._added_lan_routes:
+                    self._added_lan_routes.remove(key)
+
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
@@ -484,6 +568,7 @@ class SingboxService:
         routing_country: str = "",
         routing_rules: dict = None,
         mtu: int = 1420,
+        allow_lan: bool = False,
     ) -> Optional[int]:
         """Start the sing-box TUN service.
 
@@ -493,6 +578,9 @@ class SingboxService:
             routing_country: Country routing code ("" or "none" to disable).
             routing_rules: User routing rules {direct/proxy/block: [targets]}.
             mtu: TUN MTU.
+            allow_lan: When True, private LAN ranges get static routes via the
+                physical gateway so LAN-device traffic bypasses the TUN (LAN
+                proxy sharing).
 
         Returns:
             sing-box PID on success, ``None`` on failure.
@@ -527,6 +615,11 @@ class SingboxService:
             if gateway:
                 for ip in resolved_ips:
                     self._add_static_route(ip, gateway)
+
+            # When LAN sharing is enabled, pin private LAN ranges to the physical
+            # gateway so LAN-device packets bypass the TUN (no loopbacks).
+            if allow_lan and gateway:
+                self._add_lan_routes(gateway)
 
             # BUG-08 FIX: Suppress Windows SMHR so DNS queries are not leaked to
             # physical adapters in parallel while the TUN interface is active.
