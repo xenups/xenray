@@ -131,12 +131,6 @@ class SettingsRepository:
     def set_startup_enabled(self, enabled: bool) -> None:
         self._write("startup_enabled.txt", "true" if enabled else "false")
 
-    # --- TUN Engine Preference ---
-    def get_tun_engine(self) -> str:
-        return self._read("tun_engine.txt") or "sing-box"
-
-    def set_tun_engine(self, engine: str) -> None:
-        self._write("tun_engine.txt", engine)
 
     # --- Auto-Reconnect Preference ---
     def get_auto_reconnect_enabled(self) -> bool:

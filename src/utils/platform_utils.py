@@ -193,3 +193,98 @@ class PlatformUtils:
             True for macOS (SMJobBless), False otherwise
         """
         return PlatformUtils.get_platform() == "macos"
+
+    # ------------------------------------------------------------------
+    # Windows SMHR (Smart Multi-Homed Name Resolution) helpers
+    #
+    # SMHR causes Windows to send DNS queries to ALL adapters in parallel
+    # and use the first reply — bypassing the TUN adapter's DNS servers
+    # and leaking queries to the physical interface while a VPN is active.
+    # Disabling it for the duration of a TUN session prevents DNS leaks.
+    #
+    # Consolidated here from the duplicate implementations that previously
+    # existed in both XrayService and SingboxService.
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def read_smhr_state() -> "Optional[bool]":
+        """Read the current SMHR enabled state from the Windows registry.
+
+        Returns:
+            True  — SMHR is enabled (OS default)
+            False — SMHR is disabled
+            None  — state could not be read (non-Windows or registry error)
+        """
+        try:
+            import winreg  # Windows-only
+
+            key_path = r"SYSTEM\CurrentControlSet\Services\Dnscache\Parameters"
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, key_path) as key:
+                try:
+                    value, _ = winreg.QueryValueEx(key, "DisableSmartNameResolution")
+                    return value == 0  # 0 = SMHR on, 1 = SMHR off
+                except FileNotFoundError:
+                    return True  # Key absent → SMHR is enabled (OS default)
+        except Exception:
+            return None
+
+    @staticmethod
+    def set_smhr_state(enabled: bool) -> None:
+        """Enable or disable SMHR via the Windows registry.
+
+        Args:
+            enabled: True to enable SMHR (OS default), False to disable.
+        """
+        try:
+            import winreg  # Windows-only
+
+            key_path = r"SYSTEM\CurrentControlSet\Services\Dnscache\Parameters"
+            with winreg.OpenKey(
+                winreg.HKEY_LOCAL_MACHINE, key_path, access=winreg.KEY_SET_VALUE
+            ) as key:
+                # DisableSmartNameResolution: 0 = on, 1 = off
+                winreg.SetValueEx(key, "DisableSmartNameResolution", 0, winreg.REG_DWORD, 0 if enabled else 1)
+                # Also toggle the parallel A+AAAA sub-feature
+                winreg.SetValueEx(key, "DisableParallelAandAAAA", 0, winreg.REG_DWORD, 0 if enabled else 1)
+        except Exception as exc:
+            from src.core.logger import logger  # lazy to avoid circular import at module level
+
+            logger.warning(f"[PlatformUtils] Could not set SMHR registry value: {exc}")
+
+    @staticmethod
+    def suppress_smhr() -> "Optional[bool]":
+        """Disable SMHR for a TUN session and return the previous state.
+
+        Only takes effect on Windows; returns None immediately on other platforms.
+
+        Returns:
+            The SMHR state *before* suppression (True = was enabled, False = was
+            already disabled, None = not Windows / registry error).  Pass this
+            value to :meth:`restore_smhr` on teardown.
+        """
+        if PlatformUtils.get_platform() != "windows":
+            return None
+
+        from src.core.logger import logger  # lazy to avoid circular import
+
+        previous = PlatformUtils.read_smhr_state()
+        if previous is True:
+            logger.info("[PlatformUtils] Disabling SMHR to prevent DNS leaks during TUN session")
+            PlatformUtils.set_smhr_state(enabled=False)
+        return previous
+
+    @staticmethod
+    def restore_smhr(previous_state: "Optional[bool]") -> None:
+        """Restore SMHR to its pre-TUN state.
+
+        Args:
+            previous_state: The value returned by :meth:`suppress_smhr`.
+                If True, SMHR is re-enabled.  Any other value is a no-op.
+        """
+        if PlatformUtils.get_platform() != "windows":
+            return
+        if previous_state is True:
+            from src.core.logger import logger  # lazy to avoid circular import
+
+            logger.info("[PlatformUtils] Restoring SMHR to enabled state")
+            PlatformUtils.set_smhr_state(enabled=True)

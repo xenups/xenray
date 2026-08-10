@@ -54,12 +54,15 @@ class ConnectionManager:
         self._state_lock = threading.Lock()
         self._session_id = 0  # Unique ID for each connection session
 
-        # Initialize ConnectionMonitoringService (creates its own monitors internally)
+        # Initialize ConnectionMonitoringService (creates its own monitors internally).
+        # Pass the canonical xray_service so the monitoring service does NOT create a
+        # second orphaned XrayService instance (which would register a duplicate atexit).
         self._monitoring = ConnectionMonitoringService(
             app_context=app_context,
             on_signal=self._handle_signal,
             on_reconnect=self._reconnect_internal,
             on_reconnect_event=self._emit_event,
+            xray_service=xray_service,
         )
 
         # Create ConnectionOrchestrator with all dependencies. The TUN engine is

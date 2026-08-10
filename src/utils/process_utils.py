@@ -169,7 +169,8 @@ def rotate_oversized_log_file(
     # Try moving current file to .1 and starting a fresh file
     try:
         os.replace(log_file, f"{log_file}.1")
-        open(log_file, "w", encoding="utf-8").close()
+        with open(log_file, "w", encoding="utf-8"):
+            pass  # Truncate/create fresh file; handle closed by context manager
     except OSError:
         # Windows file lock by running subprocess — fallback to in-place tail truncation!
         truncate_log_file_inplace(log_file, max_bytes=max_bytes)

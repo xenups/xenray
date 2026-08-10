@@ -22,7 +22,6 @@ from src.core.app_context import AppContext
 from src.services.connection_tester import ConnectionTester
 from src.services.network_validator import NetworkValidator
 from src.services.xray_process_monitor import XrayProcessProvider
-from src.services.xray_service import XrayService
 
 from .active_connectivity_monitor import ActiveConnectivityMonitor
 from .auto_reconnect_service import AutoReconnectService
@@ -48,6 +47,7 @@ class ConnectionMonitoringService:
         on_signal: Callable[[MonitorSignal], None],
         on_reconnect: Callable[[str, str], bool],
         on_reconnect_event: Callable[[str, dict], None],
+        xray_service=None,
     ):
         """
         Initialize the monitoring service with signal callback.
@@ -57,6 +57,9 @@ class ConnectionMonitoringService:
             on_signal: Single callback for ALL monitor signals (session-validated)
             on_reconnect: Called to attempt reconnection (file_path, mode) -> success
             on_reconnect_event: Called by AutoReconnectService for reconnect-specific events
+            xray_service: The canonical XrayService instance (from ConnectionManager).
+                Providing this prevents a second orphaned XrayService from being created
+                inside the monitoring service and avoids a double-atexit race.
         """
         self._app_context = app_context
         self._on_signal = on_signal
@@ -87,9 +90,16 @@ class ConnectionMonitoringService:
 
         # Create ActiveConnectivityMonitor (process-based, VPN mode only)
         # Emits ACTIVE_LOST, ACTIVE_RESTORED, ACTIVE_DEGRADED signals
-        xray_service = XrayService()
+        #
+        # Use the injected xray_service if provided — avoids creating a second
+        # orphaned XrayService instance that would register its own atexit handler.
+        _xray_svc = xray_service
+        if _xray_svc is None:
+            # Fallback: lazy import to avoid circular import at module level
+            from src.services.xray_service import XrayService as _XS
+            _xray_svc = _XS()
         metrics_provider = XrayProcessProvider(
-            pid_getter=lambda: xray_service.pid,
+            pid_getter=lambda: _xray_svc.pid,
             socks_port_getter=app_context.settings.get_proxy_port,
         )
         self._active_monitor = ActiveConnectivityMonitor(

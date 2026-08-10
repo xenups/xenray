@@ -158,7 +158,7 @@ class TestSingboxLanRoutes:
 
         return SingboxService()
 
-    @patch("src.services.singbox_service.subprocess.run")
+    @patch("src.services.route_manager_service.subprocess.run")
     @patch("src.utils.platform_utils.PlatformUtils.get_platform", return_value="windows")
     def test_add_lan_routes(self, mock_platform, mock_run):
         svc = self._service()

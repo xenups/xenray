@@ -20,6 +20,7 @@ if sys.stderr:
 
 # Add file handler
 log_file = os.path.join(TMPDIR, "xenray.log")
+os.makedirs(TMPDIR, exist_ok=True)  # Guarantee directory exists before handler creation
 logger.add(
     log_file,
     # Strict rotation: rotate once the active file reaches exactly 5 MB

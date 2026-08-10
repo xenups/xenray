@@ -152,6 +152,16 @@ NCSI_BYPASS_DOMAINS: list = [
     "ipv6.msftncsi.com",
 ]
 
+# Processes that must always bypass the TUN adapter (e.g. internal OS services)
+BASE_BYPASS_PROCESSES = [
+    "xray",
+    "v2ray",
+    "sing-box",
+    "python",
+    "pythonw",
+    "curl",
+]
+
 # DNS Providers (from environment)
 DNS_PROVIDERS = {
     "local_resolver": {
