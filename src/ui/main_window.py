@@ -503,7 +503,10 @@ class MainWindow:
         """Navigate to a new view — suppress background updates during swap."""
         self._nav_locked = True
         self._view_switcher.content = control
-        self._view_switcher.update()
+        try:
+            self._view_switcher.update()
+        except RuntimeError:
+            pass
         self._nav_locked = False
 
     def _on_server_search(self, query: str):
@@ -520,16 +523,16 @@ class MainWindow:
         target_tab = (
             self._active_tab if self._active_tab in ("settings", "statistics", "servers", "logs") else "settings"
         )
-        self._on_nav_tab_changed(target_tab)
+        self._on_nav_tab_changed(target_tab, force=True)
 
-    def _on_nav_tab_changed(self, tab_id: str):
+    def _on_nav_tab_changed(self, tab_id: str, force: bool = False):
         """Switch the main content view based on the selected nav tab.
 
         Uses targeted ``control.update()`` on just the view-switcher and
         sidebar buttons instead of ``page.update()`` to avoid serializing
         the entire page control tree.
         """
-        if self._active_tab == tab_id:
+        if self._active_tab == tab_id and not force:
             return
         self._active_tab = tab_id
         view_map = {
@@ -539,7 +542,7 @@ class MainWindow:
             "logs": self._stitch_logs_view,
             "settings": self._stitch_settings_view,
         }
-        target = view_map.get(tab_id, self._dashboard_view)
+        target = view_map.get(tab_id, self._stitch_dashboard_view)
 
         # Mutate both controls before flushing to the client
         self._view_switcher.content = target
@@ -548,9 +551,16 @@ class MainWindow:
             self._nav_sidebar._apply_active_styles()
 
         # Targeted updates — only send the changed subtrees, not the entire page
-        self._view_switcher.update()
+        try:
+            self._view_switcher.update()
+        except RuntimeError:
+            pass
+
         if hasattr(self, "_nav_sidebar") and self._nav_sidebar:
-            self._nav_sidebar._buttons_container.update()
+            try:
+                self._nav_sidebar._buttons_container.update()
+            except RuntimeError:
+                pass
 
         # Update log viewer visibility (only live-stream logs when viewing logs tab or drawer)
         if hasattr(self, "_log_viewer") and self._log_viewer:

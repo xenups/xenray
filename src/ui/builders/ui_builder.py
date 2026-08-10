@@ -143,9 +143,14 @@ class UIBuilder:
         # Legacy dashboard view fallback
         self._main._dashboard_view = self._main._stitch_dashboard_view
 
-        # View container for main right canvas (instant swap, no animation lag)
-        self._main._view_switcher = ft.Container(
+        # View container for main right canvas (smooth 200ms crossfade transitions)
+        self._main._view_switcher = ft.AnimatedSwitcher(
             content=initial_view,
+            transition=ft.AnimatedSwitcherTransition.FADE,
+            duration=200,
+            reverse_duration=200,
+            switch_in_curve=ft.AnimationCurve.EASE_IN,
+            switch_out_curve=ft.AnimationCurve.EASE_OUT,
             expand=True,
         )
 

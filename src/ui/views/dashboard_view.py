@@ -41,44 +41,16 @@ class DashboardView(ft.Container):
         self._timer_thread: threading.Thread | None = None
         self._lan_sharing_enabled = False
 
-        # --- 1. Center Connection Core (Clean Typography & Restored Button Scale) ---
+        # --- 1. Center Connection Core (Hero Section) ---
         self._toggle_button = (
             connection_button if connection_button is not None else ConnectionButton(on_click=self._on_toggle_click)
         )
 
-        self._center_status_text = ft.Text(
-            t("dashboard.disconnected", default="Disconnected"),
-            size=15,
-            weight=ft.FontWeight.W_500,
-            color=WHITE,
-        )
-
-        self._uptime_text = ft.Text(
-            "00:00:00",
-            size=12,
-            weight=ft.FontWeight.W_400,
-            color=MUTED_WHITE,
-        )
-
-        centerpiece_layout = ft.Column(
-            [
-                self._toggle_button,
-                ft.Column(
-                    [
-                        self._center_status_text,
-                        self._uptime_text,
-                    ],
-                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                    spacing=4,
-                ),
-            ],
-            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            alignment=ft.MainAxisAlignment.CENTER,
-            spacing=8,
-        )
+        self._center_status_text = self._toggle_button._status_text
+        self._uptime_text = self._toggle_button._uptime_text
 
         hero_center_section = ft.Container(
-            content=centerpiece_layout,
+            content=self._toggle_button,
             alignment=ft.Alignment.CENTER,
             padding=ft.Padding.symmetric(vertical=8),
             expand=True,
@@ -314,26 +286,21 @@ class DashboardView(ft.Container):
         is_connecting: bool = False,
         is_disconnecting: bool = False,
     ):
-        """Update connection button state and centerpiece text underneath."""
+        """Update connection button state and centerpiece text inside the button."""
         self._is_connected = is_connected
 
         if is_disconnecting:
-            self._center_status_text.value = t("status.disconnecting", default="Disconnecting...")
-            self._toggle_button.set_disconnecting()
+            self._toggle_button.set_disconnecting(t("status.disconnecting", default="Disconnecting..."))
             self._stop_uptime_timer()
         elif is_connecting:
-            self._center_status_text.value = t("status.connecting", default="Connecting...")
-            self._toggle_button.set_connecting()
+            self._toggle_button.set_connecting(t("status.connecting", default="Connecting..."))
             self._uptime_text.value = "00:00:00"
         elif is_connected:
-            self._center_status_text.value = t("dashboard.connected", default="Connected")
-            self._toggle_button.set_connected()
+            self._toggle_button.set_connected(t("dashboard.connected", default="Connected"))
             self._start_uptime_timer()
         else:
-            self._center_status_text.value = t("dashboard.disconnected", default="Disconnected")
             self._stop_uptime_timer()
-            self._uptime_text.value = "00:00:00"
-            self._toggle_button.set_disconnected()
+            self._toggle_button.set_disconnected(t("dashboard.disconnected", default="Disconnected"))
 
         try:
             if self.page:
