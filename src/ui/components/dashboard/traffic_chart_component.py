@@ -19,20 +19,14 @@ class TrafficChartComponent:
         MUTED_WHITE = AppColors.ON_SURFACE_VARIANT
 
         self._traffic_rate_badge = ft.Container(
-            content=ft.Text(
-                "0.0 MB/s", size=12, weight=ft.FontWeight.W_700, color=WHITE
-            ),
+            content=ft.Text("0.0 MB/s", size=12, weight=ft.FontWeight.W_700, color=WHITE),
             padding=ft.Padding.symmetric(horizontal=12, vertical=5),
             border_radius=18,
             bgcolor=ft.Colors.with_opacity(0.18, PURPLE),
             border=ft.Border.all(1, ft.Colors.with_opacity(0.35, PURPLE)),
         )
-        self._upload_total_text = ft.Text(
-            "0.0 MB", size=15, weight=ft.FontWeight.W_800, color=WHITE
-        )
-        self._download_total_text = ft.Text(
-            "0.0 MB", size=15, weight=ft.FontWeight.W_800, color=WHITE
-        )
+        self._upload_total_text = ft.Text("0.0 MB", size=15, weight=ft.FontWeight.W_800, color=WHITE)
+        self._download_total_text = ft.Text("0.0 MB", size=15, weight=ft.FontWeight.W_800, color=WHITE)
 
         self._dl_history = [0.0] * 12
         self._ul_history = [0.0] * 12
@@ -62,9 +56,7 @@ class TrafficChartComponent:
                         ft.Colors.with_opacity(0.0, PURPLE),
                     ],
                 ),
-                border_radius=ft.BorderRadius(
-                    top_left=5, top_right=5, bottom_left=2, bottom_right=2
-                ),
+                border_radius=ft.BorderRadius(top_left=5, top_right=5, bottom_left=2, bottom_right=2),
                 animate=ANIM_SMOOTH,
                 expand=True,
             )
@@ -78,9 +70,7 @@ class TrafficChartComponent:
                         ft.Colors.with_opacity(0.0, CYAN),
                     ],
                 ),
-                border_radius=ft.BorderRadius(
-                    top_left=5, top_right=5, bottom_left=2, bottom_right=2
-                ),
+                border_radius=ft.BorderRadius(top_left=5, top_right=5, bottom_left=2, bottom_right=2),
                 animate=ANIM_SMOOTH,
                 expand=True,
             )
@@ -136,9 +126,7 @@ class TrafficChartComponent:
                         ft.Row(
                             [
                                 ft.Container(
-                                    content=ft.Icon(
-                                        ft.Icons.ARROW_UPWARD, size=15, color=CYAN
-                                    ),
+                                    content=ft.Icon(ft.Icons.ARROW_UPWARD, size=15, color=CYAN),
                                     width=28,
                                     height=28,
                                     shape=ft.BoxShape.CIRCLE,
@@ -163,9 +151,7 @@ class TrafficChartComponent:
                         ft.Row(
                             [
                                 ft.Container(
-                                    content=ft.Icon(
-                                        ft.Icons.ARROW_DOWNWARD, size=15, color=PURPLE
-                                    ),
+                                    content=ft.Icon(ft.Icons.ARROW_DOWNWARD, size=15, color=PURPLE),
                                     width=28,
                                     height=28,
                                     shape=ft.BoxShape.CIRCLE,
@@ -269,12 +255,8 @@ class TrafficChartComponent:
         self._ul_history.pop(0)
         self._ul_history.append(upload_bps)
 
-        dl_heights = self._compute_smooth_wave_heights(
-            self._dl_history, num_output=24, min_h=4.0, max_h=56.0
-        )
-        ul_heights = self._compute_smooth_wave_heights(
-            self._ul_history, num_output=24, min_h=4.0, max_h=56.0
-        )
+        dl_heights = self._compute_smooth_wave_heights(self._dl_history, num_output=24, min_h=4.0, max_h=56.0)
+        ul_heights = self._compute_smooth_wave_heights(self._ul_history, num_output=24, min_h=4.0, max_h=56.0)
 
         for i in range(len(self._dl_bars)):
             self._dl_bars[i].height = dl_heights[i]

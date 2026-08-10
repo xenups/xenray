@@ -53,9 +53,7 @@ class NavSidebar(ft.Container):
         self._build_nav_buttons()
 
         self._change_server_btn = ft.Container(
-            content=ft.Icon(
-                ft.Icons.SWAP_HORIZ_ROUNDED, size=18, color=ft.Colors.WHITE
-            ),
+            content=ft.Icon(ft.Icons.SWAP_HORIZ_ROUNDED, size=18, color=ft.Colors.WHITE),
             padding=ft.Padding.all(10),
             border_radius=12,
             bgcolor=ft.Colors.with_opacity(0.12, "#a855f7"),
@@ -103,9 +101,7 @@ class NavSidebar(ft.Container):
             width=70,
             padding=ft.Padding.symmetric(vertical=16, horizontal=8),
             bgcolor=ft.Colors.with_opacity(0.4, "#0b0518"),
-            border=ft.Border.only(
-                right=ft.BorderSide(1, ft.Colors.with_opacity(0.12, "#a855f7"))
-            ),
+            border=ft.Border.only(right=ft.BorderSide(1, ft.Colors.with_opacity(0.12, "#a855f7"))),
         )
 
     def _handle_change_server_click(self, e):
@@ -124,9 +120,7 @@ class NavSidebar(ft.Container):
         except Exception:
             pass
 
-    def update_connect_button_text(
-        self, text: str, is_running: bool, server_name: str = ""
-    ):
+    def update_connect_button_text(self, text: str, is_running: bool, server_name: str = ""):
         """Update quick action icon button tooltip and style matching connection status."""
         btn_tooltip = (
             t("dashboard.quick_disconnect", default="Quick Disconnect")
@@ -137,15 +131,11 @@ class NavSidebar(ft.Container):
         if is_running:
             self._quick_action_icon.color = "#f43f5e"
             self._quick_action_btn.bgcolor = ft.Colors.with_opacity(0.08, "#f43f5e")
-            self._quick_action_btn.border = ft.Border.all(
-                1.0, ft.Colors.with_opacity(0.25, "#f43f5e")
-            )
+            self._quick_action_btn.border = ft.Border.all(1.0, ft.Colors.with_opacity(0.25, "#f43f5e"))
         else:
             self._quick_action_icon.color = "#c084fc"
             self._quick_action_btn.bgcolor = ft.Colors.with_opacity(0.1, "#a855f7")
-            self._quick_action_btn.border = ft.Border.all(
-                1.0, ft.Colors.with_opacity(0.3, "#a855f7")
-            )
+            self._quick_action_btn.border = ft.Border.all(1.0, ft.Colors.with_opacity(0.3, "#a855f7"))
 
         try:
             if self._quick_action_btn.page:
@@ -168,12 +158,8 @@ class NavSidebar(ft.Container):
                 content=icon_ctrl,
                 padding=ft.Padding.symmetric(vertical=10, horizontal=12),
                 border_radius=12,
-                bgcolor=ft.Colors.with_opacity(0.2, "#6d28d9")
-                if is_active
-                else ft.Colors.TRANSPARENT,
-                border=ft.Border.all(1.2, ft.Colors.with_opacity(0.5, "#a855f7"))
-                if is_active
-                else None,
+                bgcolor=ft.Colors.with_opacity(0.2, "#6d28d9") if is_active else ft.Colors.TRANSPARENT,
+                border=ft.Border.all(1.2, ft.Colors.with_opacity(0.5, "#a855f7")) if is_active else None,
                 shadow=ft.BoxShadow(
                     spread_radius=0,
                     blur_radius=12,
@@ -194,16 +180,8 @@ class NavSidebar(ft.Container):
         for tab_id, (btn, icon_ctrl) in self._button_refs.items():
             is_active = tab_id == self._active_tab
             icon_ctrl.color = "#c084fc" if is_active else AppColors.ON_SURFACE_VARIANT
-            btn.bgcolor = (
-                ft.Colors.with_opacity(0.2, "#6d28d9")
-                if is_active
-                else ft.Colors.TRANSPARENT
-            )
-            btn.border = (
-                ft.Border.all(1.2, ft.Colors.with_opacity(0.5, "#a855f7"))
-                if is_active
-                else None
-            )
+            btn.bgcolor = ft.Colors.with_opacity(0.2, "#6d28d9") if is_active else ft.Colors.TRANSPARENT
+            btn.border = ft.Border.all(1.2, ft.Colors.with_opacity(0.5, "#a855f7")) if is_active else None
             btn.shadow = (
                 ft.BoxShadow(
                     spread_radius=0,

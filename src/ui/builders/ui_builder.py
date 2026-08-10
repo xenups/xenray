@@ -51,9 +51,7 @@ class UIBuilder:
         )
 
         self._main._status_display = StatusDisplay()
-        self._main._connection_button = ConnectionButton(
-            on_click=self._main._on_connect_clicked
-        )
+        self._main._connection_button = ConnectionButton(on_click=self._main._on_connect_clicked)
         self._main._server_card = ServerCard(
             app_context=self._main._app_context, on_click=self._main._open_server_drawer
         )
@@ -66,9 +64,7 @@ class UIBuilder:
         self._main._stitch_dashboard_view = DashboardView(
             on_toggle_click=self._main._on_connect_clicked,
             on_change_server_click=lambda e: self._main._on_nav_tab_changed("servers"),
-            on_open_statistics_click=lambda e: self._main._on_nav_tab_changed(
-                "statistics"
-            ),
+            on_open_statistics_click=lambda e: self._main._on_nav_tab_changed("statistics"),
             connection_button=self._main._connection_button,
             app_context=self._main._app_context,
             server_card=self._main._server_card,
@@ -200,9 +196,7 @@ class UIBuilder:
                                 ft.IconButton(
                                     icon=ft.Icons.MINIMIZE_ROUNDED,
                                     icon_size=14,
-                                    icon_color=ft.Colors.with_opacity(
-                                        0.65, ft.Colors.WHITE
-                                    ),
+                                    icon_color=ft.Colors.with_opacity(0.65, ft.Colors.WHITE),
                                     tooltip="Minimize",
                                     on_click=lambda e: self._handle_window_minimize(),
                                 ),

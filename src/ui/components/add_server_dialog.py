@@ -159,9 +159,7 @@ class AddServerDialog(ft.AlertDialog):
         self._content_input.error_text = None
 
         if not content:
-            self._content_input.error_text = t(
-                "add_dialog.required", default="Configuration link or URL required"
-            )
+            self._content_input.error_text = t("add_dialog.required", default="Configuration link or URL required")
             self._content_input.update()
             return
 
@@ -173,9 +171,7 @@ class AddServerDialog(ft.AlertDialog):
             if not line:
                 continue
 
-            if line.startswith(
-                ("vless://", "vmess://", "trojan://", "ss://", "hysteria2://")
-            ):
+            if line.startswith(("vless://", "vmess://", "trojan://", "ss://", "hysteria2://")):
                 try:
                     parsed = LinkParser.parse_link(line)
                     valid_configs.append(parsed)
@@ -196,9 +192,7 @@ class AddServerDialog(ft.AlertDialog):
             self._reset_and_close()
             return
 
-        is_config_link = content.startswith(
-            ("vless://", "vmess://", "trojan://", "ss://", "hysteria2://")
-        )
+        is_config_link = content.startswith(("vless://", "vmess://", "trojan://", "ss://", "hysteria2://"))
 
         if is_config_link:
             try:
@@ -210,19 +204,13 @@ class AddServerDialog(ft.AlertDialog):
                 return
             except Exception as ex:
                 logger.error(f"Failed to parse config: {ex}")
-                error_msg = (
-                    str(ex)
-                    if str(ex)
-                    else t("add_dialog.invalid_link", default="Invalid link format")
-                )
+                error_msg = str(ex) if str(ex) else t("add_dialog.invalid_link", default="Invalid link format")
                 self._content_input.error_text = error_msg
                 self._content_input.update()
                 return
 
         if not name:
-            self._name_input.error_text = t(
-                "add_dialog.name_required", default="Subscription name required"
-            )
+            self._name_input.error_text = t("add_dialog.name_required", default="Subscription name required")
             self._name_input.update()
             return
 

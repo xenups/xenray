@@ -75,20 +75,14 @@ class ProfilePresenter:
         if exit_ip:
             info["server_ip"] = exit_ip
         else:
-            raw_addr = (
-                profile.get("address") or profile.get("server") or profile.get("host")
-            )
+            raw_addr = profile.get("address") or profile.get("server") or profile.get("host")
             if not raw_addr:
                 config = profile.get("config") or {}
                 raw_addr = config.get("address", "")
                 if not raw_addr and outbounds:
                     ob = outbounds[0]
                     settings = ob.get("settings", {}) if isinstance(ob, dict) else {}
-                    srv_obj = (
-                        get_server_object(settings)
-                        if isinstance(settings, dict)
-                        else None
-                    )
+                    srv_obj = get_server_object(settings) if isinstance(settings, dict) else None
                     if srv_obj and isinstance(srv_obj, dict):
                         raw_addr = srv_obj.get("address", "")
 

@@ -80,9 +80,7 @@ class SettingsView(ft.Container):
                     spacing=12,
                 ),
                 padding=ft.Padding.only(left=8, right=8, top=4, bottom=10),
-                border=ft.Border.only(
-                    bottom=ft.BorderSide(1, ft.Colors.with_opacity(0.12, WHITE))
-                ),
+                border=ft.Border.only(bottom=ft.BorderSide(1, ft.Colors.with_opacity(0.12, WHITE))),
             ),
             self._mode_switch_row,
             self._tun_engine_row,
@@ -104,9 +102,7 @@ class SettingsView(ft.Container):
                 content=ft.Row(
                     [
                         ft.Container(
-                            content=ft.Icon(
-                                ft.Icons.ALT_ROUTE, color=AppColors.PRIMARY, size=22
-                            ),
+                            content=ft.Icon(ft.Icons.ALT_ROUTE, color=AppColors.PRIMARY, size=22),
                             width=28,
                             alignment=ft.Alignment.CENTER_LEFT,
                         ),
@@ -120,9 +116,7 @@ class SettingsView(ft.Container):
                     spacing=12,
                 ),
                 padding=ft.Padding.only(left=8, right=8, top=4, bottom=10),
-                border=ft.Border.only(
-                    bottom=ft.BorderSide(1, ft.Colors.with_opacity(0.12, WHITE))
-                ),
+                border=ft.Border.only(bottom=ft.BorderSide(1, ft.Colors.with_opacity(0.12, WHITE))),
             ),
             self._country_row,
         ]
@@ -169,9 +163,7 @@ class SettingsView(ft.Container):
                         content=ft.Row(
                             [
                                 ft.Container(
-                                    content=ft.Icon(
-                                        ft.Icons.TUNE, color=AppColors.PRIMARY, size=22
-                                    ),
+                                    content=ft.Icon(ft.Icons.TUNE, color=AppColors.PRIMARY, size=22),
                                     width=28,
                                     alignment=ft.Alignment.CENTER_LEFT,
                                 ),
@@ -188,9 +180,7 @@ class SettingsView(ft.Container):
                             spacing=12,
                         ),
                         padding=ft.Padding.only(left=8, right=8, top=4, bottom=10),
-                        border=ft.Border.only(
-                            bottom=ft.BorderSide(1, ft.Colors.with_opacity(0.12, WHITE))
-                        ),
+                        border=ft.Border.only(bottom=ft.BorderSide(1, ft.Colors.with_opacity(0.12, WHITE))),
                     ),
                     self._language_row,
                     self._reconnect_row,
@@ -222,9 +212,7 @@ class SettingsView(ft.Container):
                     ft.ElevatedButton(
                         content=ft.Row(
                             [
-                                ft.Icon(
-                                    ft.Icons.SYSTEM_UPDATE_ALT, size=15, color=WHITE
-                                ),
+                                ft.Icon(ft.Icons.SYSTEM_UPDATE_ALT, size=15, color=WHITE),
                                 ft.Text(
                                     t(
                                         "settings.check_updates",

@@ -359,10 +359,7 @@ class MainWindow:
         def wrapped_set_step(msg):
             orig_set_step(msg)
             try:
-                if (
-                    hasattr(self, "_stitch_dashboard_view")
-                    and self._stitch_dashboard_view
-                ):
+                if hasattr(self, "_stitch_dashboard_view") and self._stitch_dashboard_view:
                     self._stitch_dashboard_view.set_step(msg)
             except Exception:
                 pass
@@ -375,13 +372,8 @@ class MainWindow:
         def wrapped_set_connecting():
             orig_set_connecting()
             try:
-                if (
-                    hasattr(self, "_stitch_dashboard_view")
-                    and self._stitch_dashboard_view
-                ):
-                    self._stitch_dashboard_view.set_connection_state(
-                        is_connected=False, is_connecting=True
-                    )
+                if hasattr(self, "_stitch_dashboard_view") and self._stitch_dashboard_view:
+                    self._stitch_dashboard_view.set_connection_state(is_connected=False, is_connecting=True)
             except Exception:
                 pass
 
@@ -393,10 +385,7 @@ class MainWindow:
         def wrapped_set_connected(country_data=None):
             orig_set_connected(country_data)
             try:
-                if (
-                    hasattr(self, "_stitch_dashboard_view")
-                    and self._stitch_dashboard_view
-                ):
+                if hasattr(self, "_stitch_dashboard_view") and self._stitch_dashboard_view:
                     self._stitch_dashboard_view.set_connection_state(is_connected=True)
             except Exception:
                 pass
@@ -409,10 +398,7 @@ class MainWindow:
         def wrapped_set_disconnected():
             orig_set_disconnected()
             try:
-                if (
-                    hasattr(self, "_stitch_dashboard_view")
-                    and self._stitch_dashboard_view
-                ):
+                if hasattr(self, "_stitch_dashboard_view") and self._stitch_dashboard_view:
                     self._stitch_dashboard_view.set_connection_state(is_connected=False)
             except Exception:
                 pass
@@ -425,13 +411,8 @@ class MainWindow:
         def wrapped_set_disconnecting():
             orig_set_disconnecting()
             try:
-                if (
-                    hasattr(self, "_stitch_dashboard_view")
-                    and self._stitch_dashboard_view
-                ):
-                    self._stitch_dashboard_view.set_connection_state(
-                        is_connected=False, is_disconnecting=True
-                    )
+                if hasattr(self, "_stitch_dashboard_view") and self._stitch_dashboard_view:
+                    self._stitch_dashboard_view.set_connection_state(is_connected=False, is_disconnecting=True)
             except Exception:
                 pass
 
@@ -457,20 +438,13 @@ class MainWindow:
                     is_connected=self._is_running,
                     is_connecting=self._connecting,
                 )
-            if (
-                hasattr(self, "_stitch_statistics_view")
-                and self._stitch_statistics_view
-            ):
+            if hasattr(self, "_stitch_statistics_view") and self._stitch_statistics_view:
                 self._stitch_statistics_view.set_connection_state(
                     is_connected=self._is_running,
                     is_connecting=self._connecting,
                 )
             if hasattr(self, "_nav_sidebar") and self._nav_sidebar:
-                server_name = (
-                    self._selected_profile.get("name", "")
-                    if self._selected_profile
-                    else ""
-                )
+                server_name = self._selected_profile.get("name", "") if self._selected_profile else ""
                 self._nav_sidebar.update_connect_button_text(
                     text="Disconnect" if self._is_running else "Connect",
                     is_running=self._is_running,
@@ -510,12 +484,8 @@ class MainWindow:
         saved_mode = self._app_context.settings.get_connection_mode()
         saved_theme = self._app_context.settings.get_theme_mode()
 
-        self._current_mode = (
-            ConnectionMode.VPN if saved_mode == "vpn" else ConnectionMode.PROXY
-        )
-        self._page.theme_mode = (
-            ft.ThemeMode.DARK if saved_theme == "dark" else ft.ThemeMode.LIGHT
-        )
+        self._current_mode = ConnectionMode.VPN if saved_mode == "vpn" else ConnectionMode.PROXY
+        self._page.theme_mode = ft.ThemeMode.DARK if saved_theme == "dark" else ft.ThemeMode.LIGHT
 
         # Load last selected profile (from local OR subscriptions)
         last_profile_id = self._app_context.settings.get_last_selected_profile_id()
@@ -548,9 +518,7 @@ class MainWindow:
     def navigate_back(self, e=None):
         """Return to settings view or active tab from subpages."""
         target_tab = (
-            self._active_tab
-            if self._active_tab in ("settings", "statistics", "servers", "logs")
-            else "settings"
+            self._active_tab if self._active_tab in ("settings", "statistics", "servers", "logs") else "settings"
         )
         self._on_nav_tab_changed(target_tab)
 
@@ -588,8 +556,7 @@ class MainWindow:
         if hasattr(self, "_log_viewer") and self._log_viewer:
             drawer_open = (
                 getattr(self._logs_drawer_component, "open", False)
-                if hasattr(self, "_logs_drawer_component")
-                and self._logs_drawer_component
+                if hasattr(self, "_logs_drawer_component") and self._logs_drawer_component
                 else False
             )
             self._log_viewer.set_visible(tab_id == "logs" or drawer_open)
@@ -652,13 +619,8 @@ class MainWindow:
         else:
             # Show disconnecting state in dashboard
             try:
-                if (
-                    hasattr(self, "_stitch_dashboard_view")
-                    and self._stitch_dashboard_view
-                ):
-                    self._stitch_dashboard_view.set_connection_state(
-                        is_connected=False, is_disconnecting=True
-                    )
+                if hasattr(self, "_stitch_dashboard_view") and self._stitch_dashboard_view:
+                    self._stitch_dashboard_view.set_connection_state(is_connected=False, is_disconnecting=True)
             except Exception:
                 pass
             self._disconnect()
@@ -726,10 +688,7 @@ class MainWindow:
                 )
 
             # Update statistics view
-            if (
-                hasattr(self, "_stitch_statistics_view")
-                and self._stitch_statistics_view
-            ):
+            if hasattr(self, "_stitch_statistics_view") and self._stitch_statistics_view:
                 self._stitch_statistics_view.update_server_info(
                     name=name,
                     country_code=country_code,
@@ -768,9 +727,7 @@ class MainWindow:
 
         # 2. Trigger immediate latency check via dedicated handler
         if not self._is_running and not self._connecting:
-            self._ui_helper.call(
-                self._status_display.set_pre_connection_ping, "...", False
-            )
+            self._ui_helper.call(self._status_display.set_pre_connection_ping, "...", False)
             self._latency_monitor_handler.trigger_single_check()
 
         # 3. Handle live switch if running
@@ -888,9 +845,7 @@ class MainWindow:
         is_proxy = self._current_mode == ConnectionMode.PROXY
         row = ModeSwitchRow(
             is_proxy=is_proxy,
-            on_change=lambda e: self._on_mode_changed(
-                ConnectionMode.PROXY if e.control.value else ConnectionMode.VPN
-            ),
+            on_change=lambda e: self._on_mode_changed(ConnectionMode.PROXY if e.control.value else ConnectionMode.VPN),
         )
         return row
 
@@ -983,9 +938,7 @@ class MainWindow:
             # Update local reference
             self._selected_profile.update(updated_profile)
             # Update Server Card
-            self._ui_helper.call(
-                lambda: self._server_card.update_server(self._selected_profile)
-            )
+            self._ui_helper.call(lambda: self._server_card.update_server(self._selected_profile))
 
     def _on_mode_changed(self, mode: ConnectionMode):
         from src.utils.process_utils import ProcessUtils
@@ -995,12 +948,8 @@ class MainWindow:
             return
 
         self._current_mode = mode
-        self._app_context.settings.set_connection_mode(
-            "vpn" if mode == ConnectionMode.VPN else "proxy"
-        )
-        self._status_display.set_status(
-            t("status.mode_selected", mode=mode.name.title())
-        )
+        self._app_context.settings.set_connection_mode("vpn" if mode == ConnectionMode.VPN else "proxy")
+        self._status_display.set_status(t("status.mode_selected", mode=mode.name.title()))
         self._ui_helper.call(lambda: None)
 
         if self._is_running:

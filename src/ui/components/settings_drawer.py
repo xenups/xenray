@@ -288,11 +288,7 @@ class SettingsDrawer(ft.NavigationDrawer):
 
     def _handle_mode_change(self, e):
         """Handle VPN/Proxy mode switch."""
-        is_proxy = (
-            bool(e.control.value)
-            if (e and hasattr(e, "control") and e.control)
-            else self._mode_switch_row.value
-        )
+        is_proxy = bool(e.control.value) if (e and hasattr(e, "control") and e.control) else self._mode_switch_row.value
 
         if not is_proxy and not ProcessUtils.is_admin():
             self._mode_switch_row.value = True
@@ -456,11 +452,7 @@ class SettingsDrawer(ft.NavigationDrawer):
 
     def _show_update_dialog(self, page, current: str, latest: str):
         """Show update confirmation dialog."""
-        msg = (
-            t("update.available", current=current, latest=latest)
-            if current
-            else t("update.install", version=latest)
-        )
+        msg = t("update.available", current=current, latest=latest) if current else t("update.install", version=latest)
 
         def close_dlg(e):
             if page is not None:
@@ -589,9 +581,7 @@ class SettingsDrawer(ft.NavigationDrawer):
                 ) = AppUpdateService.check_for_updates()
 
                 if not available and current:
-                    self._show_toast(
-                        t("app_update.up_to_date", version=current), "info"
-                    )
+                    self._show_toast(t("app_update.up_to_date", version=current), "info")
                     page.update()
                     return
 
@@ -606,9 +596,7 @@ class SettingsDrawer(ft.NavigationDrawer):
 
         threading.Thread(target=check_task, daemon=True).start()
 
-    def _show_app_update_dialog(
-        self, page, current: str, latest: str, download_url: str
-    ):
+    def _show_app_update_dialog(self, page, current: str, latest: str, download_url: str):
         """Show app update confirmation dialog."""
         msg = (
             t("app_update.available", current=current, latest=latest)

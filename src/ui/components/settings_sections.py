@@ -53,9 +53,7 @@ class SettingsRow(ft.Container):
         if sublabel_control:
             label_column.controls.append(sublabel_control)
         elif sublabel:
-            label_column.controls.append(
-                ft.Text(sublabel, size=11, color=ft.Colors.ON_SURFACE_VARIANT)
-            )
+            label_column.controls.append(ft.Text(sublabel, size=11, color=ft.Colors.ON_SURFACE_VARIANT))
 
         super().__init__(
             content=ft.Row(
@@ -85,9 +83,7 @@ class SettingsListTile(ft.Container):
         badge_text: Optional[str] = None,
     ):
         self._on_click = on_click
-        self._chevron_icon = ft.Icon(
-            ft.Icons.CHEVRON_RIGHT, size=18, color=ft.Colors.PRIMARY
-        )
+        self._chevron_icon = ft.Icon(ft.Icons.CHEVRON_RIGHT, size=18, color=ft.Colors.PRIMARY)
 
         badge_control = None
         if badge_text:
@@ -255,9 +251,7 @@ class TunEngineRow(ft.Container):
         super().__init__(
             content=ft.Row(
                 [
-                    ft.Icon(
-                        ft.Icons.SETTINGS_ETHERNET, size=20, color=ft.Colors.ON_SURFACE_VARIANT
-                    ),
+                    ft.Icon(ft.Icons.SETTINGS_ETHERNET, size=20, color=ft.Colors.ON_SURFACE_VARIANT),
                     ft.Column(
                         [
                             ft.Text(
@@ -307,9 +301,7 @@ class PortInputRow(ft.Container):
         super().__init__(
             content=ft.Row(
                 [
-                    ft.Icon(
-                        ft.Icons.INPUT, size=20, color=ft.Colors.ON_SURFACE_VARIANT
-                    ),
+                    ft.Icon(ft.Icons.INPUT, size=20, color=ft.Colors.ON_SURFACE_VARIANT),
                     ft.Column(
                         [
                             ft.Text(
@@ -380,9 +372,7 @@ class CountryDropdownRow(ft.Container):
         super().__init__(
             content=ft.Row(
                 [
-                    ft.Icon(
-                        ft.Icons.PUBLIC, size=20, color=ft.Colors.ON_SURFACE_VARIANT
-                    ),
+                    ft.Icon(ft.Icons.PUBLIC, size=20, color=ft.Colors.ON_SURFACE_VARIANT),
                     ft.Column(
                         [
                             ft.Text(
@@ -430,10 +420,7 @@ class LanguageDropdownRow(ft.Container):
             text_size=12,
             content_padding=8,
             value=current_value if current_value else "en",
-            options=[
-                ft.dropdown.Option(lang_code, f"{name}")
-                for lang_code, flag_code, name in self._languages
-            ],
+            options=[ft.dropdown.Option(lang_code, f"{name}") for lang_code, flag_code, name in self._languages],
             border_color=ft.Colors.OUTLINE_VARIANT,
             focused_border_color=ft.Colors.PRIMARY,
             on_select=on_change,
@@ -473,9 +460,7 @@ class LanguageDropdownRow(ft.Container):
         super().__init__(
             content=ft.Row(
                 [
-                    ft.Icon(
-                        ft.Icons.LANGUAGE, size=20, color=ft.Colors.ON_SURFACE_VARIANT
-                    ),
+                    ft.Icon(ft.Icons.LANGUAGE, size=20, color=ft.Colors.ON_SURFACE_VARIANT),
                     ft.Column(
                         [
                             ft.Row(
@@ -564,9 +549,7 @@ class StartupToggleRow(ft.Container):
                     ft.Icon(ft.Icons.ROCKET_LAUNCH, color=ft.Colors.ON_SURFACE_VARIANT),
                     ft.Column(
                         [
-                            ft.Text(
-                                t("settings.add_to_startup"), weight=ft.FontWeight.W_500
-                            ),
+                            ft.Text(t("settings.add_to_startup"), weight=ft.FontWeight.W_500),
                             self._sublabel,
                         ],
                         spacing=2,
@@ -636,9 +619,7 @@ class AutoReconnectToggleRow(ft.Container):
             on_change=self._handle_toggle,
         )
 
-        self._sublabel = ft.Text(
-            t("settings.experimental"), size=11, color=ft.Colors.ON_SURFACE_VARIANT
-        )
+        self._sublabel = ft.Text(t("settings.experimental"), size=11, color=ft.Colors.ON_SURFACE_VARIANT)
 
         super().__init__(
             content=ft.Row(
@@ -646,9 +627,7 @@ class AutoReconnectToggleRow(ft.Container):
                     ft.Icon(ft.Icons.AUTORENEW, color=ft.Colors.ON_SURFACE_VARIANT),
                     ft.Column(
                         [
-                            ft.Text(
-                                t("settings.auto_reconnect"), weight=ft.FontWeight.W_500
-                            ),
+                            ft.Text(t("settings.auto_reconnect"), weight=ft.FontWeight.W_500),
                             self._sublabel,
                         ],
                         spacing=2,

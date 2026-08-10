@@ -23,9 +23,7 @@ class Toast(ft.Container):
             "warning": (ft.Icons.WARNING_ROUNDED, ft.Colors.AMBER_400),
         }
 
-        icon, icon_color = color_map.get(
-            message_type, (ft.Icons.INFO_ROUNDED, ft.Colors.BLUE_400)
-        )
+        icon, icon_color = color_map.get(message_type, (ft.Icons.INFO_ROUNDED, ft.Colors.BLUE_400))
 
         super().__init__(
             content=ft.Row(

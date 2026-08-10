@@ -48,27 +48,17 @@ class NodeCardComponent:
             border=ft.Border.all(1, ft.Colors.with_opacity(0.3, PURPLE)),
         )
 
-        self._row_flag_img = ft.Image(
-            src="", width=18, height=12, border_radius=2, visible=False
-        )
-        self._row_country_text = ft.Text(
-            "--", size=11, color=WHITE, weight=ft.FontWeight.W_600
-        )
+        self._row_flag_img = ft.Image(src="", width=18, height=12, border_radius=2, visible=False)
+        self._row_country_text = ft.Text("--", size=11, color=WHITE, weight=ft.FontWeight.W_600)
         self._country_value_row = ft.Row(
             [self._row_flag_img, self._row_country_text],
             spacing=6,
             alignment=ft.MainAxisAlignment.END,
         )
 
-        self._server_protocol_text = ft.Text(
-            "--", size=11, color=WHITE, weight=ft.FontWeight.W_600
-        )
-        self._encryption_text = ft.Text(
-            "--", size=11, color=WHITE, weight=ft.FontWeight.W_600
-        )
-        self._server_ip_text = ft.Text(
-            "--", size=11, color=WHITE, weight=ft.FontWeight.W_600
-        )
+        self._server_protocol_text = ft.Text("--", size=11, color=WHITE, weight=ft.FontWeight.W_600)
+        self._encryption_text = ft.Text("--", size=11, color=WHITE, weight=ft.FontWeight.W_600)
+        self._server_ip_text = ft.Text("--", size=11, color=WHITE, weight=ft.FontWeight.W_600)
 
         self._change_server_btn = ft.Container(
             content=ft.Row(
@@ -177,11 +167,7 @@ class NodeCardComponent:
         self._encryption_text.value = encryption
         self._server_ip_text.value = server_ip
 
-        loc_text = (
-            translate_country(country_code, fallback=country_name)
-            if country_code or country_name
-            else "--"
-        )
+        loc_text = translate_country(country_code, fallback=country_name) if country_code or country_name else "--"
         self._row_country_text.value = loc_text
 
         if country_code:

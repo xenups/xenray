@@ -26,19 +26,11 @@ class LogsView(ft.Container):
         self._on_clear_logs_click = on_clear_logs_click
 
         WHITE = ft.Colors.WHITE
-        self._memory_value = ft.Text(
-            "--", size=15, weight=ft.FontWeight.W_600, color=WHITE
-        )
-        self._memory_bar = ft.ProgressBar(
-            value=0, color=AppColors.SECONDARY, bgcolor=AppColors.SURFACE_CONTAINER_HIGH
-        )
-        self._threads_value = ft.Text(
-            "--", size=15, weight=ft.FontWeight.W_600, color=WHITE
-        )
+        self._memory_value = ft.Text("--", size=15, weight=ft.FontWeight.W_600, color=WHITE)
+        self._memory_bar = ft.ProgressBar(value=0, color=AppColors.SECONDARY, bgcolor=AppColors.SURFACE_CONTAINER_HIGH)
+        self._threads_value = ft.Text("--", size=15, weight=ft.FontWeight.W_600, color=WHITE)
         self._threads_sub = ft.Text("", size=11, color=AppColors.PRIMARY)
-        self._health_value = ft.Text(
-            "--", size=15, weight=ft.FontWeight.W_600, color=WHITE
-        )
+        self._health_value = ft.Text("--", size=15, weight=ft.FontWeight.W_600, color=WHITE)
         self._health_sub = ft.Text("", size=11, color=AppColors.ON_SURFACE_VARIANT)
 
         self._memory_card = create_glass_container(
@@ -46,9 +38,7 @@ class LogsView(ft.Container):
                 [
                     ft.Row(
                         [
-                            ft.Icon(
-                                ft.Icons.MEMORY, size=18, color=AppColors.SECONDARY
-                            ),
+                            ft.Icon(ft.Icons.MEMORY, size=18, color=AppColors.SECONDARY),
                             ft.Text(
                                 t("logs.memory", default="Memory"),
                                 size=11,
@@ -72,9 +62,7 @@ class LogsView(ft.Container):
                 [
                     ft.Row(
                         [
-                            ft.Icon(
-                                ft.Icons.SWAP_CALLS, size=18, color=AppColors.PRIMARY
-                            ),
+                            ft.Icon(ft.Icons.SWAP_CALLS, size=18, color=AppColors.PRIMARY),
                             ft.Text(
                                 t("logs.active_threads", default="Active Threads"),
                                 size=11,
@@ -98,9 +86,7 @@ class LogsView(ft.Container):
                 [
                     ft.Row(
                         [
-                            ft.Icon(
-                                ft.Icons.VERIFIED_USER, size=18, color=AppColors.PRIMARY
-                            ),
+                            ft.Icon(ft.Icons.VERIFIED_USER, size=18, color=AppColors.PRIMARY),
                             ft.Text(
                                 t("logs.health_status", default="Health Status"),
                                 size=11,
@@ -139,9 +125,7 @@ class LogsView(ft.Container):
             content=ft.Row(
                 [
                     ft.Icon(ft.Icons.DOWNLOAD, size=14, color=WHITE),
-                    ft.Text(
-                        t("logs.download", default="Download"), size=11, color=WHITE
-                    ),
+                    ft.Text(t("logs.download", default="Download"), size=11, color=WHITE),
                 ],
                 spacing=4,
             ),
@@ -251,9 +235,7 @@ class LogsView(ft.Container):
     def update_threads(self, thread_count: int, status: str = ""):
         """Update active threads card."""
         self._threads_value.value = f"{thread_count} {t('logs.nodes', default='Nodes')}"
-        self._threads_sub.value = status or t(
-            "logs.optimal_performance", default="Optimal Performance"
-        )
+        self._threads_sub.value = status or t("logs.optimal_performance", default="Optimal Performance")
         try:
             self._threads_card.update()
         except Exception:
@@ -262,9 +244,7 @@ class LogsView(ft.Container):
     def update_health(self, issues: int, message: str = ""):
         """Update health status card."""
         self._health_value.value = f"{issues} {t('logs.issues', default='Issues')}"
-        self._health_sub.value = message or t(
-            "logs.system_healthy", default="System is healthy"
-        )
+        self._health_sub.value = message or t("logs.system_healthy", default="System is healthy")
         try:
             self._health_card.update()
         except Exception:

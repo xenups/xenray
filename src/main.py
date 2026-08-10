@@ -105,9 +105,7 @@ async def main(page: ft.Page):
     async def on_window_event(e):
         event_type_str = str(getattr(e, "type", "")).lower()
         event_data_str = str(e.data).lower() if e.data is not None else ""
-        logger.debug(
-            f"[WINDOW_EVENT] data='{e.data}' type='{getattr(e, 'type', None)}'"
-        )
+        logger.debug(f"[WINDOW_EVENT] data='{e.data}' type='{getattr(e, 'type', None)}'")
 
         is_close = "close" in event_type_str or "close" in event_data_str
         is_minimize = "minimize" in event_type_str or "minimize" in event_data_str
@@ -195,9 +193,7 @@ def run():
         global _singleton_mutex
         _singleton_mutex = kernel32.CreateMutexW(None, False, mutex_name)
         last_error = ctypes.get_last_error()
-        logger.debug(
-            f"[Startup] Mutex creation result: handle={_singleton_mutex}, last_error={last_error}"
-        )
+        logger.debug(f"[Startup] Mutex creation result: handle={_singleton_mutex}, last_error={last_error}")
         if last_error == 183:
             logger.warning("Another instance is already running. Exiting.")
             return

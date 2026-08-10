@@ -52,14 +52,10 @@ class ServersView(ft.Container):
             border_radius=12,
             bgcolor=ft.Colors.with_opacity(0.15, AppColors.PRIMARY),
         )
-        self._hero_node_name = ft.Text(
-            "--", size=18, weight=ft.FontWeight.W_700, color=ft.Colors.WHITE
-        )
+        self._hero_node_name = ft.Text("--", size=18, weight=ft.FontWeight.W_700, color=ft.Colors.WHITE)
         self._hero_node_protocol = ft.Text("--", size=11, color=ft.Colors.WHITE)
         self._hero_node_speed = ft.Text("--", size=11, color=ft.Colors.WHITE)
-        self._hero_node_latency = ft.Text(
-            "--", size=22, weight=ft.FontWeight.W_700, color=ft.Colors.WHITE
-        )
+        self._hero_node_latency = ft.Text("--", size=22, weight=ft.FontWeight.W_700, color=ft.Colors.WHITE)
         self._hero_flag = ft.Image(src="", width=28, height=20, visible=False)
 
         self._hero_card = ft.Container(
@@ -68,9 +64,7 @@ class ServersView(ft.Container):
                     ft.Row(
                         [
                             self._hero_badge,
-                            ft.Icon(
-                                ft.Icons.VERIFIED, size=18, color=AppColors.SECONDARY
-                            ),
+                            ft.Icon(ft.Icons.VERIFIED, size=18, color=AppColors.SECONDARY),
                         ],
                         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                     ),
@@ -140,9 +134,7 @@ class ServersView(ft.Container):
                             ft.ElevatedButton(
                                 content=ft.Row(
                                     [
-                                        ft.Icon(
-                                            ft.Icons.ADD, size=18, color=ft.Colors.WHITE
-                                        ),
+                                        ft.Icon(ft.Icons.ADD, size=18, color=ft.Colors.WHITE),
                                         ft.Text(
                                             t("servers.add", default="Add Server"),
                                             size=13,
@@ -157,9 +149,7 @@ class ServersView(ft.Container):
                                     bgcolor=AppColors.PRIMARY,
                                     color=ft.Colors.WHITE,
                                     shape=ft.RoundedRectangleBorder(radius=22),
-                                    padding=ft.Padding.symmetric(
-                                        horizontal=18, vertical=10
-                                    ),
+                                    padding=ft.Padding.symmetric(horizontal=18, vertical=10),
                                 ),
                                 height=44,
                                 on_click=self._on_add_server_click,

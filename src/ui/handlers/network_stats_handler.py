@@ -113,26 +113,14 @@ class NetworkStatsHandler:
             total_bps = 0.0
 
         current_tab = self._active_tab_getter() if self._active_tab_getter else ""
-        drawer_open = (
-            getattr(self._logs_drawer_component, "open", False)
-            if self._logs_drawer_component
-            else False
-        )
+        drawer_open = getattr(self._logs_drawer_component, "open", False) if self._logs_drawer_component else False
 
         # Update Connection Button Glow ONLY if on dashboard tab
-        if (
-            current_tab == "dashboard"
-            and self._connection_button
-            and self._page_attached(self._connection_button)
-        ):
+        if current_tab == "dashboard" and self._connection_button and self._page_attached(self._connection_button):
             self._connection_button.update_network_activity(total_bps)
 
         # Update LogsDrawer stats ONLY if mounted and open
-        if (
-            drawer_open
-            and self._logs_drawer_component
-            and self._page_attached(self._logs_drawer_component)
-        ):
+        if drawer_open and self._logs_drawer_component and self._page_attached(self._logs_drawer_component):
             self._logs_drawer_component.update_network_stats(down_str, up_str)
 
         # Earth Glow Animation
@@ -150,11 +138,7 @@ class NetworkStatsHandler:
             self._earth_glow.update()
 
         # Heartbeat logic ONLY if logs drawer is open
-        if (
-            drawer_open
-            and self._logs_heartbeat
-            and self._page_attached(self._logs_heartbeat)
-        ):
+        if drawer_open and self._logs_heartbeat and self._page_attached(self._logs_heartbeat):
             is_bright = self._logs_heartbeat.opacity > 0.5
             self._logs_heartbeat.opacity = 0.3 if is_bright else 1.0
             self._logs_heartbeat.update()

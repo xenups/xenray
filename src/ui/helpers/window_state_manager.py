@@ -31,9 +31,7 @@ class WindowStateManager:
         saved_mode = app_context.settings.get_connection_mode()
         saved_theme = app_context.settings.get_theme_mode()
 
-        page.theme_mode = (
-            ft.ThemeMode.DARK if saved_theme == "dark" else ft.ThemeMode.LIGHT
-        )
+        page.theme_mode = ft.ThemeMode.DARK if saved_theme == "dark" else ft.ThemeMode.LIGHT
         return ConnectionMode.VPN if saved_mode == "vpn" else ConnectionMode.PROXY
 
     @staticmethod

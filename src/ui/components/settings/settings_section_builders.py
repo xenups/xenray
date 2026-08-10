@@ -32,11 +32,7 @@ class SettingsSection(ft.Container):
                         ),
                         alignment=ft.Alignment(1.0 if rtl else -1.0, 0),
                         padding=ft.Padding.only(bottom=8),
-                        border=ft.Border.only(
-                            bottom=ft.BorderSide(
-                                1, ft.Colors.with_opacity(0.12, ft.Colors.WHITE)
-                            )
-                        ),
+                        border=ft.Border.only(bottom=ft.BorderSide(1, ft.Colors.with_opacity(0.12, ft.Colors.WHITE))),
                     ),
                     ft.Container(height=8),
                     *controls,
@@ -91,9 +87,7 @@ class ModeRadioCards(ft.Container):
             padding=4,
         )
 
-    def _build_card(
-        self, icon, label, desc, badge, value, selected, accent: str, rtl: bool
-    ):
+    def _build_card(self, icon, label, desc, badge, value, selected, accent: str, rtl: bool):
         return ft.Container(
             content=ft.Column(
                 [
@@ -112,9 +106,7 @@ class ModeRadioCards(ft.Container):
                         text_align=ft.TextAlign.CENTER,
                     ),
                     ft.Container(
-                        content=ft.Text(
-                            badge, size=9, weight=ft.FontWeight.W_700, color=accent
-                        )
+                        content=ft.Text(badge, size=9, weight=ft.FontWeight.W_700, color=accent)
                         if badge
                         else ft.Container(height=0),
                         padding=ft.Padding.symmetric(horizontal=6, vertical=2),
@@ -130,9 +122,7 @@ class ModeRadioCards(ft.Container):
             width=140,
             height=110,
             border_radius=12,
-            bgcolor=ft.Colors.with_opacity(0.15, accent)
-            if selected
-            else ft.Colors.with_opacity(0.06, ft.Colors.WHITE),
+            bgcolor=ft.Colors.with_opacity(0.15, accent) if selected else ft.Colors.with_opacity(0.06, ft.Colors.WHITE),
             border=ft.Border.all(1.5, accent)
             if selected
             else ft.Border.all(1, ft.Colors.with_opacity(0.15, ft.Colors.WHITE)),
@@ -155,9 +145,7 @@ class ModeSwitchRow(ft.Container):
 
     def __init__(self, is_proxy: bool, on_change: Callable):
         self._is_proxy = is_proxy
-        self._switch = ft.Switch(
-            value=is_proxy, active_color=AppColors.PRIMARY, on_change=on_change
-        )
+        self._switch = ft.Switch(value=is_proxy, active_color=AppColors.PRIMARY, on_change=on_change)
         self._vpn_text = ft.Text(
             t("settings.vpn"),
             size=11,
@@ -175,9 +163,7 @@ class ModeSwitchRow(ft.Container):
             content=ft.Row(
                 [
                     ft.Container(
-                        content=ft.Icon(
-                            ft.Icons.VPN_LOCK, size=20, color=ft.Colors.WHITE
-                        ),
+                        content=ft.Icon(ft.Icons.VPN_LOCK, size=20, color=ft.Colors.WHITE),
                         width=28,
                         alignment=ft.Alignment.CENTER_LEFT,
                     ),
@@ -263,10 +249,7 @@ class LanguageDropdownRow(ft.Container):
             text_size=12,
             content_padding=8,
             value=current_value if current_value else "en",
-            options=[
-                ft.dropdown.Option(lang_code, f"{name}")
-                for lang_code, flag_code, name in self._languages
-            ],
+            options=[ft.dropdown.Option(lang_code, f"{name}") for lang_code, flag_code, name in self._languages],
             border_color=ft.Colors.OUTLINE_VARIANT,
             focused_border_color=AppColors.PRIMARY,
             on_select=self._handle_change,
@@ -355,9 +338,7 @@ class StartupToggleRow(ft.Container):
             content=ft.Row(
                 [
                     ft.Container(
-                        content=ft.Icon(
-                            ft.Icons.ROCKET_LAUNCH, size=20, color=ft.Colors.WHITE
-                        ),
+                        content=ft.Icon(ft.Icons.ROCKET_LAUNCH, size=20, color=ft.Colors.WHITE),
                         width=28,
                         alignment=ft.Alignment.CENTER_LEFT,
                     ),
