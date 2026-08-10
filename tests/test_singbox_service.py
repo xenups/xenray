@@ -198,7 +198,9 @@ class TestStaticRouteFiltering:
             patch("src.utils.platform_utils.PlatformUtils.suppress_smhr"),
             patch.object(service, "_wait_for_xray_ready", return_value=True),
             patch.object(service, "_write_config_and_start", return_value=True),
-            patch("src.services.route_manager_service.RouteManagerService.resolve_ips", return_value=["104.17.121.70"]) as mock_resolve,
+            patch(
+                "src.services.route_manager_service.RouteManagerService.resolve_ips", return_value=["104.17.121.70"]
+            ) as mock_resolve,
             patch("src.services.route_manager_service.RouteManagerService.add_static_route") as mock_route,
         ):
             service.start(

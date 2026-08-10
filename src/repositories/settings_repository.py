@@ -131,7 +131,6 @@ class SettingsRepository:
     def set_startup_enabled(self, enabled: bool) -> None:
         self._write("startup_enabled.txt", "true" if enabled else "false")
 
-
     # --- Auto-Reconnect Preference ---
     def get_auto_reconnect_enabled(self) -> bool:
         val = self._read("auto_reconnect_enabled.txt")

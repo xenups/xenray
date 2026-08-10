@@ -119,10 +119,7 @@ class SingboxConfigBuilder:
         # Build process bypass list — include the frozen binary if running packed.
         current_exe = os.path.basename(sys.executable).lower()
         is_windows = PlatformUtils.get_platform() == "windows"
-        process_names = [
-            f"{proc}.exe" if is_windows else proc
-            for proc in BASE_BYPASS_PROCESSES
-        ]
+        process_names = [f"{proc}.exe" if is_windows else proc for proc in BASE_BYPASS_PROCESSES]
         if current_exe not in process_names:
             process_names.append(current_exe)
 
@@ -192,7 +189,7 @@ class SingboxConfigBuilder:
                     "type": "direct",
                     "tag": "direct",
                     "domain_resolver": "bootstrap",
-                    **( {"bind_interface": interface_name} if interface_name else {}),
+                    **({"bind_interface": interface_name} if interface_name else {}),
                 },
                 {"type": "block", "tag": "block"},
             ],
@@ -225,16 +222,16 @@ class SingboxConfigBuilder:
                             "192.168.0.0/16",
                             "127.0.0.0/8",
                             "169.254.0.0/16",
-                            "fc00::/7",   # IPv6 ULA
+                            "fc00::/7",  # IPv6 ULA
                             "fe80::/10",  # IPv6 Link-Local
-                            "::1/128",    # IPv6 loopback
+                            "::1/128",  # IPv6 loopback
                         ],
                         "outbound": "direct",
                     },
                 ],
                 "final": "proxy",
                 "auto_detect_interface": True,
-                **( {"default_interface": interface_name} if interface_name else {}),
+                **({"default_interface": interface_name} if interface_name else {}),
             },
         }
 

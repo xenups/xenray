@@ -97,6 +97,7 @@ class ConnectionMonitoringService:
         if _xray_svc is None:
             # Fallback: lazy import to avoid circular import at module level
             from src.services.xray_service import XrayService as _XS
+
             _xray_svc = _XS()
         metrics_provider = XrayProcessProvider(
             pid_getter=lambda: _xray_svc.pid,

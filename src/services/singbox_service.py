@@ -49,9 +49,11 @@ class SingboxService:
             try:
                 prev = signal.getsignal(sig)
                 if callable(prev) and prev not in (signal.SIG_DFL, signal.SIG_IGN):
+
                     def _chained(signum, frame, _prev=prev):
                         self._signal_handler(signum, frame)
                         _prev(signum, frame)
+
                     signal.signal(sig, _chained)
                 else:
                     signal.signal(sig, self._signal_handler)
@@ -96,17 +98,26 @@ class SingboxService:
 
     async def _run_check(self):
         proc = await asyncio.subprocess.create_subprocess_exec(
-            SINGBOX_EXECUTABLE, "check", "-c", SINGBOX_CONFIG_PATH,
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
-            creationflags=PlatformUtils.get_subprocess_flags(), startupinfo=PlatformUtils.get_startupinfo(),
+            SINGBOX_EXECUTABLE,
+            "check",
+            "-c",
+            SINGBOX_CONFIG_PATH,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            creationflags=PlatformUtils.get_subprocess_flags(),
+            startupinfo=PlatformUtils.get_startupinfo(),
         )
         stdout, stderr = await proc.communicate()
         return proc.returncode, stdout, stderr
 
     async def _spawn_process(self) -> Optional[asyncio.subprocess.Process]:
         return await asyncio.subprocess.create_subprocess_exec(
-            SINGBOX_EXECUTABLE, "run", "-c", SINGBOX_CONFIG_PATH,
-            stdout=self._log_handle, stderr=self._log_handle,
+            SINGBOX_EXECUTABLE,
+            "run",
+            "-c",
+            SINGBOX_CONFIG_PATH,
+            stdout=self._log_handle,
+            stderr=self._log_handle,
             creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
             startupinfo=PlatformUtils.get_startupinfo(),
         )
@@ -160,28 +171,61 @@ class SingboxService:
                 pass
 
     # Delegates for backward-compatibility with existing tests
-    def _normalize_list(self, val): return self._config_builder.normalize_list(val)
-    def _filter_real_ips(self, lst): return self._config_builder.filter_real_ips(lst)
-    def _filter_domains(self, lst): return self._config_builder.filter_domains(lst)
-    def _generate_config(self, *a, **kw): return self._config_builder.build(*a, **kw)
-    def _is_private_or_reserved(self, ip): return RouteManagerService.is_private_or_reserved(ip)
-    def _resolve_ips(self, eps): return self._route_manager.resolve_ips(eps)
-    def _add_static_route(self, ip, gw): self._route_manager.add_static_route(ip, gw)
-    def _cleanup_routes(self): self._route_manager.cleanup_routes()
-    def _add_lan_routes(self, gw): self._route_manager.add_lan_routes(gw)
-    def _cleanup_lan_routes(self): self._route_manager._cleanup_lan_routes()
-    @property
-    def _added_routes(self): return self._route_manager._added_routes
-    @property
-    def _added_lan_routes(self): return self._route_manager._added_lan_routes
+    def _normalize_list(self, val):
+        return self._config_builder.normalize_list(val)
 
-    def start(self, xray_socks_port: int, proxy_server_ip: Union[str, List[str]] = "", routing_country: str = "", routing_rules: dict = None, mtu: int = 1420, allow_lan: bool = False) -> Optional[int]:
+    def _filter_real_ips(self, lst):
+        return self._config_builder.filter_real_ips(lst)
+
+    def _filter_domains(self, lst):
+        return self._config_builder.filter_domains(lst)
+
+    def _generate_config(self, *a, **kw):
+        return self._config_builder.build(*a, **kw)
+
+    def _is_private_or_reserved(self, ip):
+        return RouteManagerService.is_private_or_reserved(ip)
+
+    def _resolve_ips(self, eps):
+        return self._route_manager.resolve_ips(eps)
+
+    def _add_static_route(self, ip, gw):
+        self._route_manager.add_static_route(ip, gw)
+
+    def _cleanup_routes(self):
+        self._route_manager.cleanup_routes()
+
+    def _add_lan_routes(self, gw):
+        self._route_manager.add_lan_routes(gw)
+
+    def _cleanup_lan_routes(self):
+        self._route_manager._cleanup_lan_routes()
+
+    @property
+    def _added_routes(self):
+        return self._route_manager._added_routes
+
+    @property
+    def _added_lan_routes(self):
+        return self._route_manager._added_lan_routes
+
+    def start(
+        self,
+        xray_socks_port: int,
+        proxy_server_ip: Union[str, List[str]] = "",
+        routing_country: str = "",
+        routing_rules: dict = None,
+        mtu: int = 1420,
+        allow_lan: bool = False,
+    ) -> Optional[int]:
         try:
             iface_name, _, _, gateway = NetworkInterfaceDetector.get_primary_interface()
             self._route_manager.setup_routes(proxy_server_ip, gateway, allow_lan=allow_lan)
             self._smhr_was_enabled = PlatformUtils.suppress_smhr()
 
-            config = self._config_builder.build(xray_socks_port, proxy_server_ip, routing_country, iface_name, routing_rules, mtu)
+            config = self._config_builder.build(
+                xray_socks_port, proxy_server_ip, routing_country, iface_name, routing_rules, mtu
+            )
 
             if not self._wait_for_xray_ready(xray_socks_port) or not self._write_config_and_start(config):
                 self._route_manager.cleanup_routes()
@@ -221,6 +265,7 @@ class SingboxService:
             with open(SINGBOX_CONFIG_PATH, "w", encoding="utf-8") as f:
                 json.dump(config, f, indent=2)
             from src.utils.process_utils import rotate_oversized_log_file
+
             rotate_oversized_log_file(SINGBOX_LOG_FILE)
             self._log_handle = open(SINGBOX_LOG_FILE, "w", encoding="utf-8")
             try:
@@ -307,7 +352,13 @@ class SingboxService:
         if not os.path.exists(SINGBOX_EXECUTABLE):
             return None
         try:
-            res = subprocess.run([SINGBOX_EXECUTABLE, "version"], capture_output=True, text=True, creationflags=PlatformUtils.get_subprocess_flags(), startupinfo=PlatformUtils.get_startupinfo())
+            res = subprocess.run(
+                [SINGBOX_EXECUTABLE, "version"],
+                capture_output=True,
+                text=True,
+                creationflags=PlatformUtils.get_subprocess_flags(),
+                startupinfo=PlatformUtils.get_startupinfo(),
+            )
             if res.returncode == 0:
                 parts = res.stdout.split("\n")[0].split()
                 if len(parts) >= 3:

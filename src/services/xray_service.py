@@ -160,19 +160,23 @@ class XrayService:
     @staticmethod
     def _read_smhr_state() -> Optional[bool]:
         from src.utils.platform_utils import PlatformUtils
+
         return PlatformUtils.read_smhr_state()
 
     @staticmethod
     def _set_smhr_state(enabled: bool):
         from src.utils.platform_utils import PlatformUtils
+
         PlatformUtils.set_smhr_state(enabled)
 
     def _suppress_smhr(self):
         from src.utils.platform_utils import PlatformUtils
+
         self._smhr_was_enabled = PlatformUtils.suppress_smhr()
 
     def _restore_smhr(self):
         from src.utils.platform_utils import PlatformUtils
+
         PlatformUtils.restore_smhr(self._smhr_was_enabled)
         self._smhr_was_enabled = None
 

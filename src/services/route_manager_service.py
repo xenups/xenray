@@ -46,8 +46,8 @@ class RouteManagerService:
     """
 
     def __init__(self) -> None:
-        self._added_routes: List[str] = []       # individual host /32 routes
-        self._added_lan_routes: List[str] = []   # CIDR network routes (LAN sharing)
+        self._added_routes: List[str] = []  # individual host /32 routes
+        self._added_lan_routes: List[str] = []  # CIDR network routes (LAN sharing)
 
     # ------------------------------------------------------------------
     # High-level API called by SingboxService
@@ -268,9 +268,14 @@ class RouteManagerService:
         platform = PlatformUtils.get_platform()
         if platform == "windows":
             return [
-                "route", "add",
-                str(network.network_address), "mask", str(network.netmask),
-                gateway, "metric", "1",
+                "route",
+                "add",
+                str(network.network_address),
+                "mask",
+                str(network.netmask),
+                gateway,
+                "metric",
+                "1",
             ]
         if platform == "macos":
             return ["route", "-n", "add", "-net", str(network), gateway]
