@@ -108,8 +108,8 @@ class ServerCard(ft.Container):
                 ],
                 tile_mode=ft.GradientTileMode.CLAMP,
             ),
-            border=ft.Border.all(1, ft.Colors.with_opacity(0.15, ft.Colors.WHITE)),
-            border_radius=20,
+            border=None,
+            border_radius=14,
             padding=ft.Padding.symmetric(horizontal=16, vertical=14),
             margin=ft.Margin.only(left=20, right=20, bottom=16),
             on_click=on_click,
@@ -293,37 +293,25 @@ class ServerCard(ft.Container):
     def update_theme(self, is_dark: bool):
         """Update card appearance based on theme."""
 
+        self.border = None
         if is_dark:
-            self.border = ft.Border.all(1, ft.Colors.with_opacity(0.2, ft.Colors.ON_SURFACE))
-
             self._globe_icon.color = ft.Colors.ON_SURFACE_VARIANT
-
             self._list_btn.bgcolor = ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE)
-
             # Safe shadow update
-
             if self.shadow:
                 if isinstance(self.shadow, list):
                     if len(self.shadow) > 0:
                         self.shadow[0].color = ft.Colors.with_opacity(0.15, ft.Colors.BLACK)
-
                 else:
                     self.shadow.color = ft.Colors.with_opacity(0.15, ft.Colors.BLACK)
-
         else:
-            self.border = ft.Border.all(1, ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE))
-
             self._globe_icon.color = ft.Colors.ON_SURFACE_VARIANT
-
             self._list_btn.bgcolor = ft.Colors.with_opacity(0.08, ft.Colors.ON_SURFACE)
-
             # Safe shadow update
-
             if self.shadow:
                 if isinstance(self.shadow, list):
                     if len(self.shadow) > 0:
                         self.shadow[0].color = ft.Colors.with_opacity(0.08, ft.Colors.BLACK)
-
                 else:
                     self.shadow.color = ft.Colors.with_opacity(0.08, ft.Colors.BLACK)
 

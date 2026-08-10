@@ -136,10 +136,8 @@ class DashboardView(ft.Container):
             height=49,
             padding=ft.Padding.symmetric(vertical=6, horizontal=10),
             border_radius=14,
-            bgcolor=GLASS_BG,
-            border=GLASS_BORDER,
-            blur=GLASS_BLUR,
-            shadow=GLASS_SHADOW,
+            bgcolor=ft.Colors.with_opacity(0.035, ft.Colors.WHITE),
+            border=None,
         )
 
         # Left Column: Bottom Upload Card (Compact 185px width)
@@ -180,10 +178,8 @@ class DashboardView(ft.Container):
             height=49,
             padding=ft.Padding.symmetric(vertical=6, horizontal=10),
             border_radius=14,
-            bgcolor=GLASS_BG,
-            border=GLASS_BORDER,
-            blur=GLASS_BLUR,
-            shadow=GLASS_SHADOW,
+            bgcolor=ft.Colors.with_opacity(0.035, ft.Colors.WHITE),
+            border=None,
         )
 
         left_traffic_column = ft.Column(
@@ -202,6 +198,8 @@ class DashboardView(ft.Container):
             # Strip the card's built-in large margin so it fits the compact row
             self._server_card_component.margin = None
             self._server_card_component.height = 106
+            self._server_card_component.border_radius = 14
+            self._server_card_component.border = None
 
             # Compact padding so text fits cleanly in the 106px height
             self._server_card_component.padding = ft.Padding.symmetric(horizontal=12, vertical=8)
@@ -239,8 +237,8 @@ class DashboardView(ft.Container):
                 height=106,
                 alignment=ft.Alignment.CENTER,
                 border_radius=14,
-                bgcolor=GLASS_BG,
-                border=GLASS_BORDER,
+                bgcolor=ft.Colors.with_opacity(0.035, ft.Colors.WHITE),
+                border=None,
                 on_click=lambda e: (self._on_change_server_click(e) if self._on_change_server_click else None),
                 ink=True,
             )
