@@ -104,6 +104,7 @@ class ProfilePresenter:
 
         if not country_code and profile.get("name"):
             from src.utils.country_flags import extract_country_code_from_name
+
             name_cc = extract_country_code_from_name(profile["name"])
             if name_cc:
                 country_code = name_cc

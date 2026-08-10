@@ -7,19 +7,19 @@ from typing import TYPE_CHECKING
 import flet as ft
 
 from src.core.i18n import t
-from src.ui.components.connection_button import ConnectionButton
-from src.ui.components.header import Header
-from src.ui.components.lan_sharing_card import LanSharingCard
-from src.ui.components.nav_sidebar import NavSidebar
-from src.ui.components.server_card import ServerCard
-from src.ui.components.settings_sections import ModeSwitchRow
-from src.ui.components.status_display import StatusDisplay
+from src.ui.components.common.header import Header
+from src.ui.components.common.nav_sidebar import NavSidebar
+from src.ui.components.dashboard.connection_button import ConnectionButton
+from src.ui.components.dashboard.server_card import ServerCard
+from src.ui.components.dashboard.status_display import StatusDisplay
+from src.ui.components.lan.lan_sharing_card import LanSharingCard
+from src.ui.components.settings import ModeSwitchRow
+from src.ui.pages.dashboard_page import DashboardPage, DashboardView
+from src.ui.pages.logs_page import LogsPage, LogsView
+from src.ui.pages.servers_page import ServersPage, ServersView
+from src.ui.pages.settings_page import SettingsPage, SettingsView
+from src.ui.pages.statistics_page import StatisticsPage, StatisticsView
 from src.ui.theme import AppColors
-from src.ui.views.dashboard_view import DashboardView
-from src.ui.views.logs_view import LogsView
-from src.ui.views.servers_view import ServersView
-from src.ui.views.settings_view import SettingsView
-from src.ui.views.statistics_view import StatisticsView
 
 if TYPE_CHECKING:
     from src.ui.main_window import MainWindow
@@ -55,6 +55,34 @@ class UIBuilder:
         self._main._connection_button = ConnectionButton(on_click=self._main._on_connect_clicked)
         self._main._server_card = ServerCard(
             app_context=self._main._app_context, on_click=self._main._open_server_drawer
+        )
+
+    def create_dashboard_view(self) -> ft.Column:
+        """Create centerpiece column layout for dashboard view."""
+        if not self._main._lan_sharing_card:
+            self._main._lan_sharing_card = LanSharingCard(self._main._app_context)
+
+        center_block = ft.Container(
+            content=ft.Column(
+                [self._main._connection_button, self._main._status_display],
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                alignment=ft.MainAxisAlignment.CENTER,
+                spacing=0,
+            ),
+            margin=ft.Margin.only(top=20),
+        )
+
+        return ft.Column(
+            [
+                self._main._header,
+                ft.Container(expand=True),
+                center_block,
+                ft.Container(expand=True),
+                self._main._server_card,
+            ],
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            alignment=ft.MainAxisAlignment.START,
+            expand=True,
         )
 
     def build_stitch_views(self):

@@ -47,14 +47,25 @@ def get_short_status_label(raw_status: Optional[str] = None) -> str:
     lower = clean.lower()
 
     # No Internet (MUST be checked before general connected check)
-    if any(k in lower for k in ["no internet", "no_internet", "no net", "connected_no_internet",
-                                 "without internet", "без интернета", "بدون نت", "بدون اینترنت",
-                                 "没网", "left on read"]):
+    if any(
+        k in lower
+        for k in [
+            "no internet",
+            "no_internet",
+            "no net",
+            "connected_no_internet",
+            "without internet",
+            "без интернета",
+            "بدون نت",
+            "بدون اینترنت",
+            "没网",
+            "left on read",
+        ]
+    ):
         return t("connection.connected_no_internet")
 
     # Errors / Failures / Timeouts
-    if any(k in lower for k in ["fail", "error", "timeout", "hold tight",
-                                 "دست نگه دار", "稍等", "подождите"]):
+    if any(k in lower for k in ["fail", "error", "timeout", "hold tight", "دست نگه دار", "稍等", "подождите"]):
         return t("connection.error")
 
     # Checking / Latency test
@@ -74,8 +85,10 @@ def get_short_status_label(raw_status: Optional[str] = None) -> str:
         return t("app.connected")
 
     # Connecting / Waking
-    if any(k in lower for k in ["connecting", "loading", "starting", "initializing", "waking",
-                                 "در حال بیداری", "唤醒中", "просыпаюсь"]):
+    if any(
+        k in lower
+        for k in ["connecting", "loading", "starting", "initializing", "waking", "در حال بیداری", "唤醒中", "просыпаюсь"]
+    ):
         return t("app.connecting")
 
     # 4. Final fallback: truncate to first 3 words and strip trailing conjunctions

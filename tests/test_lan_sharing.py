@@ -238,14 +238,14 @@ class TestLanSharingCardUI:
 
     @patch("src.utils.network_interface.NetworkInterfaceDetector.get_primary_lan_ip", return_value="192.168.70.125")
     def test_initial_state(self, mock_ip, app_context):
-        from src.ui.components.lan_sharing_card import LanSharingCard
+        from src.ui.components.lan.lan_sharing_card import LanSharingCard
 
         card = LanSharingCard(app_context)
         assert card.visible is False
 
     @patch("src.utils.network_interface.NetworkInterfaceDetector.get_primary_lan_ip", return_value="192.168.70.125")
     def test_set_visible_shows_badge(self, mock_ip, app_context):
-        from src.ui.components.lan_sharing_card import LanSharingCard
+        from src.ui.components.lan.lan_sharing_card import LanSharingCard
 
         card = LanSharingCard(app_context)
         card.set_visible(True)
@@ -254,7 +254,7 @@ class TestLanSharingCardUI:
 
     @patch("src.utils.network_interface.NetworkInterfaceDetector.get_primary_lan_ip", return_value="192.168.70.125")
     def test_open_dialog_opens_modal(self, mock_ip, app_context):
-        from src.ui.components.lan_sharing_card import LanSharingCard
+        from src.ui.components.lan.lan_sharing_card import LanSharingCard
 
         card = LanSharingCard(app_context)
         mock_page = MagicMock()

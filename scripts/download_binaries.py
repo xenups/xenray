@@ -39,7 +39,9 @@ WINTUN_ARCH_MAP = {64: "amd64", 32: "x86"}
 
 # GitHub / Official release URLs
 XRAY_URL_TEMPLATE = "https://github.com/XTLS/Xray-core/releases/download/v{version}/Xray-windows-{arch}.zip"
-SINGBOX_URL_TEMPLATE = "https://github.com/SagerNet/sing-box/releases/download/v{version}/sing-box-{version}-windows-{sb_arch}.zip"
+SINGBOX_URL_TEMPLATE = (
+    "https://github.com/SagerNet/sing-box/releases/download/v{version}/sing-box-{version}-windows-{sb_arch}.zip"
+)
 WINTUN_URL = "https://www.wintun.net/builds/wintun-0.14.1.zip"
 
 
@@ -101,6 +103,7 @@ def extract_zip(zip_path: Path, extract_dir: Path, target_filename: str, subpath
                     extracted_path.replace(final_path)
                     # Clean up nested directory created during zip extraction
                     import shutil
+
                     rel_parts = Path(file).parts
                     if len(rel_parts) > 1:
                         top_subfolder = extract_dir / rel_parts[0]
@@ -186,4 +189,3 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
-

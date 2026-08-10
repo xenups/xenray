@@ -11,7 +11,7 @@ from src.ui.handlers.connection_handler import ConnectionHandler
 from src.utils.network_utils import NetworkUtils
 
 if TYPE_CHECKING:
-    from src.ui.components.toast import ToastManager
+    from src.ui.components.common.toast import ToastManager
 
 
 class MonitoringService:

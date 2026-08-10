@@ -1,0 +1,141 @@
+"""Navigation Service - manages view transitions, route switching, and subpage navigation."""
+
+from __future__ import annotations
+
+import asyncio
+from typing import TYPE_CHECKING, Optional
+
+import flet as ft
+
+from src.core.logger import logger
+from src.ui.components.servers.add_server_dialog import AddServerDialog
+
+if TYPE_CHECKING:
+    from src.ui.main_window import MainWindow
+
+
+class NavigationService:
+    """Service handling navigation route switching and subpage transitions."""
+
+    def __init__(self, main_window: MainWindow) -> None:
+        self._mw = main_window
+
+    def navigate_to(self, control: ft.Control) -> None:
+        """Navigate to a new view — suppress background updates during swap."""
+        self._mw._nav_locked = True
+        self._mw._view_switcher.content = control
+        try:
+            self._mw._view_switcher.update()
+        except RuntimeError:
+            pass
+        self._mw._nav_locked = False
+
+    def navigate_back(self, e: Optional[ft.ControlEvent] = None) -> None:
+        """Return to settings view or active tab from subpages."""
+        target_tab = (
+            self._mw._active_tab
+            if self._mw._active_tab in ("settings", "statistics", "servers", "logs")
+            else "settings"
+        )
+        self.on_nav_tab_changed(target_tab, force=True)
+
+    def on_nav_tab_changed(self, tab_id: str, force: bool = False) -> None:
+        """Switch the main content view based on selected nav tab using targeted updates."""
+        if self._mw._active_tab == tab_id and not force:
+            return
+        self._mw._active_tab = tab_id
+        view_map = {
+            "dashboard": self._mw._stitch_dashboard_view,
+            "statistics": self._mw._stitch_statistics_view,
+            "servers": self._mw._stitch_servers_view,
+            "logs": self._mw._stitch_logs_view,
+            "settings": self._mw._stitch_settings_view,
+        }
+        target = view_map.get(tab_id, self._mw._stitch_dashboard_view)
+
+        self._mw._view_switcher.content = target
+        if hasattr(self._mw, "_nav_sidebar") and self._mw._nav_sidebar:
+            self._mw._nav_sidebar.set_active_tab(tab_id)
+
+        try:
+            self._mw._view_switcher.update()
+        except RuntimeError:
+            pass
+
+        if hasattr(self._mw, "_nav_sidebar") and self._mw._nav_sidebar:
+            try:
+                self._mw._nav_sidebar._buttons_container.update()
+            except RuntimeError:
+                pass
+
+        if hasattr(self._mw, "_log_viewer") and self._mw._log_viewer:
+            drawer_open = (
+                getattr(self._mw._logs_drawer_component, "open", False)
+                if hasattr(self._mw, "_logs_drawer_component") and self._mw._logs_drawer_component
+                else False
+            )
+            self._mw._log_viewer.set_visible(tab_id == "logs" or drawer_open)
+
+    def on_server_search(self, query: str) -> None:
+        """Handle server search in ServersView."""
+        if self._mw._profile_manager and self._mw._server_list:
+            self._mw._server_list._load_profiles(search_query=query, update_ui=True)
+
+    def open_add_server_dialog(self, e: Optional[ft.ControlEvent] = None) -> None:
+        """Open the add server/subscription dialog."""
+        dialog = AddServerDialog(
+            on_server_added=lambda name, config: self.add_server_profile(name, config),
+            on_subscription_added=lambda name, url: self.add_subscription(name, url),
+            on_close=lambda: self._mw._page.pop_dialog(),
+            on_create_chain=None,
+        )
+        self._mw._page.show_dialog(dialog)
+
+    def add_server_profile(self, name: str, config: dict) -> None:
+        """Save a newly added server profile and refresh server list."""
+        self._mw._app_context.profiles.save(name, config)
+        if self._mw._server_list:
+            self._mw._server_list._load_profiles(update_ui=True)
+
+    def add_subscription(self, name: str, url: str) -> None:
+        """Save a newly added subscription and refresh server list."""
+        self._mw._app_context.subscriptions.save(name, url)
+        if self._mw._server_list:
+            self._mw._server_list._load_profiles(update_ui=True)
+
+    def open_routing_page(self) -> None:
+        """Navigate to routing page."""
+        from src.ui.pages.routing_page import RoutingPage
+
+        page = RoutingPage(
+            app_context=self._mw._app_context,
+            on_back=self.navigate_back,
+        )
+        self.navigate_to(page)
+
+    def open_dns_page(self) -> None:
+        """Navigate to DNS management page."""
+        from src.ui.pages.dns_page import DNSPage
+
+        page = DNSPage(
+            app_context=self._mw._app_context,
+            on_back=self.navigate_back,
+        )
+        self.navigate_to(page)
+
+    def open_lan_page(self) -> None:
+        """Navigate to the dedicated LAN Sharing view."""
+        from src.ui.pages.lan_sharing_page import LanSharingPage, LanSharingView
+
+        self._mw._active_tab = "lan"
+        if hasattr(self._mw, "_nav_sidebar") and self._mw._nav_sidebar:
+            self._mw._nav_sidebar.set_active_tab("lan")
+
+        view = LanSharingView(
+            app_context=self._mw._app_context,
+            on_back=self.navigate_back,
+            on_lan_toggle=lambda enabled: self._mw._nav_sidebar.update_lan_button(enabled)
+            if hasattr(self._mw, "_nav_sidebar") and self._mw._nav_sidebar
+            else None,
+        )
+        self.navigate_to(view)

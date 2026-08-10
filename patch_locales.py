@@ -13,9 +13,7 @@ def load(l):
 def _sanitize(obj):
     """Replace surrogate characters in strings so json.dumps(ensure_ascii=False) works."""
     if isinstance(obj, str):
-        return obj.encode("utf-8", errors="surrogatepass").decode(
-            "utf-8", errors="replace"
-        )
+        return obj.encode("utf-8", errors="surrogatepass").decode("utf-8", errors="replace")
     if isinstance(obj, dict):
         return {k: _sanitize(v) for k, v in obj.items()}
     if isinstance(obj, list):

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+
 import flet as ft
 
 from src.core.i18n import t

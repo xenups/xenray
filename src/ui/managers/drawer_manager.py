@@ -7,10 +7,10 @@ from typing import TYPE_CHECKING
 
 import flet as ft
 
-from src.ui.components.logs_drawer import LogsDrawer
-from src.ui.components.settings_drawer import SettingsDrawer
-from src.ui.log_viewer import LogViewer
-from src.ui.server_list import ServerList
+from src.ui.components.logs.log_viewer import LogViewer
+from src.ui.components.logs.logs_drawer import LogsDrawer
+from src.ui.components.servers.server_list import ServerList
+from src.ui.components.settings.settings_drawer import SettingsDrawer
 
 if TYPE_CHECKING:
     from src.ui.main_window import MainWindow
