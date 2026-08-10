@@ -68,7 +68,7 @@ class LanSharingCard(ft.Container):
                     page.run_task(page.clipboard.set, text)
                     toast_mgr = getattr(page, "_toast_manager", None)
                     if toast_mgr:
-                        toast_mgr.show(f"{label} copied! 📋", "success")
+                        toast_mgr.show(f"{label} {t('lan.copied')}", "success")
                 except Exception:
                     pass
 
@@ -81,6 +81,7 @@ class LanSharingCard(ft.Container):
             return
 
         port = self._app_context.settings.get_proxy_port()
+        http_port = self._app_context.settings.get_http_port()
         lan_ip = NetworkInterfaceDetector.get_primary_lan_ip() or t("lan.unknown_ip")
         telegram_url = f"t.me/socks?server={lan_ip}&port={port}"
 
@@ -113,7 +114,7 @@ class LanSharingCard(ft.Container):
                                 ft.IconButton(
                                     icon=ft.Icons.COPY_ROUNDED,
                                     icon_size=14,
-                                    tooltip="Copy IP",
+                                    tooltip=t("lan.copy_ip"),
                                     on_click=self._copy_to_clipboard(lan_ip, "IP"),
                                 ),
                             ],
@@ -123,12 +124,12 @@ class LanSharingCard(ft.Container):
                         # SOCKS5 Port Row
                         ft.Row(
                             [
-                                ft.Text("SOCKS5 Port:", size=11, color=ft.Colors.ON_SURFACE_VARIANT),
+                                ft.Text(t("lan.socks5_port"), size=11, color=ft.Colors.ON_SURFACE_VARIANT),
                                 ft.Text(str(port), size=12, weight=ft.FontWeight.BOLD, selectable=True, expand=True),
                                 ft.IconButton(
                                     icon=ft.Icons.COPY_ROUNDED,
                                     icon_size=14,
-                                    tooltip="Copy Port",
+                                    tooltip=t("lan.copy_port"),
                                     on_click=self._copy_to_clipboard(str(port), "SOCKS5 Port"),
                                 ),
                             ],
@@ -138,15 +139,15 @@ class LanSharingCard(ft.Container):
                         # HTTP Port Row
                         ft.Row(
                             [
-                                ft.Text("HTTP Port:", size=11, color=ft.Colors.ON_SURFACE_VARIANT),
+                                ft.Text(t("lan.http_port"), size=11, color=ft.Colors.ON_SURFACE_VARIANT),
                                 ft.Text(
-                                    str(port + 4), size=12, weight=ft.FontWeight.BOLD, selectable=True, expand=True
+                                    str(http_port), size=12, weight=ft.FontWeight.BOLD, selectable=True, expand=True
                                 ),
                                 ft.IconButton(
                                     icon=ft.Icons.COPY_ROUNDED,
                                     icon_size=14,
-                                    tooltip="Copy Port",
-                                    on_click=self._copy_to_clipboard(str(port + 4), "HTTP Port"),
+                                    tooltip=t("lan.copy_port"),
+                                    on_click=self._copy_to_clipboard(str(http_port), "HTTP Port"),
                                 ),
                             ],
                             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
@@ -171,7 +172,7 @@ class LanSharingCard(ft.Container):
                                 ft.IconButton(
                                     icon=ft.Icons.COPY_ROUNDED,
                                     icon_size=14,
-                                    tooltip="Copy Telegram Link",
+                                    tooltip=t("lan.copy_tg"),
                                     on_click=self._copy_to_clipboard(telegram_url, "Telegram Link"),
                                 ),
                             ],

@@ -81,7 +81,9 @@ class StatisticsView(ft.Container):
             content=ft.Row(
                 [
                     ft.Icon(ft.Icons.SUBTITLES_OUTLINED, size=14, color=CYAN),
-                    ft.Text("0.0 MB/s", size=13, weight=ft.FontWeight.W_700, color=WHITE),
+                    ft.Text(
+                        "0.0 MB/s", size=13, weight=ft.FontWeight.W_700, color=WHITE
+                    ),
                 ],
                 spacing=6,
                 alignment=ft.MainAxisAlignment.CENTER,
@@ -102,20 +104,34 @@ class StatisticsView(ft.Container):
         )
 
         # --- 2. Live Speed & Usage Metric Cards ---
-        self._dl_speed_text = ft.Text("0.0 MB/s", size=18, weight=ft.FontWeight.W_700, color=WHITE)
-        self._ul_speed_text = ft.Text("0.0 MB/s", size=18, weight=ft.FontWeight.W_700, color=WHITE)
-        self._dl_total_text = ft.Text("0.0 MB", size=11, weight=ft.FontWeight.W_600, color=WHITE)
-        self._ul_total_text = ft.Text("0.0 MB", size=11, weight=ft.FontWeight.W_600, color=WHITE)
-        self._total_transfer_text = ft.Text("0.0 MB / 0.0 MB", size=18, weight=ft.FontWeight.W_700, color=CYAN)
-        self._uptime_display_text = ft.Text("00:00:00", size=11, weight=ft.FontWeight.W_600, color=WHITE)
-        self._peak_speed_text = ft.Text("0.0 MB/s", size=11, weight=ft.FontWeight.W_600, color=WHITE)
+        self._dl_speed_text = ft.Text(
+            "0.0 MB/s", size=18, weight=ft.FontWeight.W_700, color=WHITE
+        )
+        self._ul_speed_text = ft.Text(
+            "0.0 MB/s", size=18, weight=ft.FontWeight.W_700, color=WHITE
+        )
+        self._dl_total_text = ft.Text(
+            "0.0 MB", size=11, weight=ft.FontWeight.W_600, color=WHITE
+        )
+        self._ul_total_text = ft.Text(
+            "0.0 MB", size=11, weight=ft.FontWeight.W_600, color=WHITE
+        )
+        self._total_transfer_text = ft.Text(
+            "0.0 MB / 0.0 MB", size=18, weight=ft.FontWeight.W_700, color=CYAN
+        )
+        self._uptime_display_text = ft.Text(
+            "00:00:00", size=11, weight=ft.FontWeight.W_600, color=WHITE
+        )
+        self._peak_speed_text = ft.Text(
+            "0.0 MB/s", size=11, weight=ft.FontWeight.W_600, color=WHITE
+        )
 
         self._peak_bps = 0.0
 
         card_dl_speed = self._build_stat_card(
             title=t("dashboard.download", default="Download Speed"),
             val_control=self._dl_speed_text,
-            sub_title="Session: ",
+            sub_title=t("stats.session", default="Session: "),
             sub_val_control=self._dl_total_text,
             icon=ft.Icons.SOUTH_WEST_ROUNDED,
             icon_color=PURPLE,
@@ -124,16 +140,16 @@ class StatisticsView(ft.Container):
         card_ul_speed = self._build_stat_card(
             title=t("dashboard.upload", default="Upload Speed"),
             val_control=self._ul_speed_text,
-            sub_title="Session: ",
+            sub_title=t("stats.session", default="Session: "),
             sub_val_control=self._ul_total_text,
             icon=ft.Icons.NORTH_EAST_ROUNDED,
             icon_color=CYAN,
         )
 
         card_total_stats = self._build_stat_card(
-            title="Total Data Transfer",
+            title=t("stats.total_data", default="Total Data Transfer"),
             val_control=self._total_transfer_text,
-            sub_title="Peak Speed: ",
+            sub_title=t("stats.peak_speed", default="Peak Speed: "),
             sub_val_control=self._peak_speed_text,
             icon=ft.Icons.SWAP_VERT_ROUNDED,
             icon_color="#a855f7",
@@ -177,7 +193,9 @@ class StatisticsView(ft.Container):
                         ft.Colors.with_opacity(0.0, "#a855f7"),
                     ],
                 ),
-                border_radius=ft.BorderRadius(top_left=5, top_right=5, bottom_left=2, bottom_right=2),
+                border_radius=ft.BorderRadius(
+                    top_left=5, top_right=5, bottom_left=2, bottom_right=2
+                ),
                 animate=ANIM_SMOOTH,
                 expand=True,
             )
@@ -191,7 +209,9 @@ class StatisticsView(ft.Container):
                         ft.Colors.with_opacity(0.0, "#38bdf8"),
                     ],
                 ),
-                border_radius=ft.BorderRadius(top_left=5, top_right=5, bottom_left=2, bottom_right=2),
+                border_radius=ft.BorderRadius(
+                    top_left=5, top_right=5, bottom_left=2, bottom_right=2
+                ),
                 animate=ANIM_SMOOTH,
                 expand=True,
             )
@@ -213,7 +233,10 @@ class StatisticsView(ft.Container):
                     [
                         ft.Icon(ft.Icons.GRAPHIC_EQ_ROUNDED, size=16, color=CYAN),
                         ft.Text(
-                            "Real-Time Traffic Wave Stream",
+                            t(
+                                "stats.realtime_wave",
+                                default="Real-Time Traffic Wave Stream",
+                            ),
                             size=12,
                             weight=ft.FontWeight.W_600,
                             color=MUTED_WHITE,
@@ -223,17 +246,21 @@ class StatisticsView(ft.Container):
                 ),
                 ft.Row(
                     [
-                        ft.Container(width=8, height=8, border_radius=4, bgcolor="#a855f7"),
+                        ft.Container(
+                            width=8, height=8, border_radius=4, bgcolor="#a855f7"
+                        ),
                         ft.Text(
-                            "Download",
+                            t("stats.download", default="Download"),
                             size=11,
                             color=MUTED_WHITE,
                             weight=ft.FontWeight.W_500,
                         ),
                         ft.Container(width=8),
-                        ft.Container(width=8, height=8, border_radius=4, bgcolor="#38bdf8"),
+                        ft.Container(
+                            width=8, height=8, border_radius=4, bgcolor="#38bdf8"
+                        ),
                         ft.Text(
-                            "Upload",
+                            t("stats.upload", default="Upload"),
                             size=11,
                             color=MUTED_WHITE,
                             weight=ft.FontWeight.W_500,
@@ -428,7 +455,9 @@ class StatisticsView(ft.Container):
                 self._peak_bps = cur_max
                 peak_kb = self._peak_bps / 1024.0
                 self._peak_speed_text.value = (
-                    f"{peak_kb:.1f} KB/s" if peak_kb < 1024.0 else f"{(peak_kb / 1024.0):.1f} MB/s"
+                    f"{peak_kb:.1f} KB/s"
+                    if peak_kb < 1024.0
+                    else f"{(peak_kb / 1024.0):.1f} MB/s"
                 )
         except (ValueError, TypeError):
             pass
@@ -446,8 +475,12 @@ class StatisticsView(ft.Container):
         self._ul_history.pop(0)
         self._ul_history.append(upload_bps if self._is_connected else 0.0)
 
-        dl_heights = self._compute_smooth_wave_heights(self._dl_history, num_output=32, min_h=6.0, max_h=160.0)
-        ul_heights = self._compute_smooth_wave_heights(self._ul_history, num_output=32, min_h=6.0, max_h=160.0)
+        dl_heights = self._compute_smooth_wave_heights(
+            self._dl_history, num_output=32, min_h=6.0, max_h=160.0
+        )
+        ul_heights = self._compute_smooth_wave_heights(
+            self._ul_history, num_output=32, min_h=6.0, max_h=160.0
+        )
 
         for i in range(len(self._dl_bars)):
             self._dl_bars[i].height = dl_heights[i]

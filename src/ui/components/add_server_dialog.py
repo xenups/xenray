@@ -1,26 +1,26 @@
-"""Add server/subscription dialog component matching Fluent Integrated UI/UX language."""
+"""Add server/subscription dialog component with standard ft.AlertDialog styling and stretched input."""
 
 from __future__ import annotations
 
-from typing import Callable
+from typing import Callable, Optional
+from urllib.parse import urlparse
 
 import flet as ft
 from loguru import logger
 
 from src.core.i18n import t
-from src.ui.theme import AppColors
 from src.utils.link_parser import LinkParser
 
 
 class AddServerDialog(ft.AlertDialog):
-    """Sleek Glassmorphism Dialog for adding servers, subscription links, or server chains."""
+    """Standard, border-enclosed AlertDialog for adding servers or subscription links."""
 
     def __init__(
         self,
         on_server_added: Callable[[str, dict], None],
         on_subscription_added: Callable[[str, str], None],
         on_close: Callable,
-        on_create_chain: Callable = None,
+        on_create_chain: Optional[Callable] = None,
     ):
         self._on_server_added = on_server_added
         self._on_subscription_added = on_subscription_added
@@ -30,19 +30,17 @@ class AddServerDialog(ft.AlertDialog):
         WHITE = ft.Colors.WHITE
         MUTED = ft.Colors.GREY_500
         ACCENT = "#A78BFA"
-        FIELD_BG = "#1A1B26"
-        FIELD_BORDER = ft.Colors.with_opacity(0.15, "#7C3AED")
 
         title_control = ft.Row(
             controls=[
                 ft.Icon(
                     ft.Icons.ADD_LINK_ROUNDED,
                     color=ACCENT,
-                    size=22,
+                    size=20,
                 ),
                 ft.Text(
                     t("add_dialog.title", default="Add Server or Subscription"),
-                    size=16,
+                    size=15,
                     weight=ft.FontWeight.BOLD,
                     color=WHITE,
                 ),
@@ -50,41 +48,34 @@ class AddServerDialog(ft.AlertDialog):
             spacing=8,
         )
 
-        self._name_input = ft.TextField(
-            hint_text=t(
-                "add_dialog.name_hint",
-                default="Name (Required for Subscriptions)",
-            ),
-            hint_style=ft.TextStyle(color=MUTED),
-            prefix=ft.Icon(ft.Icons.LABEL_OUTLINE, color=ACCENT),
-            border_color=FIELD_BORDER,
-            bgcolor=FIELD_BG,
-            color=WHITE,
-            cursor_color=ACCENT,
-            height=45,
-            content_padding=10,
-        )
-
+        # Single Clean Input Field with Prefix Margin Container
         self._content_input = ft.TextField(
+            prefix=ft.Container(
+                content=ft.Icon(ft.Icons.TERMINAL_ROUNDED, color=ACCENT, size=18),
+                margin=ft.Margin.only(right=10, left=4),
+            ),
             hint_text=t(
                 "add_dialog.link_hint",
-                default="vless://... or https://example.com/sub",
+                default="Paste vless://, vmess://, ss:// or subscription URL",
             ),
-            hint_style=ft.TextStyle(color=MUTED),
-            prefix=ft.Icon(ft.Icons.TERMINAL_ROUNDED, color=ACCENT),
-            border_color=FIELD_BORDER,
-            bgcolor=FIELD_BG,
+            hint_style=ft.TextStyle(size=12, color=MUTED),
+            bgcolor="#1A1B26",
+            border_color=ft.Colors.with_opacity(0.25, "#7C3AED"),
+            focused_border_color="#7C3AED",
             color=WHITE,
             cursor_color=ACCENT,
-            height=45,
-            content_padding=10,
+            text_size=12,
+            height=46,
+            content_padding=ft.Padding.symmetric(horizontal=12, vertical=10),
+            autofocus=True,
+            on_submit=self._handle_add,
         )
 
         self._cancel_btn = ft.TextButton(
             t("add_dialog.cancel", default="Cancel"),
             style=ft.ButtonStyle(
                 color=ft.Colors.GREY_400,
-                overlay_color=ft.Colors.with_opacity(0.1, ft.Colors.WHITE),
+                overlay_color=ft.Colors.with_opacity(0.1, WHITE),
             ),
             on_click=self._handle_close,
         )
@@ -96,11 +87,14 @@ class AddServerDialog(ft.AlertDialog):
                     ft.Text(t("add_dialog.add", default="Add"), color=WHITE),
                 ],
                 spacing=4,
-                alignment=ft.MainAxisAlignment.CENTER,
+                tight=True,  # Crucial: prevents ft.Row from expanding button to full width
             ),
             bgcolor="#6D28D9",
             color=WHITE,
-            style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=8)),
+            style=ft.ButtonStyle(
+                shape=ft.RoundedRectangleBorder(radius=8),
+                padding=ft.Padding.symmetric(horizontal=16, vertical=8),
+            ),
             on_click=self._handle_add,
         )
 
@@ -121,6 +115,7 @@ class AddServerDialog(ft.AlertDialog):
                             ),
                         ],
                         spacing=6,
+                        tight=True,
                     ),
                     on_click=self._handle_create_chain,
                 ),
@@ -128,20 +123,27 @@ class AddServerDialog(ft.AlertDialog):
 
         super().__init__(
             modal=True,
+            barrier_color=ft.Colors.with_opacity(0.7, ft.Colors.BLACK),
+            bgcolor="#12131C",
+            shape=ft.RoundedRectangleBorder(
+                radius=16,
+                side=ft.BorderSide(1.5, ft.Colors.with_opacity(0.3, "#7C3AED")),
+            ),
             title=title_control,
-            content=ft.Column(
-                controls=[
-                    self._name_input,
-                    self._content_input,
-                ],
-                tight=True,
-                spacing=12,
+            content=ft.Container(
+                width=400,  # Comfortable fixed width
+                content=ft.Column(
+                    controls=[
+                        self._content_input,
+                    ],
+                    tight=True,
+                    spacing=0,
+                    horizontal_alignment=ft.CrossAxisAlignment.STRETCH,  # Forces TextField to stretch across full width
+                ),
             ),
             actions=actions,
             actions_alignment=ft.MainAxisAlignment.END,
             actions_padding=ft.Padding.only(right=16, bottom=16, left=16),
-            bgcolor="#12131C",
-            shape=ft.RoundedRectangleBorder(radius=16),
         )
 
     def _handle_create_chain(self, e):
@@ -150,17 +152,17 @@ class AddServerDialog(ft.AlertDialog):
             self._on_close()
             self._on_create_chain()
 
-    def _handle_add(self, e):
-        """Handle the add button click. Supports multiple configs separated by newlines."""
+    def _handle_add(self, e=None):
+        """Handle the add button click. Supports single/multiple server links or subscription URLs."""
         content = self._content_input.value.strip() if self._content_input.value else ""
-        name = self._name_input.value.strip() if self._name_input.value else ""
-
-        self._name_input.error_text = None
         self._content_input.error_text = None
 
         if not content:
             self._content_input.error_text = t("add_dialog.required", default="Configuration link or URL required")
-            self._content_input.update()
+            try:
+                self._content_input.update()
+            except Exception:
+                pass
             return
 
         lines = content.splitlines()
@@ -171,7 +173,7 @@ class AddServerDialog(ft.AlertDialog):
             if not line:
                 continue
 
-            if line.startswith(("vless://", "vmess://", "trojan://", "ss://", "hysteria2://")):
+            if line.startswith(("vless://", "vmess://", "trojan://", "ss://", "hysteria2://", "tuic://", "socks://")):
                 try:
                     parsed = LinkParser.parse_link(line)
                     valid_configs.append(parsed)
@@ -187,35 +189,35 @@ class AddServerDialog(ft.AlertDialog):
 
         if len(valid_configs) == 1:
             parsed = valid_configs[0]
-            final_name = name if name else parsed["name"]
-            self._on_server_added(final_name, parsed["config"])
+            self._on_server_added(parsed["name"], parsed["config"])
             self._reset_and_close()
             return
 
-        is_config_link = content.startswith(("vless://", "vmess://", "trojan://", "ss://", "hysteria2://"))
+        # Try parsing direct link
+        try:
+            parsed = LinkParser.parse_link(content)
+            self._on_server_added(parsed["name"], parsed["config"])
+            self._reset_and_close()
+            return
+        except Exception:
+            pass
 
-        if is_config_link:
-            try:
-                logger.debug(f"Attempting to parse config: {content[:50]}...")
-                parsed = LinkParser.parse_link(content)
-                final_name = name if name else parsed["name"]
-                self._on_server_added(final_name, parsed["config"])
-                self._reset_and_close()
-                return
-            except Exception as ex:
-                logger.error(f"Failed to parse config: {ex}")
-                error_msg = str(ex) if str(ex) else t("add_dialog.invalid_link", default="Invalid link format")
-                self._content_input.error_text = error_msg
-                self._content_input.update()
-                return
-
-        if not name:
-            self._name_input.error_text = t("add_dialog.name_required", default="Subscription name required")
-            self._name_input.update()
+        # Subscription URL handling
+        if content.startswith(("http://", "https://")):
+            parsed_url = urlparse(content)
+            sub_name = parsed_url.netloc or "Subscription"
+            if len(sub_name) > 30:
+                sub_name = sub_name[:30] + "..."
+            sub_name = f"Sub ({sub_name})"
+            self._on_subscription_added(sub_name, content)
+            self._reset_and_close()
             return
 
-        self._on_subscription_added(name, content)
-        self._reset_and_close()
+        self._content_input.error_text = t("add_dialog.invalid_link", default="Invalid server link or subscription URL")
+        try:
+            self._content_input.update()
+        except Exception:
+            pass
 
     def _show_success(self, msg: str):
         """Show a success message via toast."""
@@ -227,10 +229,8 @@ class AddServerDialog(ft.AlertDialog):
         self._reset_and_close()
 
     def _reset_and_close(self):
-        """Reset fields and close the dialog."""
-        self._name_input.value = ""
+        """Reset field and close the dialog."""
         self._content_input.value = ""
-        self._name_input.error_text = None
         self._content_input.error_text = None
         self._on_close()
 

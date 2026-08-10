@@ -53,7 +53,9 @@ class SettingsRow(ft.Container):
         if sublabel_control:
             label_column.controls.append(sublabel_control)
         elif sublabel:
-            label_column.controls.append(ft.Text(sublabel, size=11, color=ft.Colors.ON_SURFACE_VARIANT))
+            label_column.controls.append(
+                ft.Text(sublabel, size=11, color=ft.Colors.ON_SURFACE_VARIANT)
+            )
 
         super().__init__(
             content=ft.Row(
@@ -83,7 +85,9 @@ class SettingsListTile(ft.Container):
         badge_text: Optional[str] = None,
     ):
         self._on_click = on_click
-        self._chevron_icon = ft.Icon(ft.Icons.CHEVRON_RIGHT, size=18, color=ft.Colors.PRIMARY)
+        self._chevron_icon = ft.Icon(
+            ft.Icons.CHEVRON_RIGHT, size=18, color=ft.Colors.PRIMARY
+        )
 
         badge_control = None
         if badge_text:
@@ -143,7 +147,9 @@ class SettingsListTile(ft.Container):
         """Interactive hover transition."""
         if e.data == "true":
             self.bgcolor = ft.Colors.with_opacity(0.18, ft.Colors.ON_SURFACE)
-            self.border = ft.Border.all(1, ft.Colors.with_opacity(0.3, ft.Colors.PRIMARY))
+            self.border = ft.Border.all(
+                1, ft.Colors.with_opacity(0.3, ft.Colors.PRIMARY)
+            )
         else:
             self.bgcolor = ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE)
             self.border = None
@@ -251,7 +257,11 @@ class TunEngineRow(ft.Container):
         super().__init__(
             content=ft.Row(
                 [
-                    ft.Icon(ft.Icons.SETTINGS_ETHERNET, size=20, color=ft.Colors.ON_SURFACE_VARIANT),
+                    ft.Icon(
+                        ft.Icons.SETTINGS_ETHERNET,
+                        size=20,
+                        color=ft.Colors.ON_SURFACE_VARIANT,
+                    ),
                     ft.Column(
                         [
                             ft.Text(
@@ -301,7 +311,9 @@ class PortInputRow(ft.Container):
         super().__init__(
             content=ft.Row(
                 [
-                    ft.Icon(ft.Icons.INPUT, size=20, color=ft.Colors.ON_SURFACE_VARIANT),
+                    ft.Icon(
+                        ft.Icons.INPUT, size=20, color=ft.Colors.ON_SURFACE_VARIANT
+                    ),
                     ft.Column(
                         [
                             ft.Text(
@@ -310,6 +322,76 @@ class PortInputRow(ft.Container):
                             ),
                             ft.Text(
                                 "Local SOCKS5 proxy port",
+                                size=11,
+                                color=ft.Colors.ON_SURFACE_VARIANT,
+                            ),
+                        ],
+                        spacing=2,
+                        expand=True,
+                    ),
+                    ft.Row(
+                        [
+                            self._field,
+                            ft.IconButton(
+                                icon=ft.Icons.CHECK,
+                                icon_size=18,
+                                icon_color=ft.Colors.PRIMARY,
+                                tooltip=t("settings.save"),
+                                on_click=lambda e: on_save(self._field.value),
+                            ),
+                        ],
+                        spacing=4,
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    ),
+                ],
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
+            padding=12,
+            border_radius=12,
+            bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE),
+        )
+
+    @property
+    def value(self) -> str:
+        return self._field.value
+
+    def set_border_color(self, color):
+        self._field.border_color = color
+        self._field.update()
+
+
+class HttpPortInputRow(ft.Container):
+    """HTTP proxy port input row for settings."""
+
+    def __init__(self, initial_value: int, on_save: Callable):
+        self._field = ft.TextField(
+            value=str(initial_value),
+            width=80,
+            height=36,
+            text_size=12,
+            content_padding=6,
+            keyboard_type=ft.KeyboardType.NUMBER,
+            text_align=ft.TextAlign.CENTER,
+            border_color=ft.Colors.OUTLINE_VARIANT,
+            focused_border_color=ft.Colors.PRIMARY,
+        )
+
+        super().__init__(
+            content=ft.Row(
+                [
+                    ft.Icon(ft.Icons.HTTP, size=20, color=ft.Colors.ON_SURFACE_VARIANT),
+                    ft.Column(
+                        [
+                            ft.Text(
+                                t("settings.http_port", default="HTTP Proxy Port"),
+                                weight=ft.FontWeight.W_500,
+                            ),
+                            ft.Text(
+                                t(
+                                    "settings.http_port_desc",
+                                    default="Local HTTP/HTTPS proxy port",
+                                ),
                                 size=11,
                                 color=ft.Colors.ON_SURFACE_VARIANT,
                             ),
@@ -372,7 +454,9 @@ class CountryDropdownRow(ft.Container):
         super().__init__(
             content=ft.Row(
                 [
-                    ft.Icon(ft.Icons.PUBLIC, size=20, color=ft.Colors.ON_SURFACE_VARIANT),
+                    ft.Icon(
+                        ft.Icons.PUBLIC, size=20, color=ft.Colors.ON_SURFACE_VARIANT
+                    ),
                     ft.Column(
                         [
                             ft.Text(
@@ -420,10 +504,12 @@ class LanguageDropdownRow(ft.Container):
             text_size=12,
             content_padding=8,
             value=current_value if current_value else "en",
-            options=[ft.dropdown.Option(lang_code, f"{name}") for lang_code, flag_code, name in self._languages],
+            options=[
+                ft.dropdown.Option(lang_code, f"{name}")
+                for lang_code, flag_code, name in self._languages
+            ],
             border_color=ft.Colors.OUTLINE_VARIANT,
             focused_border_color=ft.Colors.PRIMARY,
-            on_select=on_change,
         )
 
         # Get current flag code
@@ -443,24 +529,32 @@ class LanguageDropdownRow(ft.Container):
             anti_alias=True,
         )
 
-        # Update flag when language changes
+        # Update flag when language changes (Dropdown uses `on_select` in Flet 0.86+)
         original_on_change = on_change
 
         def wrapped_on_change(e):
-            selected = self._dropdown.value
+            selected = getattr(e, "control", None)
+            value = selected.value if selected is not None else None
+            if not value:
+                value = self._dropdown.value
             for lang_code, flag_code, _ in self._languages:
-                if lang_code == selected:
+                if lang_code == value:
                     self._flag_image.src = f"/flags/{flag_code}.svg"
-                    self._flag_image.update()
+                    try:
+                        self._flag_image.update()
+                    except Exception:
+                        pass
                     break
             original_on_change(e)
 
-        self._dropdown.on_change = wrapped_on_change
+        self._dropdown.on_select = wrapped_on_change
 
         super().__init__(
             content=ft.Row(
                 [
-                    ft.Icon(ft.Icons.LANGUAGE, size=20, color=ft.Colors.ON_SURFACE_VARIANT),
+                    ft.Icon(
+                        ft.Icons.LANGUAGE, size=20, color=ft.Colors.ON_SURFACE_VARIANT
+                    ),
                     ft.Column(
                         [
                             ft.Row(
@@ -475,7 +569,10 @@ class LanguageDropdownRow(ft.Container):
                                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
                             ),
                             ft.Text(
-                                t("settings.language_description", default="Interface display language"),
+                                t(
+                                    "settings.language_description",
+                                    default="Interface display language",
+                                ),
                                 size=11,
                                 color=ft.Colors.ON_SURFACE_VARIANT,
                             ),
@@ -549,7 +646,9 @@ class StartupToggleRow(ft.Container):
                     ft.Icon(ft.Icons.ROCKET_LAUNCH, color=ft.Colors.ON_SURFACE_VARIANT),
                     ft.Column(
                         [
-                            ft.Text(t("settings.add_to_startup"), weight=ft.FontWeight.W_500),
+                            ft.Text(
+                                t("settings.add_to_startup"), weight=ft.FontWeight.W_500
+                            ),
                             self._sublabel,
                         ],
                         spacing=2,
@@ -619,7 +718,9 @@ class AutoReconnectToggleRow(ft.Container):
             on_change=self._handle_toggle,
         )
 
-        self._sublabel = ft.Text(t("settings.experimental"), size=11, color=ft.Colors.ON_SURFACE_VARIANT)
+        self._sublabel = ft.Text(
+            t("settings.experimental"), size=11, color=ft.Colors.ON_SURFACE_VARIANT
+        )
 
         super().__init__(
             content=ft.Row(
@@ -627,7 +728,9 @@ class AutoReconnectToggleRow(ft.Container):
                     ft.Icon(ft.Icons.AUTORENEW, color=ft.Colors.ON_SURFACE_VARIANT),
                     ft.Column(
                         [
-                            ft.Text(t("settings.auto_reconnect"), weight=ft.FontWeight.W_500),
+                            ft.Text(
+                                t("settings.auto_reconnect"), weight=ft.FontWeight.W_500
+                            ),
                             self._sublabel,
                         ],
                         spacing=2,
@@ -759,7 +862,9 @@ class CoreDropdownRow(ft.Container):
         super().__init__(
             content=ft.Row(
                 [
-                    ft.Icon(ft.Icons.MEMORY, size=24, color=ft.Colors.ON_SURFACE_VARIANT),
+                    ft.Icon(
+                        ft.Icons.MEMORY, size=24, color=ft.Colors.ON_SURFACE_VARIANT
+                    ),
                     ft.Column(
                         [
                             ft.Text(
@@ -813,7 +918,9 @@ class TunEngineDropdownRow(ft.Container):
         super().__init__(
             content=ft.Row(
                 [
-                    ft.Icon(ft.Icons.ROUTER, size=24, color=ft.Colors.ON_SURFACE_VARIANT),
+                    ft.Icon(
+                        ft.Icons.ROUTER, size=24, color=ft.Colors.ON_SURFACE_VARIANT
+                    ),
                     ft.Column(
                         [
                             ft.Text(
@@ -874,7 +981,9 @@ class LanShareToggleRow(ft.Container):
                     ft.Icon(ft.Icons.LAN, color=ft.Colors.ON_SURFACE_VARIANT),
                     ft.Column(
                         [
-                            ft.Text(t("settings.allow_lan"), weight=ft.FontWeight.W_500),
+                            ft.Text(
+                                t("settings.allow_lan"), weight=ft.FontWeight.W_500
+                            ),
                             ft.Text(
                                 t("settings.allow_lan_desc"),
                                 size=11,

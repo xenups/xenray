@@ -10,8 +10,9 @@ from src.core.i18n import is_rtl, t
 from src.ui.components.settings_sections import (
     AutoReconnectToggleRow,
     CountryDropdownRow,
-    LanShareToggleRow,
+    HttpPortInputRow,
     LanguageDropdownRow,
+    LanShareToggleRow,
     ModeSwitchRow,
     PortInputRow,
     SettingsListTile,
@@ -37,12 +38,14 @@ class SettingsView(ft.Container):
         on_open_routing_click: Optional[Callable] = None,
         on_open_dns_click: Optional[Callable] = None,
         lan_share_row: Optional[LanShareToggleRow] = None,
+        http_port_row: Optional[HttpPortInputRow] = None,
         routing_badge_text: str = "12 Active Rules",
         dns_badge_text: str = "Cloudflare (1.1.1.1)",
     ):
         self._mode_switch_row = mode_switch_row
         self._tun_engine_row = tun_engine_row
         self._port_row = port_row
+        self._http_port_row = http_port_row
         self._country_row = country_row
         self._language_row = language_row
         self._reconnect_row = reconnect_row
@@ -83,12 +86,16 @@ class SettingsView(ft.Container):
                 border=ft.Border.only(bottom=ft.BorderSide(1, ft.Colors.with_opacity(0.12, WHITE))),
             ),
             self._mode_switch_row,
-            self._tun_engine_row,
             self._port_row,
         ]
 
+        if self._http_port_row:
+            connectivity_controls.append(self._http_port_row)
+
         if self._lan_share_row:
             connectivity_controls.append(self._lan_share_row)
+
+        connectivity_controls.append(self._tun_engine_row)
 
         self._connectivity_card = create_glass_container(
             content=ft.Column(

@@ -8,6 +8,7 @@ from src.repositories.file_utils import atomic_write
 
 # Defaults
 DEFAULT_PROXY_PORT = 10805
+DEFAULT_HTTP_PORT = 10809
 
 
 class SettingsRepository:
@@ -62,6 +63,19 @@ class SettingsRepository:
         if 1024 <= port <= 65535:
             self._write("proxy_port.txt", str(port))
 
+    # --- HTTP Proxy Port ---
+    def get_http_port(self) -> int:
+        val = self._read("http_port.txt")
+        try:
+            port = int(val)
+            return port if 1024 <= port <= 65535 else DEFAULT_HTTP_PORT
+        except ValueError:
+            return DEFAULT_HTTP_PORT
+
+    def set_http_port(self, port: int) -> None:
+        if 1024 <= port <= 65535:
+            self._write("http_port.txt", str(port))
+
     # --- Connection Mode ---
     def get_connection_mode(self) -> str:
         val = self._read("connection_mode.txt", "vpn")
@@ -100,8 +114,8 @@ class SettingsRepository:
 
     # --- Routing Country ---
     def get_routing_country(self) -> str:
-        val = self._read("routing_country.txt", "none")
-        return val if val in {"ir", "cn", "ru", "none"} else "none"
+        val = self._read("routing_country.txt", "ir")
+        return val if val in {"ir", "cn", "ru", "none"} else "ir"
 
     def set_routing_country(self, country_code: Optional[str]) -> None:
         if not country_code or country_code in {"ir", "cn", "ru", "none"}:

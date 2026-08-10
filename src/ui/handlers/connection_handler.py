@@ -344,9 +344,6 @@ class ConnectionHandler:
 
         time.sleep(2.0)  # Allow the tunnel + fragmented/finalmask streams to stabilize
 
-        if self._status_display:
-            self._ui_call(lambda: self._status_display.set_step(t("connection.checking_network")))
-
         mode = self._current_mode_getter() if self._current_mode_getter else ConnectionMode.PROXY
         proxy_port = self._app_context.settings.get_proxy_port() if self._app_context else 0
 

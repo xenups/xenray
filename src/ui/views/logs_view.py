@@ -1,4 +1,4 @@
-"""Logs & Telemetry View Component."""
+"""Logs & Telemetry View Component - unified height & flex alignment for top cards."""
 
 from __future__ import annotations
 
@@ -20,91 +20,128 @@ class LogsView(ft.Container):
         on_download_logs_click: Callable,
         on_clear_logs_click: Callable,
     ):
+        super().__init__()
+        self.expand = True
+        self.padding = 24
+
         self._log_text_control = log_text_control
         self._on_copy_logs_click = on_copy_logs_click
         self._on_download_logs_click = on_download_logs_click
         self._on_clear_logs_click = on_clear_logs_click
 
         WHITE = ft.Colors.WHITE
-        self._memory_value = ft.Text("--", size=15, weight=ft.FontWeight.W_600, color=WHITE)
-        self._memory_bar = ft.ProgressBar(value=0, color=AppColors.SECONDARY, bgcolor=AppColors.SURFACE_CONTAINER_HIGH)
-        self._threads_value = ft.Text("--", size=15, weight=ft.FontWeight.W_600, color=WHITE)
+        self._memory_value = ft.Text("--", size=14, weight=ft.FontWeight.W_600, color=WHITE)
+        self._memory_bar = ft.ProgressBar(
+            value=0,
+            height=4,
+            color=AppColors.SECONDARY,
+            bgcolor=AppColors.SURFACE_CONTAINER_HIGH,
+        )
+        self._threads_value = ft.Text("--", size=14, weight=ft.FontWeight.W_600, color=WHITE)
         self._threads_sub = ft.Text("", size=11, color=AppColors.PRIMARY)
-        self._health_value = ft.Text("--", size=15, weight=ft.FontWeight.W_600, color=WHITE)
+        self._health_value = ft.Text("--", size=14, weight=ft.FontWeight.W_600, color=WHITE)
         self._health_sub = ft.Text("", size=11, color=AppColors.ON_SURFACE_VARIANT)
 
+        # ── 1. Card Contents (MainAxisAlignment.SPACE_BETWEEN for equal internal spacing) ──
+        memory_card_content = ft.Column(
+            [
+                ft.Row(
+                    [
+                        ft.Icon(ft.Icons.MEMORY, size=16, color=AppColors.SECONDARY),
+                        ft.Text(
+                            t("logs.memory", default="Memory"),
+                            size=11,
+                            weight=ft.FontWeight.W_600,
+                            color=AppColors.ON_SURFACE_VARIANT,
+                        ),
+                    ],
+                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                ),
+                self._memory_value,
+                self._memory_bar,
+            ],
+            spacing=4,
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+        )
+
+        threads_card_content = ft.Column(
+            [
+                ft.Row(
+                    [
+                        ft.Icon(ft.Icons.SWAP_CALLS, size=16, color=AppColors.PRIMARY),
+                        ft.Text(
+                            t("logs.active_threads", default="Active Threads"),
+                            size=11,
+                            weight=ft.FontWeight.W_600,
+                            color=AppColors.ON_SURFACE_VARIANT,
+                        ),
+                    ],
+                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                ),
+                self._threads_value,
+                self._threads_sub,
+            ],
+            spacing=4,
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+        )
+
+        health_card_content = ft.Column(
+            [
+                ft.Row(
+                    [
+                        ft.Icon(ft.Icons.VERIFIED_USER, size=16, color=AppColors.PRIMARY),
+                        ft.Text(
+                            t("logs.health_status", default="Health Status"),
+                            size=11,
+                            weight=ft.FontWeight.W_600,
+                            color=AppColors.ON_SURFACE_VARIANT,
+                        ),
+                    ],
+                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                ),
+                self._health_value,
+                self._health_sub,
+            ],
+            spacing=4,
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+        )
+
+        # ── 2. Top Metric Cards (Unified height=110 & expand=1 flex containers) ──
         self._memory_card = create_glass_container(
-            content=ft.Column(
-                [
-                    ft.Row(
-                        [
-                            ft.Icon(ft.Icons.MEMORY, size=18, color=AppColors.SECONDARY),
-                            ft.Text(
-                                t("logs.memory", default="Memory"),
-                                size=11,
-                                weight=ft.FontWeight.W_600,
-                                color=AppColors.ON_SURFACE_VARIANT,
-                            ),
-                        ],
-                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                    ),
-                    self._memory_value,
-                    self._memory_bar,
-                ],
-                spacing=6,
-            ),
-            expand=True,
+            content=memory_card_content,
+            expand=1,
+            height=110,
             padding=14,
+            border_radius=12,
         )
 
         self._threads_card = create_glass_container(
-            content=ft.Column(
-                [
-                    ft.Row(
-                        [
-                            ft.Icon(ft.Icons.SWAP_CALLS, size=18, color=AppColors.PRIMARY),
-                            ft.Text(
-                                t("logs.active_threads", default="Active Threads"),
-                                size=11,
-                                weight=ft.FontWeight.W_600,
-                                color=AppColors.ON_SURFACE_VARIANT,
-                            ),
-                        ],
-                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                    ),
-                    self._threads_value,
-                    self._threads_sub,
-                ],
-                spacing=6,
-            ),
-            expand=True,
+            content=threads_card_content,
+            expand=1,
+            height=110,
             padding=14,
+            border_radius=12,
         )
 
         self._health_card = create_glass_container(
-            content=ft.Column(
-                [
-                    ft.Row(
-                        [
-                            ft.Icon(ft.Icons.VERIFIED_USER, size=18, color=AppColors.PRIMARY),
-                            ft.Text(
-                                t("logs.health_status", default="Health Status"),
-                                size=11,
-                                weight=ft.FontWeight.W_600,
-                                color=AppColors.ON_SURFACE_VARIANT,
-                            ),
-                        ],
-                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                    ),
-                    self._health_value,
-                    self._health_sub,
-                ],
-                spacing=6,
-            ),
-            expand=True,
+            content=health_card_content,
+            expand=1,
+            height=110,
             padding=14,
+            border_radius=12,
         )
 
+        top_metrics_row = ft.Row(
+            controls=[
+                self._memory_card,
+                self._threads_card,
+                self._health_card,
+            ],
+            spacing=12,
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+        )
+
+        # ── 3. Buttons & Terminal Window ──────────────────────────────────────
         button_shape = ft.RoundedRectangleBorder(radius=8)
 
         self._copy_btn = ft.OutlinedButton(
@@ -206,46 +243,43 @@ class LogsView(ft.Container):
             padding=16,
         )
 
-        super().__init__(
-            content=ft.Column(
-                [
-                    ft.Row(
-                        [self._memory_card, self._threads_card, self._health_card],
-                        spacing=12,
-                    ),
-                    self._terminal_window,
-                ],
-                spacing=16,
-                expand=True,
-            ),
-            padding=24,
+        # Master Column Layout
+        self.content = ft.Column(
+            [
+                top_metrics_row,
+                self._terminal_window,
+            ],
+            spacing=16,
             expand=True,
         )
 
     def update_memory(self, used_mb: float, total_mb: float):
         """Update memory usage card."""
-        self._memory_value.value = f"{used_mb:.1f} / {total_mb:.0f} MB"
-        ratio = used_mb / total_mb if total_mb > 0 else 0
-        self._memory_bar.value = min(1.0, ratio)
         try:
-            self._memory_card.update()
+            self._memory_value.value = f"{used_mb:.1f} / {total_mb:.0f} MB"
+            ratio = used_mb / total_mb if total_mb > 0 else 0
+            self._memory_bar.value = min(1.0, ratio)
+            if self._memory_card.page:
+                self._memory_card.update()
         except Exception:
             pass
 
     def update_threads(self, thread_count: int, status: str = ""):
         """Update active threads card."""
-        self._threads_value.value = f"{thread_count} {t('logs.nodes', default='Nodes')}"
-        self._threads_sub.value = status or t("logs.optimal_performance", default="Optimal Performance")
         try:
-            self._threads_card.update()
+            self._threads_value.value = f"{thread_count} {t('logs.nodes', default='Nodes')}"
+            self._threads_sub.value = status or t("logs.optimal_performance", default="Optimal Performance")
+            if self._threads_card.page:
+                self._threads_card.update()
         except Exception:
             pass
 
     def update_health(self, issues: int, message: str = ""):
         """Update health status card."""
-        self._health_value.value = f"{issues} {t('logs.issues', default='Issues')}"
-        self._health_sub.value = message or t("logs.system_healthy", default="System is healthy")
         try:
-            self._health_card.update()
+            self._health_value.value = f"{issues} {t('logs.issues', default='Issues')}"
+            self._health_sub.value = message or t("logs.system_healthy", default="System is healthy")
+            if self._health_card.page:
+                self._health_card.update()
         except Exception:
             pass

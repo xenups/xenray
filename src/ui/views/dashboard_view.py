@@ -43,7 +43,9 @@ class DashboardView(ft.Container):
 
         # --- 1. Center Connection Core (Hero Section) ---
         self._toggle_button = (
-            connection_button if connection_button is not None else ConnectionButton(on_click=self._on_toggle_click)
+            connection_button
+            if connection_button is not None
+            else ConnectionButton(on_click=self._on_toggle_click)
         )
 
         self._center_status_text = self._toggle_button._status_text
@@ -67,8 +69,12 @@ class DashboardView(ft.Container):
         )
         GLASS_BLUR = ft.Blur(12, 12)
 
-        self._dl_value_text = ft.Text("0.0 MB/s", size=13, weight=ft.FontWeight.W_700, color=WHITE)
-        self._ul_value_text = ft.Text("0.0 MB/s", size=13, weight=ft.FontWeight.W_700, color=WHITE)
+        self._dl_value_text = ft.Text(
+            "0.0 MB/s", size=13, weight=ft.FontWeight.W_700, color=WHITE
+        )
+        self._ul_value_text = ft.Text(
+            "0.0 MB/s", size=13, weight=ft.FontWeight.W_700, color=WHITE
+        )
 
         # Left Column: Top Download Card (Compact 185px width)
         download_card = ft.Container(
@@ -89,7 +95,7 @@ class DashboardView(ft.Container):
                     ft.Column(
                         [
                             ft.Text(
-                                "Download",
+                                t("dashboard.download", default="Download"),
                                 size=10,
                                 color=MUTED_WHITE,
                                 weight=ft.FontWeight.W_500,
@@ -131,7 +137,7 @@ class DashboardView(ft.Container):
                     ft.Column(
                         [
                             ft.Text(
-                                "Upload",
+                                t("dashboard.upload", default="Upload"),
                                 size=10,
                                 color=MUTED_WHITE,
                                 weight=ft.FontWeight.W_500,
@@ -174,7 +180,9 @@ class DashboardView(ft.Container):
             self._server_card_component.border = None
 
             # Compact padding so text fits cleanly in the 106px height
-            self._server_card_component.padding = ft.Padding.symmetric(horizontal=12, vertical=8)
+            self._server_card_component.padding = ft.Padding.symmetric(
+                horizontal=12, vertical=8
+            )
 
             # Hide the expand/chevron button — card tap navigates to servers instead
             try:
@@ -184,12 +192,18 @@ class DashboardView(ft.Container):
 
             # Fix vertical alignment of text column inside the card
             try:
-                self._server_card_component._content_row.vertical_alignment = ft.CrossAxisAlignment.CENTER
+                self._server_card_component._content_row.vertical_alignment = (
+                    ft.CrossAxisAlignment.CENTER
+                )
             except Exception:
                 pass
 
             # Wire both click targets to navigate to the Servers page
-            _nav_to_servers = lambda e: (self._on_change_server_click(e) if self._on_change_server_click else None)
+            _nav_to_servers = lambda e: (
+                self._on_change_server_click(e)
+                if self._on_change_server_click
+                else None
+            )
             self._server_card_component.on_click = _nav_to_servers
 
             server_card_wrapper = ft.Container(
@@ -211,7 +225,11 @@ class DashboardView(ft.Container):
                 border_radius=14,
                 bgcolor=ft.Colors.with_opacity(0.035, ft.Colors.WHITE),
                 border=None,
-                on_click=lambda e: (self._on_change_server_click(e) if self._on_change_server_click else None),
+                on_click=lambda e: (
+                    self._on_change_server_click(e)
+                    if self._on_change_server_click
+                    else None
+                ),
                 ink=True,
             )
 
@@ -287,20 +305,30 @@ class DashboardView(ft.Container):
         is_disconnecting: bool = False,
     ):
         """Update connection button state and centerpiece text inside the button."""
+        from src.ui.helpers.status_helper import get_short_status_label
+
         self._is_connected = is_connected
 
         if is_disconnecting:
-            self._toggle_button.set_disconnecting(t("status.disconnecting", default="Disconnecting..."))
+            self._toggle_button.set_disconnecting(
+                get_short_status_label(t("app.disconnecting"))
+            )
             self._stop_uptime_timer()
         elif is_connecting:
-            self._toggle_button.set_connecting(t("status.connecting", default="Connecting..."))
+            self._toggle_button.set_connecting(
+                get_short_status_label(t("app.connecting"))
+            )
             self._uptime_text.value = "00:00:00"
         elif is_connected:
-            self._toggle_button.set_connected(t("dashboard.connected", default="Connected"))
+            self._toggle_button.set_connected(
+                get_short_status_label(t("app.connected"))
+            )
             self._start_uptime_timer()
         else:
             self._stop_uptime_timer()
-            self._toggle_button.set_disconnected(t("dashboard.disconnected", default="Disconnected"))
+            self._toggle_button.set_disconnected(
+                get_short_status_label(t("app.disconnected"))
+            )
 
         try:
             if self.page:
@@ -310,8 +338,15 @@ class DashboardView(ft.Container):
 
     def set_step(self, step_text: str):
         """Update center status text underneath button."""
-        if hasattr(self, "_center_status_text") and self._center_status_text and step_text:
-            self._center_status_text.value = step_text
+        from src.ui.helpers.status_helper import get_short_status_label
+
+        if (
+            hasattr(self, "_center_status_text")
+            and self._center_status_text
+            and step_text
+        ):
+            clean = get_short_status_label(step_text)
+            self._center_status_text.value = clean
             try:
                 if self._center_status_text.page:
                     self._center_status_text.update()

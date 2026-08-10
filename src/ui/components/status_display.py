@@ -15,6 +15,8 @@ class StatusDisplay(ft.Container):
         super().__init__()
 
         self._is_connected = False
+        self._current_text: str = ""   # Deduplication guard
+        self._current_color: str = ""  # Deduplication guard
 
         # Status Label (initial instance)
         self._status_label = self._create_label(t("app.disconnected"), ft.Colors.ORANGE_400)
@@ -57,8 +59,18 @@ class StatusDisplay(ft.Container):
         )
 
     def _update_label(self, text: str, color: str):
-        """Triggers a smooth transition to a new label."""
-        self._status_label = self._create_label(text, color)
+        """Triggers a smooth transition to a new label, skipping duplicate updates."""
+        from src.ui.helpers.status_helper import get_short_status_label
+
+        clean_text = get_short_status_label(text)
+
+        # Dedup guard — skip re-render if nothing changed
+        if clean_text == self._current_text and color == self._current_color:
+            return
+        self._current_text = clean_text
+        self._current_color = color
+
+        self._status_label = self._create_label(clean_text, color)
         self._switcher.content = self._status_label
         try:
             if self.page:

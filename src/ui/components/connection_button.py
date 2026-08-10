@@ -109,17 +109,22 @@ class ConnectionButton(ft.Container):
         except RuntimeError:
             pass
 
-    def set_connected(self, status_label: str = "Connected"):
+    def set_connected(self, status_label: str = None):
         """Set button to connected state with subtle purple glass glow."""
+        from src.core.i18n import t
+        from src.ui.helpers.status_helper import get_short_status_label
+
         self._is_connected = True
         self._is_connecting = False
-        self._state = "connected"  # Track current state
+        self._state = "connected"
+
+        label = get_short_status_label(status_label or t("app.connected"))
 
         # Purple Glass Style for button
         self._button.bgcolor = ft.Colors.with_opacity(0.25, "#8b5cf6")
         self._button.border = ft.Border.all(2.5, ft.Colors.with_opacity(0.5, "#a78bfa"))
         self._icon.color = ft.Colors.WHITE
-        self._status_text.value = status_label
+        self._status_text.value = label
         self._status_text.color = "#4ADE80"
         try:
             self._button.update()
@@ -158,8 +163,6 @@ class ConnectionButton(ft.Container):
                     except RuntimeError:
                         break
                     try:
-                        # Only pulse if network activity is low (idle breath)
-                        # High activity will override with more dramatic expansion in update_network_activity
                         if self._current_activity < 5:
                             if grow:
                                 self._glow_layer.opacity = 0.8
@@ -170,24 +173,29 @@ class ConnectionButton(ft.Container):
                             self._glow_layer.update()
 
                         grow = not grow
-                        await asyncio.sleep(1.2)  # Slower, calmer breath for connected idle
+                        await asyncio.sleep(1.2)
                     except Exception:
                         break
 
             self.page.run_task(_connected_breath)
 
-    def set_disconnected(self, status_label: str = "Disconnected"):
+    def set_disconnected(self, status_label: str = None):
         """Set button to disconnected state."""
+        from src.core.i18n import t
+        from src.ui.helpers.status_helper import get_short_status_label
+
         self._is_connected = False
         self._is_connecting = False
         self._state = "disconnected"
         self._current_activity = 0
 
+        label = get_short_status_label(status_label or t("app.disconnected"))
+
         # Revert button to standard glass
         self._button.bgcolor = ft.Colors.with_opacity(0.15, "#1e293b")
         self._button.border = ft.Border.all(1.5, ft.Colors.with_opacity(0.2, ft.Colors.WHITE))
         self._icon.color = ft.Colors.WHITE
-        self._status_text.value = status_label
+        self._status_text.value = label
         self._status_text.color = ft.Colors.WHITE_70
         self._uptime_text.value = "00:00:00"
         try:
@@ -207,18 +215,24 @@ class ConnectionButton(ft.Container):
         except RuntimeError:
             pass
 
-    def set_connecting(self, status_label: str = "Connecting..."):
+    def set_connecting(self, status_label: str = None):
         """Set connecting state with subtle amber glass pulse."""
+        from src.core.i18n import t
+        from src.ui.helpers.status_helper import get_short_status_label
+
         self._is_connected = False
         self._is_connecting = True
         self._state = "connecting"
+
+        label = get_short_status_label(status_label or t("app.connecting"))
 
         # Amber Glass Style for button
         self._button.bgcolor = ft.Colors.with_opacity(0.25, "#f59e0b")
         self._button.border = ft.Border.all(2.5, ft.Colors.with_opacity(0.5, "#fbbf24"))
         self._icon.color = ft.Colors.WHITE
-        self._status_text.value = status_label
+        self._status_text.value = label
         self._status_text.color = ft.Colors.WHITE
+        self._uptime_text.value = "00:00:00"
         self._uptime_text.value = "00:00:00"
         try:
             self._button.update()

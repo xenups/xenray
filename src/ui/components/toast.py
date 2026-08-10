@@ -1,4 +1,4 @@
-"""Toast notification component with glassy effect."""
+"""Toast notification component with glassy effect and bottom floating alignment."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import flet as ft
 
 
 class Toast(ft.Container):
-    """A glassy toast notification that appears centered at the top of the screen."""
+    """A glassy toast notification that floats cleanly in the bottom corner of the screen."""
 
     def __init__(
         self,
@@ -25,33 +25,44 @@ class Toast(ft.Container):
 
         icon, icon_color = color_map.get(message_type, (ft.Icons.INFO_ROUNDED, ft.Colors.BLUE_400))
 
+        is_rtl = False
+        try:
+            from src.core.i18n import get_language  # noqa: PLC0415
+
+            is_rtl = get_language() == "fa"
+        except Exception:
+            pass
+
         super().__init__(
             content=ft.Row(
                 [
                     ft.Icon(icon, color=icon_color, size=18),
                     ft.Text(
                         message,
-                        size=13,
+                        size=12,
                         weight=ft.FontWeight.W_600,
                         color=ft.Colors.WHITE,
+                        rtl=is_rtl,
                     ),
                 ],
-                spacing=10,
+                spacing=8,
                 alignment=ft.MainAxisAlignment.CENTER,
                 tight=True,
             ),
-            bgcolor=ft.Colors.with_opacity(0.85, "#181825"),
-            border=ft.Border.all(1, ft.Colors.with_opacity(0.2, ft.Colors.WHITE)),
-            border_radius=20,
-            padding=ft.Padding.symmetric(horizontal=20, vertical=12),
+            bgcolor=ft.Colors.with_opacity(0.9, "#13141C"),
+            border=ft.Border.all(1, ft.Colors.with_opacity(0.15, ft.Colors.WHITE)),
+            border_radius=12,
+            padding=ft.Padding.symmetric(horizontal=16, vertical=10),
             shadow=ft.BoxShadow(
                 spread_radius=0,
                 blur_radius=16,
-                color=ft.Colors.with_opacity(0.4, ft.Colors.BLACK),
+                color=ft.Colors.with_opacity(0.45, ft.Colors.BLACK),
                 offset=ft.Offset(0, 4),
             ),
             animate_opacity=300,
+            animate_offset=300,
             opacity=1,
+            offset=ft.Offset(0, 0),
         )
 
         self.duration = duration
@@ -69,32 +80,48 @@ class ToastManager:
         message_type: str = "info",
         duration: int = 3000,
     ):
-        """Show a toast notification."""
+        """Show a toast notification floating in the bottom corner of the main content view."""
         toast = Toast(message, message_type, duration)
 
-        # Centered container over the main content canvas (offsetting left 210px sidebar)
-        toast_container = ft.Container(
-            content=toast,
-            top=24,
-            left=210,
-            right=0,
-            alignment=ft.Alignment.TOP_CENTER,
-        )
+        is_rtl = False
+        try:
+            from src.core.i18n import get_language  # noqa: PLC0415
+
+            is_rtl = get_language() == "fa"
+        except Exception:
+            pass
+
+        # Floating toast container at bottom-right (or bottom-left for RTL)
+        if is_rtl:
+            toast_container = ft.Container(
+                content=toast,
+                bottom=20,
+                left=20,
+                alignment=ft.Alignment.BOTTOM_LEFT,
+            )
+        else:
+            toast_container = ft.Container(
+                content=toast,
+                bottom=20,
+                right=20,
+                alignment=ft.Alignment.BOTTOM_RIGHT,
+            )
 
         # Add to overlay — one page.update() to mount the toast
         self._page.overlay.append(toast_container)
         self._page.update()
 
-        # Auto-dismiss
+        # Auto-dismiss with smooth entrance/exit slide animation
         async def auto_dismiss():
             try:
                 await asyncio.sleep(duration / 1000)
 
-                # Fade out — targeted update, NOT page.update()
+                # Fade and slide down out
                 toast.opacity = 0
+                toast.offset = ft.Offset(0, 0.2)
                 toast.update()
 
-                # Wait for fade animation
+                # Wait for animation
                 await asyncio.sleep(0.3)
 
                 # Remove from overlay

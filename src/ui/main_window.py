@@ -547,8 +547,7 @@ class MainWindow:
         # Mutate both controls before flushing to the client
         self._view_switcher.content = target
         if hasattr(self, "_nav_sidebar") and self._nav_sidebar:
-            self._nav_sidebar._active_tab = tab_id
-            self._nav_sidebar._apply_active_styles()
+            self._nav_sidebar.set_active_tab(tab_id)
 
         # Targeted updates — only send the changed subtrees, not the entire page
         try:
@@ -850,6 +849,23 @@ class MainWindow:
         )
         self.navigate_to(page)
 
+    def _open_lan_page(self):
+        """Navigate to the dedicated LAN Sharing view."""
+        from src.ui.views.lan_sharing_view import LanSharingView
+
+        self._active_tab = "lan"
+        if hasattr(self, "_nav_sidebar") and self._nav_sidebar:
+            self._nav_sidebar.set_active_tab("lan")
+
+        view = LanSharingView(
+            app_context=self._app_context,
+            on_back=self.navigate_back,
+            on_lan_toggle=lambda enabled: self._nav_sidebar.update_lan_button(enabled)
+            if hasattr(self, "_nav_sidebar") and self._nav_sidebar
+            else None,
+        )
+        self.navigate_to(view)
+
     # --- Settings Row Builders ---
     def _build_mode_switch_row(self) -> ModeSwitchRow:
         is_proxy = self._current_mode == ConnectionMode.PROXY
@@ -1045,6 +1061,11 @@ class MainWindow:
         except Exception:
             pass
         try:
+            from src.utils.firewall_manager import FirewallManager
+
+            FirewallManager.remove_lan_firewall_rule()
+        except Exception:
+            pass
             from src.utils.firewall_manager import FirewallManager
 
             FirewallManager.remove_lan_firewall_rule()

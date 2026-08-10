@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 import flet as ft
 
+from src.core.i18n import t
 from src.ui.components.connection_button import ConnectionButton
 from src.ui.components.header import Header
 from src.ui.components.lan_sharing_card import LanSharingCard
@@ -98,6 +99,7 @@ class UIBuilder:
             on_open_routing_click=drawer._open_routing_manager,
             on_open_dns_click=drawer._open_dns_manager,
             lan_share_row=getattr(drawer, "_lan_share_row", None),
+            http_port_row=getattr(drawer, "_http_port_row", None),
         )
 
         self._main._stitch_logs_view = LogsView(
@@ -138,6 +140,8 @@ class UIBuilder:
             on_tab_change=self._main._on_nav_tab_changed,
             on_connect_click=self._main._on_connect_clicked,
             on_change_server_click=lambda e: self._main._on_nav_tab_changed("servers"),
+            on_lan_click=lambda e: self._main._open_lan_page(),
+            allow_lan=self._main._app_context.settings.get_allow_lan(),
         )
 
         # Legacy dashboard view fallback
@@ -202,14 +206,14 @@ class UIBuilder:
                                     icon=ft.Icons.MINIMIZE_ROUNDED,
                                     icon_size=14,
                                     icon_color=ft.Colors.with_opacity(0.65, ft.Colors.WHITE),
-                                    tooltip="Minimize",
+                                    tooltip=t("window.minimize"),
                                     on_click=lambda e: self._handle_window_minimize(),
                                 ),
                                 ft.IconButton(
                                     icon=ft.Icons.CLOSE_ROUNDED,
                                     icon_size=14,
                                     icon_color=ft.Colors.with_opacity(0.8, "#f43f5e"),
-                                    tooltip="Close",
+                                    tooltip=t("window.close"),
                                     on_click=lambda e: self._handle_window_close(),
                                 ),
                             ],

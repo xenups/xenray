@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import threading
 import time
+from typing import Optional
 
 import flet as ft
 from loguru import logger
@@ -21,6 +22,7 @@ from src.services.xray_installer import XrayInstallerService
 from src.ui.components.settings_sections import (
     AutoReconnectToggleRow,
     CountryDropdownRow,
+    HttpPortInputRow,
     LanguageDropdownRow,
     LanShareToggleRow,
     ModeSwitchRow,
@@ -67,6 +69,10 @@ class SettingsDrawer(ft.NavigationDrawer):
         self._port_row = PortInputRow(
             self._app_context.settings.get_proxy_port(),
             self._save_port,
+        )
+        self._http_port_row = HttpPortInputRow(
+            self._app_context.settings.get_http_port(),
+            self._save_http_port,
         )
         self._country_row = CountryDropdownRow(
             self._app_context.settings.get_routing_country(),
@@ -131,15 +137,16 @@ class SettingsDrawer(ft.NavigationDrawer):
                 # Scrollable content including version footer
                 ft.Column(
                     [
-                        # Connection Section
+                        # Connection Section (LAN Share comes before TUN Engine)
                         SettingsSection(
                             t("settings.connection"),
                             [
                                 self._mode_switch_row,
-                                self._tun_dropdown_row,
                                 self._port_row,
+                                self._http_port_row,
                                 self._country_row,
                                 self._lan_share_row,
+                                self._tun_dropdown_row,
                             ],
                         ),
                         ft.Divider(
@@ -280,15 +287,20 @@ class SettingsDrawer(ft.NavigationDrawer):
 
     def _close_drawer(self, e=None):
         """Close this settings drawer."""
-        if self.page is not None:
+        page = self.safe_page
+        if page is not None:
             try:
-                self.page.run_task(self.page.close_end_drawer)
+                page.run_task(page.close_end_drawer)
             except Exception:
                 pass
 
     def _handle_mode_change(self, e):
         """Handle VPN/Proxy mode switch."""
-        is_proxy = bool(e.control.value) if (e and hasattr(e, "control") and e.control) else self._mode_switch_row.value
+        is_proxy = (
+            bool(e.control.value)
+            if (e and hasattr(e, "control") and e.control)
+            else self._mode_switch_row.value
+        )
 
         if not is_proxy and not ProcessUtils.is_admin():
             self._mode_switch_row.value = True
@@ -300,7 +312,7 @@ class SettingsDrawer(ft.NavigationDrawer):
 
     def _show_admin_restart_dialog(self):
         """Show dialog to restart as admin for VPN mode."""
-        page = self.page
+        page = self.safe_page
         if not page:
             return
 
@@ -369,9 +381,36 @@ class SettingsDrawer(ft.NavigationDrawer):
 
         page.update()
 
+    def _save_http_port(self, value: str):
+        """Save the HTTP proxy port setting."""
+        page = self.safe_page
+        if not page:
+            return
+
+        try:
+            port = int(value)
+            if 1024 <= port <= 65535:
+                self._app_context.settings.set_http_port(port)
+                self._http_port_row.set_border_color(ft.Colors.GREEN_400)
+                self._show_toast(
+                    t(
+                        "settings.http_port_saved",
+                        default=f"HTTP Proxy Port saved: {port}",
+                    ),
+                    "success",
+                )
+            else:
+                self._http_port_row.set_border_color(ft.Colors.RED_400)
+                self._show_toast(t("settings.port_invalid_range"), "error")
+        except ValueError:
+            self._http_port_row.set_border_color(ft.Colors.RED_400)
+            self._show_toast(t("settings.port_must_be_number"), "error")
+
+        page.update()
+
     def _save_country(self, e):
         """Save the direct country setting."""
-        page = self.page
+        page = self.safe_page
         if not page:
             return
 
@@ -396,13 +435,23 @@ class SettingsDrawer(ft.NavigationDrawer):
 
     def _save_language(self, e):
         """Save the language setting and update i18n."""
-        page = self.page
-        if not page:
+        page = self.safe_page
+
+        lang = None
+        if e is not None and hasattr(e, "control") and e.control is not None:
+            lang = getattr(e.control, "value", None)
+        if not lang:
+            lang = self._language_row.value
+        if not lang:
+            lang = getattr(e, "data", None)
+        if not lang:
             return
 
-        lang = self._language_row.value
         self._app_context.settings.set_language(lang)
         set_app_language(lang)
+
+        if not page:
+            return
 
         # Notify user - app needs restart for full effect
         msg = t("settings.language_restart_msg")
@@ -411,7 +460,7 @@ class SettingsDrawer(ft.NavigationDrawer):
 
     def _reset_close_preference(self, e):
         """Reset the 'Remember Choice' for close dialog."""
-        page = self.page
+        page = self.safe_page
         if not page:
             return
 
@@ -421,7 +470,7 @@ class SettingsDrawer(ft.NavigationDrawer):
 
     def _on_installer_run(self, component: str):
         """Handle update/install request."""
-        page = self.page
+        page = self.safe_page
         if not page:
             return
 
@@ -452,7 +501,11 @@ class SettingsDrawer(ft.NavigationDrawer):
 
     def _show_update_dialog(self, page, current: str, latest: str):
         """Show update confirmation dialog."""
-        msg = t("update.available", current=current, latest=latest) if current else t("update.install", version=latest)
+        msg = (
+            t("update.available", current=current, latest=latest)
+            if current
+            else t("update.install", version=latest)
+        )
 
         def close_dlg(e):
             if page is not None:
@@ -543,11 +596,12 @@ class SettingsDrawer(ft.NavigationDrawer):
         """Open the routing rules page."""
         from src.ui.pages.routing_page import RoutingPage
 
-        try:
-            if self.page:
-                self.page.run_task(self.page.close_end_drawer)
-        except RuntimeError:
-            pass
+        page = self.safe_page
+        if page:
+            try:
+                page.run_task(page.close_end_drawer)
+            except RuntimeError:
+                pass
         routing_page = RoutingPage(self._app_context, on_back=self._on_subpage_back)
         self._navigate_to(routing_page)
 
@@ -555,17 +609,18 @@ class SettingsDrawer(ft.NavigationDrawer):
         """Open the DNS settings page."""
         from src.ui.pages.dns_page import DNSPage
 
-        try:
-            if self.page:
-                self.page.run_task(self.page.close_end_drawer)
-        except RuntimeError:
-            pass
+        page = self.safe_page
+        if page:
+            try:
+                page.run_task(page.close_end_drawer)
+            except RuntimeError:
+                pass
         dns_page = DNSPage(self._app_context, on_back=self._on_subpage_back)
         self._navigate_to(dns_page)
 
     def _check_app_updates(self, e):
         """Check for app updates."""
-        page = self.page
+        page = self.safe_page
         if not page:
             return
 
@@ -581,7 +636,9 @@ class SettingsDrawer(ft.NavigationDrawer):
                 ) = AppUpdateService.check_for_updates()
 
                 if not available and current:
-                    self._show_toast(t("app_update.up_to_date", version=current), "info")
+                    self._show_toast(
+                        t("app_update.up_to_date", version=current), "info"
+                    )
                     page.update()
                     return
 
@@ -596,7 +653,9 @@ class SettingsDrawer(ft.NavigationDrawer):
 
         threading.Thread(target=check_task, daemon=True).start()
 
-    def _show_app_update_dialog(self, page, current: str, latest: str, download_url: str):
+    def _show_app_update_dialog(
+        self, page, current: str, latest: str, download_url: str
+    ):
         """Show app update confirmation dialog."""
         msg = (
             t("app_update.available", current=current, latest=latest)
@@ -716,7 +775,7 @@ class SettingsDrawer(ft.NavigationDrawer):
 
     def _update_rules(self, e):
         """Check for and update geoip/geosite rule files."""
-        page = self.page
+        page = self.safe_page
         if not page:
             return
 

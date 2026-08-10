@@ -102,16 +102,12 @@ class ProfilePresenter:
         country_code = profile.get("country_code", "")
         country_name = profile.get("country_name", "")
 
-        if not country_code and info["server_ip"] and is_ip(info["server_ip"]):
-            from src.utils.country_flags import fetch_country_info_from_ip
-
-            geo_code, geo_name = fetch_country_info_from_ip(info["server_ip"])
-            if geo_code:
-                country_code = geo_code
-                profile["country_code"] = geo_code
-            if geo_name:
-                country_name = geo_name
-                profile["country_name"] = geo_name
+        if not country_code and profile.get("name"):
+            from src.utils.country_flags import extract_country_code_from_name
+            name_cc = extract_country_code_from_name(profile["name"])
+            if name_cc:
+                country_code = name_cc
+                profile["country_code"] = name_cc
 
         info["country_code"] = country_code
         info["country_name"] = country_name
