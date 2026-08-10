@@ -65,11 +65,13 @@ async def main(page: ft.Page):
     #    We set dimensions here so they take effect before the first paint.
     page.window.width = WINDOW_WIDTH
     page.window.height = WINDOW_HEIGHT
-    page.window.min_width = 880
-    page.window.min_height = 600
-    page.window.resizable = True
+    page.window.min_width = 620
+    page.window.min_height = 480
+    page.window.max_width = 620
+    page.window.max_height = 480
+    page.window.resizable = False
     page.window.minimizable = True
-    page.window.maximizable = True
+    page.window.maximizable = False
     page.window.prevent_close = True
     page.window.title_bar_hidden = True
     page.window.title_bar_buttons_hidden = True

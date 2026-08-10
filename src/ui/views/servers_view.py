@@ -167,16 +167,15 @@ class ServersView(ft.Container):
                         ],
                         spacing=12,
                     ),
-                    self._hero_card,
                     ft.Container(
                         content=self._server_list_component,
                         expand=True,
                     ),
                 ],
-                spacing=16,
+                spacing=12,
                 expand=True,
             ),
-            padding=24,
+            padding=14,
             expand=True,
         )
 
@@ -188,28 +187,5 @@ class ServersView(ft.Container):
         speed: str = "",
         country_code: str = "",
     ):
-        """Update top featured node info."""
-        self._hero_node_name.value = name or "--"
-        self._hero_node_latency.value = (
-            latency if latency and latency != "-- ms" else "--"
-        )
-        self._hero_node_protocol.value = protocol or "--"
-        self._hero_node_speed.value = speed or "--"
-        self._hero_badge.content.value = t(
-            "servers.selected_node", default="SELECTED NODE"
-        )
-        if country_code:
-            self._hero_flag.src = f"/flags/{country_code.lower()}.svg"
-            self._hero_flag.visible = True
-            bg = GradientHelper.get_flag_gradient(country_code)
-            if bg:
-                self._hero_card.gradient = bg
-                self._hero_card.bgcolor = None
-        else:
-            self._hero_flag.visible = False
-            self._hero_card.gradient = None
-            self._hero_card.bgcolor = None
-        try:
-            self._hero_card.update()
-        except Exception:
-            pass
+        """Update top featured node info (noop after SELECTED NODE banner removal)."""
+        pass

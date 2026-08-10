@@ -11,6 +11,40 @@ from src.core.i18n import t
 from src.ui.theme import AppColors, create_glass_container
 
 
+def parse_size_to_bytes(size_str: str) -> float:
+    """Parse size string (e.g. '12.4 MB', '500 KB', '1.2 GB', '1024 B') into bytes float."""
+    if not size_str:
+        return 0.0
+    try:
+        parts = size_str.strip().split()
+        if not parts:
+            return 0.0
+        val = float(parts[0])
+        unit = parts[1].upper() if len(parts) > 1 else "B"
+        if "GB" in unit:
+            return val * 1024.0 * 1024.0 * 1024.0
+        elif "MB" in unit:
+            return val * 1024.0 * 1024.0
+        elif "KB" in unit:
+            return val * 1024.0
+        else:
+            return val
+    except Exception:
+        return 0.0
+
+
+def format_bytes(bytes_val: float) -> str:
+    """Format bytes into human-readable data transfer string."""
+    if bytes_val < 1024:
+        return f"{bytes_val:.0f} B"
+    elif bytes_val < 1024 * 1024:
+        return f"{(bytes_val / 1024.0):.1f} KB"
+    elif bytes_val < 1024 * 1024 * 1024:
+        return f"{(bytes_val / (1024.0 * 1024.0)):.1f} MB"
+    else:
+        return f"{(bytes_val / (1024.0 * 1024.0 * 1024.0)):.2f} GB"
+
+
 class StatisticsView(ft.Container):
     """Fluent Integrated Statistics View with high-density wave chart, speed cards, and data transfer analytics."""
 
@@ -28,15 +62,15 @@ class StatisticsView(ft.Container):
         header_title_col = ft.Column(
             [
                 ft.Text(
-                    t("nav.statistics", default="STATISTICS & ANALYTICS"),
-                    size=10,
-                    weight=ft.FontWeight.W_700,
+                    t("nav.statistics", default="Statistics & Analytics"),
+                    size=11,
+                    weight=ft.FontWeight.W_600,
                     color=MUTED_WHITE,
                 ),
                 ft.Text(
                     t("dashboard.network_traffic", default="Network Traffic Analytics"),
-                    size=22,
-                    weight=ft.FontWeight.W_800,
+                    size=20,
+                    weight=ft.FontWeight.W_700,
                     color=WHITE,
                 ),
             ],
@@ -48,16 +82,16 @@ class StatisticsView(ft.Container):
                 [
                     ft.Icon(ft.Icons.SUBTITLES_OUTLINED, size=14, color=CYAN),
                     ft.Text(
-                        "0.0 MB/s", size=13, weight=ft.FontWeight.W_800, color=WHITE
+                        "0.0 MB/s", size=13, weight=ft.FontWeight.W_700, color=WHITE
                     ),
                 ],
                 spacing=6,
                 alignment=ft.MainAxisAlignment.CENTER,
             ),
-            padding=ft.Padding.symmetric(horizontal=14, vertical=6),
-            border_radius=20,
-            bgcolor=ft.Colors.with_opacity(0.18, PURPLE),
-            border=ft.Border.all(1.2, ft.Colors.with_opacity(0.4, PURPLE)),
+            padding=ft.Padding.symmetric(horizontal=12, vertical=6),
+            border_radius=16,
+            bgcolor=ft.Colors.with_opacity(0.14, PURPLE),
+            border=ft.Border.all(1.0, ft.Colors.with_opacity(0.3, PURPLE)),
         )
 
         top_header_row = ft.Row(
@@ -71,25 +105,25 @@ class StatisticsView(ft.Container):
 
         # --- 2. Live Speed & Usage Metric Cards ---
         self._dl_speed_text = ft.Text(
-            "0.0 MB/s", size=18, weight=ft.FontWeight.W_800, color=WHITE
+            "0.0 MB/s", size=18, weight=ft.FontWeight.W_700, color=WHITE
         )
         self._ul_speed_text = ft.Text(
-            "0.0 MB/s", size=18, weight=ft.FontWeight.W_800, color=WHITE
+            "0.0 MB/s", size=18, weight=ft.FontWeight.W_700, color=WHITE
         )
         self._dl_total_text = ft.Text(
-            "0.0 MB", size=16, weight=ft.FontWeight.W_700, color=WHITE
+            "0.0 MB", size=11, weight=ft.FontWeight.W_600, color=WHITE
         )
         self._ul_total_text = ft.Text(
-            "0.0 MB", size=16, weight=ft.FontWeight.W_700, color=WHITE
+            "0.0 MB", size=11, weight=ft.FontWeight.W_600, color=WHITE
         )
         self._total_transfer_text = ft.Text(
-            "0.0 MB", size=18, weight=ft.FontWeight.W_800, color=CYAN
+            "0.0 MB / 0.0 MB", size=18, weight=ft.FontWeight.W_700, color=CYAN
         )
         self._uptime_display_text = ft.Text(
-            "00:00:00", size=15, weight=ft.FontWeight.W_700, color=WHITE
+            "00:00:00", size=11, weight=ft.FontWeight.W_600, color=WHITE
         )
         self._peak_speed_text = ft.Text(
-            "0.0 MB/s", size=15, weight=ft.FontWeight.W_700, color=WHITE
+            "0.0 MB/s", size=11, weight=ft.FontWeight.W_600, color=WHITE
         )
 
         self._peak_bps = 0.0
@@ -142,7 +176,7 @@ class StatisticsView(ft.Container):
             spacing=3,
             alignment=ft.MainAxisAlignment.CENTER,
             vertical_alignment=ft.CrossAxisAlignment.END,
-            height=140,
+            height=160,
         )
         ANIM_SMOOTH = ft.Animation(650, ft.AnimationCurve.DECELERATE)
 
@@ -199,9 +233,9 @@ class StatisticsView(ft.Container):
                     [
                         ft.Icon(ft.Icons.GRAPHIC_EQ_ROUNDED, size=16, color=CYAN),
                         ft.Text(
-                            "REAL-TIME TRAFFIC WAVE STREAM",
-                            size=11,
-                            weight=ft.FontWeight.W_700,
+                            "Real-Time Traffic Wave Stream",
+                            size=12,
+                            weight=ft.FontWeight.W_600,
                             color=MUTED_WHITE,
                         ),
                     ],
@@ -216,9 +250,9 @@ class StatisticsView(ft.Container):
                             "Download",
                             size=11,
                             color=MUTED_WHITE,
-                            weight=ft.FontWeight.W_600,
+                            weight=ft.FontWeight.W_500,
                         ),
-                        ft.Container(width=12),
+                        ft.Container(width=8),
                         ft.Container(
                             width=8, height=8, border_radius=4, bgcolor="#38bdf8"
                         ),
@@ -226,13 +260,14 @@ class StatisticsView(ft.Container):
                             "Upload",
                             size=11,
                             color=MUTED_WHITE,
-                            weight=ft.FontWeight.W_600,
+                            weight=ft.FontWeight.W_500,
                         ),
                     ],
                     spacing=4,
                 ),
             ],
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
         )
 
         visualizer_box = create_glass_container(
@@ -241,7 +276,7 @@ class StatisticsView(ft.Container):
                     wave_header,
                     ft.Container(
                         content=chart_row,
-                        height=140,
+                        height=160,
                         padding=ft.Padding.symmetric(vertical=6),
                     ),
                 ],
@@ -285,20 +320,21 @@ class StatisticsView(ft.Container):
                     [
                         ft.Container(
                             content=ft.Icon(icon, size=15, color=icon_color),
-                            width=28,
-                            height=28,
-                            border_radius=14,
+                            width=26,
+                            height=26,
+                            border_radius=13,
                             bgcolor=ft.Colors.with_opacity(0.16, icon_color),
                             alignment=ft.Alignment.CENTER,
                         ),
                         ft.Text(
                             title,
                             size=11,
-                            weight=ft.FontWeight.W_700,
+                            weight=ft.FontWeight.W_600,
                             color=AppColors.ON_SURFACE_VARIANT,
                         ),
                     ],
                     spacing=8,
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 ),
                 val_control,
                 ft.Row(
@@ -307,15 +343,18 @@ class StatisticsView(ft.Container):
                         sub_val_control,
                     ],
                     spacing=2,
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 ),
             ],
             spacing=6,
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
         )
 
         return create_glass_container(
             content=card_content,
             expand=True,
             padding=14,
+            height=110,
         )
 
     @staticmethod
@@ -323,7 +362,7 @@ class StatisticsView(ft.Container):
         history: list[float],
         num_output: int = 32,
         min_h: float = 6.0,
-        max_h: float = 140.0,
+        max_h: float = 160.0,
     ) -> list[float]:
         """Compute smooth Catmull-Rom spline wave heights across num_output wave bars."""
         n = len(history)
@@ -424,9 +463,9 @@ class StatisticsView(ft.Container):
             self._traffic_rate_badge.content.controls[1].value = dl_text
         self._dl_speed_text.value = dl_text
         self._ul_speed_text.value = ul_text
-        self._dl_total_text.value = d_str
-        self._ul_total_text.value = u_str
-        self._total_transfer_text.value = f"D: {d_str} / U: {u_str}"
+        dl_bytes = parse_size_to_bytes(d_str)
+        ul_bytes = parse_size_to_bytes(u_str)
+        self._total_transfer_text.value = format_bytes(dl_bytes + ul_bytes)
 
         self._dl_history.pop(0)
         self._dl_history.append(download_bps if self._is_connected else 0.0)
@@ -434,10 +473,10 @@ class StatisticsView(ft.Container):
         self._ul_history.append(upload_bps if self._is_connected else 0.0)
 
         dl_heights = self._compute_smooth_wave_heights(
-            self._dl_history, num_output=32, min_h=6.0, max_h=140.0
+            self._dl_history, num_output=32, min_h=6.0, max_h=160.0
         )
         ul_heights = self._compute_smooth_wave_heights(
-            self._ul_history, num_output=32, min_h=6.0, max_h=140.0
+            self._ul_history, num_output=32, min_h=6.0, max_h=160.0
         )
 
         for i in range(len(self._dl_bars)):

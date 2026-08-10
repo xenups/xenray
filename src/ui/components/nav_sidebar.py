@@ -1,4 +1,4 @@
-"""Left Navigation Sidebar Component with Clean Empty Top (Apple macOS style) & Quick-Action Card."""
+"""Left Navigation Sidebar Component - Collapsed Compact Icon-Only Navigation Rail (70px)."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from src.ui.theme import AppColors
 
 
 class NavSidebar(ft.Container):
-    """Sidebar navigation drawer matching Fluent Integrated design specs (image_54.png)."""
+    """Compact collapsed icon-only navigation sidebar rail matching 70px width spec."""
 
     def __init__(
         self,
@@ -29,14 +29,14 @@ class NavSidebar(ft.Container):
             (
                 "dashboard",
                 t("nav.dashboard", default="Dashboard"),
-                ft.Icons.GRID_VIEW_ROUNDED,
+                ft.Icons.DASHBOARD_ROUNDED,
             ),
+            ("servers", t("nav.servers", default="Servers"), ft.Icons.DNS_ROUNDED),
             (
                 "statistics",
                 t("nav.statistics", default="Statistics"),
                 ft.Icons.BAR_CHART_ROUNDED,
             ),
-            ("servers", t("nav.servers", default="Servers"), ft.Icons.DNS_ROUNDED),
             ("logs", t("nav.logs", default="Logs"), ft.Icons.TERMINAL_ROUNDED),
             (
                 "settings",
@@ -45,54 +45,37 @@ class NavSidebar(ft.Container):
             ),
         ]
 
-        self._buttons_container = ft.Column(spacing=8, expand=True)
+        self._buttons_container = ft.Column(
+            spacing=8,
+            alignment=ft.MainAxisAlignment.START,
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+        )
         self._build_nav_buttons()
 
         self._change_server_btn = ft.Container(
-            content=ft.Row(
-                [
-                    ft.Icon(
-                        ft.Icons.SWAP_HORIZ_ROUNDED, size=16, color=ft.Colors.WHITE
-                    ),
-                    ft.Text(
-                        t("dashboard.change_server", default="Change Server"),
-                        size=12,
-                        weight=ft.FontWeight.W_600,
-                        color=ft.Colors.WHITE,
-                    ),
-                ],
-                alignment=ft.MainAxisAlignment.CENTER,
-                spacing=8,
+            content=ft.Icon(
+                ft.Icons.SWAP_HORIZ_ROUNDED, size=18, color=ft.Colors.WHITE
             ),
-            padding=ft.Padding.symmetric(vertical=10, horizontal=14),
+            padding=ft.Padding.all(10),
             border_radius=12,
             bgcolor=ft.Colors.with_opacity(0.12, "#a855f7"),
             border=ft.Border.all(1.2, ft.Colors.with_opacity(0.6, "#a855f7")),
+            tooltip=t("dashboard.change_server", default="Change Server"),
+            alignment=ft.Alignment.CENTER,
             on_click=self._handle_change_server_click,
             ink=True,
         )
 
-        self._quick_action_icon = ft.Icon(ft.Icons.BOLT, size=16, color="#f43f5e")
-        self._quick_action_text = ft.Text(
-            t("dashboard.quick_disconnect", default="Quick Disconnect"),
-            size=12,
-            weight=ft.FontWeight.W_600,
-            color=ft.Colors.WHITE,
-        )
+        self._quick_action_icon = ft.Icon(ft.Icons.BOLT, size=18, color="#f43f5e")
 
         self._quick_action_btn = ft.Container(
-            content=ft.Row(
-                [
-                    self._quick_action_icon,
-                    self._quick_action_text,
-                ],
-                alignment=ft.MainAxisAlignment.CENTER,
-                spacing=6,
-            ),
-            padding=ft.Padding.symmetric(vertical=10, horizontal=14),
+            content=self._quick_action_icon,
+            padding=ft.Padding.all(10),
             border_radius=12,
-            bgcolor=ft.Colors.with_opacity(0.15, "#f43f5e"),
-            border=ft.Border.all(1.2, ft.Colors.with_opacity(0.6, "#f43f5e")),
+            bgcolor=ft.Colors.with_opacity(0.08, "#f43f5e"),
+            border=ft.Border.all(1.0, ft.Colors.with_opacity(0.25, "#f43f5e")),
+            tooltip=t("dashboard.quick_disconnect", default="Quick Disconnect"),
+            alignment=ft.Alignment.CENTER,
             on_click=self._on_connect_click,
             ink=True,
         )
@@ -102,42 +85,23 @@ class NavSidebar(ft.Container):
                 self._change_server_btn,
                 self._quick_action_btn,
             ],
-            spacing=8,
+            spacing=10,
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
         )
 
         super().__init__(
             content=ft.Column(
                 [
-                    ft.WindowDragArea(
-                        content=ft.Container(
-                            content=ft.Row(
-                                [
-                                    ft.Image(
-                                        src="icon.png",
-                                        width=22,
-                                        height=22,
-                                        fit="contain",
-                                    ),
-                                    ft.Text(
-                                        "XenRay",
-                                        size=15,
-                                        weight=ft.FontWeight.W_800,
-                                        color=ft.Colors.WHITE,
-                                    ),
-                                ],
-                                spacing=8,
-                            ),
-                            padding=ft.Padding.only(left=8, top=12, bottom=16),
-                        )
-                    ),
                     self._buttons_container,
                     self._actions_panel,
                 ],
-                spacing=0,
+                spacing=16,
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                 expand=True,
             ),
-            width=210,
-            padding=14,
+            width=70,
+            padding=ft.Padding.symmetric(vertical=16, horizontal=8),
             bgcolor=ft.Colors.with_opacity(0.4, "#0b0518"),
             border=ft.Border.only(
                 right=ft.BorderSide(1, ft.Colors.with_opacity(0.12, "#a855f7"))
@@ -149,7 +113,7 @@ class NavSidebar(ft.Container):
             self._on_change_server_click(e)
 
     def set_active_tab(self, tab_id: str):
-        """Set the current active navigation tab (in-place style update, no rebuild)."""
+        """Set the current active navigation tab."""
         if self._active_tab == tab_id:
             return
         self._active_tab = tab_id
@@ -163,24 +127,24 @@ class NavSidebar(ft.Container):
     def update_connect_button_text(
         self, text: str, is_running: bool, server_name: str = ""
     ):
-        """Update the bottom quick action button state matching connected / disconnected status."""
-        btn_text = (
+        """Update quick action icon button tooltip and style matching connection status."""
+        btn_tooltip = (
             t("dashboard.quick_disconnect", default="Quick Disconnect")
             if is_running
             else t("dashboard.quick_connect", default="Quick Connect")
         )
-        self._quick_action_text.value = btn_text
+        self._quick_action_btn.tooltip = btn_tooltip
         if is_running:
             self._quick_action_icon.color = "#f43f5e"
-            self._quick_action_btn.bgcolor = ft.Colors.with_opacity(0.15, "#f43f5e")
+            self._quick_action_btn.bgcolor = ft.Colors.with_opacity(0.08, "#f43f5e")
             self._quick_action_btn.border = ft.Border.all(
-                1.2, ft.Colors.with_opacity(0.6, "#f43f5e")
+                1.0, ft.Colors.with_opacity(0.25, "#f43f5e")
             )
         else:
             self._quick_action_icon.color = "#c084fc"
-            self._quick_action_btn.bgcolor = ft.Colors.with_opacity(0.12, "#a855f7")
+            self._quick_action_btn.bgcolor = ft.Colors.with_opacity(0.1, "#a855f7")
             self._quick_action_btn.border = ft.Border.all(
-                1.2, ft.Colors.with_opacity(0.5, "#a855f7")
+                1.0, ft.Colors.with_opacity(0.3, "#a855f7")
             )
 
         try:
@@ -190,28 +154,19 @@ class NavSidebar(ft.Container):
             pass
 
     def _build_nav_buttons(self):
-        """Build nav buttons once and store references for in-place updates."""
+        """Build compact icon-only nav buttons with hover tooltips."""
         self._buttons_container.controls.clear()
-        self._button_refs: dict[str, tuple[ft.Container, ft.Icon, ft.Text]] = {}
+        self._button_refs: dict[str, tuple[ft.Container, ft.Icon]] = {}
         for tab_id, label, icon in self._nav_items:
             is_active = tab_id == self._active_tab
             icon_ctrl = ft.Icon(
                 icon,
-                size=18,
+                size=20,
                 color="#c084fc" if is_active else AppColors.ON_SURFACE_VARIANT,
             )
-            text_ctrl = ft.Text(
-                label,
-                size=13,
-                weight=ft.FontWeight.W_700 if is_active else ft.FontWeight.W_500,
-                color=ft.Colors.WHITE if is_active else AppColors.ON_SURFACE_VARIANT,
-            )
             btn = ft.Container(
-                content=ft.Row(
-                    [icon_ctrl, text_ctrl],
-                    spacing=12,
-                ),
-                padding=ft.Padding.symmetric(horizontal=14, vertical=10),
+                content=icon_ctrl,
+                padding=ft.Padding.symmetric(vertical=10, horizontal=12),
                 border_radius=12,
                 bgcolor=ft.Colors.with_opacity(0.2, "#6d28d9")
                 if is_active
@@ -227,22 +182,18 @@ class NavSidebar(ft.Container):
                 )
                 if is_active
                 else None,
+                tooltip=label,
+                alignment=ft.Alignment.CENTER,
                 on_click=lambda e, tid=tab_id: self._on_tab_change(tid),
             )
-            self._button_refs[tab_id] = (btn, icon_ctrl, text_ctrl)
+            self._button_refs[tab_id] = (btn, icon_ctrl)
             self._buttons_container.controls.append(btn)
 
     def _apply_active_styles(self):
         """Update existing button styles in-place without rebuilding controls."""
-        for tab_id, (btn, icon_ctrl, text_ctrl) in self._button_refs.items():
+        for tab_id, (btn, icon_ctrl) in self._button_refs.items():
             is_active = tab_id == self._active_tab
             icon_ctrl.color = "#c084fc" if is_active else AppColors.ON_SURFACE_VARIANT
-            text_ctrl.weight = (
-                ft.FontWeight.W_700 if is_active else ft.FontWeight.W_500
-            )
-            text_ctrl.color = (
-                ft.Colors.WHITE if is_active else AppColors.ON_SURFACE_VARIANT
-            )
             btn.bgcolor = (
                 ft.Colors.with_opacity(0.2, "#6d28d9")
                 if is_active
@@ -263,4 +214,3 @@ class NavSidebar(ft.Container):
                 if is_active
                 else None
             )
-

@@ -27,17 +27,17 @@ class LogsView(ft.Container):
 
         WHITE = ft.Colors.WHITE
         self._memory_value = ft.Text(
-            "--", size=18, weight=ft.FontWeight.W_700, color=WHITE
+            "--", size=15, weight=ft.FontWeight.W_600, color=WHITE
         )
         self._memory_bar = ft.ProgressBar(
             value=0, color=AppColors.SECONDARY, bgcolor=AppColors.SURFACE_CONTAINER_HIGH
         )
         self._threads_value = ft.Text(
-            "--", size=18, weight=ft.FontWeight.W_700, color=WHITE
+            "--", size=15, weight=ft.FontWeight.W_600, color=WHITE
         )
         self._threads_sub = ft.Text("", size=11, color=AppColors.PRIMARY)
         self._health_value = ft.Text(
-            "--", size=18, weight=ft.FontWeight.W_700, color=WHITE
+            "--", size=15, weight=ft.FontWeight.W_600, color=WHITE
         )
         self._health_sub = ft.Text("", size=11, color=AppColors.ON_SURFACE_VARIANT)
 
@@ -47,11 +47,12 @@ class LogsView(ft.Container):
                     ft.Row(
                         [
                             ft.Icon(
-                                ft.Icons.MEMORY, size=20, color=AppColors.SECONDARY
+                                ft.Icons.MEMORY, size=18, color=AppColors.SECONDARY
                             ),
                             ft.Text(
                                 t("logs.memory", default="Memory"),
                                 size=11,
+                                weight=ft.FontWeight.W_600,
                                 color=AppColors.ON_SURFACE_VARIANT,
                             ),
                         ],
@@ -60,9 +61,10 @@ class LogsView(ft.Container):
                     self._memory_value,
                     self._memory_bar,
                 ],
-                spacing=8,
+                spacing=6,
             ),
             expand=True,
+            padding=14,
         )
 
         self._threads_card = create_glass_container(
@@ -71,11 +73,12 @@ class LogsView(ft.Container):
                     ft.Row(
                         [
                             ft.Icon(
-                                ft.Icons.SWAP_CALLS, size=20, color=AppColors.PRIMARY
+                                ft.Icons.SWAP_CALLS, size=18, color=AppColors.PRIMARY
                             ),
                             ft.Text(
                                 t("logs.active_threads", default="Active Threads"),
                                 size=11,
+                                weight=ft.FontWeight.W_600,
                                 color=AppColors.ON_SURFACE_VARIANT,
                             ),
                         ],
@@ -84,9 +87,10 @@ class LogsView(ft.Container):
                     self._threads_value,
                     self._threads_sub,
                 ],
-                spacing=8,
+                spacing=6,
             ),
             expand=True,
+            padding=14,
         )
 
         self._health_card = create_glass_container(
@@ -95,11 +99,12 @@ class LogsView(ft.Container):
                     ft.Row(
                         [
                             ft.Icon(
-                                ft.Icons.VERIFIED_USER, size=20, color=AppColors.PRIMARY
+                                ft.Icons.VERIFIED_USER, size=18, color=AppColors.PRIMARY
                             ),
                             ft.Text(
                                 t("logs.health_status", default="Health Status"),
                                 size=11,
+                                weight=ft.FontWeight.W_600,
                                 color=AppColors.ON_SURFACE_VARIANT,
                             ),
                         ],
@@ -108,10 +113,13 @@ class LogsView(ft.Container):
                     self._health_value,
                     self._health_sub,
                 ],
-                spacing=8,
+                spacing=6,
             ),
             expand=True,
+            padding=14,
         )
+
+        button_shape = ft.RoundedRectangleBorder(radius=8)
 
         self._copy_btn = ft.OutlinedButton(
             content=ft.Row(
@@ -121,7 +129,10 @@ class LogsView(ft.Container):
                 ],
                 spacing=4,
             ),
-            style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=12)),
+            style=ft.ButtonStyle(
+                shape=button_shape,
+                padding=ft.Padding.symmetric(horizontal=12, vertical=6),
+            ),
             on_click=self._on_copy_logs_click,
         )
         self._download_btn = ft.OutlinedButton(
@@ -134,18 +145,26 @@ class LogsView(ft.Container):
                 ],
                 spacing=4,
             ),
-            style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=12)),
+            style=ft.ButtonStyle(
+                shape=button_shape,
+                padding=ft.Padding.symmetric(horizontal=12, vertical=6),
+            ),
             on_click=self._on_download_logs_click,
         )
         self._clear_btn = ft.OutlinedButton(
             content=ft.Row(
                 [
-                    ft.Icon(ft.Icons.DELETE, size=14, color=WHITE),
-                    ft.Text(t("logs.clear", default="Clear"), size=11, color=WHITE),
+                    ft.Icon(ft.Icons.DELETE_OUTLINED, size=14, color="#f43f5e"),
+                    ft.Text(t("logs.clear", default="Clear"), size=11, color="#f43f5e"),
                 ],
                 spacing=4,
             ),
-            style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=12)),
+            style=ft.ButtonStyle(
+                shape=button_shape,
+                padding=ft.Padding.symmetric(horizontal=12, vertical=6),
+                side=ft.BorderSide(1.0, ft.Colors.with_opacity(0.3, "#f43f5e")),
+                bgcolor=ft.Colors.with_opacity(0.08, "#f43f5e"),
+            ),
             on_click=self._on_clear_logs_click,
         )
 
@@ -177,7 +196,7 @@ class LogsView(ft.Container):
                                     ft.Text(
                                         t(
                                             "logs.terminal_title",
-                                            default="XENRAY_CLI :: MAIN_LOGGER",
+                                            default="XenRay CLI :: Main Logger",
                                         ),
                                         size=11,
                                         weight=ft.FontWeight.W_600,

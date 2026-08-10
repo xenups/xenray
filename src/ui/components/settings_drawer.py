@@ -546,11 +546,6 @@ class SettingsDrawer(ft.NavigationDrawer):
     def _on_subpage_back(self, e):
         """Handle navigation back from subpage."""
         self._navigate_back()
-        try:
-            if self.page:
-                self.page.run_task(self.page.show_end_drawer)
-        except RuntimeError:
-            pass
 
     def _open_routing_manager(self, e):
         """Open the routing rules page."""

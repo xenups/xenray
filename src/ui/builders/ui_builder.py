@@ -70,6 +70,8 @@ class UIBuilder:
                 "statistics"
             ),
             connection_button=self._main._connection_button,
+            app_context=self._main._app_context,
+            server_card=self._main._server_card,
         )
 
         self._main._stitch_statistics_view = StatisticsView(
@@ -99,6 +101,7 @@ class UIBuilder:
             on_check_update_click=drawer._check_app_updates,
             on_open_routing_click=drawer._open_routing_manager,
             on_open_dns_click=drawer._open_dns_manager,
+            lan_share_row=getattr(drawer, "_lan_share_row", None),
         )
 
         self._main._stitch_logs_view = LogsView(
@@ -108,9 +111,34 @@ class UIBuilder:
             on_clear_logs_click=lambda e: self._main._log_viewer.clear_logs(),
         )
 
+        # Check if server profiles or subscriptions exist on startup — default to Dashboard if servers exist
+        has_servers = False
+        try:
+            if hasattr(self._main, "_selected_profile") and self._main._selected_profile:
+                has_servers = True
+            elif hasattr(self._main, "_app_context") and self._main._app_context:
+                ctx = self._main._app_context
+                profiles = ctx.profiles.load_all() if hasattr(ctx, "profiles") and ctx.profiles else []
+                subs = ctx.subscriptions.load_all() if hasattr(ctx, "subscriptions") and ctx.subscriptions else []
+                has_servers = len(profiles) > 0 or len(subs) > 0
+        except Exception:
+            pass
+
+        initial_tab = "dashboard" if has_servers else "servers"
+        self._main._active_tab = initial_tab
+
+        view_map = {
+            "dashboard": self._main._stitch_dashboard_view,
+            "statistics": self._main._stitch_statistics_view,
+            "servers": self._main._stitch_servers_view,
+            "logs": self._main._stitch_logs_view,
+            "settings": self._main._stitch_settings_view,
+        }
+        initial_view = view_map.get(initial_tab, self._main._stitch_dashboard_view)
+
         # Left Sidebar Navigation
         self._main._nav_sidebar = NavSidebar(
-            active_tab="dashboard",
+            active_tab=initial_tab,
             on_tab_change=self._main._on_nav_tab_changed,
             on_connect_click=self._main._on_connect_clicked,
             on_change_server_click=lambda e: self._main._on_nav_tab_changed("servers"),
@@ -121,7 +149,7 @@ class UIBuilder:
 
         # View container for main right canvas (instant swap, no animation lag)
         self._main._view_switcher = ft.Container(
-            content=self._main._stitch_dashboard_view,
+            content=initial_view,
             expand=True,
         )
 
@@ -142,12 +170,31 @@ class UIBuilder:
             expand=True,
         )
 
-        # Top Header Drag Bar with Window Control Buttons
+        # Top Header Drag Bar with App Branding (Left) and Window Control Buttons (Right)
+        header_branding = ft.Row(
+            [
+                ft.Image(
+                    src="icon.png",
+                    width=20,
+                    height=20,
+                    fit="contain",
+                ),
+                ft.Text(
+                    "XenRay",
+                    size=14,
+                    weight=ft.FontWeight.W_800,
+                    color=ft.Colors.WHITE,
+                ),
+            ],
+            spacing=8,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+        )
+
         top_header_bar = ft.Container(
             content=ft.WindowDragArea(
                 content=ft.Row(
                     [
-                        ft.Container(expand=True),
+                        header_branding,
                         ft.Row(
                             [
                                 ft.IconButton(
@@ -158,15 +205,6 @@ class UIBuilder:
                                     ),
                                     tooltip="Minimize",
                                     on_click=lambda e: self._handle_window_minimize(),
-                                ),
-                                ft.IconButton(
-                                    icon=ft.Icons.CROP_SQUARE_ROUNDED,
-                                    icon_size=13,
-                                    icon_color=ft.Colors.with_opacity(
-                                        0.65, ft.Colors.WHITE
-                                    ),
-                                    tooltip="Maximize / Restore",
-                                    on_click=lambda e: self._handle_window_maximize(),
                                 ),
                                 ft.IconButton(
                                     icon=ft.Icons.CLOSE_ROUNDED,
@@ -184,8 +222,8 @@ class UIBuilder:
                 ),
                 expand=True,
             ),
-            height=32,
-            padding=ft.Padding.only(right=8, left=12),
+            height=36,
+            padding=ft.Padding.only(right=8, left=14, top=4),
         )
 
         # Right content column with top drag header bar & view switcher
@@ -214,9 +252,18 @@ class UIBuilder:
             expand=True,
         )
 
+        # Drag area wraps the background — sits at the bottom of the Stack so all
+        # interactive controls on upper layers still receive their own events.
+        # Dragging any empty space in the window moves the window.
+        _drag_bg = ft.WindowDragArea(
+            content=self._main._background,
+            expand=True,
+            maximizable=False,
+        )
+
         self._main._stack = ft.Stack(
             controls=[
-                self._main._background,
+                _drag_bg,
                 self._main._main_content,
             ],
             expand=True,

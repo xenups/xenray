@@ -72,8 +72,8 @@ class SettingsRow(ft.Container):
         )
 
 
-class SettingsListTile(ft.ListTile):
-    """A styled list tile for settings navigation."""
+class SettingsListTile(ft.Container):
+    """A styled, interactive container list tile for settings navigation with badge support."""
 
     def __init__(
         self,
@@ -82,21 +82,80 @@ class SettingsListTile(ft.ListTile):
         subtitle: str,
         on_click: Optional[Callable] = None,
         show_chevron: bool = True,
+        badge_text: Optional[str] = None,
     ):
-        trailing = (
-            ft.Icon(ft.Icons.CHEVRON_RIGHT, size=18, color=ft.Colors.OUTLINE)
-            if show_chevron
-            else None
+        self._on_click = on_click
+        self._chevron_icon = ft.Icon(
+            ft.Icons.CHEVRON_RIGHT, size=18, color=ft.Colors.PRIMARY
         )
 
+        badge_control = None
+        if badge_text:
+            badge_control = ft.Container(
+                content=ft.Text(
+                    badge_text,
+                    size=11,
+                    weight=ft.FontWeight.W_600,
+                    color=ft.Colors.PRIMARY,
+                ),
+                padding=ft.Padding.symmetric(horizontal=8, vertical=3),
+                border_radius=8,
+                bgcolor=ft.Colors.with_opacity(0.12, ft.Colors.PRIMARY),
+                border=ft.Border.all(1, ft.Colors.with_opacity(0.3, ft.Colors.PRIMARY)),
+            )
+
+        trailing_controls = []
+        if badge_control:
+            trailing_controls.append(badge_control)
+        if show_chevron:
+            trailing_controls.append(self._chevron_icon)
+
         super().__init__(
-            leading=ft.Icon(icon, color=ft.Colors.ON_SURFACE_VARIANT),
-            title=ft.Text(title, weight=ft.FontWeight.W_500),
-            subtitle=ft.Text(subtitle, size=12),
-            trailing=trailing,
+            content=ft.Row(
+                [
+                    ft.Icon(icon, size=20, color=ft.Colors.ON_SURFACE_VARIANT),
+                    ft.Column(
+                        [
+                            ft.Text(title, weight=ft.FontWeight.W_500),
+                            ft.Text(
+                                subtitle,
+                                size=11,
+                                color=ft.Colors.ON_SURFACE_VARIANT,
+                            ),
+                        ],
+                        spacing=2,
+                        expand=True,
+                    ),
+                    ft.Row(
+                        trailing_controls,
+                        spacing=8,
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    ),
+                ],
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
+            padding=12,
+            border_radius=12,
+            bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE),
             on_click=on_click,
-            shape=ft.RoundedRectangleBorder(radius=8),
+            on_hover=self._handle_hover,
+            ink=True,
         )
+
+    def _handle_hover(self, e):
+        """Interactive hover transition."""
+        if e.data == "true":
+            self.bgcolor = ft.Colors.with_opacity(0.18, ft.Colors.ON_SURFACE)
+            self.border = ft.Border.all(1, ft.Colors.with_opacity(0.3, ft.Colors.PRIMARY))
+        else:
+            self.bgcolor = ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE)
+            self.border = None
+        try:
+            if self.page:
+                self.update()
+        except Exception:
+            pass
 
 
 class ModeSwitchRow(ft.Container):
@@ -152,8 +211,8 @@ class ModeSwitchRow(ft.Container):
                 ],
                 alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
             ),
-            padding=10,
-            border_radius=8,
+            padding=12,
+            border_radius=12,
             bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE),
         )
 
@@ -181,7 +240,6 @@ class TunEngineRow(ft.Container):
     def __init__(self, current_engine: str, on_change: Callable):
         self._dropdown = ft.Dropdown(
             width=140,
-            height=38,
             text_size=12,
             content_padding=8,
             value=current_engine if current_engine else "sing-box",
@@ -197,24 +255,18 @@ class TunEngineRow(ft.Container):
         super().__init__(
             content=ft.Row(
                 [
-                    ft.Container(
-                        content=ft.Icon(
-                            ft.Icons.SETTINGS_ETHERNET, size=20, color=ft.Colors.WHITE
-                        ),
-                        width=28,
-                        alignment=ft.Alignment.CENTER_LEFT,
+                    ft.Icon(
+                        ft.Icons.SETTINGS_ETHERNET, size=20, color=ft.Colors.ON_SURFACE_VARIANT
                     ),
                     ft.Column(
                         [
                             ft.Text(
                                 "TUN Engine",
-                                size=14,
-                                weight=ft.FontWeight.W_600,
-                                color=ft.Colors.WHITE,
+                                weight=ft.FontWeight.W_500,
                             ),
                             ft.Text(
                                 "Core driver engine for VPN TUN mode",
-                                size=12,
+                                size=11,
                                 color=ft.Colors.ON_SURFACE_VARIANT,
                             ),
                         ],
@@ -223,12 +275,12 @@ class TunEngineRow(ft.Container):
                     ),
                     self._dropdown,
                 ],
-                alignment=ft.MainAxisAlignment.START,
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                spacing=12,
             ),
-            padding=ft.Padding.symmetric(horizontal=8, vertical=8),
-            border_radius=10,
+            padding=12,
+            border_radius=12,
+            bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE),
         )
 
     @property
@@ -242,10 +294,10 @@ class PortInputRow(ft.Container):
     def __init__(self, initial_value: int, on_save: Callable):
         self._field = ft.TextField(
             value=str(initial_value),
-            width=100,
-            height=40,
-            text_size=14,
-            content_padding=8,
+            width=80,
+            height=36,
+            text_size=12,
+            content_padding=6,
             keyboard_type=ft.KeyboardType.NUMBER,
             text_align=ft.TextAlign.CENTER,
             border_color=ft.Colors.OUTLINE_VARIANT,
@@ -256,28 +308,44 @@ class PortInputRow(ft.Container):
             content=ft.Row(
                 [
                     ft.Icon(
-                        ft.Icons.INPUT, size=24, color=ft.Colors.ON_SURFACE_VARIANT
+                        ft.Icons.INPUT, size=20, color=ft.Colors.ON_SURFACE_VARIANT
                     ),
-                    ft.Text(
-                        t("settings.socks_port"),
-                        size=12,
-                        weight=ft.FontWeight.W_500,
-                        width=80,
+                    ft.Column(
+                        [
+                            ft.Text(
+                                t("settings.socks_port"),
+                                weight=ft.FontWeight.W_500,
+                            ),
+                            ft.Text(
+                                "Local SOCKS5 proxy port",
+                                size=11,
+                                color=ft.Colors.ON_SURFACE_VARIANT,
+                            ),
+                        ],
+                        spacing=2,
+                        expand=True,
                     ),
-                    self._field,
-                    ft.IconButton(
-                        icon=ft.Icons.CHECK,
-                        icon_size=20,
-                        icon_color=ft.Colors.PRIMARY,
-                        tooltip=t("settings.save"),
-                        on_click=lambda e: on_save(self._field.value),
+                    ft.Row(
+                        [
+                            self._field,
+                            ft.IconButton(
+                                icon=ft.Icons.CHECK,
+                                icon_size=18,
+                                icon_color=ft.Colors.PRIMARY,
+                                tooltip=t("settings.save"),
+                                on_click=lambda e: on_save(self._field.value),
+                            ),
+                        ],
+                        spacing=4,
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
                     ),
                 ],
-                spacing=5,
-                alignment=ft.MainAxisAlignment.START,
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
             ),
-            padding=ft.Padding.symmetric(horizontal=10, vertical=8),
+            padding=12,
+            border_radius=12,
+            bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE),
         )
 
     @property
@@ -294,7 +362,7 @@ class CountryDropdownRow(ft.Container):
 
     def __init__(self, current_value: str, on_change: Callable):
         self._dropdown = ft.Dropdown(
-            width=120,
+            width=140,
             text_size=12,
             content_padding=8,
             value=current_value if current_value else "none",
@@ -313,21 +381,31 @@ class CountryDropdownRow(ft.Container):
             content=ft.Row(
                 [
                     ft.Icon(
-                        ft.Icons.PUBLIC, size=24, color=ft.Colors.ON_SURFACE_VARIANT
+                        ft.Icons.PUBLIC, size=20, color=ft.Colors.ON_SURFACE_VARIANT
                     ),
-                    ft.Text(
-                        t("settings.direct_country"),
-                        size=12,
-                        weight=ft.FontWeight.W_500,
-                        width=80,
+                    ft.Column(
+                        [
+                            ft.Text(
+                                t("settings.direct_country"),
+                                weight=ft.FontWeight.W_500,
+                            ),
+                            ft.Text(
+                                "Bypass proxy for specified country traffic",
+                                size=11,
+                                color=ft.Colors.ON_SURFACE_VARIANT,
+                            ),
+                        ],
+                        spacing=2,
+                        expand=True,
                     ),
                     self._dropdown,
                 ],
-                spacing=8,
-                alignment=ft.MainAxisAlignment.START,
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
             ),
-            padding=ft.Padding.symmetric(horizontal=8, vertical=8),
+            padding=12,
+            border_radius=12,
+            bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE),
         )
 
     @property
@@ -395,30 +473,39 @@ class LanguageDropdownRow(ft.Container):
         super().__init__(
             content=ft.Row(
                 [
+                    ft.Icon(
+                        ft.Icons.LANGUAGE, size=20, color=ft.Colors.ON_SURFACE_VARIANT
+                    ),
                     ft.Column(
                         [
-                            ft.Container(
-                                content=self._flag_image,
-                                alignment=ft.Alignment.CENTER,
+                            ft.Row(
+                                [
+                                    ft.Text(
+                                        t("settings.language"),
+                                        weight=ft.FontWeight.W_500,
+                                    ),
+                                    self._flag_image,
+                                ],
+                                spacing=6,
+                                vertical_alignment=ft.CrossAxisAlignment.CENTER,
                             ),
                             ft.Text(
-                                t("settings.language"),
+                                t("settings.language_description", default="Interface display language"),
                                 size=11,
-                                weight=ft.FontWeight.W_500,
-                                text_align=ft.TextAlign.CENTER,
+                                color=ft.Colors.ON_SURFACE_VARIANT,
                             ),
                         ],
-                        spacing=4,
-                        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                        width=60,
+                        spacing=2,
+                        expand=True,
                     ),
                     self._dropdown,
                 ],
-                spacing=8,
-                alignment=ft.MainAxisAlignment.START,
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
             ),
-            padding=ft.Padding.symmetric(horizontal=10, vertical=8),
+            padding=12,
+            border_radius=12,
+            bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE),
         )
 
     @property
@@ -489,8 +576,8 @@ class StartupToggleRow(ft.Container):
                 ],
                 alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
             ),
-            padding=10,
-            border_radius=8,
+            padding=12,
+            border_radius=12,
             bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE),
         )
 
@@ -571,8 +658,8 @@ class AutoReconnectToggleRow(ft.Container):
                 ],
                 alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
             ),
-            padding=10,
-            border_radius=8,
+            padding=12,
+            border_radius=12,
             bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE),
         )
 
@@ -716,8 +803,8 @@ class CoreDropdownRow(ft.Container):
                 alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
             ),
-            padding=ft.Padding.symmetric(horizontal=10, vertical=8),
-            border_radius=8,
+            padding=12,
+            border_radius=12,
             bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE),
         )
 
@@ -770,8 +857,8 @@ class TunEngineDropdownRow(ft.Container):
                 alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
             ),
-            padding=ft.Padding.symmetric(horizontal=10, vertical=8),
-            border_radius=8,
+            padding=12,
+            border_radius=12,
             bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE),
         )
 
@@ -822,8 +909,8 @@ class LanShareToggleRow(ft.Container):
                 ],
                 alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
             ),
-            padding=10,
-            border_radius=8,
+            padding=12,
+            border_radius=12,
             bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE),
         )
 

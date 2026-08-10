@@ -30,7 +30,12 @@ class LogViewer:
             multiline=True,
             read_only=True,
             expand=True,
-            text_style=ft.TextStyle(font_family="Consolas", size=12),
+            text_style=ft.TextStyle(
+                font_family="JetBrains Mono, Fira Code, ui-monospace, Consolas, monospace",
+                size=11,
+                color="#CBD5E1",
+            ),
+            bgcolor=ft.Colors.TRANSPARENT,
             border_color=ft.Colors.TRANSPARENT,
             focused_border_color=ft.Colors.TRANSPARENT,
         )

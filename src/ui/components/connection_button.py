@@ -5,22 +5,22 @@ class ConnectionButton(ft.Container):
     """Connection button with animated glow based on network activity."""
 
     def __init__(self, on_click):
-        self._icon = ft.Icon(ft.Icons.POWER_SETTINGS_NEW, size=55, color=ft.Colors.WHITE)
+        self._icon = ft.Icon(ft.Icons.POWER_SETTINGS_NEW, size=54, color=ft.Colors.WHITE)
         self._is_connected = False
         self._is_connecting = False
         self._current_activity = 0
         self._last_active = False
         self._state = "disconnected"  # Track state: disconnected, connecting, connected
 
-        # Outer glow layer - very tight, minimal space for glow
+        # Outer glow layer - breathing glow area (~210px)
         self._glow_layer = ft.Container(
-            width=190,  # Button is 170, so 10px glow space on each side
-            height=190,
-            border_radius=95,
+            width=210,  # Button is 180, so 15px glow space on each side
+            height=210,
+            border_radius=105,
             bgcolor=ft.Colors.TRANSPARENT,
             shadow=ft.BoxShadow(
                 spread_radius=0,
-                blur_radius=20,
+                blur_radius=24,
                 color=ft.Colors.with_opacity(0.2, ft.Colors.BLACK),
                 offset=ft.Offset(0, 0),
             ),
@@ -33,9 +33,9 @@ class ConnectionButton(ft.Container):
         # Inner button (the actual clickable glass button)
         self._button = ft.Container(
             content=self._icon,
-            width=170,
-            height=170,
-            border_radius=85,
+            width=180,
+            height=180,
+            border_radius=90,
             bgcolor="#1e293b",
             border=ft.Border.all(1.5, ft.Colors.with_opacity(0.2, ft.Colors.WHITE)),
             on_click=on_click,
@@ -51,8 +51,8 @@ class ConnectionButton(ft.Container):
                 ],
                 alignment=ft.Alignment.CENTER,
             ),
-            width=190,  # Match glow layer
-            height=190,
+            width=210,  # Match glow layer
+            height=210,
             alignment=ft.Alignment.CENTER,
         )
 
@@ -132,6 +132,23 @@ class ConnectionButton(ft.Container):
                     except Exception:
                         break
 
+                    try:
+                        # Only pulse if network activity is low (idle breath)
+                        # High activity will override with more dramatic expansion in update_network_activity
+                        if self._current_activity < 5:
+                            if grow:
+                                self._glow_layer.opacity = 0.8
+                                self._glow_layer.scale = 1.02
+                            else:
+                                self._glow_layer.opacity = 0.5
+                                self._glow_layer.scale = 1.0
+                            self._glow_layer.update()
+
+                        grow = not grow
+                        await asyncio.sleep(1.2)  # Slower, calmer breath for connected idle
+                    except Exception:
+                        break
+
             self.page.run_task(_connected_breath)
 
     def set_disconnected(self):
@@ -150,8 +167,8 @@ class ConnectionButton(ft.Container):
         # Minimal glow
         self._glow_layer.shadow = ft.BoxShadow(
             spread_radius=0,
-            blur_radius=25,
-            color=ft.Colors.with_opacity(0.2, ft.Colors.BLACK),
+            blur_radius=20,
+            color=ft.Colors.with_opacity(0.15, ft.Colors.BLACK),
             offset=ft.Offset(0, 0),
         )
         self._glow_layer.update()
@@ -160,7 +177,7 @@ class ConnectionButton(ft.Container):
         """Set connecting state with subtle amber glass pulse."""
         self._is_connected = False
         self._is_connecting = True
-        self._state = "connecting"  # Track current state
+        self._state = "connecting"
 
         # Amber Glass Style for button
         self._button.bgcolor = ft.Colors.with_opacity(0.25, "#f59e0b")
@@ -168,20 +185,17 @@ class ConnectionButton(ft.Container):
         self._icon.color = ft.Colors.WHITE
         self._button.update()
 
-        # Reset glow layer for smooth connecting animation
         self._glow_layer.opacity = 1.0
         self._glow_layer.scale = 1.0
 
-        # Outer glow - tight amber with reduced intensity
         self._glow_layer.shadow = ft.BoxShadow(
             spread_radius=0,
-            blur_radius=35,
-            color=ft.Colors.with_opacity(0.5, "#f59e0b"),  # Reduced from 0.8
+            blur_radius=28,
+            color=ft.Colors.with_opacity(0.35, "#f59e0b"),
             offset=ft.Offset(0, 0),
         )
         self._glow_layer.update()
 
-        # Start async pulse loop
         try:
             _has_page = self.page is not None
         except RuntimeError:
@@ -198,8 +212,8 @@ class ConnectionButton(ft.Container):
                         break
                     try:
                         if grow:
-                            self._glow_layer.opacity = 0.8
-                            self._glow_layer.scale = 1.04
+                            self._glow_layer.opacity = 0.75
+                            self._glow_layer.scale = 1.02
                         else:
                             self._glow_layer.opacity = 0.4
                             self._glow_layer.scale = 1.0
@@ -218,26 +232,22 @@ class ConnectionButton(ft.Container):
         self._is_connecting = False
         self._state = "disconnecting"
 
-        # Red Glass Style for button
         self._button.bgcolor = ft.Colors.with_opacity(0.25, ft.Colors.RED_700)
         self._button.border = ft.Border.all(2.5, ft.Colors.with_opacity(0.5, ft.Colors.RED_400))
         self._icon.color = ft.Colors.WHITE
         self._button.update()
 
-        # Reset glow layer for smooth animation
         self._glow_layer.opacity = 1.0
         self._glow_layer.scale = 1.0
 
-        # Outer glow - tight red
         self._glow_layer.shadow = ft.BoxShadow(
             spread_radius=0,
-            blur_radius=35,
-            color=ft.Colors.with_opacity(0.5, ft.Colors.RED_400),
+            blur_radius=28,
+            color=ft.Colors.with_opacity(0.35, ft.Colors.RED_400),
             offset=ft.Offset(0, 0),
         )
         self._glow_layer.update()
 
-        # Start async pulse loop
         try:
             _has_page = self.page is not None
         except RuntimeError:
@@ -254,15 +264,15 @@ class ConnectionButton(ft.Container):
                         break
                     try:
                         if grow:
-                            self._glow_layer.opacity = 0.8
-                            self._glow_layer.scale = 1.04
+                            self._glow_layer.opacity = 0.75
+                            self._glow_layer.scale = 1.02
                         else:
                             self._glow_layer.opacity = 0.4
                             self._glow_layer.scale = 1.0
 
                         self._glow_layer.update()
                         grow = not grow
-                        await asyncio.sleep(0.4)  # Faster pulse for disconnecting
+                        await asyncio.sleep(0.4)
                     except Exception:
                         break
 
@@ -270,17 +280,13 @@ class ConnectionButton(ft.Container):
 
     def update_network_activity(self, total_bps: float):
         """
-        Update the glow based on real-time network activity (only when connected).
-        Args:
-            total_bps: Total bytes per second (download + upload)
+        Update glow based on network traffic (clamped blur to 35px max, spread to 4px max).
         """
-        # Only animate network activity when in connected state
         if self._state != "connected":
             return
 
-        kb_per_sec = total_bps / 1024
+        kb_per_sec = total_bps / 1024.0
 
-        # Map network speed to activity percentage (0-100)
         if kb_per_sec < 10:
             activity = int(kb_per_sec * 1)
         elif kb_per_sec < 50:
@@ -292,33 +298,30 @@ class ConnectionButton(ft.Container):
         else:
             activity = min(100, int(90 + (kb_per_sec / 10000) * 10))
 
-        # Allow updates if activity changed by more than 2% for more responsive animation
         if abs(activity - self._current_activity) < 2:
             return
 
         self._current_activity = activity
 
-        # Calculate glow parameters - smooth shadow breathing only
-        min_blur = 25
-        max_blur = 45
-        min_spread = 0
-        max_spread = 1
+        # Calculate glow parameters - strictly clamped bounds
+        min_blur = 20.0
+        max_blur = 35.0  # Max 35px blur prevents light bleeding
+        min_spread = 0.0
+        max_spread = 4.0  # Max 4px spread prevents container overlap
 
-        blur = min_blur + (max_blur - min_blur) * (activity / 100)
-        spread = min_spread + (max_spread - min_spread) * (activity / 100)
-        opacity = 0.5 + 0.3 * (activity / 100)
+        blur = min_blur + (max_blur - min_blur) * (activity / 100.0)
+        spread = min_spread + (max_spread - min_spread) * (activity / 100.0)
+        opacity = 0.25 + 0.1 * (activity / 100.0)  # Max opacity 0.35
 
-        # Clamp values
-        blur = max(20, min(50, blur))
-        spread = max(0, min(2, spread))
-        opacity = max(0.45, min(0.9, opacity))
+        # Strict clamping
+        blur = max(18.0, min(35.0, blur))
+        spread = max(0.0, min(4.0, spread))
+        opacity = max(0.2, min(0.35, opacity))
 
-        # Add pulsing scale and opacity for more tangible visual feedback
-        scale = 1.0 + (activity / 100) * 0.05  # 1.0 to 1.05
-        glow_opacity = 0.7 + (activity / 100) * 0.3  # 0.7 to 1.0
+        scale = 1.0 + (activity / 100.0) * 0.02  # 1.0 to 1.02 max scale
+        glow_opacity = 0.7 + (activity / 100.0) * 0.15
 
         try:
-            # Update shadow (instant) and animate scale/opacity (smooth)
             self._glow_layer.shadow = ft.BoxShadow(
                 spread_radius=spread,
                 blur_radius=blur,

@@ -1,19 +1,19 @@
-"""Dashboard View Component matching Fluent Integrated UI design specs (image_54.png)."""
-
 from __future__ import annotations
 
+import threading
+import time
 from typing import Callable
 
 import flet as ft
 
-from src.core.country_translator import translate_country
 from src.core.i18n import t
 from src.ui.components.connection_button import ConnectionButton
 from src.ui.theme import AppColors
+from src.utils.network_interface import NetworkInterfaceDetector
 
 
 class DashboardView(ft.Container):
-    """Fluent Integrated Dashboard View with glassmorphism connection button, status text underneath, and real network stats chart."""
+    """Dashboard View – connection centerpiece + traffic cards + ServerCard."""
 
     def __init__(
         self,
@@ -21,94 +21,27 @@ class DashboardView(ft.Container):
         on_change_server_click: Callable,
         on_open_statistics_click: Callable | None = None,
         connection_button: ConnectionButton | None = None,
+        app_context=None,
+        server_card=None,
     ):
         self._on_toggle_click = on_toggle_click
         self._on_change_server_click = on_change_server_click
         self._on_open_statistics_click = on_open_statistics_click
+        self._app_context = app_context
+        self._server_card_component = server_card  # The shared ServerCard instance
 
         WHITE = ft.Colors.WHITE
+        BLACK = ft.Colors.BLACK
         MUTED_WHITE = AppColors.ON_SURFACE_VARIANT
 
         self._is_connected = False
         self._is_online = True
+        self._timer_running = False
+        self._start_time = 0.0
+        self._timer_thread: threading.Thread | None = None
+        self._lan_sharing_enabled = False
 
-        # --- 1. Top-Left Server Info ---
-        self._flag_img = ft.Image(
-            src="https://flagcdn.com/w40/fi.png",
-            width=28,
-            height=28,
-            fit="cover",
-            border_radius=14,
-            visible=True,
-        )
-
-        self._server_name_text = ft.Text(
-            "BunkerBuster (FI)",
-            size=15,
-            weight=ft.FontWeight.W_700,
-            color=WHITE,
-        )
-
-        self._server_info_row = ft.Row(
-            [
-                ft.Container(
-                    content=self._flag_img,
-                    width=28,
-                    height=28,
-                    border_radius=14,
-                    clip_behavior=ft.ClipBehavior.HARD_EDGE,
-                ),
-                self._server_name_text,
-            ],
-            spacing=10,
-            vertical_alignment=ft.CrossAxisAlignment.CENTER,
-        )
-
-        # --- 2. Top-Right Precise Data Stats ---
-        self._dl_value_text = ft.Text(
-            "D: 0.0 MB/s", size=12, weight=ft.FontWeight.W_600, color=WHITE
-        )
-        self._ul_value_text = ft.Text(
-            "U: 0.0 MB/s", size=12, weight=ft.FontWeight.W_600, color=WHITE
-        )
-
-        self._data_stats_column = ft.Column(
-            [
-                ft.Row(
-                    [
-                        ft.Icon(
-                            ft.Icons.SOUTH_WEST_ROUNDED, size=13, color=MUTED_WHITE
-                        ),
-                        self._dl_value_text,
-                    ],
-                    spacing=4,
-                    alignment=ft.MainAxisAlignment.END,
-                ),
-                ft.Row(
-                    [
-                        ft.Icon(
-                            ft.Icons.NORTH_EAST_ROUNDED, size=13, color=MUTED_WHITE
-                        ),
-                        self._ul_value_text,
-                    ],
-                    spacing=4,
-                    alignment=ft.MainAxisAlignment.END,
-                ),
-            ],
-            spacing=2,
-            horizontal_alignment=ft.CrossAxisAlignment.END,
-        )
-
-        top_canvas_row = ft.Row(
-            [
-                self._server_info_row,
-                self._data_stats_column,
-            ],
-            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-            vertical_alignment=ft.CrossAxisAlignment.START,
-        )
-
-        # --- 3. Central Glassmorphism Button & Status Area ---
+        # --- 1. Center Connection Core (Clean Typography & Restored Button Scale) ---
         self._toggle_button = (
             connection_button
             if connection_button is not None
@@ -118,13 +51,14 @@ class DashboardView(ft.Container):
         self._center_status_text = ft.Text(
             t("dashboard.disconnected", default="Disconnected"),
             size=15,
-            weight=ft.FontWeight.W_700,
+            weight=ft.FontWeight.W_500,
             color=WHITE,
         )
+
         self._uptime_text = ft.Text(
             "00:00:00",
             size=12,
-            weight=ft.FontWeight.W_500,
+            weight=ft.FontWeight.W_400,
             color=MUTED_WHITE,
         )
 
@@ -142,139 +76,253 @@ class DashboardView(ft.Container):
             ],
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             alignment=ft.MainAxisAlignment.CENTER,
-            spacing=16,
+            spacing=8,
         )
 
-        centerpiece_container = ft.Container(
+        hero_center_section = ft.Container(
             content=centerpiece_layout,
             alignment=ft.Alignment.CENTER,
+            padding=ft.Padding.symmetric(vertical=8),
             expand=True,
         )
 
-        # History tracking for stats compatibility
-        self._dl_history = [0.0] * 12
-        self._ul_history = [0.0] * 12
-        self._dl_bars = []
-        self._ul_bars = []
+        # --- 2. Bottom Cards Section (Download/Upload Left + 4-Row Server Card Right) ---
+        GLASS_BG = ft.Colors.with_opacity(0.04, WHITE)
+        GLASS_BORDER = ft.Border.all(1.0, ft.Colors.with_opacity(0.1, WHITE))
+        GLASS_SHADOW = ft.BoxShadow(
+            spread_radius=0,
+            blur_radius=16,
+            color=ft.Colors.with_opacity(0.25, BLACK),
+            offset=ft.Offset(0, 4),
+        )
+        GLASS_BLUR = ft.Blur(12, 12)
 
-        # --- 4. Bottom Quick Link to Dedicated Statistics View ---
-        self._bottom_stats_row = ft.Row(
-            [
-                ft.Row(
-                    [
-                        ft.Icon(ft.Icons.GRAPHIC_EQ_ROUNDED, size=15, color="#38bdf8"),
-                        ft.Text(
-                            t(
-                                "dashboard.realtime_wave",
-                                default="Live Wave Stream & Detailed Traffic Stats",
-                            ),
-                            size=11,
-                            color=MUTED_WHITE,
+        self._dl_value_text = ft.Text(
+            "0.0 MB/s", size=13, weight=ft.FontWeight.W_700, color=WHITE
+        )
+        self._ul_value_text = ft.Text(
+            "0.0 MB/s", size=13, weight=ft.FontWeight.W_700, color=WHITE
+        )
+
+        # Left Column: Top Download Card (Compact 185px width)
+        download_card = ft.Container(
+            content=ft.Row(
+                [
+                    ft.Container(
+                        content=ft.Icon(
+                            ft.Icons.SOUTH_WEST_ROUNDED,
+                            size=16,
+                            color="#38bdf8",
                         ),
-                    ],
-                    spacing=6,
-                ),
-                ft.Container(
-                    content=ft.Row(
+                        width=30,
+                        height=30,
+                        border_radius=8,
+                        bgcolor=ft.Colors.with_opacity(0.14, "#38bdf8"),
+                        alignment=ft.Alignment.CENTER,
+                    ),
+                    ft.Column(
                         [
-                            ft.Icon(
-                                ft.Icons.BAR_CHART_ROUNDED, size=14, color="#c084fc"
-                            ),
                             ft.Text(
-                                t(
-                                    "dashboard.view_statistics",
-                                    default="Statistics Page 📊",
-                                ),
-                                size=12,
-                                weight=ft.FontWeight.W_700,
-                                color=WHITE,
+                                "Download",
+                                size=10,
+                                color=MUTED_WHITE,
+                                weight=ft.FontWeight.W_500,
                             ),
+                            self._dl_value_text,
                         ],
-                        spacing=6,
+                        spacing=1,
+                        alignment=ft.MainAxisAlignment.CENTER,
                     ),
-                    padding=ft.Padding.symmetric(horizontal=12, vertical=6),
-                    border_radius=12,
-                    bgcolor=ft.Colors.with_opacity(0.15, "#a855f7"),
-                    border=ft.Border.all(1.0, ft.Colors.with_opacity(0.4, "#a855f7")),
-                    on_click=lambda e: (
-                        self._on_open_statistics_click(e)
-                        if self._on_open_statistics_click
-                        else None
+                ],
+                spacing=8,
+                alignment=ft.MainAxisAlignment.CENTER,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
+            width=185,
+            height=49,
+            padding=ft.Padding.symmetric(vertical=6, horizontal=10),
+            border_radius=14,
+            bgcolor=GLASS_BG,
+            border=GLASS_BORDER,
+            blur=GLASS_BLUR,
+            shadow=GLASS_SHADOW,
+        )
+
+        # Left Column: Bottom Upload Card (Compact 185px width)
+        upload_card = ft.Container(
+            content=ft.Row(
+                [
+                    ft.Container(
+                        content=ft.Icon(
+                            ft.Icons.NORTH_EAST_ROUNDED,
+                            size=16,
+                            color="#c084fc",
+                        ),
+                        width=30,
+                        height=30,
+                        border_radius=8,
+                        bgcolor=ft.Colors.with_opacity(0.14, "#c084fc"),
+                        alignment=ft.Alignment.CENTER,
                     ),
-                    ink=True,
-                ),
+                    ft.Column(
+                        [
+                            ft.Text(
+                                "Upload",
+                                size=10,
+                                color=MUTED_WHITE,
+                                weight=ft.FontWeight.W_500,
+                            ),
+                            self._ul_value_text,
+                        ],
+                        spacing=1,
+                        alignment=ft.MainAxisAlignment.CENTER,
+                    ),
+                ],
+                spacing=8,
+                alignment=ft.MainAxisAlignment.CENTER,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
+            width=185,
+            height=49,
+            padding=ft.Padding.symmetric(vertical=6, horizontal=10),
+            border_radius=14,
+            bgcolor=GLASS_BG,
+            border=GLASS_BORDER,
+            blur=GLASS_BLUR,
+            shadow=GLASS_SHADOW,
+        )
+
+        left_traffic_column = ft.Column(
+            [
+                download_card,
+                upload_card,
             ],
+            width=185,
+            spacing=8,
+            height=106,
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+        )
+
+        # --- 2b. Right column: ServerCard (shared instance, sized to match previous card) ---
+        if self._server_card_component:
+            # Strip the card's built-in large margin so it fits the compact row
+            self._server_card_component.margin = None
+            self._server_card_component.height = 106
+
+            # Compact padding so text fits cleanly in the 106px height
+            self._server_card_component.padding = ft.Padding.symmetric(
+                horizontal=12, vertical=8
+            )
+
+            # Hide the expand/chevron button — card tap navigates to servers instead
+            try:
+                self._server_card_component._list_btn.visible = False
+            except Exception:
+                pass
+
+            # Fix vertical alignment of text column inside the card
+            try:
+                self._server_card_component._content_row.vertical_alignment = (
+                    ft.CrossAxisAlignment.CENTER
+                )
+            except Exception:
+                pass
+
+            # Wire both click targets to navigate to the Servers page
+            _nav_to_servers = lambda e: (
+                self._on_change_server_click(e) if self._on_change_server_click else None
+            )
+            self._server_card_component.on_click = _nav_to_servers
+
+            server_card_wrapper = ft.Container(
+                content=self._server_card_component,
+                width=235,
+                height=106,
+                clip_behavior=ft.ClipBehavior.HARD_EDGE,
+            )
+        else:
+            server_card_wrapper = ft.Container(
+                content=ft.Text(
+                    t("server_list.no_server"),
+                    size=12,
+                    color=AppColors.ON_SURFACE_VARIANT,
+                ),
+                width=235,
+                height=106,
+                alignment=ft.Alignment.CENTER,
+                border_radius=14,
+                bgcolor=GLASS_BG,
+                border=GLASS_BORDER,
+                on_click=lambda e: (
+                    self._on_change_server_click(e) if self._on_change_server_click else None
+                ),
+                ink=True,
+            )
+
+        cards_grid_row = ft.Row(
+            [
+                left_traffic_column,
+                server_card_wrapper,
+            ],
+            spacing=14,
+            height=106,
+            alignment=ft.MainAxisAlignment.CENTER,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
         )
 
-        visualizer_container = ft.Container(
-            content=self._bottom_stats_row,
-            padding=ft.Padding.symmetric(horizontal=10, vertical=8),
+        cards_grid_container = ft.Container(
+            content=cards_grid_row,
             alignment=ft.Alignment.CENTER,
+            margin=ft.Margin.only(bottom=10),
         )
 
-        # --- 5. Full Canvas Layout Assembly ---
+        # --- Assembly ---
         canvas_layout = ft.Column(
             [
-                top_canvas_row,
-                centerpiece_container,
-                visualizer_container,
+                hero_center_section,
+                cards_grid_container,
             ],
-            spacing=0,
+            spacing=10,
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             expand=True,
         )
 
         super().__init__(
-            content=ft.WindowDragArea(content=canvas_layout, expand=True),
-            padding=20,
+            content=canvas_layout,
+            padding=14,
             expand=True,
             bgcolor=ft.Colors.TRANSPARENT,
         )
 
-    @staticmethod
-    def _compute_smooth_wave_heights(
-        history: list[float],
-        num_output: int = 24,
-        min_h: float = 4.0,
-        max_h: float = 95.0,
-    ) -> list[float]:
-        """Compute smooth Catmull-Rom spline wave heights across num_output wave bars."""
-        import math
+    def _start_uptime_timer(self):
+        """Start background timer loop for uptime counter."""
+        if self._timer_running:
+            return
+        self._timer_running = True
+        self._start_time = time.time()
 
-        n = len(history)
-        if n == 0:
-            return [min_h] * num_output
+        def timer_loop():
+            while self._timer_running and self._is_connected:
+                elapsed = int(time.time() - self._start_time)
+                hours = elapsed // 3600
+                minutes = (elapsed % 3600) // 60
+                seconds = elapsed % 60
+                uptime_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+                self._uptime_text.value = uptime_str
+                try:
+                    if hasattr(self, "_uptime_text") and self._uptime_text.page:
+                        self._uptime_text.update()
+                except Exception:
+                    break
+                time.sleep(1.0)
 
-        max_val = max(max(history), 1024.0 * 1024.0)
-        norm = [min(1.0, max(0.0, float(v) / max_val)) for v in history]
+        self._timer_thread = threading.Thread(target=timer_loop, daemon=True)
+        self._timer_thread.start()
 
-        heights = []
-        for i in range(num_output):
-            pos = (i / max(1, num_output - 1)) * (n - 1)
-            idx = int(pos)
-            t_val = pos - idx
-
-            p0 = norm[max(0, idx - 1)]
-            p1 = norm[idx]
-            p2 = norm[min(n - 1, idx + 1)]
-            p3 = norm[min(n - 1, idx + 2)]
-
-            val = 0.5 * (
-                (2 * p1)
-                + (-p0 + p2) * t_val
-                + (2 * p0 - 5 * p1 + 4 * p2 - p3) * (t_val**2)
-                + (-p0 + 3 * p1 - 3 * p2 + p3) * (t_val**3)
-            )
-            val = max(0.0, min(1.0, val))
-
-            idle_wave = 0.03 * (math.sin(i * 0.45) + 1.0)
-            final_pct = max(val, idle_wave) if max(history) < 100.0 else val
-
-            h = max(min_h, final_pct * max_h)
-            heights.append(round(h, 2))
-
-        return heights
+    def _stop_uptime_timer(self):
+        """Stop background timer loop."""
+        self._timer_running = False
 
     def set_connection_state(
         self,
@@ -290,27 +338,26 @@ class DashboardView(ft.Container):
                 "status.disconnecting", default="Disconnecting..."
             )
             self._toggle_button.set_disconnecting()
+            self._stop_uptime_timer()
         elif is_connecting:
             self._center_status_text.value = t(
                 "status.connecting", default="Connecting..."
             )
             self._toggle_button.set_connecting()
+            self._uptime_text.value = "00:00:00"
         elif is_connected:
             self._center_status_text.value = t(
                 "dashboard.connected", default="Connected"
             )
             self._toggle_button.set_connected()
+            self._start_uptime_timer()
         else:
             self._center_status_text.value = t(
                 "dashboard.disconnected", default="Disconnected"
             )
+            self._stop_uptime_timer()
             self._uptime_text.value = "00:00:00"
             self._toggle_button.set_disconnected()
-            self._dl_history = [0.0] * len(self._dl_history)
-            self._ul_history = [0.0] * len(self._ul_history)
-            for i in range(len(self._dl_bars)):
-                self._dl_bars[i].height = 4.0
-                self._ul_bars[i].height = 4.0
 
         try:
             if self.page:
@@ -344,7 +391,7 @@ class DashboardView(ft.Container):
         upload_total: str | None = None,
         download_total: str | None = None,
     ):
-        """Update top-right precise data values and render real network traffic stats on chart."""
+        """Update live download/upload values and forward activity to connection button."""
         dl_text = speed_text if speed_text is not None else rate_str
         ul_speed_kb = upload_bps / 1024.0
         if ul_speed_kb < 1024.0:
@@ -352,25 +399,11 @@ class DashboardView(ft.Container):
         else:
             ul_text = f"{(ul_speed_kb / 1024.0):.1f} MB/s"
 
-        self._dl_value_text.value = f"D: {dl_text}"
-        self._ul_value_text.value = f"U: {ul_text}"
+        self._dl_value_text.value = dl_text
+        self._ul_value_text.value = ul_text
 
-        self._dl_history.pop(0)
-        self._dl_history.append(download_bps if self._is_connected else 0.0)
-        self._ul_history.pop(0)
-        self._ul_history.append(upload_bps if self._is_connected else 0.0)
-
-        if hasattr(self, "_dl_bars") and self._dl_bars:
-            dl_heights = self._compute_smooth_wave_heights(
-                self._dl_history, num_output=len(self._dl_bars), min_h=4.0, max_h=95.0
-            )
-            ul_heights = self._compute_smooth_wave_heights(
-                self._ul_history, num_output=len(self._dl_bars), min_h=4.0, max_h=95.0
-            )
-
-            for i in range(len(self._dl_bars)):
-                self._dl_bars[i].height = dl_heights[i]
-                self._ul_bars[i].height = ul_heights[i]
+        active_total_bps = total_bps if total_bps > 0 else (download_bps + upload_bps)
+        self.update_glow_intensity(active_total_bps)
 
         try:
             if self.page:
@@ -379,43 +412,17 @@ class DashboardView(ft.Container):
             pass
 
     def update_glow_intensity(self, total_bps: float = 0.0):
-        """Delegate glow intensity updates to connection button."""
+        """Update live throughput for connection button."""
         if self._toggle_button:
             self._toggle_button.update_network_activity(total_bps)
 
-    def update_server_info(
-        self,
-        name: str = "",
-        latency: str = "",
-        protocol: str = "",
-        encryption: str = "",
-        server_ip: str = "",
-        country_code: str = "",
-        country_name: str = "",
-        local_ip: str | None = None,
-        **kwargs,
-    ):
-        """Update top-left server title and circular flag image."""
-        if name:
-            if country_code and f"({country_code.upper()})" not in name:
-                display_name = f"{name} ({country_code.upper()})"
-            else:
-                display_name = name
-            self._server_name_text.value = display_name
+    def update_server_info(self, *args, **kwargs):
+        """No-op: ServerCard updates itself via main_window's _update_selected_profile_ui call."""
+        pass
 
-        if country_code:
-            code_lower = country_code.lower()
-            self._flag_img.src = f"https://flagcdn.com/w40/{code_lower}.png"
-            self._flag_img.visible = True
-        else:
-            self._flag_img.src = "https://flagcdn.com/w40/fi.png"
-            self._flag_img.visible = True
-
-        try:
-            if self.page:
-                self.update()
-        except Exception:
-            pass
+    def update_lan_sharing(self, is_enabled: bool, ip_address: str = ""):
+        """No-op: LAN sharing is now managed by the top-bar LanSharingCard badge."""
+        self._lan_sharing_enabled = is_enabled
 
     def update_internet_status(self, is_online: bool):
         """Update connection status."""

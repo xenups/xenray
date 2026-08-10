@@ -245,20 +245,50 @@ class MainWindow:
         """Periodically forward network stats to new views."""
         import asyncio
 
+        # Session accumulators (bytes)
+        _session_dl_bytes: float = 0.0
+        _session_ul_bytes: float = 0.0
+        _was_running: bool = False
+        _interval: float = 3.0
+
         while True:
             try:
-                await asyncio.sleep(3.0)
-                if not self._is_running or self._nav_locked:
+                await asyncio.sleep(_interval)
+                is_running = self._is_running
+
+                # Reset session totals when a new connection starts
+                if is_running and not _was_running:
+                    _session_dl_bytes = 0.0
+                    _session_ul_bytes = 0.0
+                _was_running = is_running
+
+                if not is_running or self._nav_locked:
                     continue
+
                 stats = self._network_stats.get_stats()
                 down_str = stats.get("download_speed", "0 B/s")
                 up_str = stats.get("upload_speed", "0 B/s")
                 total_bps = float(stats.get("total_bps", 0))
-                # Estimate dl/ul bps from total (conservative 50/50 split)
+
+                # Real dl/ul bps from stats (use 60/40 split as estimate)
                 dl_bps = total_bps * 0.6
                 ul_bps = total_bps * 0.4
-                dl_total_str = f"{dl_bps / (1024 * 1024):.1f} MB"
-                ul_total_str = f"{ul_bps / (1024 * 1024):.1f} MB"
+
+                # Accumulate session totals
+                _session_dl_bytes += dl_bps * _interval
+                _session_ul_bytes += ul_bps * _interval
+
+                def _fmt_bytes(b: float) -> str:
+                    if b < 1024:
+                        return f"{b:.0f} B"
+                    if b < 1024 * 1024:
+                        return f"{b / 1024:.1f} KB"
+                    if b < 1024 * 1024 * 1024:
+                        return f"{b / (1024 * 1024):.1f} MB"
+                    return f"{b / (1024 * 1024 * 1024):.2f} GB"
+
+                dl_total_str = _fmt_bytes(_session_dl_bytes)
+                ul_total_str = _fmt_bytes(_session_ul_bytes)
 
                 kwargs = dict(
                     rate_str=down_str,
@@ -267,6 +297,8 @@ class MainWindow:
                     download_bps=dl_bps,
                     upload_bps=ul_bps,
                     total_bps=total_bps,
+                    download_total=dl_total_str,
+                    upload_total=ul_total_str,
                 )
 
                 # Only update the view that is currently visible
@@ -514,9 +546,13 @@ class MainWindow:
         self._show_add_server_dialog()
 
     def navigate_back(self, e=None):
-        """Return to dashboard view."""
-        self._view_switcher.content = self._dashboard_view
-        self._view_switcher.update()
+        """Return to settings view or active tab from subpages."""
+        target_tab = (
+            self._active_tab
+            if self._active_tab in ("settings", "statistics", "servers", "logs")
+            else "settings"
+        )
+        self._on_nav_tab_changed(target_tab)
 
     def _on_nav_tab_changed(self, tab_id: str):
         """Switch the main content view based on the selected nav tab.
@@ -741,6 +777,9 @@ class MainWindow:
         if self._is_running:
             self._trigger_reconnect()
 
+        # 4. Navigate back to dashboard automatically
+        self._on_nav_tab_changed("dashboard")
+
     def _safe_update_server_list(self):
         """Waits for the sheet to be mounted before updating list."""
 
@@ -788,16 +827,24 @@ class MainWindow:
     def _show_add_server_dialog(self):
         """Show the add server/subscription dialog."""
         dialog = AddServerDialog(
-            on_server_added=lambda name, config: self._profile_manager.add_profile(
-                name, config
-            ),
-            on_subscription_added=lambda name, url: (
-                self._profile_manager.add_subscription(name, url)
-            ),
-            on_close=lambda: self._page.close_dialog(),
+            on_server_added=lambda name, config: self._add_server_profile(name, config),
+            on_subscription_added=lambda name, url: self._add_subscription(name, url),
+            on_close=lambda: self._page.pop_dialog(),
             on_create_chain=None,
         )
         self._page.show_dialog(dialog)
+
+    def _add_server_profile(self, name: str, config: dict):
+        """Save a newly added server profile and refresh the server list."""
+        self._app_context.profiles.save(name, config)
+        if self._server_list:
+            self._server_list._load_profiles(update_ui=True)
+
+    def _add_subscription(self, name: str, url: str):
+        """Save a newly added subscription and refresh the server list."""
+        self._app_context.subscriptions.save(name, url)
+        if self._server_list:
+            self._server_list._load_profiles(update_ui=True)
 
     def _copy_logs(self):
         """Copy logs to clipboard."""
@@ -1001,11 +1048,12 @@ class MainWindow:
             try:
                 self._page.window.width = WINDOW_WIDTH
                 self._page.window.height = WINDOW_HEIGHT
-                self._page.window.min_width = WINDOW_WIDTH
-                self._page.window.min_height = WINDOW_HEIGHT
-                self._page.window.max_width = WINDOW_WIDTH
-                self._page.window.max_height = WINDOW_HEIGHT
+                self._page.window.min_width = 620
+                self._page.window.min_height = 480
+                self._page.window.max_width = 620
+                self._page.window.max_height = 480
                 self._page.window.resizable = False
+                self._page.window.maximizable = False
                 self._page.window.visible = True
                 self._page.window.minimized = False
                 self._page.update()

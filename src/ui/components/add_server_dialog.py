@@ -28,170 +28,120 @@ class AddServerDialog(ft.AlertDialog):
         self._on_create_chain = on_create_chain
 
         WHITE = ft.Colors.WHITE
+        MUTED = ft.Colors.GREY_500
+        ACCENT = "#A78BFA"
+        FIELD_BG = "#1A1B26"
+        FIELD_BORDER = ft.Colors.with_opacity(0.15, "#7C3AED")
 
         title_control = ft.Row(
-            [
-                ft.Container(
-                    content=ft.Icon(
-                        ft.Icons.ADD_LINK_ROUNDED, size=20, color="#c084fc"
-                    ),
-                    padding=6,
-                    border_radius=10,
-                    bgcolor=ft.Colors.with_opacity(0.18, "#a855f7"),
+            controls=[
+                ft.Icon(
+                    ft.Icons.ADD_LINK_ROUNDED,
+                    color=ACCENT,
+                    size=22,
                 ),
                 ft.Text(
                     t("add_dialog.title", default="Add Server or Subscription"),
                     size=16,
-                    weight=ft.FontWeight.W_700,
+                    weight=ft.FontWeight.BOLD,
                     color=WHITE,
                 ),
             ],
-            spacing=10,
-            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            spacing=8,
         )
 
         self._name_input = ft.TextField(
-            label=t(
-                "add_dialog.name_label", default="Server / Subscription Name (Optional)"
+            hint_text=t(
+                "add_dialog.name_hint",
+                default="Name (Required for Subscriptions)",
             ),
-            hint_text=t("add_dialog.name_hint", default="e.g. My Fast Server"),
-            text_size=13,
-            border_radius=10,
-            bgcolor=ft.Colors.with_opacity(0.18, "#130927"),
-            border_color=ft.Colors.with_opacity(0.35, "#a855f7"),
-            focused_border_color="#c084fc",
-            cursor_color="#c084fc",
-            prefix_icon=ft.Icons.LABEL_ROUNDED,
-            focused_bgcolor=ft.Colors.with_opacity(0.25, "#180b33"),
+            hint_style=ft.TextStyle(color=MUTED),
+            prefix=ft.Icon(ft.Icons.LABEL_OUTLINE, color=ACCENT),
+            border_color=FIELD_BORDER,
+            bgcolor=FIELD_BG,
+            color=WHITE,
+            cursor_color=ACCENT,
+            height=45,
+            content_padding=10,
         )
 
         self._content_input = ft.TextField(
-            label=t("add_dialog.link_label", default="Config Link or Subscription URL"),
             hint_text=t(
                 "add_dialog.link_hint",
-                default="Paste vless://, vmess://, trojan://, ss://, hysteria2://, or https:// subscription URL...",
+                default="vless://... or https://example.com/sub",
             ),
-            multiline=True,
-            min_lines=5,
-            max_lines=5,
-            text_size=12,
-            border_radius=10,
-            bgcolor=ft.Colors.with_opacity(0.18, "#130927"),
-            border_color=ft.Colors.with_opacity(0.35, "#a855f7"),
-            focused_border_color="#c084fc",
-            cursor_color="#c084fc",
-            prefix_icon=ft.Icons.TERMINAL_ROUNDED,
-            focused_bgcolor=ft.Colors.with_opacity(0.25, "#180b33"),
+            hint_style=ft.TextStyle(color=MUTED),
+            prefix=ft.Icon(ft.Icons.TERMINAL_ROUNDED, color=ACCENT),
+            border_color=FIELD_BORDER,
+            bgcolor=FIELD_BG,
+            color=WHITE,
+            cursor_color=ACCENT,
+            height=45,
+            content_padding=10,
         )
 
-        self._cancel_btn = ft.Container(
-            content=ft.Text(
-                t("add_dialog.cancel", default="Cancel"),
-                size=12,
-                weight=ft.FontWeight.W_600,
-                color=WHITE,
+        self._cancel_btn = ft.TextButton(
+            t("add_dialog.cancel", default="Cancel"),
+            style=ft.ButtonStyle(
+                color=ft.Colors.GREY_400,
+                overlay_color=ft.Colors.with_opacity(0.1, ft.Colors.WHITE),
             ),
-            padding=ft.Padding.symmetric(vertical=9, horizontal=16),
-            border_radius=10,
-            bgcolor=ft.Colors.with_opacity(0.1, WHITE),
-            border=ft.Border.all(1, ft.Colors.with_opacity(0.2, WHITE)),
             on_click=self._handle_close,
-            ink=True,
         )
 
-        self._add_btn = ft.Container(
+        self._add_btn = ft.ElevatedButton(
             content=ft.Row(
                 [
-                    ft.Icon(ft.Icons.CHECK_ROUNDED, size=15, color=WHITE),
-                    ft.Text(
-                        t("add_dialog.add", default="Add Server"),
-                        size=12,
-                        weight=ft.FontWeight.W_700,
-                        color=WHITE,
-                    ),
+                    ft.Icon(ft.Icons.CHECK, size=16, color=WHITE),
+                    ft.Text(t("add_dialog.add", default="Add"), color=WHITE),
                 ],
-                spacing=6,
+                spacing=4,
                 alignment=ft.MainAxisAlignment.CENTER,
             ),
-            padding=ft.Padding.symmetric(vertical=9, horizontal=18),
-            border_radius=10,
-            bgcolor=ft.Colors.with_opacity(0.85, "#7c3aed"),
-            border=ft.Border.all(1, ft.Colors.with_opacity(0.8, "#c084fc")),
-            shadow=ft.BoxShadow(
-                spread_radius=1,
-                blur_radius=16,
-                color=ft.Colors.with_opacity(0.4, "#7c3aed"),
-                offset=ft.Offset(0, 4),
-            ),
+            bgcolor="#6D28D9",
+            color=WHITE,
+            style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=8)),
             on_click=self._handle_add,
-            ink=True,
         )
 
-        chain_btn = (
-            ft.Container(
-                content=ft.Row(
-                    [
-                        ft.Icon(ft.Icons.LINK_ROUNDED, size=15, color="#c084fc"),
-                        ft.Text(
-                            t("chain.title", default="Chain Builder"),
-                            size=12,
-                            weight=ft.FontWeight.W_600,
-                            color="#c084fc",
-                        ),
-                    ],
-                    spacing=6,
+        actions = [self._cancel_btn, self._add_btn]
+
+        if on_create_chain:
+            actions.insert(
+                0,
+                ft.TextButton(
+                    content=ft.Row(
+                        [
+                            ft.Icon(ft.Icons.LINK_ROUNDED, size=15, color="#c084fc"),
+                            ft.Text(
+                                t("chain.title", default="Chain Builder"),
+                                size=12,
+                                weight=ft.FontWeight.W_600,
+                                color="#c084fc",
+                            ),
+                        ],
+                        spacing=6,
+                    ),
+                    on_click=self._handle_create_chain,
                 ),
-                padding=ft.Padding.symmetric(vertical=9, horizontal=14),
-                border_radius=10,
-                bgcolor=ft.Colors.with_opacity(0.12, "#a855f7"),
-                border=ft.Border.all(1, ft.Colors.with_opacity(0.4, "#a855f7")),
-                on_click=self._handle_create_chain,
-                ink=True,
-                visible=bool(on_create_chain),
             )
-            if on_create_chain
-            else ft.Container(visible=False)
-        )
-
-        actions_row = ft.Row(
-            [
-                chain_btn,
-                ft.Container(expand=True),
-                self._cancel_btn,
-                self._add_btn,
-            ],
-            spacing=10,
-            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-        )
-
-        body_container = ft.Container(
-            content=ft.Column(
-                [
-                    self._name_input,
-                    self._content_input,
-                    ft.Container(height=4),
-                    actions_row,
-                ],
-                spacing=14,
-                tight=True,
-            ),
-            width=480,
-            padding=20,
-            border_radius=18,
-            bgcolor=ft.Colors.with_opacity(0.92, "#0d061c"),
-            border=ft.Border.all(1.2, ft.Colors.with_opacity(0.5, "#a855f7")),
-            shadow=ft.BoxShadow(
-                spread_radius=2,
-                blur_radius=32,
-                color=ft.Colors.with_opacity(0.35, "#581c87"),
-                offset=ft.Offset(0, 8),
-            ),
-        )
 
         super().__init__(
+            modal=True,
             title=title_control,
-            content=body_container,
-            bgcolor=ft.Colors.TRANSPARENT,
+            content=ft.Column(
+                controls=[
+                    self._name_input,
+                    self._content_input,
+                ],
+                tight=True,
+                spacing=12,
+            ),
+            actions=actions,
+            actions_alignment=ft.MainAxisAlignment.END,
+            actions_padding=ft.Padding.only(right=16, bottom=16, left=16),
+            bgcolor="#12131C",
+            shape=ft.RoundedRectangleBorder(radius=16),
         )
 
     def _handle_create_chain(self, e):

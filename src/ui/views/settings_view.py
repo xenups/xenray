@@ -10,6 +10,7 @@ from src.core.i18n import is_rtl, t
 from src.ui.components.settings_sections import (
     AutoReconnectToggleRow,
     CountryDropdownRow,
+    LanShareToggleRow,
     LanguageDropdownRow,
     ModeSwitchRow,
     PortInputRow,
@@ -35,6 +36,9 @@ class SettingsView(ft.Container):
         on_check_update_click: Callable,
         on_open_routing_click: Optional[Callable] = None,
         on_open_dns_click: Optional[Callable] = None,
+        lan_share_row: Optional[LanShareToggleRow] = None,
+        routing_badge_text: str = "12 Active Rules",
+        dns_badge_text: str = "Cloudflare (1.1.1.1)",
     ):
         self._mode_switch_row = mode_switch_row
         self._tun_engine_row = tun_engine_row
@@ -43,48 +47,54 @@ class SettingsView(ft.Container):
         self._language_row = language_row
         self._reconnect_row = reconnect_row
         self._startup_row = startup_row
+        self._lan_share_row = lan_share_row
         self._on_check_update_click = on_check_update_click
         self._on_open_routing_click = on_open_routing_click
         self._on_open_dns_click = on_open_dns_click
 
         WHITE = ft.Colors.WHITE
 
+        connectivity_controls = [
+            ft.Container(
+                content=ft.Row(
+                    [
+                        ft.Container(
+                            content=ft.Icon(
+                                ft.Icons.WIFI_TETHERING,
+                                color=AppColors.PRIMARY,
+                                size=22,
+                            ),
+                            width=28,
+                            alignment=ft.Alignment.CENTER_LEFT,
+                        ),
+                        ft.Text(
+                            t(
+                                "settings.connectivity_title",
+                                default="Connectivity Settings",
+                            ),
+                            size=16,
+                            weight=ft.FontWeight.W_700,
+                            color=WHITE,
+                        ),
+                    ],
+                    spacing=12,
+                ),
+                padding=ft.Padding.only(left=8, right=8, top=4, bottom=10),
+                border=ft.Border.only(
+                    bottom=ft.BorderSide(1, ft.Colors.with_opacity(0.12, WHITE))
+                ),
+            ),
+            self._mode_switch_row,
+            self._tun_engine_row,
+            self._port_row,
+        ]
+
+        if self._lan_share_row:
+            connectivity_controls.append(self._lan_share_row)
+
         self._connectivity_card = create_glass_container(
             content=ft.Column(
-                [
-                    ft.Container(
-                        content=ft.Row(
-                            [
-                                ft.Container(
-                                    content=ft.Icon(
-                                        ft.Icons.WIFI_TETHERING,
-                                        color=AppColors.PRIMARY,
-                                        size=22,
-                                    ),
-                                    width=28,
-                                    alignment=ft.Alignment.CENTER_LEFT,
-                                ),
-                                ft.Text(
-                                    t(
-                                        "settings.connectivity_title",
-                                        default="Connectivity Settings",
-                                    ),
-                                    size=18,
-                                    weight=ft.FontWeight.BOLD,
-                                    color=WHITE,
-                                ),
-                            ],
-                            spacing=12,
-                        ),
-                        padding=ft.Padding.only(left=8, right=8, top=4, bottom=10),
-                        border=ft.Border.only(
-                            bottom=ft.BorderSide(1, ft.Colors.with_opacity(0.12, WHITE))
-                        ),
-                    ),
-                    self._mode_switch_row,
-                    self._tun_engine_row,
-                    self._port_row,
-                ],
+                connectivity_controls,
                 spacing=10,
             ),
         )
@@ -102,8 +112,8 @@ class SettingsView(ft.Container):
                         ),
                         ft.Text(
                             t("settings.routing_title", default="Routing & Anti-Leak"),
-                            size=18,
-                            weight=ft.FontWeight.BOLD,
+                            size=16,
+                            weight=ft.FontWeight.W_700,
                             color=WHITE,
                         ),
                     ],
@@ -127,6 +137,7 @@ class SettingsView(ft.Container):
                         default="Configure custom domain and IP routing rules",
                     ),
                     on_click=self._on_open_routing_click,
+                    badge_text=routing_badge_text,
                 )
             )
 
@@ -140,6 +151,7 @@ class SettingsView(ft.Container):
                         default="Configure custom DNS servers and resolution strategies",
                     ),
                     on_click=self._on_open_dns_click,
+                    badge_text=dns_badge_text,
                 )
             )
 
@@ -168,8 +180,8 @@ class SettingsView(ft.Container):
                                         "settings.preferences_title",
                                         default="Application Preferences",
                                     ),
-                                    size=18,
-                                    weight=ft.FontWeight.BOLD,
+                                    size=16,
+                                    weight=ft.FontWeight.W_700,
                                     color=WHITE,
                                 ),
                             ],
@@ -228,7 +240,7 @@ class SettingsView(ft.Container):
                         style=ft.ButtonStyle(
                             bgcolor=AppColors.PRIMARY,
                             color=AppColors.ON_PRIMARY,
-                            shape=ft.RoundedRectangleBorder(radius=14),
+                            shape=ft.RoundedRectangleBorder(radius=8),
                             padding=ft.Padding.symmetric(horizontal=16, vertical=10),
                         ),
                         on_click=self._on_check_update_click,
@@ -250,6 +262,6 @@ class SettingsView(ft.Container):
                 scroll=ft.ScrollMode.AUTO,
                 expand=True,
             ),
-            padding=20,
+            padding=ft.Padding.only(left=20, right=20, top=20, bottom=40),
             expand=True,
         )
