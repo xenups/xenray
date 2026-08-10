@@ -2,156 +2,331 @@ import flet as ft
 
 
 class ConnectionButton(ft.Container):
-    """Balanced Glassmorphism Connection Button."""
+    """Connection button with animated glow based on network activity."""
 
     def __init__(self, on_click):
-        self._icon = ft.Icon(
-            ft.Icons.POWER_SETTINGS_NEW, size=60, color=ft.Colors.WHITE
-        )
-
+        self._icon = ft.Icon(ft.Icons.POWER_SETTINGS_NEW, size=55, color=ft.Colors.WHITE)
         self._is_connected = False
         self._is_connecting = False
         self._current_activity = 0
-        self._state = "disconnected"
+        self._last_active = False
+        self._state = "disconnected"  # Track state: disconnected, connecting, connected
 
-        def _on_button_click(e):
-            if self._state == "disconnecting":
-                return
-            if on_click:
-                on_click(e)
-
-        super().__init__(
-            content=self._icon,
-            width=180,
-            height=180,
-            border_radius=90,
-            bgcolor=ft.Colors.with_opacity(0.12, ft.Colors.WHITE),
-            border=ft.Border.all(1.5, ft.Colors.with_opacity(0.25, ft.Colors.WHITE)),
-            on_click=_on_button_click,
-            alignment=ft.Alignment.CENTER,
+        # Outer glow layer - very tight, minimal space for glow
+        self._glow_layer = ft.Container(
+            width=190,  # Button is 170, so 10px glow space on each side
+            height=190,
+            border_radius=95,
+            bgcolor=ft.Colors.TRANSPARENT,
             shadow=ft.BoxShadow(
                 spread_radius=0,
-                blur_radius=24,
-                color=ft.Colors.with_opacity(0.25, ft.Colors.BLACK),
-                offset=ft.Offset(0, 8),
+                blur_radius=20,
+                color=ft.Colors.with_opacity(0.2, ft.Colors.BLACK),
+                offset=ft.Offset(0, 0),
             ),
-            animate=ft.Animation(300, ft.AnimationCurve.EASE_OUT_QUAD),
+            opacity=1.0,  # Animated opacity for network activity visibility
+            animate_opacity=800,  # Smooth fade for network changes
+            animate_scale=ft.Animation(800, ft.AnimationCurve.EASE_IN_OUT),  # Smooth scaling
+            animate=ft.Animation(600, ft.AnimationCurve.EASE_IN_OUT),  # Smooth shadow/color changes
         )
 
-    def _safe_update(self, control=None):
-        try:
-            if control:
-                control.update()
-            elif self.page:
-                self.update()
-        except Exception:
-            pass
+        # Inner button (the actual clickable glass button)
+        self._button = ft.Container(
+            content=self._icon,
+            width=170,
+            height=170,
+            border_radius=85,
+            bgcolor="#1e293b",
+            border=ft.Border.all(1.5, ft.Colors.with_opacity(0.2, ft.Colors.WHITE)),
+            on_click=on_click,
+            alignment=ft.Alignment.CENTER,
+        )
+
+        # Stack: glow behind, button on top
+        super().__init__(
+            content=ft.Stack(
+                [
+                    self._glow_layer,
+                    self._button,
+                ],
+                alignment=ft.Alignment.CENTER,
+            ),
+            width=190,  # Match glow layer
+            height=190,
+            alignment=ft.Alignment.CENTER,
+        )
 
     def update_theme(self, is_dark: bool):
-        """Maintain glassmorphism appearance based on theme."""
+        """Update button appearance based on theme."""
         if self._is_connected or self._is_connecting:
             return
+
+        # Keep it glassy regardless of theme, just adjust tint
         if is_dark:
-            self.bgcolor = ft.Colors.with_opacity(0.12, ft.Colors.WHITE)
-            self.border = ft.Border.all(
-                1.5, ft.Colors.with_opacity(0.25, ft.Colors.WHITE)
-            )
+            self._button.bgcolor = ft.Colors.with_opacity(0.15, "#1e293b")
+            self._button.border = ft.Border.all(1.5, ft.Colors.with_opacity(0.2, ft.Colors.WHITE))
         else:
-            self.bgcolor = ft.Colors.with_opacity(0.15, ft.Colors.WHITE)
-            self.border = ft.Border.all(
-                1.5, ft.Colors.with_opacity(0.3, ft.Colors.BLACK12)
-            )
-        self._safe_update()
+            self._button.bgcolor = ft.Colors.with_opacity(0.15, ft.Colors.WHITE)
+            self._button.border = ft.Border.all(1.5, ft.Colors.with_opacity(0.3, ft.Colors.BLACK12))
+
+        try:
+            self._button.update()
+        except RuntimeError:
+            pass
 
     def set_connected(self):
-        """Set connected state with purple glassmorphism styling."""
+        """Set button to connected state with subtle purple glass glow."""
         self._is_connected = True
         self._is_connecting = False
-        self._state = "connected"
+        self._state = "connected"  # Track current state
 
-        self.bgcolor = ft.Colors.with_opacity(0.28, "#7c3aed")
-        self.border = ft.Border.all(2.0, ft.Colors.with_opacity(0.65, "#c084fc"))
+        # Purple Glass Style for button
+        self._button.bgcolor = ft.Colors.with_opacity(0.25, "#8b5cf6")
+        self._button.border = ft.Border.all(2.5, ft.Colors.with_opacity(0.5, "#a78bfa"))
         self._icon.color = ft.Colors.WHITE
-        self.shadow = ft.BoxShadow(
-            spread_radius=2,
-            blur_radius=32,
-            color=ft.Colors.with_opacity(0.5, "#7c3aed"),
-            offset=ft.Offset(0, 8),
+        self._button.update()
+
+        # Reset glow layer for network activity animation
+        self._glow_layer.opacity = 1.0
+        self._glow_layer.scale = 1.0
+
+        # Outer glow - tight purple glow
+        self._glow_layer.shadow = ft.BoxShadow(
+            spread_radius=0,
+            blur_radius=30,
+            color=ft.Colors.with_opacity(0.7, "#8b5cf6"),
+            offset=ft.Offset(0, 0),
         )
-        self._safe_update()
+        self._glow_layer.update()
+
+        # Start a gentle idle breathing pulse for the connected state
+        # This keeps the button "alive" even when waiting for first network stats
+        try:
+            _has_page = self.page is not None
+        except RuntimeError:
+            _has_page = False
+        if _has_page:
+            import asyncio
+
+            async def _connected_breath():
+                grow = True
+                while self._state == "connected":
+                    try:
+                        _ = self.page
+                    except RuntimeError:
+                        break
+                    try:
+                        # Only pulse if network activity is low (idle breath)
+                        # High activity will override with more dramatic expansion in update_network_activity
+                        if self._current_activity < 5:
+                            if grow:
+                                self._glow_layer.opacity = 0.8
+                                self._glow_layer.scale = 1.02
+                            else:
+                                self._glow_layer.opacity = 0.5
+                                self._glow_layer.scale = 1.0
+                            self._glow_layer.update()
+
+                        grow = not grow
+                        await asyncio.sleep(1.2)  # Slower, calmer breath for connected idle
+                    except Exception:
+                        break
+
+            self.page.run_task(_connected_breath)
 
     def set_disconnected(self):
-        """Reset button to idle glassmorphism state."""
+        """Set button to disconnected state."""
         self._is_connected = False
         self._is_connecting = False
         self._state = "disconnected"
         self._current_activity = 0
 
-        self.bgcolor = ft.Colors.with_opacity(0.12, ft.Colors.WHITE)
-        self.border = ft.Border.all(1.5, ft.Colors.with_opacity(0.25, ft.Colors.WHITE))
+        # Revert button to standard glass
+        self._button.bgcolor = ft.Colors.with_opacity(0.15, "#1e293b")
+        self._button.border = ft.Border.all(1.5, ft.Colors.with_opacity(0.2, ft.Colors.WHITE))
         self._icon.color = ft.Colors.WHITE
-        self.shadow = ft.BoxShadow(
+        self._button.update()
+
+        # Minimal glow
+        self._glow_layer.shadow = ft.BoxShadow(
             spread_radius=0,
-            blur_radius=24,
-            color=ft.Colors.with_opacity(0.25, ft.Colors.BLACK),
-            offset=ft.Offset(0, 8),
+            blur_radius=25,
+            color=ft.Colors.with_opacity(0.2, ft.Colors.BLACK),
+            offset=ft.Offset(0, 0),
         )
-        self._safe_update()
+        self._glow_layer.update()
 
     def set_connecting(self):
-        """Set connecting state with amber glassmorphism pulse."""
+        """Set connecting state with subtle amber glass pulse."""
         self._is_connected = False
         self._is_connecting = True
-        self._state = "connecting"
+        self._state = "connecting"  # Track current state
 
-        self.bgcolor = ft.Colors.with_opacity(0.25, "#f59e0b")
-        self.border = ft.Border.all(2.0, ft.Colors.with_opacity(0.65, "#fbbf24"))
-        self.shadow = ft.BoxShadow(
-            spread_radius=2,
-            blur_radius=32,
-            color=ft.Colors.with_opacity(0.5, "#f59e0b"),
-            offset=ft.Offset(0, 8),
+        # Amber Glass Style for button
+        self._button.bgcolor = ft.Colors.with_opacity(0.25, "#f59e0b")
+        self._button.border = ft.Border.all(2.5, ft.Colors.with_opacity(0.5, "#fbbf24"))
+        self._icon.color = ft.Colors.WHITE
+        self._button.update()
+
+        # Reset glow layer for smooth connecting animation
+        self._glow_layer.opacity = 1.0
+        self._glow_layer.scale = 1.0
+
+        # Outer glow - tight amber with reduced intensity
+        self._glow_layer.shadow = ft.BoxShadow(
+            spread_radius=0,
+            blur_radius=35,
+            color=ft.Colors.with_opacity(0.5, "#f59e0b"),  # Reduced from 0.8
+            offset=ft.Offset(0, 0),
         )
-        self._safe_update()
+        self._glow_layer.update()
+
+        # Start async pulse loop
+        try:
+            _has_page = self.page is not None
+        except RuntimeError:
+            _has_page = False
+        if _has_page:
+            import asyncio
+
+            async def _pulse_loop():
+                grow = True
+                while self._is_connecting:
+                    try:
+                        _ = self.page
+                    except RuntimeError:
+                        break
+                    try:
+                        if grow:
+                            self._glow_layer.opacity = 0.8
+                            self._glow_layer.scale = 1.04
+                        else:
+                            self._glow_layer.opacity = 0.4
+                            self._glow_layer.scale = 1.0
+
+                        self._glow_layer.update()
+                        grow = not grow
+                        await asyncio.sleep(0.8)
+                    except Exception:
+                        break
+
+            self.page.run_task(_pulse_loop)
 
     def set_disconnecting(self):
-        """Set disconnecting state with red glassmorphism pulse."""
+        """Set disconnecting state with red glass pulse."""
         self._is_connected = False
         self._is_connecting = False
         self._state = "disconnecting"
 
-        self.bgcolor = ft.Colors.with_opacity(0.25, "#f43f5e")
-        self.border = ft.Border.all(2.0, ft.Colors.with_opacity(0.65, "#fb7185"))
-        self.shadow = ft.BoxShadow(
-            spread_radius=2,
-            blur_radius=32,
-            color=ft.Colors.with_opacity(0.5, "#f43f5e"),
-            offset=ft.Offset(0, 8),
+        # Red Glass Style for button
+        self._button.bgcolor = ft.Colors.with_opacity(0.25, ft.Colors.RED_700)
+        self._button.border = ft.Border.all(2.5, ft.Colors.with_opacity(0.5, ft.Colors.RED_400))
+        self._icon.color = ft.Colors.WHITE
+        self._button.update()
+
+        # Reset glow layer for smooth animation
+        self._glow_layer.opacity = 1.0
+        self._glow_layer.scale = 1.0
+
+        # Outer glow - tight red
+        self._glow_layer.shadow = ft.BoxShadow(
+            spread_radius=0,
+            blur_radius=35,
+            color=ft.Colors.with_opacity(0.5, ft.Colors.RED_400),
+            offset=ft.Offset(0, 0),
         )
-        self._safe_update()
+        self._glow_layer.update()
+
+        # Start async pulse loop
+        try:
+            _has_page = self.page is not None
+        except RuntimeError:
+            _has_page = False
+        if _has_page:
+            import asyncio
+
+            async def _disconnecting_pulse():
+                grow = True
+                while self._state == "disconnecting":
+                    try:
+                        _ = self.page
+                    except RuntimeError:
+                        break
+                    try:
+                        if grow:
+                            self._glow_layer.opacity = 0.8
+                            self._glow_layer.scale = 1.04
+                        else:
+                            self._glow_layer.opacity = 0.4
+                            self._glow_layer.scale = 1.0
+
+                        self._glow_layer.update()
+                        grow = not grow
+                        await asyncio.sleep(0.4)  # Faster pulse for disconnecting
+                    except Exception:
+                        break
+
+            self.page.run_task(_disconnecting_pulse)
 
     def update_network_activity(self, total_bps: float):
-        """Update glass glow dynamic intensity based on throughput."""
+        """
+        Update the glow based on real-time network activity (only when connected).
+        Args:
+            total_bps: Total bytes per second (download + upload)
+        """
+        # Only animate network activity when in connected state
         if self._state != "connected":
             return
 
         kb_per_sec = total_bps / 1024
-        activity = min(100, int(kb_per_sec / 10))
 
+        # Map network speed to activity percentage (0-100)
+        if kb_per_sec < 10:
+            activity = int(kb_per_sec * 1)
+        elif kb_per_sec < 50:
+            activity = int(10 + (kb_per_sec / 50) * 25)
+        elif kb_per_sec < 500:
+            activity = int(35 + ((kb_per_sec - 50) / 450) * 30)
+        elif kb_per_sec < 2000:
+            activity = int(65 + ((kb_per_sec - 500) / 1500) * 25)
+        else:
+            activity = min(100, int(90 + (kb_per_sec / 10000) * 10))
+
+        # Allow updates if activity changed by more than 2% for more responsive animation
         if abs(activity - self._current_activity) < 2:
             return
 
         self._current_activity = activity
-        blur = 30 + (activity / 100) * 18
-        spread = 2 + (activity / 100) * 3
+
+        # Calculate glow parameters - smooth shadow breathing only
+        min_blur = 25
+        max_blur = 45
+        min_spread = 0
+        max_spread = 1
+
+        blur = min_blur + (max_blur - min_blur) * (activity / 100)
+        spread = min_spread + (max_spread - min_spread) * (activity / 100)
+        opacity = 0.5 + 0.3 * (activity / 100)
+
+        # Clamp values
+        blur = max(20, min(50, blur))
+        spread = max(0, min(2, spread))
+        opacity = max(0.45, min(0.9, opacity))
+
+        # Add pulsing scale and opacity for more tangible visual feedback
+        scale = 1.0 + (activity / 100) * 0.05  # 1.0 to 1.05
+        glow_opacity = 0.7 + (activity / 100) * 0.3  # 0.7 to 1.0
 
         try:
-            self.shadow = ft.BoxShadow(
+            # Update shadow (instant) and animate scale/opacity (smooth)
+            self._glow_layer.shadow = ft.BoxShadow(
                 spread_radius=spread,
                 blur_radius=blur,
-                color=ft.Colors.with_opacity(0.55, "#c084fc"),
-                offset=ft.Offset(0, 8),
+                color=ft.Colors.with_opacity(opacity, "#8b5cf6"),
+                offset=ft.Offset(0, 0),
             )
-            self._safe_update()
+            self._glow_layer.scale = scale
+            self._glow_layer.opacity = glow_opacity
+            self._glow_layer.update()
         except Exception:
             pass
