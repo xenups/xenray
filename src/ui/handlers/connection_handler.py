@@ -58,6 +58,7 @@ class ConnectionHandler:
         self._update_horizon_glow_callback: Optional[Callable[[str], None]] = None
         self._profile_manager_is_running_setter: Optional[Callable[[bool], None]] = None
         self._monitoring_service_is_running_setter: Optional[Callable[[bool], None]] = None
+        self._lan_card_callback: Optional[Callable[[bool], None]] = None
 
     def setup(
         self,
@@ -191,6 +192,15 @@ class ConnectionHandler:
             self._ui_call(lambda: self._update_horizon_glow_callback("connected"))
         if self._systray:
             self._systray.update_state()
+        self._update_lan_card()
+
+    def _update_lan_card(self, show: bool = True):
+        """Show/hide the LAN sharing card based on connection + allow_lan state."""
+        if not self._lan_card_callback:
+            return
+        if show and self._app_context:
+            show = bool(self._app_context.settings.get_allow_lan())
+        self._ui_call(lambda: self._lan_card_callback(show))
 
     def _show_toast(self, msg_key: str, toast_type: str = "error", duration: int = 3000):
         """Show toast notification."""
@@ -214,6 +224,7 @@ class ConnectionHandler:
                 self._latency_monitor_handler.trigger_single_check()
         except Exception as e:
             logger.warning(f"[ConnectionHandler] Error resetting UI: {e}")
+        self._update_lan_card(show=False)
 
     # -------------------------------------------------------------------------
     # Connection Task (broken into smaller methods)
@@ -321,41 +332,56 @@ class ConnectionHandler:
         return success
 
     def _verify_post_connection(self) -> bool:
-        """Verify connection is working after establishment."""
+        """Lightweight post-connection sanity check after fragment warmup (soft).
+
+        The connection was already verified by the orchestrator's health check
+        before ``establish_connection`` returned. This re-check is advisory only:
+        curl probes through the tunnel (especially sing-box ``strict_route`` WFP
+        mode) can return false negatives once the TUN filters fully engage, so a
+        failure here is logged but never tears down a healthy connection.
+        """
         from src.utils.network_utils import NetworkUtils
 
-        time.sleep(2.0)  # Allow fragmented/finalmask connection streams to stabilize
+        time.sleep(2.0)  # Allow the tunnel + fragmented/finalmask streams to stabilize
 
         if self._status_display:
             self._ui_call(lambda: self._status_display.set_step(t("connection.checking_network")))
 
         mode = self._current_mode_getter() if self._current_mode_getter else ConnectionMode.PROXY
-        is_vpn = mode == ConnectionMode.VPN or mode == "vpn"
+        proxy_port = self._app_context.settings.get_proxy_port() if self._app_context else 0
 
-        proxy_port = self._app_context.settings.get_proxy_port()
-        is_ok = NetworkUtils.check_proxy_connectivity(proxy_port, timeout=5, retries=2)
+        # Quick re-check with one retry to ride out a transient stall. The outcome
+        # is advisory — the connection stays connected regardless.
+        for attempt in range(2):
+            if self._post_connection_check(NetworkUtils, mode, proxy_port):
+                return True
+            if attempt < 1:
+                logger.debug("[ConnectionHandler] Post-connection check transient failure, retrying...")
+                time.sleep(1.0)
 
-        # In VPN mode, traffic flows through TUN, so also check direct internet connectivity
-        if not is_ok and is_vpn:
-            is_ok = NetworkUtils.check_internet_connection(host="8.8.8.8", timeout=4)
-
-        # Retry once after additional stabilization if initial attempt missed due to fragment warmup
-        if not is_ok:
-            logger.info("[ConnectionHandler] Initial post-connection check pending, retrying after warmup...")
-            time.sleep(1.5)
-            is_ok = NetworkUtils.check_proxy_connectivity(proxy_port, timeout=6, retries=2)
-            if not is_ok and is_vpn:
-                is_ok = NetworkUtils.check_internet_connection(host="8.8.8.8", timeout=5)
-
-        if not is_ok:
-            logger.error("[ConnectionHandler] Post-connection check failed after warmup retries")
-            self._set_connecting(False)
-            self._connection_manager.disconnect()
-            self._ui_call(self.reset_ui_disconnected)
-            self._show_toast("connection.connected_no_internet", "warning")
-            return False
-
+        # Soft failure: keep the connection. The orchestrator's health check
+        # already verified it moments ago, so a flaky probe must not tear it down.
+        logger.warning(
+            "[ConnectionHandler] Post-connection re-check failed but connection kept "
+            "(already verified by health check)"
+        )
         return True
+
+    @staticmethod
+    def _post_connection_check(network_utils, mode, proxy_port: int) -> bool:
+        """Verify the connection through the correct path for the active mode.
+
+        In VPN/TUN mode all traffic is captured by the tunnel, so a raw direct
+        socket check (e.g. to 8.8.8.8:53) is blocked by the TUN engine — the
+        sing-box ``strict_route`` WFP filter rejects it with WinError 10013
+        (WSAEACCES). Verify through the SOCKS proxy (the tunnel's egress path)
+        instead, which works for both the Xray and sing-box TUN engines.
+        """
+        if mode == ConnectionMode.VPN:
+            if not proxy_port:
+                return False
+            return network_utils.check_proxy_connectivity(proxy_port, timeout=3.0, retries=2)
+        return network_utils.check_internet_connection()
 
     def _finalize_connection(self, profile: dict):
         """Finalize successful connection."""

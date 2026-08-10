@@ -1,4 +1,5 @@
 """Thread-safe Server List component for XenRay."""
+
 from __future__ import annotations
 
 import threading
@@ -324,7 +325,7 @@ class ServerList(ft.Container):
             return
 
         profiles = []
-        for profile_id, item in self._item_map.items():
+        for _, item in self._item_map.items():
             profiles.append(item._profile)
 
         if not profiles:

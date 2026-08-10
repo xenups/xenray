@@ -1,8 +1,10 @@
 """Tests for TunInjector."""
+
 from unittest.mock import Mock
 
 import pytest
 
+from src.core.constants import TUN_GATEWAY_IPV4, TUN_ROUTE_IPV4
 from src.services.tun_injector import TunInjector
 
 
@@ -45,9 +47,21 @@ class TestInject:
         assert tun["tag"] == "tun"
         assert tun["settings"]["mtu"] == 1400
         assert tun["settings"]["dns"] == ["1.1.1.1", "8.8.8.8"]
-        assert tun["settings"]["gateway"] == ["10.0.0.1/16"]
+        assert tun["settings"]["gateway"] == [TUN_GATEWAY_IPV4]
+        assert tun["settings"]["autoSystemRoutingTable"] == [TUN_ROUTE_IPV4]
         assert tun["sniffing"]["enabled"] is True
-        assert tun["sniffing"]["destOverride"] == ["http", "tls", "quic"]
+        assert tun["sniffing"]["destOverride"] == ["fakedns", "http", "tls", "quic"]
+
+    def test_tun_inbound_ipv4_only(self, injector):
+        """TUN adapter is IPv4-only: single IPv4 subnet and default route."""
+        config = {"inbounds": [], "routing": {"rules": []}}
+        injector.inject(config, dns_servers=["1.1.1.1"])
+        tun = next(ib for ib in config["inbounds"] if ib["protocol"] == "tun")
+        gateway = tun["settings"]["gateway"]
+        routes = tun["settings"]["autoSystemRoutingTable"]
+        assert gateway == [TUN_GATEWAY_IPV4]
+        assert routes == [TUN_ROUTE_IPV4]
+        assert not any(":" in g for g in gateway), "No IPv6 gateway subnets allowed"
 
     def test_tun_prepended_to_inbounds(self, injector):
         config = {
@@ -82,7 +96,7 @@ class TestInject:
     def test_sets_domain_strategy(self, injector):
         config = {"inbounds": [], "routing": {"rules": []}}
         injector.inject(config, dns_servers=["1.1.1.1"])
-        assert config["routing"]["domainStrategy"] == "IPIfNonMatch"
+        assert config["routing"]["domainStrategy"] == "AsIs"
 
     def test_prepends_rules_to_existing(self, injector):
         config = {
@@ -126,8 +140,8 @@ class TestBuildRoutingRules:
             routing_rules={"direct": [], "proxy": [], "block": []},
             proxy_server_ips=["proxy.example.com"],
         )
-        domain_rule = next(r for r in rules if "domain" in r and r.get("outboundTag") == "direct")
-        assert "proxy.example.com" in domain_rule["domain"]
+        domain_rules = [r for r in rules if "domain" in r and r.get("outboundTag") == "direct"]
+        assert any("proxy.example.com" in r["domain"] for r in domain_rules)
 
     def test_user_block_rules(self, injector):
         rules = injector._build_routing_rules(
@@ -200,8 +214,8 @@ class TestBuildRoutingRules:
             routing_rules={"direct": ["direct.com"], "proxy": [], "block": []},
             proxy_server_ips=[],
         )
-        direct_rule = next(r for r in rules if r.get("outboundTag") == "direct" and "domain" in r)
-        assert "direct.com" in direct_rule["domain"]
+        direct_rules = [r for r in rules if r.get("outboundTag") == "direct" and "domain" in r]
+        assert any("direct.com" in r["domain"] for r in direct_rules)
 
     def test_private_ips_go_direct_when_enabled(self, injector):
         injector._app_context.routing.load_toggles.return_value = {
@@ -272,8 +286,8 @@ class TestBuildRoutingRules:
             routing_rules={"direct": ["a.com"], "proxy": [], "block": []},
             proxy_server_ips=[],
         )
-        direct_rule = next(r for r in rules if r.get("outboundTag") == "direct" and "domain" in r)
-        assert "a.com" in direct_rule["domain"]
+        direct_rules = [r for r in rules if r.get("outboundTag") == "direct" and "domain" in r]
+        assert any("a.com" in r["domain"] for r in direct_rules)
 
     def test_routing_order_respected(self, injector):
         injector._app_context.routing.load_toggles.return_value = {
@@ -291,5 +305,6 @@ class TestBuildRoutingRules:
             proxy_server_ips=["5.5.5.5"],
         )
         tags = [r.get("outboundTag") for r in rules]
-        assert tags[0] == "direct"  # proxy server IPs
+        assert tags[0] == "dns-out"  # DNS port 53 rule is first
+        assert "direct" in tags
         assert tags[-1] == "proxy"  # user proxy rules at end

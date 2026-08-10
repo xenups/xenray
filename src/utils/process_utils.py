@@ -7,8 +7,172 @@ from typing import List, Optional
 
 import psutil
 
+from src.core.constants import LOG_BACKUP_COUNT, LOG_MAX_BYTES
 from src.core.logger import logger
 from src.utils.platform_utils import PlatformUtils
+
+
+def truncate_log_file_inplace(
+    log_file: str,
+    max_bytes: int = LOG_MAX_BYTES,
+    keep_bytes: int = 512 * 1024,
+) -> bool:
+    """Truncate a log file in-place, retaining the last ``keep_bytes`` of lines.
+
+    Safe for Windows even when an active subprocess holds a write lock on the file.
+    """
+    if not os.path.exists(log_file):
+        return False
+    try:
+        size = os.path.getsize(log_file)
+        if size < max_bytes:
+            return False
+
+        logger.info(f"[ProcessUtils] In-place truncating oversized log ({size} bytes >= {max_bytes}): {log_file}")
+        with open(log_file, "r+", encoding="utf-8", errors="ignore") as f:
+            f.seek(0, os.SEEK_END)
+            curr_size = f.tell()
+            if curr_size < max_bytes:
+                return False
+
+            read_pos = max(0, curr_size - keep_bytes)
+            f.seek(read_pos)
+            if read_pos > 0:
+                f.readline()  # Skip incomplete partial line
+
+            tail_content = f.read()
+            f.seek(0)
+            f.write("[... Log truncated at 5 MB ceiling ...]\n" + tail_content)
+            f.truncate()
+            f.flush()
+        return True
+    except Exception as e:
+        logger.warning(f"[ProcessUtils] In-place log truncation failed for {log_file}: {e}")
+        return False
+
+
+def cleanup_tmp_log_dir(max_bytes: int = LOG_MAX_BYTES) -> None:
+    """Scan TMPDIR and remove all legacy log backups and truncate any oversized active logs."""
+    from src.core.constants import TMPDIR
+
+    if not os.path.exists(TMPDIR):
+        return
+
+    try:
+        for file_name in os.listdir(TMPDIR):
+            file_path = os.path.join(TMPDIR, file_name)
+            if not os.path.isfile(file_path):
+                continue
+            try:
+                # 1. Unconditionally purge old rotated backup files (.1, .2, .3, .old, .bak)
+                if file_name.endswith((".1", ".2", ".3", ".old", ".bak")) or ".log." in file_name:
+                    try:
+                        os.remove(file_path)
+                        logger.info(f"[ProcessUtils] Deleted old rotated log backup: {file_name}")
+                    except OSError:
+                        pass
+                    continue
+
+                # 2. Truncate any active log file exceeding max_bytes (5 MB)
+                size = os.path.getsize(file_path)
+                if size >= max_bytes:
+                    truncate_log_file_inplace(file_path, max_bytes=max_bytes, keep_bytes=64 * 1024)
+            except OSError:
+                pass
+    except Exception as e:
+        logger.debug(f"[ProcessUtils] Error during temp log directory cleanup: {e}")
+
+
+def purge_all_logs_on_connect() -> None:
+    """Clear/truncate all *.log files and purge backup files in TMPDIR on new connection.
+
+    Ensures every new connection starts with a fresh, clean log file.
+    """
+    from src.core.constants import TMPDIR
+
+    if not os.path.exists(TMPDIR):
+        return
+
+    logger.info("[ProcessUtils] Clearing all log files on new connection attempt...")
+    try:
+        for file_name in os.listdir(TMPDIR):
+            file_path = os.path.join(TMPDIR, file_name)
+            if not os.path.isfile(file_path):
+                continue
+            try:
+                # 1. Unconditionally remove rotated backup files (.1, .2, .3, .old, .bak)
+                if file_name.endswith((".1", ".2", ".3", ".old", ".bak")) or ".log." in file_name:
+                    try:
+                        os.remove(file_path)
+                    except OSError:
+                        pass
+                    continue
+
+                # 2. Clear/truncate all *.log files
+                if file_name.endswith(".log"):
+                    try:
+                        with open(file_path, "w", encoding="utf-8") as f:
+                            f.write("[... Log cleared on new connection start ...]\n")
+                            f.flush()
+                    except OSError:
+                        # Fallback if locked by open handle
+                        truncate_log_file_inplace(file_path, max_bytes=0, keep_bytes=0)
+            except OSError:
+                pass
+    except Exception as e:
+        logger.debug(f"[ProcessUtils] Error clearing log files on connect: {e}")
+
+
+def rotate_oversized_log_file(
+    log_file: str,
+    max_bytes: int = LOG_MAX_BYTES,
+    backup_count: int = LOG_BACKUP_COUNT,
+) -> None:
+    """Rotate a log file if it exceeds ``max_bytes``.
+
+    If file renaming fails (e.g. Windows file lock by running subprocess),
+    falls back to safe in-place tail truncation so the log file never exceeds 5 MB.
+    """
+    if not os.path.exists(log_file):
+        return
+    try:
+        size = os.path.getsize(log_file)
+    except OSError:
+        return
+    if size < max_bytes:
+        return
+
+    logger.info(f"[ProcessUtils] Rotating oversized log ({size} bytes >= {max_bytes}): {log_file}")
+
+    # Drop oldest backup.
+    oldest = f"{log_file}.{backup_count}"
+    if os.path.exists(oldest):
+        try:
+            os.remove(oldest)
+        except OSError:
+            pass
+
+    # Shift backups down: .N-1 -> .N, ..., .1 -> .2.
+    for i in range(backup_count - 1, 0, -1):
+        src = f"{log_file}.{i}"
+        dst = f"{log_file}.{i + 1}"
+        if os.path.exists(src):
+            try:
+                # If backup file itself is oversized, purge it instead of shifting
+                if os.path.exists(src) and os.path.getsize(src) >= max_bytes:
+                    os.remove(src)
+                else:
+                    os.replace(src, dst)
+            except OSError:
+                pass
+
+    # Try moving current file to .1 and starting a fresh file
+    try:
+        os.replace(log_file, f"{log_file}.1")
+        open(log_file, "w", encoding="utf-8").close()
+    except OSError:
+        # Windows file lock by running subprocess — fallback to in-place tail truncation!
+        truncate_log_file_inplace(log_file, max_bytes=max_bytes)
 
 
 class ProcessUtils:
@@ -81,9 +245,7 @@ class ProcessUtils:
             return True  # Already dead
         except psutil.AccessDenied:
             # Can't kill due to permissions - log but don't fail
-            logger.warning(
-                f"Access denied when trying to kill process {pid} - it may require admin rights"
-            )
+            logger.warning(f"Access denied when trying to kill process {pid} - it may require admin rights")
             return False
         except Exception as e:
             logger.error(f"Failed to kill process {pid}: {e}")
@@ -116,12 +278,16 @@ class ProcessUtils:
         stderr_handle = None
         try:
             if stdout_file:
+                # Enforce the 5 MB ceiling before appending subprocess output.
+                rotate_oversized_log_file(stdout_file)
                 stdout_handle = open(stdout_file, "a", encoding="utf-8")
                 stdout = stdout_handle
             else:
                 stdout = subprocess.PIPE
 
             if stderr_file:
+                # Enforce the 5 MB ceiling before appending subprocess output.
+                rotate_oversized_log_file(stderr_file)
                 stderr_handle = open(stderr_file, "a", encoding="utf-8")
                 stderr = stderr_handle
             else:
@@ -158,9 +324,7 @@ class ProcessUtils:
             return None
 
     @staticmethod
-    def run_command_sync(
-        cmd: List[str], timeout: Optional[int] = None
-    ) -> Optional[tuple]:
+    def run_command_sync(cmd: List[str], timeout: Optional[int] = None) -> Optional[tuple]:
         """
         Run a command synchronously and return output.
 
@@ -216,9 +380,7 @@ class ProcessUtils:
             for proc in psutil.process_iter(["pid", "name"]):
                 try:
                     if proc.info["name"] and proc.info["name"].lower() == name.lower():
-                        logger.info(
-                            f"Killing process {proc.info['name']} (PID: {proc.info['pid']})"
-                        )
+                        logger.info(f"Killing process {proc.info['name']} (PID: {proc.info['pid']})")
                         proc.kill()
                         killed_any = True
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
@@ -308,15 +470,11 @@ class ProcessUtils:
                 parent = psutil.Process(current_pid)
                 children = parent.children(recursive=True)
 
-                logger.info(
-                    f"Killing {len(children)} child processes before restart..."
-                )
+                logger.info(f"Killing {len(children)} child processes before restart...")
                 for child in children:
                     try:
                         child_name = child.name().lower()
-                        logger.debug(
-                            f"Killing child process: {child.pid} ({child_name})"
-                        )
+                        logger.debug(f"Killing child process: {child.pid} ({child_name})")
                         child.kill()
                     except psutil.NoSuchProcess:
                         pass
@@ -340,9 +498,7 @@ class ProcessUtils:
 
             # ShellExecuteW returns > 32 on success
             if result > 32:
-                logger.info(
-                    f"ShellExecuteW succeeded (code {result}). Terminating current process..."
-                )
+                logger.info(f"ShellExecuteW succeeded (code {result}). Terminating current process...")
                 # STEP 3: Terminate immediately using ExitProcess
                 # This bypasses PyInstaller's cleanup which can fail on locked files
                 ctypes.windll.kernel32.ExitProcess(0)
@@ -384,17 +540,12 @@ class ProcessUtils:
                 # Running as Python script
                 executable = sys.executable
                 script_path = sys.argv[0]
-                script = (
-                    f'do shell script "\\"{executable}\\" \\"{script_path}\\"" '
-                    "with administrator privileges"
-                )
+                script = f'do shell script "\\"{executable}\\" \\"{script_path}\\"" ' "with administrator privileges"
 
             logger.info("Requesting admin privileges via osascript...")
 
             # Execute AppleScript to request admin privileges
-            result = subprocess.run(
-                ["osascript", "-e", script], capture_output=True, text=True
-            )
+            result = subprocess.run(["osascript", "-e", script], capture_output=True, text=True)
 
             if result.returncode == 0:
                 logger.info("Successfully launched new instance with admin privileges")

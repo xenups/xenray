@@ -5,6 +5,7 @@ Monitors Xray logs for connection failures and triggers callbacks.
 """
 
 import os
+import re
 import threading
 import time
 from typing import Callable, Optional
@@ -53,6 +54,16 @@ class PassiveLogMonitor:
         "wsarecv:",  # Windows socket errors
     ]
 
+    # Keywords indicating the primary (server-side / remote) DNS resolver failed
+    # and Xray is falling back to the secondary remote DNS. These are WARNINGS,
+    # not connection failures — they must NOT trigger the failure callback.
+    DNS_FALLBACK_KEYWORDS = [
+        "failed to resolve domain",
+        "failed to lookup ip",
+        "dns fallback triggered",
+        "dns server failed",
+    ]
+
     # Configuration
     CHECK_INTERVAL = 1.0  # seconds between log checks
     DEBOUNCE_SECONDS = 5.0  # Minimum time between alerts
@@ -80,6 +91,7 @@ class PassiveLogMonitor:
         self._paused_until = 0.0
         self._consecutive_failures = 0
         self._last_error_time = 0.0  # For cross-signal validation
+        self._last_dns_warn_time = 0.0  # Debounce for DNS fallback warnings
 
     def has_recent_error(self, window_seconds: float = 30.0) -> bool:
         """
@@ -182,6 +194,20 @@ class PassiveLogMonitor:
                     current_size = stat.st_size
                     current_ctime = stat.st_ctime if os.name == "nt" else 0
 
+                    # Enforce 5 MB ceiling in real time while subprocess streams logs
+                    from src.core.constants import LOG_MAX_BYTES
+                    from src.utils.process_utils import truncate_log_file_inplace
+
+                    if current_size >= LOG_MAX_BYTES:
+                        if file_obj:
+                            file_obj.close()
+                        truncate_log_file_inplace(file_path, max_bytes=LOG_MAX_BYTES)
+                        file_obj = open(file_path, "r", encoding="utf-8", errors="ignore")
+                        file_obj.seek(0, os.SEEK_END)
+                        inode = current_inode
+                        last_ctime = current_ctime
+                        continue
+
                     # First time opening
                     if file_obj is None:
                         file_obj = open(file_path, "r", encoding="utf-8", errors="ignore")
@@ -192,7 +218,12 @@ class PassiveLogMonitor:
 
                     # Check rotation (inode changed, size shrunk, or ctime changed on Windows)
                     elif self._is_file_rotated(
-                        inode, current_inode, file_obj.tell(), current_size, last_ctime, current_ctime
+                        inode,
+                        current_inode,
+                        file_obj.tell(),
+                        current_size,
+                        last_ctime,
+                        current_ctime,
                     ):
                         logger.debug("[PassiveLogMonitor] Log rotation detected, reopening")
                         file_obj.close()
@@ -234,11 +265,41 @@ class PassiveLogMonitor:
         """Process a single log line."""
         lower_line = line.lower()
 
+        # DNS fallback is a WARNING, not a connection failure. Handle it first so
+        # these lines never trigger the failure callback / reconnect flow.
+        for keyword in self.DNS_FALLBACK_KEYWORDS:
+            if keyword in lower_line:
+                domain = self._extract_domain(line)
+                self._log_dns_fallback(domain)
+                return
+
         for keyword in self.ERROR_KEYWORDS:
             if keyword in lower_line:
                 logger.debug(f"[PassiveLogMonitor] Keyword '{keyword}' matched in line")
                 self._trigger_alert(line.strip())
                 break
+
+    def _log_dns_fallback(self, domain: str):
+        """Log a warning when primary/server-side DNS resolution fails."""
+        now = time.time()
+        if now - self._last_dns_warn_time < self.DEBOUNCE_SECONDS:
+            return
+        self._last_dns_warn_time = now
+
+        subject = domain if domain else "a domain"
+        logger.warning(
+            f"[DNS Warning] Remote server DNS failed for domain {subject}. Falling back to secondary Remote DNS."
+        )
+
+    @staticmethod
+    def _extract_domain(line: str) -> str:
+        """Extract a hostname from a log line, e.g. 'example.com'."""
+        pattern = (
+            r"\b([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?"
+            r"(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?){1,})\b"
+        )
+        match = re.search(pattern, line)
+        return match.group(0) if match else ""
 
     def _trigger_alert(self, log_line: str):
         """Trigger an alert if debounce/cooldown allows."""
@@ -254,7 +315,10 @@ class PassiveLogMonitor:
         self._consecutive_failures += 1
 
         # Calculate exponential backoff
-        backoff = min(self.BASE_COOLDOWN_SECONDS * (2 ** (self._consecutive_failures - 1)), self.MAX_COOLDOWN_SECONDS)
+        backoff = min(
+            self.BASE_COOLDOWN_SECONDS * (2 ** (self._consecutive_failures - 1)),
+            self.MAX_COOLDOWN_SECONDS,
+        )
 
         # Auto-pause (Cooldown)
         logger.info(f"[PassiveLogMonitor] Backing off for {backoff}s (Attempt {self._consecutive_failures})")
@@ -262,7 +326,11 @@ class PassiveLogMonitor:
 
         # Run callback in separate thread to avoid blocking monitor loop
         if self._on_failure:
-            threading.Thread(target=self._run_callback_safe, daemon=True, name="PassiveLogMonitor-Callback").start()
+            threading.Thread(
+                target=self._run_callback_safe,
+                daemon=True,
+                name="PassiveLogMonitor-Callback",
+            ).start()
 
     def _run_callback_safe(self):
         """Run the failure callback safely in a separate thread."""

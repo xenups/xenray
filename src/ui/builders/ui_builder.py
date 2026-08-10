@@ -8,6 +8,7 @@ import flet as ft
 
 from src.ui.components.connection_button import ConnectionButton
 from src.ui.components.header import Header
+from src.ui.components.lan_sharing_card import LanSharingCard
 from src.ui.components.nav_sidebar import NavSidebar
 from src.ui.components.server_card import ServerCard
 from src.ui.components.settings_sections import ModeSwitchRow
@@ -31,10 +32,13 @@ class UIBuilder:
 
     def build_core_components(self):
         """Step 1: Construct core legacy components needed by drawers."""
+        self._main._lan_sharing_card = LanSharingCard(self._main._app_context)
+
         self._main._header = Header(
             self._main._page,
             self._main._open_logs_drawer,
             self._main._open_settings_drawer,
+            lan_sharing_card=self._main._lan_sharing_card,
         )
 
         self._main._heartbeat = ft.Container(
@@ -86,7 +90,7 @@ class UIBuilder:
                 is_proxy,
                 drawer._handle_mode_change,
             ),
-            tun_engine_row=drawer._tun_engine_row,
+            tun_engine_row=getattr(drawer, "_tun_engine_row", getattr(drawer, "_tun_dropdown_row", None)),
             port_row=drawer._port_row,
             country_row=drawer._country_row,
             language_row=drawer._language_row,

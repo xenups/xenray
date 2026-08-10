@@ -1,4 +1,5 @@
 """Subscription list item component."""
+
 from __future__ import annotations
 
 from typing import Callable
@@ -96,13 +97,11 @@ class SubscriptionListItem(ft.Container):
         try:
             url = self._sub.get("url", "")
             if self.page:
-                self.page.set_clipboard(url)
-                # Use toast manager if available
+                self.page.run_task(self.page.clipboard.set, url)
                 if hasattr(self.page, "_toast_manager"):
                     self.page._toast_manager.success(t("server_list.subscription_link_copied"), 2000)
                 self.page.update()
         except Exception:
-            # Silently fail if clipboard operation fails
             pass
 
     def _delete_item(self, e):

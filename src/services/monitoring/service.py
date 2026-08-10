@@ -82,6 +82,7 @@ class ConnectionMonitoringService:
             connection_tester=ConnectionTester,
             connect_fn=on_reconnect,
             event_emitter=on_reconnect_event,
+            internet_check=self._mode_aware_internet_check,
         )
 
         # Create ActiveConnectivityMonitor (process-based, VPN mode only)
@@ -204,6 +205,25 @@ class ConnectionMonitoringService:
             session_id = self._session_id
 
         self._auto_reconnect.handle_failure(current_connection, session_id)
+
+    def _mode_aware_internet_check(self, current_connection: Optional[dict]) -> bool:
+        """Check internet availability through the path that matches the active mode.
+
+        In VPN/TUN mode all traffic is captured by the tunnel, so a raw direct
+        socket check is blocked by the TUN engine — sing-box's ``strict_route``
+        WFP filter rejects it with WinError 10013 (WSAEACCES). Verify through the
+        SOCKS proxy (the tunnel egress) instead.
+        """
+        from src.core.constants import MODE_VPN
+        from src.utils.network_utils import NetworkUtils
+
+        mode = (current_connection or {}).get("mode")
+        if mode == MODE_VPN:
+            proxy_port = self._app_context.settings.get_proxy_port()
+            if not proxy_port:
+                return False
+            return NetworkUtils.check_proxy_connectivity(proxy_port)
+        return self._network_validator.check_internet_connection()
 
     @property
     def session_id(self) -> int:

@@ -37,6 +37,7 @@ from src.core.constants import (
     STREAM_XHTTP_SETTINGS,
     TAG_PROXY,
     TLS_SETTINGS,
+    XHTTP_EXTRA_KEYS,
 )
 from src.services.config_utils import get_server_object
 
@@ -103,6 +104,17 @@ class LegacyConfigService:
 
                 # Apply XHTTP stability settings during migration
                 xhttp_settings = stream_settings.setdefault(STREAM_XHTTP_SETTINGS, {})
+
+                # Migrate root-level advanced fields into extra dict
+                extra = xhttp_settings.get("extra")
+                if not isinstance(extra, dict):
+                    extra = {}
+                for key in list(xhttp_settings.keys()):
+                    if key in XHTTP_EXTRA_KEYS:
+                        extra[key] = xhttp_settings.pop(key)
+                        logger.info(f"[LegacyConfigService] Migrated xhttpSettings.{key} into extra dict")
+                if extra:
+                    xhttp_settings["extra"] = extra
 
                 # Set mode to packet-up for best CDN compatibility
                 if not xhttp_settings.get(STREAM_MODE):

@@ -383,7 +383,7 @@ class LanguageDropdownRow(ft.Container):
 
         def wrapped_on_change(e):
             selected = self._dropdown.value
-            for lang_code, flag_code, name in self._languages:
+            for lang_code, flag_code, _ in self._languages:
                 if lang_code == selected:
                     self._flag_image.src = f"/flags/{flag_code}.svg"
                     self._flag_image.update()
@@ -499,9 +499,9 @@ class StartupToggleRow(ft.Container):
         enabled = self._switch.value
 
         if enabled:
-            success, msg = self._on_register()
+            success, _ = self._on_register()
         else:
-            success, msg = self._on_unregister()
+            success, _ = self._on_unregister()
 
         if success:
             self._app_context.settings.set_startup_enabled(enabled)
@@ -591,3 +591,260 @@ class AutoReconnectToggleRow(ft.Container):
                 self.page.update()
         except (RuntimeError, AttributeError):
             pass
+
+
+class CipherSuitesInputRow(ft.Container):
+    """Cipher suites input row for TLS/REALITY settings."""
+
+    def __init__(self, initial_value: str, on_save: Callable):
+        self._field = ft.TextField(
+            value=initial_value,
+            width=280,
+            height=40,
+            text_size=12,
+            content_padding=8,
+            hint_text=t("settings.cipher_suites_hint"),
+            border_color=ft.Colors.OUTLINE_VARIANT,
+            focused_border_color=ft.Colors.PRIMARY,
+        )
+        self._example_text = ft.Text(
+            t("settings.cipher_suites_example"),
+            size=10,
+            color=ft.Colors.OUTLINE,
+        )
+
+        super().__init__(
+            content=ft.Column(
+                [
+                    ft.Row(
+                        [
+                            ft.Icon(
+                                ft.Icons.SECURITY,
+                                size=24,
+                                color=ft.Colors.ON_SURFACE_VARIANT,
+                            ),
+                            ft.Column(
+                                [
+                                    ft.Text(
+                                        t("settings.cipher_suites"),
+                                        weight=ft.FontWeight.W_500,
+                                    ),
+                                    ft.Text(
+                                        t("settings.cipher_suites_desc"),
+                                        size=11,
+                                        color=ft.Colors.ON_SURFACE_VARIANT,
+                                    ),
+                                ],
+                                spacing=2,
+                                expand=True,
+                            ),
+                            ft.IconButton(
+                                icon=ft.Icons.CHECK,
+                                icon_size=20,
+                                icon_color=ft.Colors.PRIMARY,
+                                tooltip=t("settings.save"),
+                                on_click=lambda e: on_save(self._field.value),
+                            ),
+                        ],
+                        spacing=5,
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    ),
+                    ft.Row(
+                        [self._field],
+                        alignment=ft.MainAxisAlignment.CENTER,
+                    ),
+                    ft.Row(
+                        [self._example_text],
+                        alignment=ft.MainAxisAlignment.CENTER,
+                    ),
+                ],
+                spacing=4,
+            ),
+            padding=ft.Padding.symmetric(horizontal=10, vertical=8),
+        )
+
+    @property
+    def value(self) -> str:
+        return self._field.value
+
+    def set_border_color(self, color):
+        self._field.border_color = color
+        self._field.update()
+
+
+class CoreDropdownRow(ft.Container):
+    """Core engine selection row (fixed to Xray-core as Outbound/Proxy Engine)."""
+
+    def __init__(self, current_value: str, on_change: Callable):
+        self._dropdown = ft.Dropdown(
+            width=120,
+            text_size=12,
+            content_padding=8,
+            value="xray",
+            options=[
+                ft.dropdown.Option("xray", "Xray-core"),
+            ],
+            disabled=True,
+            border_color=ft.Colors.OUTLINE_VARIANT,
+            focused_border_color=ft.Colors.PRIMARY,
+            on_select=on_change,
+        )
+
+        super().__init__(
+            content=ft.Row(
+                [
+                    ft.Icon(ft.Icons.MEMORY, size=24, color=ft.Colors.ON_SURFACE_VARIANT),
+                    ft.Column(
+                        [
+                            ft.Text(
+                                t("settings.core_engine"),
+                                size=12,
+                                weight=ft.FontWeight.W_500,
+                            ),
+                            ft.Text(
+                                t("settings.core_engine_desc"),
+                                size=11,
+                                color=ft.Colors.ON_SURFACE_VARIANT,
+                            ),
+                        ],
+                        spacing=2,
+                        expand=True,
+                    ),
+                    self._dropdown,
+                ],
+                spacing=8,
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
+            padding=ft.Padding.symmetric(horizontal=10, vertical=8),
+            border_radius=8,
+            bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE),
+        )
+
+    @property
+    def value(self) -> str:
+        return "xray"
+
+
+class TunEngineDropdownRow(ft.Container):
+    """TUN implementation selection row (Xray / Sing-box)."""
+
+    def __init__(self, current_value: str, on_change: Callable):
+        self._dropdown = ft.Dropdown(
+            width=120,
+            text_size=12,
+            content_padding=8,
+            value=current_value if current_value in ("xray", "singbox") else "singbox",
+            options=[
+                ft.dropdown.Option("singbox", "Sing-box TUN"),
+                ft.dropdown.Option("xray", "Xray TUN"),
+            ],
+            border_color=ft.Colors.OUTLINE_VARIANT,
+            focused_border_color=ft.Colors.PRIMARY,
+            on_select=on_change,
+        )
+
+        super().__init__(
+            content=ft.Row(
+                [
+                    ft.Icon(ft.Icons.ROUTER, size=24, color=ft.Colors.ON_SURFACE_VARIANT),
+                    ft.Column(
+                        [
+                            ft.Text(
+                                t("settings.tun_engine"),
+                                size=12,
+                                weight=ft.FontWeight.W_500,
+                            ),
+                            ft.Text(
+                                t("settings.tun_engine_desc"),
+                                size=11,
+                                color=ft.Colors.ON_SURFACE_VARIANT,
+                            ),
+                        ],
+                        spacing=2,
+                        expand=True,
+                    ),
+                    self._dropdown,
+                ],
+                spacing=8,
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
+            padding=ft.Padding.symmetric(horizontal=10, vertical=8),
+            border_radius=8,
+            bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE),
+        )
+
+    @property
+    def value(self) -> str:
+        return self._dropdown.value
+
+
+class LanShareToggleRow(ft.Container):
+    """Self-contained LAN proxy sharing toggle.
+
+    Persists ``allow_lan`` and manages the Windows Firewall inbound rule so LAN
+    devices can reach XenRay's SOCKS/HTTP proxy endpoints.
+    """
+
+    def __init__(
+        self,
+        app_context,
+        toast_callback: Callable[[str, str], None],
+    ):
+        self._app_context = app_context
+        self._toast_callback = toast_callback
+
+        is_enabled = app_context.settings.get_allow_lan()
+        self._switch = ft.Switch(
+            value=is_enabled,
+            active_color=ft.Colors.PRIMARY,
+            on_change=self._handle_toggle,
+        )
+
+        super().__init__(
+            content=ft.Row(
+                [
+                    ft.Icon(ft.Icons.LAN, color=ft.Colors.ON_SURFACE_VARIANT),
+                    ft.Column(
+                        [
+                            ft.Text(t("settings.allow_lan"), weight=ft.FontWeight.W_500),
+                            ft.Text(
+                                t("settings.allow_lan_desc"),
+                                size=11,
+                                color=ft.Colors.ON_SURFACE_VARIANT,
+                            ),
+                        ],
+                        spacing=2,
+                        expand=True,
+                    ),
+                    self._switch,
+                ],
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            ),
+            padding=10,
+            border_radius=8,
+            bgcolor=ft.Colors.with_opacity(0.1, ft.Colors.ON_SURFACE),
+        )
+
+    def _handle_toggle(self, e):
+        """Persist the setting and manage the firewall rule."""
+        enabled = self._switch.value
+        self._app_context.settings.set_allow_lan(enabled)
+
+        from src.utils.firewall_manager import FirewallManager
+
+        if enabled:
+            port = self._app_context.settings.get_proxy_port()
+            FirewallManager.add_lan_firewall_rule([port, port + 4])
+            self._toast_callback(t("settings.lan_enabled"), "success")
+        else:
+            FirewallManager.remove_lan_firewall_rule()
+            self._toast_callback(t("settings.lan_disabled"), "info")
+
+        if self.page:
+            self.page.update()
+
+    @property
+    def value(self) -> bool:
+        return self._switch.value

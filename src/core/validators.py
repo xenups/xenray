@@ -7,26 +7,8 @@ class ValidationError(ValueError):
     pass
 
 
-def validate_port(port: int) -> None:
-    """Validate proxy port is in valid range."""
-    if not isinstance(port, int):
-        raise ValidationError("Port must be an integer")
-    if not (1024 <= port <= 65535):
-        raise ValidationError(f"Port must be between 1024 and 65535, got {port}")
-
-
 def validate_chain_items(items: list[str], is_chain_fn, profile_resolver) -> None:
-    """
-    Validate chain configuration.
-
-    Args:
-        items: List of profile IDs
-        is_chain_fn: Callable to check if ID is a chain
-        profile_resolver: Object with resolve_for_validation(profile_id) method
-
-    Raises:
-        ValidationError: If validation fails
-    """
+    """Validate chain configuration."""
     if not items or not isinstance(items, list):
         raise ValidationError("Invalid chain items")
 
@@ -61,7 +43,6 @@ def validate_chain_items(items: list[str], is_chain_fn, profile_resolver) -> Non
         if protocol not in chainable:
             raise ValidationError(f"{protocol} does not support chaining")
 
-        # Last item check
         if idx == len(items) - 1:
             sockopt = outbound.get("streamSettings", {}).get("sockopt", {})
             if sockopt.get("dialerProxy"):
@@ -74,15 +55,3 @@ def _get_chain_outbound(config: dict, chainable: set) -> dict | None:
         if outbound.get("protocol", "") in chainable:
             return outbound
     return None
-
-
-def validate_profile_name(name: str) -> None:
-    """Validate profile name."""
-    if not name or not isinstance(name, str):
-        raise ValidationError("Profile name is required")
-
-
-def validate_profile_config(config: dict) -> None:
-    """Validate profile config structure."""
-    if not isinstance(config, dict):
-        raise ValidationError("Profile config must be a dictionary")

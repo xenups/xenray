@@ -1,17 +1,45 @@
 """Main application entry point."""
 
+import asyncio
+import ctypes
 import os
 import sys
 
-if __name__ == "__main__":
-    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-import asyncio
+import flet as ft
 
 from src.core.constants import EARLY_LOG_FILE, WINDOW_HEIGHT, WINDOW_WIDTH
 from src.core.logger import logger
 from src.core.settings import Settings
 from src.ui.theme import AppColors
+
+# 1. Register AppUserModelID for Windows Process Grouping (Must run BEFORE ft.app/ft.run)
+if sys.platform == "win32":
+    try:
+        myappid = "xenray.desktop.client.v1"
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+    except Exception as e:
+        print(f"Failed to set AppUserModelID: {e}")
+
+
+def get_absolute_icon_path() -> str:
+    """Returns absolute path to assets/icon.ico regardless of dev or PyInstaller execution."""
+    if hasattr(sys, "_MEIPASS"):
+        base_path = sys._MEIPASS
+    else:
+        base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+    icon_path = os.path.join(base_path, "assets", "icon.ico")
+    return os.path.abspath(icon_path)
+
+
+def resolve_asset_path(relative_path: str) -> str:
+    """Resolves absolute path to asset files for dev and compiled PyInstaller executable."""
+    return (
+        get_absolute_icon_path()
+        if relative_path.endswith("icon.ico")
+        else (os.path.join(sys._MEIPASS, relative_path) if hasattr(sys, "_MEIPASS") else os.path.abspath(relative_path))
+    )
+
 
 _shutdown_event = asyncio.Event()
 
@@ -20,9 +48,17 @@ def signal_exit():
     _shutdown_event.set()
 
 
-async def main(page):
+async def main(page: ft.Page):
     """Main entry point."""
     logger.debug("[DEBUG] Starting Flet session (async main)")
+
+    # 2. Resolve absolute icon path for Flet 0.86+ specs
+    icon_path = get_absolute_icon_path()
+
+    # 3. Set Window Properties per Flet 0.86+ Specs
+    page.window.title = "XenRay"
+    if os.path.exists(icon_path):
+        page.window.icon = icon_path  # Absolute path is mandatory in 0.86+
 
     # 1. Lock native window geometry and configure page.
     #    The window is already hidden at the OS level (FLET_APP_HIDDEN view).
@@ -199,5 +235,6 @@ def run():
 if __name__ == "__main__":
     import multiprocessing
 
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     multiprocessing.freeze_support()
     run()

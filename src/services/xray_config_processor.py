@@ -46,7 +46,6 @@ from src.core.constants import (
     XRAY_LOCATION_ASSET,
 )
 from src.services.config_patcher import ConfigPatcher
-from src.services.config_utils import get_server_object, is_ip
 from src.services.dns_configurator import DnsConfigurator
 from src.services.tun_injector import TunInjector
 from src.utils.network_utils import NetworkUtils
@@ -60,7 +59,13 @@ class XrayConfigProcessor:
     specialized classes (DnsConfigurator, TunInjector, ConfigPatcher).
     """
 
-    SUPPORTED_PROTOCOLS = [PROTOCOL_VLESS, PROTOCOL_VMESS, PROTOCOL_TROJAN, PROTOCOL_SHADOWSOCKS, PROTOCOL_HYSTERIA2]
+    SUPPORTED_PROTOCOLS = [
+        PROTOCOL_VLESS,
+        PROTOCOL_VMESS,
+        PROTOCOL_TROJAN,
+        PROTOCOL_SHADOWSOCKS,
+        PROTOCOL_HYSTERIA2,
+    ]
     CHAINABLE_PROTOCOLS = {
         PROTOCOL_VLESS,
         PROTOCOL_VMESS,
@@ -97,23 +102,36 @@ class XrayConfigProcessor:
         """
         new_config = copy.deepcopy(config)
 
-        new_config["log"] = {"loglevel": "debug", "access": "", "error": ""}
+        new_config["log"] = {"loglevel": "warning", "access": "", "error": ""}
 
         os.environ["XRAY_LOCATION_ASSET"] = XRAY_LOCATION_ASSET
 
         self._ensure_inbounds(new_config)
 
-        self._dns_configurator.configure(new_config)
+        proxy_server_ips = self.get_proxy_server_ip(new_config)
+        routing_rules = None
+        if mode == MODE_VPN and hasattr(self._app_context, "routing"):
+            routing_rules = self._app_context.routing.load_rules()
 
-        self._config_patcher.safe_patch(new_config)
+        self._dns_configurator.configure(
+            new_config,
+            mode=mode,
+            proxy_server_ips=proxy_server_ips,
+            routing_rules=routing_rules,
+        )
+
+        default_cipher = self._app_context.settings.get_cipher_suites()
+        self._config_patcher.safe_patch(new_config, default_cipher_suites=default_cipher)
 
         if mode == MODE_VPN:
             is_quic = self.is_quic_transport(new_config)
             mtu_mode = "quic_safe" if is_quic else "auto"
             optimal_mtu = NetworkUtils.detect_optimal_mtu(mtu_mode=mtu_mode)
-            routing_country = self._app_context.settings.get_routing_country()
-            routing_rules = self._app_context.routing.load_rules()
-            proxy_server_ips = self.get_proxy_server_ip(new_config)
+            routing_country = ""
+            if hasattr(self._app_context, "settings"):
+                routing_country = self._app_context.settings.get_routing_country()
+            if routing_rules is None and hasattr(self._app_context, "routing"):
+                routing_rules = self._app_context.routing.load_rules()
             dns_servers = self._dns_configurator.build_tun_servers()
             self._tun_injector.inject(
                 new_config,
@@ -151,10 +169,17 @@ class XrayConfigProcessor:
             for i, node in enumerate(resolved_items):
                 node_config = node.get("config", {})
                 outbounds = node_config.get(CONFIG_OUTBOUNDS, [])
-                proxy_out = next((o for o in outbounds if o.get(CONFIG_PROTOCOL) in self.CHAINABLE_PROTOCOLS), None)
+                proxy_out = next(
+                    (o for o in outbounds if o.get(CONFIG_PROTOCOL) in self.CHAINABLE_PROTOCOLS),
+                    None,
+                )
 
                 if not proxy_out:
-                    return False, None, f"Node {i+1} ({node.get('name')}) has no valid proxy outbound"
+                    return (
+                        False,
+                        None,
+                        f"Node {i + 1} ({node.get('name')}) has no valid proxy outbound",
+                    )
 
                 outbound = copy.deepcopy(proxy_out)
                 outbound[CONFIG_TAG] = f"proxy_{i}"
@@ -184,41 +209,6 @@ class XrayConfigProcessor:
         except Exception as e:
             return False, None, str(e)
 
-    def validate_config(self, config: dict) -> tuple[bool, str]:
-        """Validate Xray configuration structure and values."""
-        if not config or not isinstance(config, dict):
-            return False, "Config must be a non-empty dictionary"
-
-        if CONFIG_OUTBOUNDS not in config or not isinstance(config[CONFIG_OUTBOUNDS], list):
-            return False, "Config must have 'outbounds' list"
-
-        if len(config[CONFIG_OUTBOUNDS]) == 0:
-            return False, "At least one outbound is required"
-
-        for idx, outbound in enumerate(config[CONFIG_OUTBOUNDS]):
-            if not isinstance(outbound, dict):
-                return False, f"Outbound {idx} must be a dictionary"
-
-            protocol = outbound.get(CONFIG_PROTOCOL)
-            if not protocol:
-                return False, f"Outbound {idx} missing 'protocol'"
-
-            if protocol in self.SUPPORTED_PROTOCOLS:
-                settings = outbound.get(CONFIG_SETTINGS, {})
-                server_obj = get_server_object(settings)
-                if server_obj:
-                    port = server_obj.get(CONFIG_PORT)
-                    if port and not (1 <= port <= 65535):
-                        return False, f"Outbound {idx} has invalid port: {port}"
-
-        if CONFIG_INBOUNDS in config:
-            for idx, inbound in enumerate(config[CONFIG_INBOUNDS]):
-                port = inbound.get(CONFIG_PORT)
-                if port and not (1 <= port <= 65535):
-                    return False, f"Inbound {idx} has invalid port: {port}"
-
-        return True, ""
-
     def get_socks_port(self, config: dict) -> int:
         """Extract SOCKS port from config and inject sniffing settings."""
         user_port = self._app_context.settings.get_proxy_port()
@@ -240,7 +230,12 @@ class XrayConfigProcessor:
         """Extract proxy server IPs/domains from config."""
         addresses = []
         for outbound in config.get(CONFIG_OUTBOUNDS, []):
-            if outbound.get(CONFIG_PROTOCOL) in [PROTOCOL_VLESS, PROTOCOL_VMESS, PROTOCOL_TROJAN, PROTOCOL_SHADOWSOCKS]:
+            if outbound.get(CONFIG_PROTOCOL) in [
+                PROTOCOL_VLESS,
+                PROTOCOL_VMESS,
+                PROTOCOL_TROJAN,
+                PROTOCOL_SHADOWSOCKS,
+            ]:
                 settings = outbound.get(CONFIG_SETTINGS, {})
                 if "vnext" in settings:
                     for server in settings["vnext"]:
@@ -277,8 +272,14 @@ class XrayConfigProcessor:
     # ------------------------------------------------------------------
 
     def _ensure_inbounds(self, config: dict):
-        """Ensure inbounds exist with user's configured ports."""
+        """Ensure inbounds exist with user's configured ports.
+
+        When LAN proxy sharing is enabled (``allow_lan``), SOCKS/HTTP inbounds
+        listen on ``0.0.0.0`` so other LAN devices can reach them; otherwise they
+        stay bound to ``127.0.0.1``.
+        """
         user_port = self._app_context.settings.get_proxy_port()
+        listen = "0.0.0.0" if self._app_context.settings.get_allow_lan() else "127.0.0.1"
 
         if not config.get(CONFIG_INBOUNDS):
             config[CONFIG_INBOUNDS] = []
@@ -289,7 +290,7 @@ class XrayConfigProcessor:
                 {
                     CONFIG_TAG: PROTOCOL_SOCKS,
                     CONFIG_PORT: user_port,
-                    "listen": "127.0.0.1",
+                    "listen": listen,
                     CONFIG_PROTOCOL: PROTOCOL_SOCKS,
                     CONFIG_SETTINGS: {"udp": True},
                     CONFIG_SNIFFING: {
@@ -299,11 +300,12 @@ class XrayConfigProcessor:
                     },
                 }
             )
-            logger.info(f"[XrayConfigProcessor] Added SOCKS inbound on port {user_port}")
+            logger.info(f"[XrayConfigProcessor] Added SOCKS inbound on port {user_port} (listen {listen})")
         else:
             for inbound in config[CONFIG_INBOUNDS]:
                 if inbound.get(CONFIG_PROTOCOL) == PROTOCOL_SOCKS:
                     inbound[CONFIG_PORT] = user_port
+                    inbound["listen"] = listen
                     inbound[CONFIG_SNIFFING] = {
                         CONFIG_ENABLED: True,
                         CONFIG_DEST_OVERRIDE: list(SNIFF_DEST_OVERRIDE),
@@ -316,102 +318,15 @@ class XrayConfigProcessor:
                 {
                     CONFIG_TAG: PROTOCOL_HTTP,
                     CONFIG_PORT: user_port + 4,
-                    "listen": "127.0.0.1",
+                    "listen": listen,
                     CONFIG_PROTOCOL: PROTOCOL_HTTP,
                 }
             )
-            logger.info(f"[XrayConfigProcessor] Added HTTP inbound on port {user_port + 4}")
+            logger.info(f"[XrayConfigProcessor] Added HTTP inbound on port {user_port + 4} (listen {listen})")
+        else:
+            for inbound in config[CONFIG_INBOUNDS]:
+                if inbound.get(CONFIG_PROTOCOL) == PROTOCOL_HTTP:
+                    inbound["listen"] = listen
 
-    # ------------------------------------------------------------------
     # DISABLED — pre-resolution was breaking ECH / Reality / SNI
-    # ------------------------------------------------------------------
-
-    def _add_outbound_dns_entries(self, config: dict):
-        """Resolve outbound server domains to IPs (DISABLED — kept for reference)."""
-        import socket
-
-        for outbound in config.get(CONFIG_OUTBOUNDS, []):
-            protocol = outbound.get(CONFIG_PROTOCOL)
-            if protocol not in self.SUPPORTED_PROTOCOLS:
-                continue
-
-            settings = outbound.get(CONFIG_SETTINGS, {})
-            server_obj = get_server_object(settings)
-
-            if not server_obj or CONFIG_ADDRESS not in server_obj:
-                continue
-
-            address = server_obj[CONFIG_ADDRESS]
-            if is_ip(address):
-                continue
-
-            try:
-                _, _, ip_list = socket.gethostbyname_ex(address)
-
-                def is_local_ip(ip_str):
-                    parts = ip_str.split(".")
-                    if len(parts) != 4:
-                        return False
-                    try:
-                        first = int(parts[0])
-                        second = int(parts[1])
-                        if first == 10 or first == 127:
-                            return True
-                        if first == 172 and 16 <= second <= 31:
-                            return True
-                        if first == 192 and second == 168:
-                            return True
-                    except ValueError:
-                        pass
-                    return False
-
-                selected_ip = None
-                for ip in ip_list:
-                    if not is_local_ip(ip):
-                        selected_ip = ip
-                        break
-
-                if not selected_ip and ip_list:
-                    selected_ip = ip_list[0]
-
-                if len(ip_list) > 1:
-                    selected_ip = ip_list[-1]
-
-                if selected_ip:
-                    server_obj[CONFIG_ADDRESS] = selected_ip
-
-                logger.info(f"[XrayConfigProcessor] Resolved {address} -> {selected_ip} (replaced in outbound config)")
-            except Exception as e:
-                logger.warning(f"[XrayConfigProcessor] Failed to resolve {address}: {e}")
-
-    def _resolve_outbound_addresses(self, config: dict):
-        """Bootstrap DNS resolution (DISABLED — kept for reference)."""
-        import socket
-
-        for outbound in config.get(CONFIG_OUTBOUNDS, []):
-            protocol = outbound.get(CONFIG_PROTOCOL)
-            if protocol not in self.SUPPORTED_PROTOCOLS:
-                continue
-
-            settings = outbound.get(CONFIG_SETTINGS, {})
-            server_obj = get_server_object(settings)
-
-            if not server_obj or CONFIG_ADDRESS not in server_obj:
-                continue
-
-            address = server_obj[CONFIG_ADDRESS]
-            if is_ip(address):
-                logger.debug(f"[XrayConfigProcessor] Address {address} is already an IP, skipping resolution")
-                continue
-
-            try:
-                socket.setdefaulttimeout(5.0)
-                resolved_ip = socket.gethostbyname(address)
-                server_obj[CONFIG_ADDRESS] = resolved_ip
-                logger.info(f"Bootstrap: Resolved {address} -> {resolved_ip}")
-                logger.info("All DNS queries will now go through tunnel")
-            except (socket.gaierror, socket.timeout, OSError) as e:
-                logger.error(f"Failed to resolve {address}: {e}")
-                logger.warning("Keeping domain address - may cause DNS issues")
-            finally:
-                socket.setdefaulttimeout(None)
+    # (Methods _add_outbound_dns_entries and _resolve_outbound_addresses removed)

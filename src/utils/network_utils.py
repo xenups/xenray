@@ -1,9 +1,11 @@
 """Network utilities."""
+
 import os
 import shutil
 import socket
 import subprocess
 
+from src.core.constants import DNS_IP_GOOGLE
 from src.core.logger import logger
 from src.utils.platform_utils import PlatformUtils
 
@@ -12,7 +14,7 @@ class NetworkUtils:
     """Utilities for network operations."""
 
     @staticmethod
-    def check_internet_connection(host="8.8.8.8", port=53, timeout=3, retries=3):
+    def check_internet_connection(host=DNS_IP_GOOGLE, port=53, timeout=3, retries=3):
         """
         Check if there is an active internet connection by connecting to a reliable host.
         Default is Google DNS (8.8.8.8) on port 53 (DNS).
@@ -46,17 +48,20 @@ class NetworkUtils:
     def check_proxy_connectivity(
         port: int,
         target_url=None,
-        timeout=5,
+        timeout=2.5,
         retries=2,
     ) -> bool:
         """
         Check connectivity through a local SOCKS5 proxy using curl with fallback target URLs.
 
+        Each endpoint gets exactly 1 attempt — if it fails, failover immediately
+        to the next fallback endpoint (no retrying the same dead URL).
+
         Args:
             port: SOCKS5 proxy port
-            target_url: Optional URL to test connectivity. If None or default, uses robust HTTPS/HTTP fallbacks.
-            timeout: Timeout in seconds for each attempt
-            retries: Number of retry attempts (default: 2)
+            target_url: Optional URL to test. If None, uses robust HTTPS/HTTP fallbacks.
+            timeout: Max seconds per request (default 2.5)
+            retries: Number of fallback endpoints to try (default 2)
 
         Returns:
             True if connectivity is confirmed through the proxy, False otherwise
@@ -66,8 +71,6 @@ class NetworkUtils:
             logger.warning("curl not found, skipping proxy connectivity check")
             return True
 
-        # Candidate targets: Encrypted HTTPS first (avoids ISP HTTP port 80 resets on DPI/fragmented links),
-        # followed by plain HTTP fallbacks.
         default_targets = [
             "https://cp.cloudflare.com/generate_204",
             "https://www.gstatic.com/generate_204",
@@ -79,10 +82,9 @@ class NetworkUtils:
         else:
             targets = default_targets
 
-        max_time = str(max(timeout, 6))
-        connect_timeout = str(min(timeout, 5))
+        connect_timeout = str(max(timeout, 2))
 
-        for url in targets:
+        for url in targets[:retries]:
             cmd = [
                 curl_path,
                 "-x",
@@ -91,7 +93,7 @@ class NetworkUtils:
                 "--connect-timeout",
                 connect_timeout,
                 "--max-time",
-                max_time,
+                connect_timeout,
                 "-s",
                 "-o",
                 os.devnull,
@@ -99,44 +101,33 @@ class NetworkUtils:
                 "%{http_code}",
             ]
 
-            for attempt in range(retries):
-                try:
-                    startupinfo = PlatformUtils.get_startupinfo()
+            try:
+                startupinfo = PlatformUtils.get_startupinfo()
 
-                    result = subprocess.run(
-                        cmd,
-                        capture_output=True,
-                        text=True,
-                        creationflags=PlatformUtils.get_subprocess_flags(),
-                        startupinfo=startupinfo,
-                        check=False,
-                    )
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    creationflags=PlatformUtils.get_subprocess_flags(),
+                    startupinfo=startupinfo,
+                    check=False,
+                )
 
-                    if result.returncode == 0:
-                        code = result.stdout.strip()
-                        logger.info(f"Proxy check to {url} returned: {code}")
-                        # Any valid HTTP status code (2xx, 3xx, 4xx, 5xx) proves the proxy tunnel is intact
-                        if code.isdigit() and int(code) > 0:
-                            return True
-                    else:
-                        logger.debug(f"Proxy check to {url} attempt {attempt + 1}/{retries} failed: {result.stderr}")
+                if result.returncode == 0:
+                    code = result.stdout.strip()
+                    logger.info(f"Proxy check to {url} returned: {code}")
+                    if code.isdigit() and int(code) > 0:
+                        return True
+                else:
+                    logger.debug(f"Proxy check to {url} failed: {result.stderr}")
 
-                    if attempt < retries - 1:
-                        import time
-
-                        time.sleep(0.5)
-
-                except Exception as e:
-                    logger.debug(f"Proxy check error to {url}: {e}")
-                    if attempt < retries - 1:
-                        import time
-
-                        time.sleep(0.5)
+            except Exception as e:
+                logger.debug(f"Proxy check error to {url}: {e}")
 
         return False
 
     @staticmethod
-    def detect_optimal_mtu(host="8.8.8.8", min_mtu=1280, max_mtu=1480, timeout=2, mtu_mode="auto") -> int:
+    def detect_optimal_mtu(host=DNS_IP_GOOGLE, min_mtu=1280, max_mtu=1480, timeout=2, mtu_mode="auto") -> int:
         """
         Detect optimal MTU using ping with Don't Fragment flag.
         Uses binary search to find the largest non-fragmented MTU.

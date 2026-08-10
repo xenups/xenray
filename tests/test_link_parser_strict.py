@@ -75,10 +75,10 @@ class TestLinkParserStrict(unittest.TestCase):
         settings = result["config"]["outbounds"][0]["streamSettings"]["xhttpSettings"]
 
         self.assertEqual(settings.get("mode"), "stream-up")
-        self.assertEqual(settings.get("noSSEHeader"), True)
-        self.assertEqual(settings.get("xPaddingBytes"), 100)
-        self.assertEqual(settings.get("scStreamUpServerSecs"), 30)
-        self.assertEqual(settings.get("scMaxBufferedPosts"), 50)
+        self.assertEqual(settings["extra"].get("noSSEHeader"), True)
+        self.assertEqual(settings["extra"].get("xPaddingBytes"), 100)
+        self.assertEqual(settings["extra"].get("scStreamUpServerSecs"), 30)
+        self.assertEqual(settings["extra"].get("scMaxBufferedPosts"), 50)
 
     def test_extended_splithttp_params_missing(self):
         """
@@ -91,6 +91,7 @@ class TestLinkParserStrict(unittest.TestCase):
         self.assertNotIn("mode", settings)
         self.assertNotIn("noSSEHeader", settings)
         self.assertNotIn("xPaddingBytes", settings)
+        self.assertNotIn("extra", settings)
 
 
 class TestXrayConfigProcessorStrict(unittest.TestCase):

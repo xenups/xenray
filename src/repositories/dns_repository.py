@@ -1,7 +1,8 @@
 """DNS Repository - Concrete JSON-backed storage for DNS configuration."""
+
 import os
 
-from src.core.constants import RECENT_FILES_PATH
+from src.core.constants import DNS_IP_CLOUDFLARE, DNS_IP_GOOGLE, RECENT_FILES_PATH
 from src.repositories.file_utils import atomic_write_json, load_json_file
 
 
@@ -15,8 +16,8 @@ class DNSRepository:
     def load(self) -> list:
         """Load DNS configuration."""
         defaults = [
-            {"address": "1.1.1.1", "protocol": "udp", "domains": []},
-            {"address": "8.8.8.8", "protocol": "udp", "domains": []},
+            {"address": DNS_IP_CLOUDFLARE, "protocol": "udp", "domains": []},
+            {"address": DNS_IP_GOOGLE, "protocol": "udp", "domains": []},
         ]
         data = load_json_file(self._path, defaults)
         return data if isinstance(data, list) else defaults

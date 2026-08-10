@@ -2,7 +2,118 @@
 
 All notable changes to XenRay will be documented in this file.
 
-## [Unreleased]
+## [0.2.5-beta] - 2026-08-06
+
+### Changed
+- **Version Bump**: Updated application version across project to `0.2.5-beta`.
+- **Flet v0.86.1 Window Controller & Taskbar Icon**:
+  - Registered explicit Windows AppUserModelID (`xenray.desktop.client.v1`) before Flet app initialization for native process icon grouping.
+  - Resolved absolute icon file paths for both development and compiled PyInstaller (`sys._MEIPASS`) environments via `get_absolute_icon_path()`.
+
+## [0.2.2-beta] - 2026-07-31
+
+### Added
+- **TLS Cipher Suites Support**: Custom cipherSuites for TLS/REALITY connections
+  - Extract `cs`/`cipherSuites` query param from VLESS/VMess/Trojan/Hysteria2 links
+  - Inject into `tlsSettings`/`realitySettings` as colon-separated string
+  - Global default cipherSuites via settings repository with runtime fallback
+- **`unsafe` Fingerprint Support**: Recognized as valid fingerprint value (disables uTLS, plain Go TLS)
+- **xHTTP `extra` Object**: Strict Xray-core v26.7.28 compliance for xhttpSettings
+  - Advanced params (`noSSEHeader`, `downloadProxy`, `xPaddingBytes`, `scMax*`, `headers`, `xmux`) nested inside `extra` dict
+  - Root level: only `host`, `path`, `mode`
+  - Auto-migration of legacy root-level fields into `extra`
+  - Share links encode `extra` as single JSON param, maintain round-trip fidelity
+- **New XHTTP Query Params**: `downloadProxy`, `uplinkHTTPMethod`, `downlinkHTTPMethod`, `scMaxEachGetBytes`, `scMinPostsIntervalMs`
+- **Share Link `fp` Round-trip**: VMess generator now includes `fingerprint` in output
+
+### Changed
+- **Connectivity Verification**: Consolidated dual verification into single pass
+  - VPN mode now uses existing SOCKS proxy instead of spawning second Xray
+  - Connection tester warm-up increased 0.5s → 2.5s
+  - `check_proxy_connectivity` timeout reduced 5s → 2.5s, no retries on dead URLs
+- **xHTTP Link Encoding**: `cs` (not `cipherSuites`) used as share-link query key (v2rayN/v2rayNG convention)
+- **Flet Clipboard API**: `page.set_clipboard()` → `page.run_task(page.clipboard.set, ...)` for API compatibility
+- **i18n**: Added cipherSuites translations for zh/ru/fa locales
+- **Version bumped**: 0.1.18-beta → 0.2.2-beta
+
+### Cleaned Up
+- **Dead Code Removal**: Removed 10 unused functions/methods:
+  - `validators.py`: `validate_port`, `validate_profile_name`, `validate_profile_config`
+  - `xray_config_processor.py`: `validate_config`, `_add_outbound_dns_entries`, `_resolve_outbound_addresses`
+  - `settings_repository.py`: `get_custom_dns`, `set_custom_dns`, `get_startup_enabled`
+  - `country_flags.py`: `get_country_from_ip`
+- **Unused variables**: Fixed 7 unused variables (`app_context`, `reg_msg`, `i`, `profile_id`, `name`, `msg`)
+- **Settings UI Row**: Removed cipherSuites input row from settings drawer (backend kept)
+
+### Fixed
+- **ImportError**: `DEFAULT_NETWORK` missing from constants import in `legacy_config_service.py` — now 351 tests passing
+- **Deprecated Splithttp**: Auto-migrated to xhttp in link parser, config patcher, and legacy service
+
+## [0.2.1-beta] - 2026-07-22
+
+### Fixed
+- **WinTUN DLL Download**: Fixed duplicate download issue for `wintun.dll`
+- **Unicode Encoding**: Fixed `charmap` codec error on Windows for non-ASCII characters
+
+## [0.2.0-beta] - 2026-07-22
+
+### Added
+- **Xray TUN Mode**: Full Xray-based TUN implementation replacing Sing-box
+  - Removed Sing-box TUN (singbox no longer maintained)
+  - Xray native TUN with proper routing rules
+  - Direct IP/domain bypass rules
+  - DNS configuration for TUN interface
+
+### Changed
+- **Sing-box Removal**: All Sing-box TUN code and tests removed
+- **Core Engine**: Xray is now the single core engine for both proxy and VPN modes
+
+### Technical
+- Updated all mocks and tests for Xray-only architecture
+- Cleaned up Sing-box service module completely
+
+## [0.1.17-beta] - 2026-07-22
+
+### Added
+- **Xray Installation Service**: Automatic download and installation of Xray core
+  - Version detection and comparison
+  - Platform-specific binary paths
+  - UI integration for installation progress
+
+## [0.1.16-alpha] - 2026-07-21
+
+### Added
+- **Connection Orchestrator**: Centralized workflow for connection establishment, health verification, and teardown
+- **Latency Tester**: Per-server latency testing with geo-location data
+- **Server List UI**: Individual server cards with ping display, share, and delete actions
+- **Core Configuration Module**: Centralized constants and configuration management
+
+## [0.1.15-alpha] - 2026-07-21
+
+### Changed
+- **Flet Desktop Mode**: Migrated to Flet desktop runtime for native window management
+- **Dependency Lock**: Updated Poetry lock file
+
+## [0.1.14-alpha] - 2026-07-21
+
+### Changed
+- **Flet Upgrade**: Upgraded to latest Flet version with breaking API changes
+- **Code Formatting**: Full reformat with updated linter rules
+
+## [0.1.12-alpha] - 2026-07-20
+
+### Added
+- **Core Upgrade**: Updated Xray and Sing-box to latest versions
+- **DNS Fixes**: Proper DNS configuration for TUN mode, fixed auto-injecting default values
+
+### Fixed
+- **Lint & Format**: CI/CD code quality fixes across multiple files
+
+## [0.1.11-alpha] - 2026-02-25
+
+### Fixed
+- **Xray Bugs**: Various bug fixes for Xray core integration
+- **Code Quality**: Linting and formatting fixes across codebase
 
 ## [0.1.10-alpha] - 2025-12-28
 

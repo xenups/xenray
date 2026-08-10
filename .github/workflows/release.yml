@@ -39,12 +39,14 @@ jobs:
           $version = "${{ github.ref_name }}".TrimStart('v')
           (Get-Content .env) -replace 'APP_VERSION=.*', "APP_VERSION=$version" | Set-Content .env
 
-      - name: Export XRAY_VERSION for workflow
+      - name: Export versions for workflow
         run: |
           $xrayVer = Select-String -Path .env -Pattern '^XRAY_VERSION=(.*)$' | ForEach-Object { $_.Matches.Groups[1].Value }
+          $singboxVer = Select-String -Path .env -Pattern '^SINGBOX_VERSION=(.*)$' | ForEach-Object { $_.Matches.Groups[1].Value }
           echo "XRAY_VERSION=$xrayVer" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "SINGBOX_VERSION=$singboxVer" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       
-      - name: Download Xray binary
+      - name: Download Xray, Sing-box, and Wintun binaries
         run: poetry run python scripts/download_binaries.py --arch 64
       
       - name: Download Xray geo files
@@ -113,6 +115,7 @@ jobs:
             ### Included
             - XenRay GUI Application
             - Xray Core ${{ env.XRAY_VERSION }}
+            - Sing-box Core ${{ env.SINGBOX_VERSION }}
             - geoip.dat & geosite.dat (Iran-optimized routing rules)
             - wintun.dll (TUN interface driver)
             - Multilingual support (EN, FA, RU, ZH)

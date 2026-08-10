@@ -98,7 +98,31 @@
     "auto_reconnect_enabled": "Авто-реконнект включен",
     "auto_reconnect_disabled": "Авто-реконнект выключен (экономия батареи)",
     "language_restart_msg": "Язык изменен! Перезапустите приложение для полного применения.",
-    "experimental": "Экспериментально"
+    "experimental": "Экспериментально",
+    "cipher_suites": "Наборы шифров TLS",
+    "cipher_suites_desc": "Наборы шифров по умолчанию для TLS/REALITY",
+    "cipher_suites_hint": "Оставьте пустым для стандартных наборов Xray",
+    "cipher_suites_saved": "Наборы шифров сохранены! 💾",
+    "cipher_suites_example": "например: TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384",
+    "core_engine": "Основное ядро",
+    "core_engine_desc": "Движок прокси и исходящих (Xray-core)",
+    "core_saved": "Основное ядро изменено на {val} ⚡",
+    "tun_engine": "Движок TUN",
+    "tun_engine_desc": "Выбор адаптера TUN (Xray / Sing-box)",
+    "tun_saved": "Движок TUN изменен на {val} 🛠️",
+    "allow_lan": "Разрешить общий доступ к прокси в ЛВС",
+    "allow_lan_desc": "Разрешить другим устройствам локальной сети использовать прокси этой системы",
+    "lan_enabled": "Общий доступ к прокси в ЛВС включен",
+    "lan_disabled": "Общий доступ к прокси в ЛВС отключен"
+  },
+  "lan": {
+    "card_title": "Общий доступ к прокси в ЛВС — активен",
+    "local_ip": "Локальный IP:",
+    "guide_title": "Быстрая настройка",
+    "telegram": "Telegram:",
+    "wifi": "Wi-Fi прокси:",
+    "type_http": "HTTP",
+    "unknown_ip": "Не определено"
   },
   "admin": {
     "title": "Требуются права администратора",

@@ -22,11 +22,13 @@ from src.ui.components.settings_sections import (
     AutoReconnectToggleRow,
     CountryDropdownRow,
     LanguageDropdownRow,
+    LanShareToggleRow,
     ModeSwitchRow,
     PortInputRow,
     SettingsListTile,
     SettingsSection,
     StartupToggleRow,
+    TunEngineDropdownRow,
     TunEngineRow,
 )
 from src.utils.process_utils import ProcessUtils
@@ -57,10 +59,11 @@ class SettingsDrawer(ft.NavigationDrawer):
 
         # Components
         self._mode_switch_row = ModeSwitchRow(is_proxy, self._handle_mode_change)
-        self._tun_engine_row = TunEngineRow(
-            self._app_context.settings.get_tun_engine() or "sing-box",
+        self._tun_dropdown_row = TunEngineDropdownRow(
+            self._app_context.settings.get_tun_engine(),
             self._save_tun_engine,
         )
+        self._tun_engine_row = self._tun_dropdown_row
         self._port_row = PortInputRow(
             self._app_context.settings.get_proxy_port(),
             self._save_port,
@@ -86,6 +89,12 @@ class SettingsDrawer(ft.NavigationDrawer):
 
         # Auto-reconnect toggle (self-contained component)
         self._auto_reconnect_row = AutoReconnectToggleRow(
+            app_context=self._app_context,
+            toast_callback=self._show_toast,
+        )
+
+        # LAN proxy sharing toggle (self-contained component)
+        self._lan_share_row = LanShareToggleRow(
             app_context=self._app_context,
             toast_callback=self._show_toast,
         )
@@ -127,8 +136,10 @@ class SettingsDrawer(ft.NavigationDrawer):
                             t("settings.connection"),
                             [
                                 self._mode_switch_row,
+                                self._tun_dropdown_row,
                                 self._port_row,
                                 self._country_row,
+                                self._lan_share_row,
                             ],
                         ),
                         ft.Divider(
@@ -374,11 +385,16 @@ class SettingsDrawer(ft.NavigationDrawer):
         page.update()
 
     def _save_tun_engine(self, e):
-        """Save the TUN engine setting."""
+        """Save the TUN implementation setting."""
         try:
-            engine = self._tun_engine_row.value
-            self._app_context.settings.set_tun_engine(engine)
-            logger.info(f"TUN engine set to: {engine}")
+            val = self._tun_dropdown_row.value
+            self._app_context.settings.set_tun_engine(val)
+            logger.info(f"TUN engine set to: {val}")
+            display_name = "Xray TUN" if val == "xray" else "Sing-box TUN"
+            self._show_toast(t("settings.tun_saved", val=display_name), "success")
+            page = self.safe_page
+            if page:
+                page.update()
         except Exception as ex:
             logger.error(f"Failed to save TUN engine: {ex}")
 

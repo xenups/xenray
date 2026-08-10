@@ -1,4 +1,5 @@
 """Network interface utilities for Windows."""
+
 import re
 import subprocess
 from typing import Optional, Tuple
@@ -157,3 +158,64 @@ class NetworkInterfaceDetector:
         if len(parts) == 4:
             return f"{parts[0]}.{parts[1]}.{parts[2]}.0/24"
         return f"{ip}/32"
+
+    @staticmethod
+    def _is_private_ipv4(ip: str) -> bool:
+        """Check whether an IPv4 address is in private/reserved space."""
+        import ipaddress
+
+        try:
+            return bool(ipaddress.ip_address(ip).is_private)
+        except ValueError:
+            return False
+
+    @staticmethod
+    def get_primary_lan_ip() -> Optional[str]:
+        """Discover the host's primary LAN IPv4 address.
+
+        Ignores loopback, TUN/TAP virtual adapters (SINGTUN, xenray-tun, utun),
+        Docker bridges, and other virtual adapters. Returns the first valid
+        private IPv4 address or ``None`` if none is found.
+        """
+        try:
+            import socket
+
+            import psutil
+        except ImportError:
+            logger.warning("psutil not available, cannot discover LAN IP")
+            return None
+
+        # Adapters that are never a usable LAN sharing address.
+        ignored_prefixes = (
+            "lo",
+            "tun",
+            "tap",
+            "utun",
+            "singtun",
+            "xenray",
+            "docker",
+            "veth",
+            "vethernet",
+            "br-",
+            "virbr",
+            "vmware",
+            "virtualbox",
+            "vbox",
+        )
+
+        try:
+            for iface_name, addrs in psutil.net_if_addrs().items():
+                if any(iface_name.lower().startswith(p) for p in ignored_prefixes):
+                    continue
+                for addr in addrs:
+                    if addr.family == socket.AF_INET and addr.address:
+                        ip = addr.address
+                        if ip.startswith("127."):
+                            continue
+                        if NetworkInterfaceDetector._is_private_ipv4(ip):
+                            logger.debug(f"[NetworkInterfaceDetector] LAN IP candidates: {ip} ({iface_name})")
+                            return ip
+        except Exception as e:
+            logger.error(f"[NetworkInterfaceDetector] Failed to discover LAN IP: {e}")
+
+        return None

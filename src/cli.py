@@ -48,9 +48,16 @@ def _init_core():
     logger.remove()
     logger.add(sys.stderr, level="INFO")
     # Still log to file at DEBUG if needed
-    from src.core.constants import EARLY_LOG_FILE
+    from src.core.constants import EARLY_LOG_FILE, LOG_BACKUP_COUNT
 
-    logger.add(EARLY_LOG_FILE, level="DEBUG", rotation="10 MB")
+    logger.add(
+        EARLY_LOG_FILE,
+        level="DEBUG",
+        # Strict 5 MB rotation ("5 MiB" == 5 * 1024 * 1024) with max 3 backups.
+        rotation="5 MiB",
+        retention=LOG_BACKUP_COUNT,
+        encoding="utf-8",
+    )
 
     # Initialize core managers
     app_context = AppContext.create()
@@ -184,7 +191,7 @@ def connect(
 @app.command()
 def disconnect():
     """Disconnect from current VPN connection."""
-    app_context, conn_mgr = _init_core()
+    _, conn_mgr = _init_core()
 
     if not conn_mgr._current_connection:
         typer.echo("ℹ️  Not connected")
@@ -192,13 +199,17 @@ def disconnect():
 
     typer.echo("🔄 Disconnecting...")
     conn_mgr.disconnect()
+    try:
+        conn_mgr.cleanup()
+    except Exception:
+        pass
     typer.echo("✅ Disconnected")
 
 
 @app.command()
 def status():
     """Show current connection status."""
-    app_context, conn_mgr = _init_core()
+    _, conn_mgr = _init_core()
 
     # Check if connection exists (handles adoption automatically)
     if conn_mgr._current_connection:

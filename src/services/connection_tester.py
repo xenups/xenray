@@ -1,4 +1,5 @@
 """Connection Tester Service."""
+
 import json
 import os
 import socket
@@ -99,39 +100,21 @@ class ConnectionTester:
         This must be run in a thread.
         """
         # ── SOCKS proxy mode (bypass TUN interference on Windows) ──
-        # Python's stdlib doesn't support SOCKS5 natively, so we do a
-        # TCP connectivity test to the proxy port. The actual end-to-end
-        # HTTP verification is handled by _verify_post_connection (curl).
-        # ── SOCKS proxy mode (existing Xray process) ──
+        # For the real end-to-end check we route an HTTP/generate_204 probe
+        # through the existing SOCKS proxy. A bare TCP connect to the proxy port
+        # does NOT prove the tunnel routes data, so no TCP-only fallback is used:
+        # if the HTTP probe cannot reach a remote endpoint, the check fails.
         if socks_port:
             from src.utils.network_utils import NetworkUtils
 
             start_time = time.time()
-            if NetworkUtils.check_proxy_connectivity(socks_port, timeout=5, retries=2):
+            if NetworkUtils.check_proxy_connectivity(socks_port):
                 latency = int((time.time() - start_time) * 1000)
                 logger.info(f"[ConnectionTester] SOCKS proxy verified at 127.0.0.1:{socks_port} ({latency}ms)")
                 return (True, t("connection.latency_ms", value=latency), None)
 
-            # Fallback to TCP socket check on the proxy port
-            max_retries = 3
-            for attempt in range(max_retries):
-                try:
-                    start_time = time.time()
-                    s = socket.create_connection(("127.0.0.1", socks_port), timeout=CONNECT_TIMEOUT)
-                    s.close()
-                    latency = int((time.time() - start_time) * 1000)
-                    logger.info(
-                        f"[ConnectionTester] SOCKS proxy port reachable at 127.0.0.1:{socks_port} ({latency}ms)"
-                    )
-                    return (True, t("connection.latency_ms", value=latency), None)
-                except Exception as e:
-                    if attempt < max_retries - 1:
-                        logger.debug(
-                            f"SOCKS connection test attempt {attempt + 1}/{max_retries} failed: {e}, retrying..."
-                        )
-                        time.sleep(0.5)
-                        continue
-                    return False, t("connection.conn_error"), None
+            logger.warning(f"[ConnectionTester] HTTP health check failed through SOCKS proxy {socks_port}")
+            return False, t("connection.conn_error"), None
 
         # ── Direct Xray instance mode (proxy mode / Linux) ──
         # Find the first valid outbound (vmess/vless/etc)
@@ -168,7 +151,7 @@ class ConnectionTester:
                 creationflags=PlatformUtils.get_subprocess_flags(),
             )
 
-            time.sleep(0.5)
+            time.sleep(2.5)
 
             if process.poll() is not None:
                 return False, t("connection.core_failed"), None
@@ -211,7 +194,11 @@ class ConnectionTester:
                         except Exception:
                             pass  # country fetch is best-effort
 
-                    return (True, t("connection.latency_ms", value=latency), country_data)
+                    return (
+                        True,
+                        t("connection.latency_ms", value=latency),
+                        country_data,
+                    )
 
                 except requests.exceptions.Timeout:
                     if attempt < max_retries - 1:

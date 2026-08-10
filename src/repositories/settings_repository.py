@@ -8,7 +8,6 @@ from src.repositories.file_utils import atomic_write
 
 # Defaults
 DEFAULT_PROXY_PORT = 10805
-DEFAULT_DNS = "8.8.8.8, 1.1.1.1"
 
 
 class SettingsRepository:
@@ -108,25 +107,12 @@ class SettingsRepository:
         if not country_code or country_code in {"ir", "cn", "ru", "none"}:
             self._write("routing_country.txt", country_code or "")
 
-    # --- Custom DNS ---
-    def get_custom_dns(self) -> str:
-        val = self._read("custom_dns.txt")
-        return val if val else DEFAULT_DNS
-
-    def set_custom_dns(self, dns_string: str) -> None:
-        if isinstance(dns_string, str):
-            self._write("custom_dns.txt", dns_string)
-
     # --- Close Preference ---
     def get_remember_close_choice(self) -> bool:
         return self._read("remember_close.txt").lower() == "true"
 
     def set_remember_close_choice(self, enabled: bool) -> None:
         self._write("remember_close.txt", "true" if enabled else "false")
-
-    # --- Startup Preference ---
-    def get_startup_enabled(self) -> bool:
-        return self._read("startup_enabled.txt").lower() == "true"
 
     def set_startup_enabled(self, enabled: bool) -> None:
         self._write("startup_enabled.txt", "true" if enabled else "false")
@@ -154,3 +140,44 @@ class SettingsRepository:
     def set_last_selected_profile_id(self, profile_id: str) -> None:
         if profile_id:
             self._write("last_profile.txt", profile_id)
+
+    # --- Cipher Suites (global default for TLS/REALITY) ---
+    def get_cipher_suites(self) -> str:
+        return self._read("cipher_suites.txt", "")
+
+    def set_cipher_suites(self, value: str) -> None:
+        self._write("cipher_suites.txt", value)
+
+    # --- Core Engine (Xray) ---
+    def get_core_type(self) -> str:
+        """Core engine is strictly locked to Xray in XenRay architecture."""
+        return "xray"
+
+    def get_core_engine(self) -> str:
+        """Alias for get_core_type(). Always returns 'xray'."""
+        return "xray"
+
+    def set_core_type(self, core_type: str) -> None:
+        """Core engine selection is locked to xray."""
+        self._write("core_type.txt", "xray")
+
+    def set_core_engine(self, core_type: str) -> None:
+        """Alias for set_core_type()."""
+        self._write("core_type.txt", "xray")
+
+    # --- TUN Engine (Xray TUN / Sing-box TUN) ---
+    def get_tun_engine(self) -> str:
+        val = self._read("tun_engine.txt", "singbox").lower()
+        return val if val in {"xray", "singbox"} else "singbox"
+
+    def set_tun_engine(self, engine: str) -> None:
+        if engine in {"xray", "singbox"}:
+            self._write("tun_engine.txt", engine)
+
+    # --- LAN Proxy Sharing ---
+    def get_allow_lan(self) -> bool:
+        """Allow other LAN devices to use XenRay's SOCKS/HTTP proxy endpoints."""
+        return self._read("allow_lan.txt").lower() == "true"
+
+    def set_allow_lan(self, enabled: bool) -> None:
+        self._write("allow_lan.txt", "true" if enabled else "false")
