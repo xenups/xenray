@@ -89,6 +89,24 @@ class WindowLifecycleHandler:
             self._mw._reconnect_event_handler.cleanup()
         except Exception:
             pass
+        for view_name in (
+            "_stitch_dashboard_view",
+            "_stitch_statistics_view",
+            "_lan_sharing_view",
+        ):
+            view = getattr(self._mw, view_name, None)
+            if view is not None and hasattr(view, "dispose"):
+                try:
+                    view.dispose()
+                except Exception:
+                    pass
+
+        lan_row = getattr(getattr(self._mw, "_settings_drawer", None), "_lan_share_row", None)
+        if lan_row is not None and hasattr(lan_row, "dispose"):
+            try:
+                lan_row.dispose()
+            except Exception:
+                pass
         try:
             from src.utils.firewall_manager import FirewallManager
 

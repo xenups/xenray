@@ -204,7 +204,10 @@ class ConnectionManager:
                 self._monitoring.start(current_session, mode=mode, transport_type=transport_type)
 
                 # Emit connected state
-                self._emit_event("connected")
+                self._emit_event(
+                    "connected",
+                    {"connected_at": connection_info.get("connected_at") or time.time()},
+                )
             else:
                 self._emit_event("connect_failed")
 
@@ -289,3 +292,15 @@ class ConnectionManager:
                 self._reconnect_event_listener(event_type, data or {})
             except Exception as e:
                 logger.error(f"[ConnectionManager] Error in event listener: {e}")
+
+        # Broadcast over the EventBus so UI components (MainWindow, DashboardView)
+        # can react in real-time without a direct service -> view dependency.
+        try:
+            from src.core.event_bus import TOPIC_CONNECTION_STATE_CHANGED, event_bus
+
+            event_bus.publish(
+                TOPIC_CONNECTION_STATE_CHANGED,
+                {"event": event_type, "data": data or {}},
+            )
+        except Exception as e:
+            logger.error(f"[ConnectionManager] Error publishing event '{event_type}': {e}")

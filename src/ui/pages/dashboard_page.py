@@ -6,10 +6,12 @@ from typing import Callable, Optional
 
 import flet as ft
 
+from src.core.event_bus import TOPIC_CONNECTION_STATE_CHANGED, TOPIC_TELEMETRY_UPDATED, event_bus
 from src.core.i18n import t
 from src.ui.components.dashboard.connection_button import ConnectionButton
 from src.ui.components.dashboard.traffic_cards import TrafficCards
 from src.ui.controllers.dashboard_controller import DashboardController, DashboardState
+from src.ui.helpers.status_helper import get_short_status_label
 from src.ui.theme import AppColors
 
 
@@ -32,6 +34,8 @@ class DashboardPage(ft.Container):
         self._server_card_component = server_card
 
         self._is_connected = False
+        self._is_connecting = False
+        self._is_disconnecting = False
         self._is_online = True
         self._lan_sharing_enabled = False
 
@@ -39,14 +43,14 @@ class DashboardPage(ft.Container):
             connection_button if connection_button is not None else ConnectionButton(on_click=self._on_toggle_click)
         )
 
-        self._center_status_text = self._toggle_button._status_text
-        self._uptime_text = self._toggle_button._uptime_text
-
         self._controller = DashboardController(
             on_state_changed=self._on_controller_state_changed,
             on_uptime_updated=self.update_uptime,
             on_stats_updated=self._on_controller_stats_updated,
         )
+
+        event_bus.subscribe(TOPIC_TELEMETRY_UPDATED, self._on_telemetry_event)
+        event_bus.subscribe(TOPIC_CONNECTION_STATE_CHANGED, self._on_connection_state_event)
 
         hero_center_section = ft.Container(
             content=self._toggle_button,
@@ -55,20 +59,22 @@ class DashboardPage(ft.Container):
             expand=True,
         )
 
-        self._traffic_cards = TrafficCards()
-        self._dl_value_text = self._traffic_cards._dl_value_text
-        self._ul_value_text = self._traffic_cards._ul_value_text
+        self._traffic_cards = TrafficCards(on_card_click=self._on_open_statistics_click)
 
         if self._server_card_component:
             self._server_card_component.margin = None
-            self._server_card_component.height = 106
+            self._server_card_component.height = 124
             self._server_card_component.border_radius = 14
             self._server_card_component.border = None
             self._server_card_component.padding = ft.Padding.symmetric(horizontal=12, vertical=8)
+            self._server_card_component.alignment = ft.Alignment.CENTER
 
             try:
                 self._server_card_component._list_btn.visible = False
+                if hasattr(self._server_card_component, "_text_column"):
+                    self._server_card_component._text_column.expand = False
                 self._server_card_component._content_row.vertical_alignment = ft.CrossAxisAlignment.CENTER
+                self._server_card_component._content_row.alignment = ft.MainAxisAlignment.CENTER
             except Exception:
                 pass
 
@@ -79,7 +85,7 @@ class DashboardPage(ft.Container):
             server_card_wrapper = ft.Container(
                 content=self._server_card_component,
                 width=235,
-                height=106,
+                height=124,
                 clip_behavior=ft.ClipBehavior.HARD_EDGE,
             )
         else:
@@ -90,7 +96,7 @@ class DashboardPage(ft.Container):
                     color=AppColors.ON_SURFACE_VARIANT,
                 ),
                 width=235,
-                height=106,
+                height=124,
                 alignment=ft.Alignment.CENTER,
                 border_radius=14,
                 bgcolor=ft.Colors.with_opacity(0.035, ft.Colors.WHITE),
@@ -102,7 +108,7 @@ class DashboardPage(ft.Container):
         cards_grid_row = ft.Row(
             [self._traffic_cards, server_card_wrapper],
             spacing=14,
-            height=106,
+            height=124,
             alignment=ft.MainAxisAlignment.CENTER,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
         )
@@ -128,74 +134,120 @@ class DashboardPage(ft.Container):
             bgcolor=ft.Colors.TRANSPARENT,
         )
 
-    def _on_controller_state_changed(self, state: DashboardState) -> None:
+    def dispose(self) -> None:
+        """Release EventBus subscriptions held by this view."""
+        event_bus.unsubscribe(TOPIC_TELEMETRY_UPDATED, self._on_telemetry_event)
+        event_bus.unsubscribe(TOPIC_CONNECTION_STATE_CHANGED, self._on_connection_state_event)
+
+    def _on_controller_state_changed(self, state: DashboardState, label: str) -> None:
         """Handle state change notification from DashboardController."""
         self._is_connected = state == DashboardState.CONNECTED
-        if state == DashboardState.CONNECTING:
-            self.set_state_connecting()
-        elif state == DashboardState.CONNECTED:
-            self.set_state_connected()
-        elif state == DashboardState.DISCONNECTING:
-            self.set_state_disconnecting()
-        else:
-            self.set_state_disconnected()
+        self._is_connecting = state == DashboardState.CONNECTING
+        self._is_disconnecting = state == DashboardState.DISCONNECTING
 
-    def _on_controller_stats_updated(self, upload_str: str, download_str: str) -> None:
+        if state == DashboardState.CONNECTING:
+            self._toggle_button.set_connecting(label)
+        elif state == DashboardState.CONNECTED:
+            self._toggle_button.set_connected(label)
+        elif state == DashboardState.DISCONNECTING:
+            self._toggle_button.set_disconnecting(label)
+        else:
+            self._toggle_button.set_disconnected(label)
+
+    def _on_controller_stats_updated(self, dl_text: str, ul_text: str, total_bps: float) -> None:
         """Handle stats update from DashboardController."""
-        self._traffic_cards.update_speeds(download_str, upload_str)
+        self._traffic_cards.update_speeds(dl_text, ul_text)
+        self._toggle_button.update_network_activity(total_bps)
+
+    def _on_telemetry_event(self, data) -> None:
+        """Handle telemetry_updated EventBus events (published on the UI event loop)."""
+        if not isinstance(data, dict):
+            return
+        try:
+            self.update_network_stats(
+                rate_str=data.get("rate_str", "0.0 MB/s"),
+                download_bps=float(data.get("download_bps", 0.0)),
+                upload_bps=float(data.get("upload_bps", 0.0)),
+                total_bps=float(data.get("total_bps", 0.0)),
+            )
+        except Exception:
+            pass
+
+    def _on_connection_state_event(self, data) -> None:
+        """Handle connection_state_changed EventBus events in real time."""
+        if not isinstance(data, dict):
+            return
+        try:
+            evt = data.get("event")
+            payload = data.get("data") or {}
+            connected_at = payload.get("connected_at")
+            if evt == "connected":
+                self.set_connection_state(is_connected=True, connected_at=connected_at)
+            elif evt == "connecting":
+                self.set_connection_state(is_connected=False, is_connecting=True)
+            elif evt == "disconnecting":
+                self.set_connection_state(is_connected=False, is_disconnecting=True)
+            elif evt in ("disconnected", "connect_failed"):
+                self.set_connection_state(is_connected=False)
+        except Exception:
+            pass
+
+    def set_connection_state(
+        self,
+        is_connected: bool,
+        is_connecting: bool = False,
+        is_disconnecting: bool = False,
+        connected_at: Optional[float] = None,
+    ) -> None:
+        """Update dashboard connection state (mirrors the legacy DashboardView API)."""
+        self._is_connected = is_connected
+        self._is_connecting = is_connecting
+        self._is_disconnecting = is_disconnecting
+        self._controller.set_connection_state(
+            is_connected=is_connected,
+            is_connecting=is_connecting,
+            is_disconnecting=is_disconnecting,
+            connected_at=connected_at,
+        )
+
+    def set_step(self, step_text: str) -> None:
+        """Update the center status text during connection step transitions."""
+        if not step_text:
+            return
+        self._toggle_button.set_step(get_short_status_label(step_text))
 
     def set_state_disconnected(self) -> None:
         """Update UI to disconnected state."""
-        self._is_connected = False
-        self._controller.set_state(DashboardState.DISCONNECTED)
-        self._toggle_button.set_state_disconnected()
-        try:
-            if self.page:
-                self.update()
-        except Exception:
-            pass
+        self.set_connection_state(is_connected=False)
 
     def set_state_connecting(self) -> None:
         """Update UI to connecting state."""
-
-        self._controller.set_state(DashboardState.CONNECTING)
-        self._toggle_button.set_state_connecting()
-        try:
-            if self.page:
-                self.update()
-        except Exception:
-            pass
+        self.set_connection_state(is_connected=False, is_connecting=True)
 
     def set_state_connected(self) -> None:
         """Update UI to connected state."""
-        self._is_connected = True
-        self._controller.set_state(DashboardState.CONNECTED)
-        self._toggle_button.set_state_connected()
-        try:
-            if self.page:
-                self.update()
-        except Exception:
-            pass
+        self.set_connection_state(is_connected=True)
 
     def set_state_disconnecting(self) -> None:
         """Update UI to disconnecting state."""
-        self._controller.set_state(DashboardState.DISCONNECTING)
-        self._toggle_button.set_state_disconnecting()
-        try:
-            if self.page:
-                self.update()
-        except Exception:
-            pass
+        self.set_connection_state(is_connected=False, is_disconnecting=True)
 
-    def update_uptime(self, uptime_str: str) -> None:
+    def update_uptime(self, elapsed: int | str) -> None:
         """Update uptime counter."""
-        self._toggle_button.set_uptime(uptime_str)
+        self._toggle_button.update_uptime(elapsed)
+
+    def update_glow_intensity(self, total_bps: float = 0.0) -> None:
+        """Update live throughput glow on the connection button."""
+        self._toggle_button.update_network_activity(total_bps)
 
     def update_network_stats(
         self,
         rate_str: str = "0.0 MB/s",
         upload_str: str = "0.0 MB",
         download_str: str = "0.0 MB",
+        download_bps: float = 0.0,
+        upload_bps: float = 0.0,
+        total_bps: float = 0.0,
         speed_text: Optional[str] = None,
         upload_total: Optional[str] = None,
         download_total: Optional[str] = None,
@@ -205,6 +257,9 @@ class DashboardPage(ft.Container):
             rate_str=rate_str,
             upload_str=upload_str,
             download_str=download_str,
+            download_bps=download_bps,
+            upload_bps=upload_bps,
+            total_bps=total_bps,
             speed_text=speed_text,
             upload_total=upload_total,
             download_total=download_total,
@@ -214,6 +269,13 @@ class DashboardPage(ft.Container):
         """Update internet status indicator."""
         self._is_online = is_online
         self._toggle_button.set_online_status(is_online)
+
+    def update_server_info(self, *args, **kwargs) -> None:
+        """No-op: ServerCard updates itself via main_window's profile update flow."""
+
+    def update_lan_sharing(self, is_enabled: bool, ip_address: str = "") -> None:
+        """Update LAN sharing status indicator."""
+        self._lan_sharing_enabled = is_enabled
 
     def set_lan_sharing_state(self, enabled: bool) -> None:
         """Update LAN sharing status indicator."""

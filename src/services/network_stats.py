@@ -71,15 +71,10 @@ def _stats_worker(stats_queue: queue.Queue, stop_event: threading.Event):
 
 
 def _format_speed(bytes_per_sec: float) -> str:
-    """Format bytes per second to human readable string."""
-    if bytes_per_sec < 1024:
-        return f"{bytes_per_sec:.0f} B/s"
-    elif bytes_per_sec < 1024 * 1024:
-        return f"{bytes_per_sec / 1024:.1f} KB/s"
-    elif bytes_per_sec < 1024 * 1024 * 1024:
-        return f"{bytes_per_sec / (1024 * 1024):.1f} MB/s"
-    else:
-        return f"{bytes_per_sec / (1024 * 1024 * 1024):.2f} GB/s"
+    """Format bytes per second to human readable string (shared utility)."""
+    from src.utils.formatting import format_speed
+
+    return format_speed(bytes_per_sec)
 
 
 class NetworkStatsService:

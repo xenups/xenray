@@ -12,6 +12,8 @@ class StatsHeader(ft.Row):
     """Header row containing title column and traffic rate badge."""
 
     def __init__(self, rate_text_control: ft.Text):
+        self._rate_text_control = rate_text_control
+
         WHITE = ft.Colors.WHITE
         MUTED_WHITE = AppColors.ON_SURFACE_VARIANT
         PURPLE = AppColors.PRIMARY
@@ -55,3 +57,11 @@ class StatsHeader(ft.Row):
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
         )
+
+    def update_rate(self, rate_str: str) -> None:
+        """Reactively update the live traffic rate badge text."""
+        self._rate_text_control.value = rate_str
+        try:
+            self.update()
+        except Exception:
+            pass

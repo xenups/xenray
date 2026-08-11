@@ -28,6 +28,7 @@ from src.ui.components.settings.language_dropdown_row import LanguageDropdownRow
 from src.ui.components.settings.mode_switch_row import ModeSwitchRow
 from src.ui.components.settings.port_input_row import HttpPortInputRow, PortInputRow
 from src.ui.components.settings.startup_toggle_row import StartupToggleRow
+from src.ui.controllers.settings_controller import SettingsController
 from src.utils.process_utils import ProcessUtils
 
 
@@ -44,11 +45,16 @@ class SettingsDrawer(ft.NavigationDrawer):
         navigate_back,
     ):
         self._app_context = app_context
-        self._on_installer_run_external = on_installer_run
+        self._on_installer_run = on_installer_run
         self._on_mode_changed = on_mode_changed
         self._get_current_mode = get_current_mode
         self._navigate_to = navigate_to
         self._navigate_back = navigate_back
+
+        self._settings_controller = SettingsController(
+            app_context=self._app_context,
+            toast_callback=self._show_toast,
+        )
 
         # Mode state
         current_mode = self._get_current_mode()
@@ -353,76 +359,53 @@ class SettingsDrawer(ft.NavigationDrawer):
 
     def _save_port(self, value: str):
         """Save the SOCKS port setting."""
-        page = self.safe_page
-        if not page:
-            return
-
-        try:
-            port = int(value)
-            if 1024 <= port <= 65535:
-                self._app_context.settings.set_proxy_port(port)
-                self._port_row.set_border_color(ft.Colors.GREEN_400)
-                self._show_toast(t("settings.port_saved", port=port), "success")
-            else:
-                self._port_row.set_border_color(ft.Colors.RED_400)
-                self._show_toast(t("settings.port_invalid_range"), "error")
-        except ValueError:
+        success, _ = self._settings_controller.update_socks_port(value)
+        if success:
+            self._port_row.set_border_color(ft.Colors.GREEN_400)
+        else:
             self._port_row.set_border_color(ft.Colors.RED_400)
-            self._show_toast(t("settings.port_must_be_number"), "error")
-
-        page.update()
+        page = self.safe_page
+        if page:
+            try:
+                page.update()
+            except Exception:
+                pass
 
     def _save_http_port(self, value: str):
         """Save the HTTP proxy port setting."""
-        page = self.safe_page
-        if not page:
-            return
-
-        try:
-            port = int(value)
-            if 1024 <= port <= 65535:
-                self._app_context.settings.set_http_port(port)
-                self._http_port_row.set_border_color(ft.Colors.GREEN_400)
-                self._show_toast(
-                    t(
-                        "settings.http_port_saved",
-                        default=f"HTTP Proxy Port saved: {port}",
-                    ),
-                    "success",
-                )
-            else:
-                self._http_port_row.set_border_color(ft.Colors.RED_400)
-                self._show_toast(t("settings.port_invalid_range"), "error")
-        except ValueError:
+        success, _ = self._settings_controller.update_http_port(value)
+        if success:
+            self._http_port_row.set_border_color(ft.Colors.GREEN_400)
+        else:
             self._http_port_row.set_border_color(ft.Colors.RED_400)
-            self._show_toast(t("settings.port_must_be_number"), "error")
-
-        page.update()
+        page = self.safe_page
+        if page:
+            try:
+                page.update()
+            except Exception:
+                pass
 
     def _save_country(self, e):
         """Save the direct country setting."""
-        page = self.safe_page
-        if not page:
-            return
-
         val = self._country_row.value
-        self._app_context.settings.set_routing_country(val)
-        self._show_toast(t("settings.country_saved", val=val), "success")
-        page.update()
+        self._settings_controller.update_routing_country(val)
+        page = self.safe_page
+        if page:
+            try:
+                page.update()
+            except Exception:
+                pass
 
     def _save_tun_engine(self, e):
         """Save the TUN implementation setting."""
-        try:
-            val = self._tun_dropdown_row.value
-            self._app_context.settings.set_tun_engine(val)
-            logger.info(f"TUN engine set to: {val}")
-            display_name = "Xray TUN" if val == "xray" else "Sing-box TUN"
-            self._show_toast(t("settings.tun_saved", val=display_name), "success")
-            page = self.safe_page
-            if page:
+        val = self._tun_dropdown_row.value
+        self._settings_controller.update_tun_engine(val)
+        page = self.safe_page
+        if page:
+            try:
                 page.update()
-        except Exception as ex:
-            logger.error(f"Failed to save TUN engine: {ex}")
+            except Exception:
+                pass
 
     def _save_language(self, e):
         """Save the language setting and update i18n."""

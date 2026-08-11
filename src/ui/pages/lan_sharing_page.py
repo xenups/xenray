@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Callable, Optional
 
 import flet as ft
 
+from src.core.event_bus import TOPIC_LAN_SHARING_CHANGED, event_bus
 from src.core.i18n import get_language, t
 from src.services.lan_service import LanService
 from src.ui.components.dashboard.connection_guide_card import ConnectionGuideCard
@@ -77,25 +79,17 @@ class LanSharingPage(ft.Container):
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
         )
 
-        self._ip_text_ctrl = ft.Text(
+        self._ip_chip = MicroChip(
+            "lan_sharing.local_ip",
+            "Local IP",
             self.local_ip,
-            size=11,
-            weight=ft.FontWeight.BOLD,
-            color="white",
-            selectable=True,
-            overflow=ft.TextOverflow.ELLIPSIS,
+            on_copy=self._copy,
+            is_rtl=self.is_rtl,
         )
 
         badges_row = ft.Row(
             controls=[
-                MicroChip(
-                    "lan_sharing.local_ip",
-                    "Local IP",
-                    self.local_ip,
-                    val_text_ctrl=self._ip_text_ctrl,
-                    on_copy=self._copy,
-                    is_rtl=self.is_rtl,
-                ),
+                self._ip_chip,
                 MicroChip(
                     "lan_sharing.http_port",
                     "HTTP Port",
@@ -115,62 +109,83 @@ class LanSharingPage(ft.Container):
             spacing=6,
         )
 
-        self._qr_box = ft.Container(
-            width=170,
-            height=170,
-            border_radius=8,
-            padding=4,
-            alignment=ft.Alignment.CENTER,
-        )
-        self._update_qr_box(self.allow_lan)
+        self._qr_card = QRCard(is_rtl=self.is_rtl)
+        if self.allow_lan:
+            qr_str = self._controller.generate_qr(self.local_ip, self.http_port)
+            self._qr_card.update_qr(qr_str)
+        else:
+            self._qr_card.set_qr_visible(False)
 
-        qr_card = QRCard(qr_box=self._qr_box, is_rtl=self.is_rtl)
         guide_card = ConnectionGuideCard(is_rtl=self.is_rtl)
 
         self.content = ft.Column(
             controls=[
                 header_row,
                 badges_row,
-                qr_card,
+                self._qr_card,
                 guide_card,
             ],
             spacing=6,
             horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
         )
 
-    def _update_qr_box(self, enabled: bool) -> None:
-        """Update QR box content dynamically in real-time when switch is toggled."""
-        if enabled:
-            qr_str = self._controller.generate_qr(self.local_ip, self.http_port)
-            if qr_str:
-                self._qr_box.bgcolor = "white"
-                self._qr_box.content = ft.Image(
-                    src=f"data:image/png;base64,{qr_str}",
-                    width=170,
-                    height=170,
-                    fit=ft.BoxFit.CONTAIN,
-                )
-                return
+        event_bus.subscribe(TOPIC_LAN_SHARING_CHANGED, self._on_lan_sharing_changed)
 
-        self._qr_box.bgcolor = "#13141C"
-        self._qr_box.content = ft.Column(
-            [
-                ft.Icon(
-                    ft.Icons.WIFI_OFF_ROUNDED,
-                    size=34,
-                    color=ft.Colors.with_opacity(0.35, ft.Colors.WHITE),
-                ),
-                ft.Text(
-                    t("lan_sharing.disabled_placeholder", default="LAN Sharing Disabled"),
-                    color="grey",
-                    size=10,
-                    rtl=self.is_rtl,
-                ),
-            ],
-            alignment=ft.MainAxisAlignment.CENTER,
-            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            spacing=2,
-        )
+    def dispose(self) -> None:
+        """Release the EventBus subscription held by this view."""
+        event_bus.unsubscribe(TOPIC_LAN_SHARING_CHANGED, self._on_lan_sharing_changed)
+
+    def _on_lan_sharing_changed(self, data) -> None:
+        """Sync this page's switch + QR card when LAN sharing changes anywhere."""
+        if not isinstance(data, dict):
+            return
+        enabled = bool(data.get("enabled", self.allow_lan))
+        if enabled == self.allow_lan:
+            return
+
+        self.allow_lan = enabled
+        self._master_switch.value = enabled
+
+        if enabled:
+            self.local_ip = self._controller.get_local_ip()
+            self._ip_chip.update_value(self.local_ip)
+            self._qr_card.show_loading()
+            self._refresh_qr_async(True)
+        else:
+            self._qr_card.set_qr_visible(False)
+
+        try:
+            if self._master_switch.page:
+                self._master_switch.update()
+        except Exception:
+            pass
+
+    def _refresh_qr_async(self, enabled: bool) -> None:
+        """Refresh QR content off the UI thread, falling back to sync when headless."""
+        if not enabled:
+            return
+        try:
+            page = self.page
+        except RuntimeError:
+            page = None
+        if page is not None:
+            page.run_task(self._generate_qr_async)
+        else:
+            self._generate_qr_sync()
+
+    async def _generate_qr_async(self) -> None:
+        """Generate the QR base64 in a worker thread so the UI never blocks."""
+        qr_str = await asyncio.to_thread(self._controller.generate_qr, self.local_ip, self.http_port)
+        self._apply_qr_result(qr_str)
+
+    def _generate_qr_sync(self) -> None:
+        """Synchronous QR generation used only when no live page is attached."""
+        qr_str = self._controller.generate_qr(self.local_ip, self.http_port)
+        self._apply_qr_result(qr_str)
+
+    def _apply_qr_result(self, qr_str: Optional[str]) -> None:
+        """Apply a resolved QR result through the QR card component."""
+        self._qr_card.update_qr(qr_str)
 
     def _copy(self, value: str) -> None:
         try:
@@ -185,15 +200,19 @@ class LanSharingPage(ft.Container):
             pass
 
     def _on_toggle_change(self, e) -> None:
-        """Handle LAN switch toggle in real-time."""
+        """Handle LAN switch toggle in real-time (UI state first, QR resolved async)."""
         try:
             enabled = e.control.value
             self.allow_lan = enabled
-            self._controller.set_allow_lan(enabled)
+            self._controller.set_lan_sharing_enabled(enabled)
 
             self.local_ip = self._controller.get_local_ip()
-            self._ip_text_ctrl.value = self.local_ip
-            self._update_qr_box(enabled)
+            self._ip_chip.update_value(self.local_ip)
+
+            if enabled:
+                self._qr_card.show_loading()
+            else:
+                self._qr_card.set_qr_visible(False)
 
             if self._on_lan_toggle:
                 self._on_lan_toggle(enabled)
@@ -207,6 +226,8 @@ class LanSharingPage(ft.Container):
                         sidebar.update_lan_badge(enabled)
             except Exception:
                 pass
+
+            self._refresh_qr_async(enabled)
         except Exception:
             pass
 

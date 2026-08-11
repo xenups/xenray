@@ -91,21 +91,15 @@ class ToastManager:
         except Exception:
             pass
 
-        # Floating toast container at bottom-right (or bottom-left for RTL)
-        if is_rtl:
-            toast_container = ft.Container(
-                content=toast,
-                bottom=20,
-                left=20,
-                alignment=ft.Alignment.BOTTOM_LEFT,
-            )
-        else:
-            toast_container = ft.Container(
-                content=toast,
-                bottom=20,
-                right=20,
-                alignment=ft.Alignment.BOTTOM_RIGHT,
-            )
+        # Floating toast container at Top-Center with top margin
+        toast_container = ft.Container(
+            content=toast,
+            top=20,
+            left=0,
+            right=0,
+            alignment=ft.Alignment.TOP_CENTER,
+            margin=ft.Margin.only(top=20),
+        )
 
         # Add to overlay — one page.update() to mount the toast
         self._page.overlay.append(toast_container)
@@ -116,9 +110,9 @@ class ToastManager:
             try:
                 await asyncio.sleep(duration / 1000)
 
-                # Fade and slide down out
+                # Fade and slide up out
                 toast.opacity = 0
-                toast.offset = ft.Offset(0, 0.2)
+                toast.offset = ft.Offset(0, -0.2)
                 toast.update()
 
                 # Wait for animation

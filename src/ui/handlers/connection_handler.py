@@ -165,18 +165,18 @@ class ConnectionHandler:
             self._ui_helper.call(callback)
 
     def _show_connecting_ui(self):
-        """Show connecting state in UI."""
-        if self._connection_button:
-            self._ui_call(self._connection_button.set_connecting)
-        if self._status_display:
-            self._ui_call(self._status_display.set_initializing)
+        """Show connecting glow only.
+
+        The connecting status text is driven exclusively by the controller state
+        machine (``_set_connecting`` -> ``_sync_dashboard_connection_state``) and
+        the orchestrator's ``step_callback`` — never set directly here — so each
+        intermediate status ("در حال اوج‌گیری" / initializing) fires exactly once.
+        """
         if self._update_horizon_glow_callback:
             self._ui_call(lambda: self._update_horizon_glow_callback("connecting"))
 
     def _show_disconnecting_ui(self):
-        """Show disconnecting state in UI."""
-        if self._connection_button:
-            self._ui_call(self._connection_button.set_disconnecting)
+        """Show disconnecting glow only (status text flows through the controller)."""
         if self._status_display:
             self._ui_call(self._status_display.set_disconnecting)
         if self._update_horizon_glow_callback:

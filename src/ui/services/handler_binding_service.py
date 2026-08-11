@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from src.core.event_bus import event_bus
+from src.core.event_bus import TOPIC_LAN_SHARING_CHANGED, event_bus
 
 if TYPE_CHECKING:
     from src.ui.main_window import MainWindow
@@ -96,8 +96,12 @@ class HandlerBindingService:
         event_bus.subscribe("profile_selected", mw._update_selected_profile_ui)
         event_bus.subscribe("connection_state_changed", lambda _: mw._sync_dashboard_connection_state())
         event_bus.subscribe(
+            TOPIC_LAN_SHARING_CHANGED,
+            lambda d: (mw._nav_sidebar.update_lan_button(d.get("enabled", False)) if mw._nav_sidebar else None),
+        )
+        event_bus.subscribe(
             "lan_toggled",
-            lambda d: mw._nav_sidebar.update_lan_button(d.get("allow_lan", False)) if mw._nav_sidebar else None,
+            lambda d: (mw._nav_sidebar.update_lan_button(d.get("allow_lan", False)) if mw._nav_sidebar else None),
         )
 
         mw._stats_forwarding.start()

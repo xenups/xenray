@@ -286,17 +286,10 @@ class MainWindow:
                 self._show_admin_restart_dialog()
                 return
 
-            self._connection_button.set_connecting()
-            self._status_display.set_connecting()
-            self._sync_dashboard_connection_state()
-            self._ui_helper.call(lambda: None)
+            # Status text is driven exclusively by the controller state machine
+            # (see ConnectionHandler.connect_async -> _set_connecting -> sync).
             self._connect_async()
         else:
-            try:
-                if hasattr(self, "_stitch_dashboard_view") and self._stitch_dashboard_view:
-                    self._stitch_dashboard_view.set_connection_state(is_connected=False, is_disconnecting=True)
-            except Exception:
-                pass
             self._disconnect()
 
     def _show_admin_restart_dialog(self) -> None:

@@ -6,6 +6,7 @@ unchanged; only the internals are decomposed into single-responsibility steps.
 """
 
 import json
+import time
 from typing import Optional
 
 from loguru import logger
@@ -428,11 +429,14 @@ class ConnectionOrchestrator:
         if step_callback:
             step_callback(t("connection.finalizing"))
 
+        import time as _time
+
         connection_info = {
             "mode": mode,
             "xray_pid": xray_pid,
             "singbox_pid": singbox_pid,
             "file": file_path,
+            "connected_at": _time.time(),
         }
 
         # NOTE: Monitoring is now started by ConnectionManager via ConnectionMonitoringService

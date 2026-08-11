@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+from unittest.mock import patch
 
 import flet as ft
 import pytest
@@ -30,7 +31,9 @@ def test_qr_base64_generation():
     assert len(qr_str) > 50
 
 
-def test_lan_sharing_view_layout_and_toggle():
+@patch("src.utils.firewall_manager.FirewallManager.remove_lan_firewall_rule")
+@patch("src.utils.firewall_manager.FirewallManager.add_lan_firewall_rule")
+def test_lan_sharing_view_layout_and_toggle(mock_add, mock_remove):
     """Test LanSharingView structure and real-time toggle update."""
 
     class MockSettings:
@@ -62,7 +65,7 @@ def test_lan_sharing_view_layout_and_toggle():
 
     assert view.content is not None
     assert view.allow_lan == True
-    assert isinstance(view._qr_box.content, ft.Image)
+    assert view._qr_card.is_qr_shown
 
     # Simulate toggle OFF
     event = type("E", (), {"control": type("C", (), {"value": False})()})()
@@ -70,7 +73,7 @@ def test_lan_sharing_view_layout_and_toggle():
 
     assert app_ctx.settings.get_allow_lan() == False
     assert view.allow_lan == False
-    assert isinstance(view._qr_box.content, ft.Column)
+    assert not view._qr_card.is_qr_shown
     assert toggled == [False]
 
     # Simulate toggle ON
@@ -79,7 +82,7 @@ def test_lan_sharing_view_layout_and_toggle():
 
     assert app_ctx.settings.get_allow_lan() == True
     assert view.allow_lan == True
-    assert isinstance(view._qr_box.content, ft.Image)
+    assert view._qr_card.is_qr_shown
     assert toggled == [False, True]
 
 
@@ -133,8 +136,8 @@ def test_nav_sidebar_lan_button_styling():
     assert sb_on._lan_btn.border.top.color == "#8B5CF6"
 
 
-def test_toast_manager_bottom_corner_positioning():
-    """Test ToastManager bottom corner container position."""
+def test_toast_manager_top_center_positioning():
+    """Test ToastManager top-center container position."""
 
     class MockPage:
         def __init__(self):
@@ -152,8 +155,8 @@ def test_toast_manager_bottom_corner_positioning():
 
     assert len(page.overlay) == 1
     container = page.overlay[0]
-    assert container.bottom == 20
-    assert container.right == 20 or container.left == 20
+    assert container.top == 20
+    assert container.alignment == ft.Alignment.TOP_CENTER
 
 
 def test_i18n_status_phrases_fa_and_en():

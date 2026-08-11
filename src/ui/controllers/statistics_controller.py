@@ -5,6 +5,8 @@ from __future__ import annotations
 import math
 from typing import List, NamedTuple, Optional
 
+from src.utils.formatting import format_speed
+
 
 class TrafficStatsPayload(NamedTuple):
     """Calculated traffic statistics payload."""
@@ -135,12 +137,8 @@ class StatisticsController:
         upload_total: Optional[str] = None,
     ) -> TrafficStatsPayload:
         """Process incoming throughput rates and return calculated UI payloads."""
-        dl_text = speed_text if speed_text is not None else f"{(download_bps / (1024.0 * 1024.0)):.1f} MB/s"
-        ul_speed_kb = upload_bps / 1024.0
-        if ul_speed_kb < 1024.0:
-            ul_text = f"{ul_speed_kb:.1f} KB/s"
-        else:
-            ul_text = f"{(ul_speed_kb / 1024.0):.1f} MB/s"
+        dl_text = speed_text if speed_text is not None else format_speed(download_bps)
+        ul_text = format_speed(upload_bps)
 
         u_str = upload_total if upload_total is not None else upload_str
         d_str = download_total if download_total is not None else download_str
@@ -149,8 +147,7 @@ class StatisticsController:
         if cur_max > self._peak_bps:
             self._peak_bps = cur_max
 
-        peak_kb = self._peak_bps / 1024.0
-        peak_speed_str = f"{peak_kb:.1f} KB/s" if peak_kb < 1024.0 else f"{(peak_kb / 1024.0):.1f} MB/s"
+        peak_speed_str = format_speed(self._peak_bps)
 
         dl_bytes = self.parse_size_to_bytes(d_str)
         ul_bytes = self.parse_size_to_bytes(u_str)

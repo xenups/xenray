@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING
 
 import psutil
 
+from src.core.event_bus import TOPIC_TELEMETRY_UPDATED, event_bus
+
 if TYPE_CHECKING:
     from src.ui.main_window import MainWindow
 
@@ -68,29 +70,23 @@ class StatsForwardingService:
                 dl_total_str = _fmt_bytes(_session_dl_bytes)
                 ul_total_str = _fmt_bytes(_session_ul_bytes)
 
-                kwargs = dict(
-                    rate_str=down_str,
-                    upload_str=ul_total_str,
-                    download_str=dl_total_str,
-                    download_bps=dl_bps,
-                    upload_bps=ul_bps,
-                    total_bps=total_bps,
-                    download_total=dl_total_str,
-                    upload_total=ul_total_str,
+                # Publish live telemetry over the EventBus. DashboardView and
+                # StatisticsView subscribe to this topic and refresh their speed
+                # cards / WaveVisualizer on every tick (UI-thread safe loop).
+                event_bus.publish(
+                    TOPIC_TELEMETRY_UPDATED,
+                    {
+                        "rate_str": down_str,
+                        "upload_str": ul_total_str,
+                        "download_str": dl_total_str,
+                        "download_bps": dl_bps,
+                        "upload_bps": ul_bps,
+                        "total_bps": total_bps,
+                        "download_total": dl_total_str,
+                        "upload_total": ul_total_str,
+                        "is_connected": is_running,
+                    },
                 )
-
-                if (
-                    self._mw._active_tab == "dashboard"
-                    and hasattr(self._mw, "_stitch_dashboard_view")
-                    and self._mw._stitch_dashboard_view
-                ):
-                    self._mw._stitch_dashboard_view.update_network_stats(**kwargs)
-                elif (
-                    self._mw._active_tab == "statistics"
-                    and hasattr(self._mw, "_stitch_statistics_view")
-                    and self._mw._stitch_statistics_view
-                ):
-                    self._mw._stitch_statistics_view.update_network_stats(**kwargs)
             except Exception:
                 pass
 

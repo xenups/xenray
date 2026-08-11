@@ -19,12 +19,12 @@ import sys
 from typing import Dict, List, Optional, Union
 
 from src.core.constants import (
-    DNS_IP_GOOGLE,
+    BASE_BYPASS_PROCESSES,
     DNS_IP_CLOUDFLARE,
+    DNS_IP_GOOGLE,
     SINGBOX_RULE_SETS,
     TUN_GATEWAY_IPV4,
     XRAY_EXECUTABLE,
-    BASE_BYPASS_PROCESSES,
 )
 from src.core.logger import logger
 from src.utils.platform_utils import PlatformUtils

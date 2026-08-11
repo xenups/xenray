@@ -361,3 +361,29 @@ class TestConnectionOrchestratorRefactor:
         assert info is None
         # Exception path must still clean up (idempotent stop calls are safe).
         orchestrator._xray_service.stop.assert_called_once()
+
+
+class TestOrchestratorFinalize:
+    """Regression: _finalize_connection must not raise NameError on time.time()."""
+
+    @pytest.fixture
+    def orchestrator(self):
+        from unittest.mock import MagicMock
+
+        return ConnectionOrchestrator(MagicMock(), MagicMock(), MagicMock(), MagicMock(), MagicMock())
+
+    def test_finalize_connection_builds_info_with_connected_at(self, orchestrator):
+        info = orchestrator._finalize_connection(
+            file_path="cfg.json",
+            mode="proxy",
+            xray_pid=1234,
+            singbox_pid=None,
+            step_callback=None,
+        )
+
+        assert info["mode"] == "proxy"
+        assert info["xray_pid"] == 1234
+        assert info["singbox_pid"] is None
+        assert info["file"] == "cfg.json"
+        assert isinstance(info["connected_at"], float)
+        assert info["connected_at"] > 0

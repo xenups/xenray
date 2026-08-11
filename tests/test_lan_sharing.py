@@ -262,3 +262,56 @@ class TestLanSharingCardUI:
 
         card._open_dialog()
         mock_page.show_dialog.assert_called_once()
+
+
+class TestLanSharingUnifiedToggle:
+    """set_lan_sharing_enabled persists, applies firewall rules, and broadcasts."""
+
+    @pytest.fixture
+    def controller(self):
+        from src.ui.controllers.lan_sharing_controller import LanSharingController
+
+        ctx = MagicMock()
+        ctx.settings.get_proxy_port.return_value = 10805
+        ctx.settings.get_allow_lan.return_value = False
+        return LanSharingController(app_context=ctx), ctx
+
+    def test_enable_persists_firewall_and_publishes(self, controller, monkeypatch):
+        from src.core.event_bus import TOPIC_LAN_SHARING_CHANGED, event_bus
+
+        ctrl, ctx = controller
+        received = []
+
+        def listener(data):
+            received.append(data)
+
+        event_bus.subscribe(TOPIC_LAN_SHARING_CHANGED, listener)
+        try:
+            with patch("src.utils.firewall_manager.FirewallManager.add_lan_firewall_rule") as mock_add:
+                ctrl.set_lan_sharing_enabled(True)
+        finally:
+            event_bus.unsubscribe(TOPIC_LAN_SHARING_CHANGED, listener)
+
+        ctx.settings.set_allow_lan.assert_called_once_with(True)
+        mock_add.assert_called_once_with([10805, 10809])
+        assert received == [{"enabled": True}]
+
+    def test_disable_removes_firewall_and_publishes(self, controller):
+        from src.core.event_bus import TOPIC_LAN_SHARING_CHANGED, event_bus
+
+        ctrl, ctx = controller
+        received = []
+
+        def listener(data):
+            received.append(data)
+
+        event_bus.subscribe(TOPIC_LAN_SHARING_CHANGED, listener)
+        try:
+            with patch("src.utils.firewall_manager.FirewallManager.remove_lan_firewall_rule") as mock_remove:
+                ctrl.set_lan_sharing_enabled(False)
+        finally:
+            event_bus.unsubscribe(TOPIC_LAN_SHARING_CHANGED, listener)
+
+        ctx.settings.set_allow_lan.assert_called_once_with(False)
+        mock_remove.assert_called_once()
+        assert received == [{"enabled": False}]

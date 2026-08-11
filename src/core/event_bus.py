@@ -7,6 +7,13 @@ from typing import Any, Callable, Dict, List
 
 from src.core.logger import logger
 
+# Canonical event topic names shared across producers and subscribers.
+TOPIC_CONNECTION_STATE_CHANGED = "connection_state_changed"
+TOPIC_TELEMETRY_UPDATED = "telemetry_updated"
+TOPIC_PROFILE_SELECTED = "profile_selected"
+TOPIC_LAN_TOGGLED = "lan_toggled"
+TOPIC_LAN_SHARING_CHANGED = "lan_sharing_changed"
+
 
 class EventBus:
     """Thread-safe Pub/Sub Event Bus eliminating circular view/service dependencies."""

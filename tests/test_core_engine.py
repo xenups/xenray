@@ -6,6 +6,7 @@
 """
 
 from unittest.mock import MagicMock, patch
+
 import pytest
 
 from src.core.config_builders.singbox_config_builder import SingboxConfigBuilder

@@ -6,7 +6,9 @@ from typing import Callable
 
 import flet as ft
 
+from src.core.event_bus import TOPIC_LAN_SHARING_CHANGED, event_bus
 from src.core.i18n import t
+from src.ui.controllers.lan_sharing_controller import LanSharingController
 
 
 class LanShareToggleRow(ft.Container):
@@ -19,6 +21,7 @@ class LanShareToggleRow(ft.Container):
     ):
         self._app_context = app_context
         self._toast_callback = toast_callback
+        self._controller = LanSharingController(app_context=app_context)
 
         is_enabled = app_context.settings.get_allow_lan()
         self._switch = ft.Switch(
@@ -26,6 +29,8 @@ class LanShareToggleRow(ft.Container):
             active_color=ft.Colors.PRIMARY,
             on_change=self._handle_toggle,
         )
+
+        event_bus.subscribe(TOPIC_LAN_SHARING_CHANGED, self._on_lan_sharing_changed)
 
         super().__init__(
             content=ft.Row(
@@ -53,22 +58,31 @@ class LanShareToggleRow(ft.Container):
         )
 
     def _handle_toggle(self, e):
-        """Persist the setting and manage the firewall rule."""
+        """Route the toggle through the unified LAN sharing controller."""
         enabled = self._switch.value
-        self._app_context.settings.set_allow_lan(enabled)
-
-        from src.utils.firewall_manager import FirewallManager
+        self._controller.set_lan_sharing_enabled(enabled)
 
         if enabled:
-            port = self._app_context.settings.get_proxy_port()
-            FirewallManager.add_lan_firewall_rule([port, port + 4])
             self._toast_callback(t("settings.lan_enabled"), "success")
         else:
-            FirewallManager.remove_lan_firewall_rule()
             self._toast_callback(t("settings.lan_disabled"), "info")
 
-        if self.page:
-            self.page.update()
+    def _on_lan_sharing_changed(self, data) -> None:
+        """Sync this switch whenever LAN sharing state changes anywhere."""
+        if not isinstance(data, dict):
+            return
+        enabled = bool(data.get("enabled", self._switch.value))
+        if self._switch.value != enabled:
+            self._switch.value = enabled
+        try:
+            if self._switch.page:
+                self._switch.update()
+        except Exception:
+            pass
+
+    def dispose(self) -> None:
+        """Release the EventBus subscription held by this row."""
+        event_bus.unsubscribe(TOPIC_LAN_SHARING_CHANGED, self._on_lan_sharing_changed)
 
     @property
     def value(self) -> bool:

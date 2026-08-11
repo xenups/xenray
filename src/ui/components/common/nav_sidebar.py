@@ -54,12 +54,42 @@ class NavSidebar(ft.Container):
             ),
         ]
 
+        # ── Apple-Style Sliding Active Indicator Overlay ─────────────────────
+        self._active_indicator = ft.Container(
+            width=44,
+            height=44,
+            border_radius=12,
+            bgcolor=ft.Colors.with_opacity(0.15, AppColors.PRIMARY),
+            border=ft.Border.all(1.5, AppColors.PRIMARY),
+            shadow=ft.BoxShadow(
+                spread_radius=0,
+                blur_radius=12,
+                color=ft.Colors.with_opacity(0.35, AppColors.PRIMARY),
+                offset=ft.Offset(0, 0),
+            ),
+            animate_position=ft.Animation(350, curve=ft.AnimationCurve.DECELERATE),
+            animate_opacity=ft.Animation(200),
+            top=0,
+            left=5,
+        )
+
         self._buttons_container = ft.Column(
             spacing=8,
             alignment=ft.MainAxisAlignment.START,
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            left=5,
+            width=44,
         )
         self._build_nav_buttons()
+
+        self._nav_stack = ft.Stack(
+            controls=[
+                self._active_indicator,
+                self._buttons_container,
+            ],
+            width=54,
+            height=len(self._nav_items) * 44 + (len(self._nav_items) - 1) * 8,
+        )
 
         # ── Quick Connect / Disconnect bolt ─────────────────────────────────
         qc_style = self._controller.get_quick_connect_style(is_running=False)
@@ -109,7 +139,7 @@ class NavSidebar(ft.Container):
         super().__init__(
             content=ft.Column(
                 [
-                    self._buttons_container,
+                    self._nav_stack,
                     self._actions_panel,
                 ],
                 spacing=16,
@@ -151,13 +181,26 @@ class NavSidebar(ft.Container):
         is_active = self._controller.active_tab == "lan"
         self._apply_lan_styles(is_active)
 
+    def _update_indicator_position(self):
+        """Calculate and set the indicator vertical Y-offset (top position) based on active tab."""
+        tab_id = self._controller.active_tab
+        nav_ids = [item[0] for item in self._nav_items]
+        if tab_id in nav_ids:
+            idx = nav_ids.index(tab_id)
+            self._active_indicator.top = idx * 52
+            self._active_indicator.opacity = 1
+        else:
+            self._active_indicator.opacity = 0
+
     def set_active_tab(self, tab_id: str):
-        """Set the current active navigation tab."""
+        """Set the current active navigation tab with smooth indicator repositioning."""
         self._controller.set_active_tab(tab_id)
+        self._update_indicator_position()
         self._apply_active_styles()
         self._apply_lan_styles(is_active=(tab_id == "lan"))
         try:
             if self.page:
+                self._active_indicator.update()
                 self._buttons_container.update()
         except Exception:
             pass
@@ -188,8 +231,13 @@ class NavSidebar(ft.Container):
         except Exception:
             pass
 
+    def _handle_nav_click(self, tab_id: str, e=None):
+        """Immediate hitbox click handler while indicator glides asynchronously."""
+        self.set_active_tab(tab_id)
+        self._on_tab_change(tab_id)
+
     def _build_nav_buttons(self):
-        """Build compact icon-only nav buttons with hover tooltips."""
+        """Build compact icon-only nav buttons laid out over the active sliding indicator."""
         self._buttons_container.controls.clear()
         self._button_refs: dict[str, tuple[ft.Container, ft.Icon]] = {}
         for tab_id, label, icon in self._nav_items:
@@ -201,23 +249,22 @@ class NavSidebar(ft.Container):
             )
             btn = ft.Container(
                 content=icon_ctrl,
-                padding=ft.Padding.symmetric(vertical=10, horizontal=12),
+                width=44,
+                height=44,
                 border_radius=12,
-                bgcolor=style.bgcolor,
-                border=style.border,
-                shadow=style.shadow,
+                bgcolor=ft.Colors.TRANSPARENT,
+                border=None,
                 tooltip=label,
                 alignment=ft.Alignment.CENTER,
-                on_click=lambda e, tid=tab_id: self._on_tab_change(tid),
+                on_click=lambda e, tid=tab_id: self._handle_nav_click(tid, e),
+                ink=True,
             )
             self._button_refs[tab_id] = (btn, icon_ctrl)
             self._buttons_container.controls.append(btn)
+        self._update_indicator_position()
 
     def _apply_active_styles(self):
-        """Update existing button styles in-place without rebuilding controls."""
+        """Update existing button icon styles in-place without rebuilding controls."""
         for tab_id, (btn, icon_ctrl) in self._button_refs.items():
             style = self._controller.get_nav_item_style(tab_id)
             icon_ctrl.color = style.icon_color
-            btn.bgcolor = style.bgcolor
-            btn.border = style.border
-            btn.shadow = style.shadow

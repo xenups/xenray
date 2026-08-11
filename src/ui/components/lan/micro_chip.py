@@ -21,7 +21,7 @@ class MicroChip(ft.Container):
         on_copy: Optional[Callable[[str], None]] = None,
         is_rtl: bool = False,
     ):
-        val_ctrl = val_text_ctrl or ft.Text(
+        self._val_ctrl = val_text_ctrl or ft.Text(
             value,
             size=11,
             weight=ft.FontWeight.BOLD,
@@ -29,6 +29,7 @@ class MicroChip(ft.Container):
             selectable=True,
             overflow=ft.TextOverflow.ELLIPSIS,
         )
+        val_ctrl = self._val_ctrl
 
         copy_btn = ft.IconButton(
             icon=ft.Icons.COPY,
@@ -66,3 +67,11 @@ class MicroChip(ft.Container):
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
             ),
         )
+
+    def update_value(self, value: str) -> None:
+        """Reactively update the chip's displayed value text."""
+        self._val_ctrl.value = value
+        try:
+            self._val_ctrl.update()
+        except Exception:
+            pass

@@ -47,6 +47,33 @@ def test_dashboard_controller_state_transitions():
     ctrl.stop_uptime_timer()
 
 
+def test_dashboard_controller_deduplicates_same_state_emissions():
+    """Re-pushing the same CONNECTING state must not re-fire the state callback.
+
+    The connecting state is emitted both by the handler's ``_set_connecting``
+    sync and the EventBus ``connecting`` event — a duplicate would render the
+    intermediate status text ("در حال اوج‌گیری" / initializing) twice.
+    """
+    state_history = []
+
+    def on_state_changed(state: DashboardState, label: str):
+        state_history.append(state)
+
+    ctrl = DashboardController(on_state_changed=on_state_changed)
+
+    # Two identical CONNECTING pushes (the duplicate scenario) -> single emission
+    ctrl.set_connection_state(is_connected=False, is_connecting=True)
+    ctrl.set_connection_state(is_connected=False, is_connecting=True)
+    assert state_history == [DashboardState.CONNECTING]
+    assert ctrl.state == DashboardState.CONNECTING
+
+    # A real transition still fires exactly once
+    ctrl.set_connection_state(is_connected=True)
+    assert state_history == [DashboardState.CONNECTING, DashboardState.CONNECTED]
+
+    ctrl.stop_uptime_timer()
+
+
 def test_dashboard_controller_process_network_stats():
     """Test processing network statistics into formatted KB/s and MB/s strings."""
     stats_history = []

@@ -20,6 +20,12 @@ class NavigationService:
     def __init__(self, main_window: MainWindow) -> None:
         self._mw = main_window
 
+    def _set_stats_visible(self, visible: bool) -> None:
+        """Mark the statistics page as shown/hidden to pause telemetry rendering."""
+        view = getattr(self._mw, "_stitch_statistics_view", None)
+        if view is not None and hasattr(view, "set_visible"):
+            view.set_visible(visible)
+
     def navigate_to(self, control: ft.Control) -> None:
         """Navigate to a new view — suppress background updates during swap."""
         self._mw._nav_locked = True
@@ -29,6 +35,8 @@ class NavigationService:
         except RuntimeError:
             pass
         self._mw._nav_locked = False
+        # Any subpage navigation hides the statistics page.
+        self._set_stats_visible(False)
 
     def navigate_back(self, e: Optional[ft.ControlEvent] = None) -> None:
         """Return to settings view or active tab from subpages."""
@@ -61,6 +69,8 @@ class NavigationService:
             self._mw._view_switcher.update()
         except RuntimeError:
             pass
+
+        self._set_stats_visible(tab_id == "statistics")
 
         if hasattr(self._mw, "_nav_sidebar") and self._mw._nav_sidebar:
             try:
@@ -124,18 +134,23 @@ class NavigationService:
         self.navigate_to(page)
 
     def open_lan_page(self) -> None:
-        """Navigate to the dedicated LAN Sharing view."""
+        """Navigate to the dedicated LAN Sharing view (cached singleton)."""
         from src.ui.pages.lan_sharing_page import LanSharingPage, LanSharingView
 
         self._mw._active_tab = "lan"
         if hasattr(self._mw, "_nav_sidebar") and self._mw._nav_sidebar:
             self._mw._nav_sidebar.set_active_tab("lan")
 
-        view = LanSharingView(
-            app_context=self._mw._app_context,
-            on_back=self.navigate_back,
-            on_lan_toggle=lambda enabled: self._mw._nav_sidebar.update_lan_button(enabled)
-            if hasattr(self._mw, "_nav_sidebar") and self._mw._nav_sidebar
-            else None,
-        )
+        view = getattr(self._mw, "_lan_sharing_view", None)
+        if view is None:
+            view = LanSharingView(
+                app_context=self._mw._app_context,
+                on_back=self.navigate_back,
+                on_lan_toggle=lambda enabled: (
+                    self._mw._nav_sidebar.update_lan_button(enabled)
+                    if hasattr(self._mw, "_nav_sidebar") and self._mw._nav_sidebar
+                    else None
+                ),
+            )
+            self._mw._lan_sharing_view = view
         self.navigate_to(view)

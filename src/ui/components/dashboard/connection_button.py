@@ -106,7 +106,7 @@ class ConnectionButton(ft.Container):
 
         try:
             self._button.update()
-        except RuntimeError:
+        except Exception:
             pass
 
     def set_connected(self, status_label: str = None):
@@ -128,7 +128,7 @@ class ConnectionButton(ft.Container):
         self._status_text.color = "#4ADE80"
         try:
             self._button.update()
-        except RuntimeError:
+        except Exception:
             pass
 
         # Reset glow layer for network activity animation
@@ -144,13 +144,13 @@ class ConnectionButton(ft.Container):
         )
         try:
             self._glow_layer.update()
-        except RuntimeError:
+        except Exception:
             pass
 
         # Start a gentle idle breathing pulse for the connected state
         try:
             _has_page = self.page is not None
-        except RuntimeError:
+        except Exception:
             _has_page = False
         if _has_page:
             import asyncio
@@ -160,7 +160,7 @@ class ConnectionButton(ft.Container):
                 while self._state == "connected":
                     try:
                         _ = self.page
-                    except RuntimeError:
+                    except Exception:
                         break
                     try:
                         if self._current_activity < 5:
@@ -200,7 +200,7 @@ class ConnectionButton(ft.Container):
         self._uptime_text.value = "00:00:00"
         try:
             self._button.update()
-        except RuntimeError:
+        except Exception:
             pass
 
         # Minimal glow
@@ -212,7 +212,7 @@ class ConnectionButton(ft.Container):
         )
         try:
             self._glow_layer.update()
-        except RuntimeError:
+        except Exception:
             pass
 
     def set_connecting(self, status_label: str = None):
@@ -236,7 +236,7 @@ class ConnectionButton(ft.Container):
         self._uptime_text.value = "00:00:00"
         try:
             self._button.update()
-        except RuntimeError:
+        except Exception:
             pass
 
         self._glow_layer.opacity = 1.0
@@ -250,12 +250,12 @@ class ConnectionButton(ft.Container):
         )
         try:
             self._glow_layer.update()
-        except RuntimeError:
+        except Exception:
             pass
 
         try:
             _has_page = self.page is not None
-        except RuntimeError:
+        except Exception:
             _has_page = False
         if _has_page:
             import asyncio
@@ -265,7 +265,7 @@ class ConnectionButton(ft.Container):
                 while self._is_connecting:
                     try:
                         _ = self.page
-                    except RuntimeError:
+                    except Exception:
                         break
                     try:
                         if grow:
@@ -296,7 +296,7 @@ class ConnectionButton(ft.Container):
         self._status_text.color = ft.Colors.WHITE
         try:
             self._button.update()
-        except RuntimeError:
+        except Exception:
             pass
 
         self._glow_layer.opacity = 1.0
@@ -310,12 +310,12 @@ class ConnectionButton(ft.Container):
         )
         try:
             self._glow_layer.update()
-        except RuntimeError:
+        except Exception:
             pass
 
         try:
             _has_page = self.page is not None
-        except RuntimeError:
+        except Exception:
             _has_page = False
         if _has_page:
             import asyncio
@@ -325,7 +325,7 @@ class ConnectionButton(ft.Container):
                 while self._state == "disconnecting":
                     try:
                         _ = self.page
-                    except RuntimeError:
+                    except Exception:
                         break
                     try:
                         if grow:
@@ -342,6 +342,46 @@ class ConnectionButton(ft.Container):
                         break
 
             self.page.run_task(_disconnecting_pulse)
+
+    def set_step(self, step_msg: str) -> None:
+        """Update the center status text during connection step transitions."""
+        if not step_msg:
+            return
+        self._status_text.value = step_msg
+        self._status_text.color = ft.Colors.AMBER_400
+        try:
+            self._status_text.update()
+        except Exception:
+            pass
+
+    def update_uptime(self, elapsed: int | str) -> None:
+        """Update the uptime timer text inside the button."""
+        if isinstance(elapsed, (int, float)):
+            hours, remainder = divmod(int(elapsed), 3600)
+            minutes, seconds = divmod(remainder, 60)
+            uptime_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+        else:
+            uptime_str = str(elapsed)
+        self._uptime_text.value = uptime_str
+        try:
+            if self._uptime_text.page:
+                self._uptime_text.update()
+        except Exception:
+            pass
+
+    def set_uptime(self, uptime_str: str) -> None:
+        """Update the uptime timer text inside the button."""
+        self.update_uptime(uptime_str)
+
+    def set_online_status(self, is_online: bool) -> None:
+        """Update online status indicator (kept for API compatibility)."""
+        if not is_online:
+            self._status_text.value = "Offline"
+            self._status_text.color = ft.Colors.RED_400
+            try:
+                self._status_text.update()
+            except Exception:
+                pass
 
     def update_network_activity(self, total_bps: float) -> None:
         """Update glow layer visual properties using calculated GlowMetrics payload."""

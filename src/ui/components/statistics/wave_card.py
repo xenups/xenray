@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import List
+
 import flet as ft
 
 from src.core.i18n import t
@@ -24,7 +26,10 @@ class WaveCard(ft.Container):
                     [
                         ft.Icon(ft.Icons.GRAPHIC_EQ_ROUNDED, size=16, color=CYAN),
                         ft.Text(
-                            t("stats.realtime_wave", default="Real-Time Traffic Wave Stream"),
+                            t(
+                                "stats.realtime_wave",
+                                default="Real-Time Traffic Wave Stream",
+                            ),
                             size=12,
                             weight=ft.FontWeight.W_600,
                             color=MUTED_WHITE,
@@ -44,7 +49,10 @@ class WaveCard(ft.Container):
                         ft.Container(width=8),
                         ft.Container(width=8, height=8, border_radius=4, bgcolor="#38bdf8"),
                         ft.Text(
-                            t("stats.upload", default="Upload"), size=11, color=MUTED_WHITE, weight=ft.FontWeight.W_500
+                            t("stats.upload", default="Upload"),
+                            size=11,
+                            color=MUTED_WHITE,
+                            weight=ft.FontWeight.W_500,
                         ),
                     ],
                     spacing=4,
@@ -69,3 +77,19 @@ class WaveCard(ft.Container):
             padding=glass.padding,
             expand=glass.expand,
         )
+
+    def update_telemetry(self, dl_heights: List[float], ul_heights: List[float]) -> None:
+        """Reactively push new wave bar heights into the visualizer."""
+        self.wave_chart.update_heights(dl_heights, ul_heights)
+        try:
+            self.update()
+        except Exception:
+            pass
+
+    def reset_heights(self) -> None:
+        """Reset the wave bars back to their idle baseline."""
+        self.wave_chart.reset_heights()
+        try:
+            self.update()
+        except Exception:
+            pass

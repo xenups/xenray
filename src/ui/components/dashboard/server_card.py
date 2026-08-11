@@ -70,20 +70,21 @@ class ServerCard(ft.Container):
 
         # Main content row
 
+        self._text_column = ft.Column(
+            [
+                self._country_city_text,
+                self._name_text,
+                self._address_text,
+            ],
+            spacing=2,
+            alignment=ft.MainAxisAlignment.CENTER,
+            horizontal_alignment=ft.CrossAxisAlignment.START,
+        )
+
         self._content_row = ft.Row(
             [
                 self._icon_container,
-                ft.Column(
-                    [
-                        self._country_city_text,
-                        self._name_text,
-                        self._address_text,
-                    ],
-                    expand=True,
-                    spacing=2,
-                    alignment=ft.MainAxisAlignment.CENTER,
-                    horizontal_alignment=ft.CrossAxisAlignment.START,
-                ),
+                self._text_column,
                 self._list_btn,
             ],
             alignment=ft.MainAxisAlignment.CENTER,
