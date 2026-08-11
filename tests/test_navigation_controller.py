@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from src.ui.controllers.navigation_controller import NavigationController
 
 

@@ -112,7 +112,7 @@ class SettingsRepository:
         if mode in {"name_asc", "ping_asc", "ping_desc"}:
             self._write("sort_mode.txt", mode)
 
-    # --- Routing Country ---
+    # --- Routing Country / Direct Country ---
     def get_routing_country(self) -> str:
         val = self._read("routing_country.txt", "ir")
         return val if val in {"ir", "cn", "ru", "none"} else "ir"
@@ -120,6 +120,14 @@ class SettingsRepository:
     def set_routing_country(self, country_code: Optional[str]) -> None:
         if not country_code or country_code in {"ir", "cn", "ru", "none"}:
             self._write("routing_country.txt", country_code or "")
+
+    def get_direct_country(self) -> str:
+        """Alias for get_routing_country."""
+        return self.get_routing_country()
+
+    def set_direct_country(self, country_code: Optional[str]) -> None:
+        """Alias for set_routing_country."""
+        self.set_routing_country(country_code)
 
     # --- Close Preference ---
     def get_remember_close_choice(self) -> bool:

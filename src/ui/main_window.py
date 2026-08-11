@@ -1,4 +1,4 @@
-"""Main Window Coordinator - lightweight layout assembly shell connecting views, navigation, lifecycle, and event bus."""
+"""Main Window Coordinator - layout assembly shell connecting views, navigation, lifecycle, and event bus."""
 
 from __future__ import annotations
 
@@ -15,7 +15,6 @@ from src.services.network_stats import NetworkStatsService
 from src.ui.builders.ui_builder import UIBuilder
 from src.ui.components.common.admin_restart_dialog import AdminRestartDialog
 from src.ui.components.common.toast import ToastManager
-from src.ui.components.lan.lan_sharing_card import LanSharingCard
 from src.ui.components.settings import (
     AutoReconnectToggleRow,
     CountryDropdownRow,

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from src.ui.helpers.glow_calculator import GlowCalculator, GlowMetrics
 
 

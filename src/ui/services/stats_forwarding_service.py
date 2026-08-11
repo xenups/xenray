@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import os
 import threading
 from typing import TYPE_CHECKING
 
@@ -49,7 +48,6 @@ class StatsForwardingService:
 
                 stats = self._mw._network_stats.get_stats()
                 down_str = stats.get("download_speed", "0 B/s")
-                up_str = stats.get("upload_speed", "0 B/s")
                 total_bps = float(stats.get("total_bps", 0))
 
                 dl_bps = total_bps * 0.6

@@ -7,7 +7,6 @@ from typing import Any, Callable, Tuple
 from src.core.app_context import AppContext
 from src.core.i18n import set_language as set_app_language
 from src.core.i18n import t
-from src.core.types import ConnectionMode
 
 
 class SettingsFormPresenter:

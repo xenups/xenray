@@ -15,11 +15,11 @@ from src.ui.components.dashboard.server_card import ServerCard
 from src.ui.components.dashboard.status_display import StatusDisplay
 from src.ui.components.lan.lan_sharing_card import LanSharingCard
 from src.ui.components.settings import ModeSwitchRow
-from src.ui.pages.dashboard_page import DashboardPage, DashboardView
-from src.ui.pages.logs_page import LogsPage, LogsView
-from src.ui.pages.servers_page import ServersPage, ServersView
-from src.ui.pages.settings_page import SettingsPage, SettingsView
-from src.ui.pages.statistics_page import StatisticsPage, StatisticsView
+from src.ui.pages.dashboard_page import DashboardView
+from src.ui.pages.logs_page import LogsView
+from src.ui.pages.servers_page import ServersView
+from src.ui.pages.settings_page import SettingsView
+from src.ui.pages.statistics_page import StatisticsView
 from src.ui.theme import AppColors
 
 if TYPE_CHECKING:
@@ -210,6 +210,8 @@ class UIBuilder:
             expand=True,
         )
 
+        from src.core.constants import APP_VERSION
+
         # Top Header Drag Bar with App Branding (Left) and Window Control Buttons (Right)
         header_branding = ft.Row(
             [
@@ -224,6 +226,11 @@ class UIBuilder:
                     size=14,
                     weight=ft.FontWeight.W_800,
                     color=ft.Colors.WHITE,
+                ),
+                ft.Text(
+                    f"v{APP_VERSION}",
+                    size=11,
+                    color="#8A8F9E",
                 ),
             ],
             spacing=8,

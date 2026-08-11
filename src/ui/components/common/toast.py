@@ -83,14 +83,6 @@ class ToastManager:
         """Show a toast notification floating in the bottom corner of the main content view."""
         toast = Toast(message, message_type, duration)
 
-        is_rtl = False
-        try:
-            from src.core.i18n import get_language  # noqa: PLC0415
-
-            is_rtl = get_language() == "fa"
-        except Exception:
-            pass
-
         # Floating toast container at Top-Center with top margin
         toast_container = ft.Container(
             content=toast,

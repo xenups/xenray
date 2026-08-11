@@ -4,9 +4,6 @@ from __future__ import annotations
 
 import os
 
-import flet as ft
-import pytest
-
 from src.core.app_initializer import AppInitializer
 
 
@@ -53,6 +50,6 @@ def test_app_initializer_configure_window_properties():
 
     assert page.window.width == 620
     assert page.window.height == 480
-    assert page.window.resizable == False
-    assert page.window.prevent_close == True
-    assert page.window.title_bar_hidden == True
+    assert page.window.resizable is False
+    assert page.window.prevent_close is True
+    assert page.window.title_bar_hidden is True

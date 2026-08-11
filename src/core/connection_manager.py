@@ -1,6 +1,7 @@
 """Connection Manager - Facade for connection management with session-scoped lifecycle."""
 
 import threading
+import time
 
 from loguru import logger
 

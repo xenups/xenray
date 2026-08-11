@@ -2,18 +2,15 @@
 
 from __future__ import annotations
 
-import json
-import os
 from unittest.mock import patch
 
 import flet as ft
-import pytest
 
 from src.core.i18n import set_language, t
 from src.ui.components.common.nav_sidebar import NavSidebar
-from src.ui.components.common.toast import Toast, ToastManager
-from src.ui.pages.lan_sharing_page import LanSharingPage, LanSharingView, generate_qr_base64, get_real_physical_lan_ip
-from src.ui.pages.logs_page import LogsPage, LogsView
+from src.ui.components.common.toast import ToastManager
+from src.ui.pages.lan_sharing_page import LanSharingView, generate_qr_base64, get_real_physical_lan_ip
+from src.ui.pages.logs_page import LogsView
 
 
 def test_lan_physical_ip_detection():
@@ -64,15 +61,15 @@ def test_lan_sharing_view_layout_and_toggle(mock_add, mock_remove):
     )
 
     assert view.content is not None
-    assert view.allow_lan == True
+    assert view.allow_lan is True
     assert view._qr_card.is_qr_shown
 
     # Simulate toggle OFF
     event = type("E", (), {"control": type("C", (), {"value": False})()})()
     view._on_toggle_change(event)
 
-    assert app_ctx.settings.get_allow_lan() == False
-    assert view.allow_lan == False
+    assert app_ctx.settings.get_allow_lan() is False
+    assert view.allow_lan is False
     assert not view._qr_card.is_qr_shown
     assert toggled == [False]
 
@@ -80,8 +77,8 @@ def test_lan_sharing_view_layout_and_toggle(mock_add, mock_remove):
     event.control.value = True
     view._on_toggle_change(event)
 
-    assert app_ctx.settings.get_allow_lan() == True
-    assert view.allow_lan == True
+    assert app_ctx.settings.get_allow_lan() is True
+    assert view.allow_lan is True
     assert view._qr_card.is_qr_shown
     assert toggled == [False, True]
 

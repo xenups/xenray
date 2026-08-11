@@ -1,4 +1,4 @@
-"""App Initializer - centralizes application startup, window geometry locking, asset path resolution, and logging initialization."""
+"""App Initializer - centralizes startup, window geometry, asset path resolution, and logging."""
 
 from __future__ import annotations
 

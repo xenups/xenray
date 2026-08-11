@@ -6,7 +6,6 @@ from typing import Callable, Optional
 from urllib.parse import urlparse
 
 import flet as ft
-from loguru import logger
 
 from src.core.i18n import t
 from src.utils.link_parser import LinkParser
@@ -173,7 +172,17 @@ class AddServerDialog(ft.AlertDialog):
             if not line:
                 continue
 
-            if line.startswith(("vless://", "vmess://", "trojan://", "ss://", "hysteria2://", "tuic://", "socks://")):
+            if line.startswith(
+                (
+                    "vless://",
+                    "vmess://",
+                    "trojan://",
+                    "ss://",
+                    "hysteria2://",
+                    "tuic://",
+                    "socks://",
+                )
+            ):
                 try:
                     parsed = LinkParser.parse_link(line)
                     valid_configs.append(parsed)

@@ -11,8 +11,8 @@ from src.utils.platform_utils import PlatformUtils
 _project_root = Path(__file__).parent.parent.parent
 load_dotenv(_project_root / ".env")
 
-# Application version from environment
-APP_VERSION = os.getenv("APP_VERSION", "0.2.5-beta")
+# Application version from single source of truth
+from src.__version__ import APP_VERSION, __version__  # noqa: E402, F401
 
 # Window dimensions
 WINDOW_WIDTH = 620

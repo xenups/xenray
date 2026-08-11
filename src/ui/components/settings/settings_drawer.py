@@ -22,7 +22,7 @@ from src.services.xray_installer import XrayInstallerService
 from src.ui.components.settings.auto_reconnect_toggle_row import AutoReconnectToggleRow
 from src.ui.components.settings.base_rows import SettingsListTile, SettingsSection
 from src.ui.components.settings.country_dropdown_row import CountryDropdownRow
-from src.ui.components.settings.engine_rows import TunEngineDropdownRow, TunEngineRow
+from src.ui.components.settings.engine_rows import TunEngineDropdownRow
 from src.ui.components.settings.lan_share_toggle_row import LanShareToggleRow
 from src.ui.components.settings.language_dropdown_row import LanguageDropdownRow
 from src.ui.components.settings.mode_switch_row import ModeSwitchRow
@@ -385,10 +385,10 @@ class SettingsDrawer(ft.NavigationDrawer):
             except Exception:
                 pass
 
-    def _save_country(self, e):
+    def _save_country(self, val):
         """Save the direct country setting."""
-        val = self._country_row.value
-        self._settings_controller.update_routing_country(val)
+        code = val if isinstance(val, str) else self._country_row.value
+        self._settings_controller.update_routing_country(code)
         page = self.safe_page
         if page:
             try:

@@ -11,7 +11,6 @@ from src.ui.theme import AppColors
 
 
 def rtl_aware(expand: bool = False):
-    rtl = is_rtl()
     return {"expand": expand}
 
 

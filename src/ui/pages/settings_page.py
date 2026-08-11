@@ -126,7 +126,30 @@ class SettingsPage(ft.Container):
             ]
         )
 
-        self._update_card = UpdateCard(on_check_update_click=self._on_check_update_click)
+        def _handle_update_click(e):
+            if self._on_check_update_click:
+                try:
+                    self._on_check_update_click(e)
+                except Exception:
+                    pass
+            elif hasattr(self, "_settings_controller") and self._settings_controller:
+                self._settings_controller.check_for_updates(
+                    update_card_ref=self._update_card,
+                    page_ref=self.page if hasattr(self, "page") else None,
+                )
+
+        self._update_card = UpdateCard(on_check_update_click=_handle_update_click)
+
+        def _handle_core_update_click(e):
+            if hasattr(self, "_settings_controller") and self._settings_controller:
+                self._settings_controller.check_xray_core_update(
+                    core_card_ref=self._xray_core_card,
+                    page_ref=self.page if hasattr(self, "page") else None,
+                )
+
+        from src.ui.components.settings.xray_core_card import XrayCoreCard
+
+        self._xray_core_card = XrayCoreCard(on_check_core_click=_handle_core_update_click)
 
         super().__init__(
             content=ft.Column(
@@ -135,6 +158,7 @@ class SettingsPage(ft.Container):
                     self._routing_card,
                     self._preferences_card,
                     self._update_card,
+                    self._xray_core_card,
                 ],
                 spacing=14,
                 scroll=ft.ScrollMode.AUTO,
@@ -143,6 +167,18 @@ class SettingsPage(ft.Container):
             padding=ft.Padding.only(left=20, right=20, top=20, bottom=40),
             expand=True,
         )
+
+    def did_mount(self) -> None:
+        """Sync component state from repository on mount."""
+        try:
+            if hasattr(self, "_app_context") and self._app_context:
+                direct_country = self._app_context.settings.get_direct_country()
+                if self._country_row and hasattr(self._country_row, "_dropdown"):
+                    self._country_row._dropdown.value = direct_country if direct_country else "none"
+                    if self._country_row.page:
+                        self._country_row.update()
+        except Exception:
+            pass
 
 
 # Backward-compatibility alias

@@ -25,7 +25,6 @@ class SplashScreen(ft.Container):
 
         BG_COLOR = "#0F111A"
         WHITE = ft.Colors.WHITE
-        MUTED_TEXT = "#94A3B8"
 
         # 1. Logo image with entrance scale/opacity transition
         self._logo_image = ft.Image(

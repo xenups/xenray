@@ -1,4 +1,4 @@
-"""App Update Card component for Settings Page."""
+"""Xray-Core Update Card component for Settings Page."""
 
 from __future__ import annotations
 
@@ -6,38 +6,45 @@ from typing import Callable
 
 import flet as ft
 
-from src.core.constants import APP_VERSION
 from src.core.i18n import t
+from src.services.xray_installer import XrayInstallerService
 from src.ui.theme import AppColors, create_glass_container
 
 
-class UpdateCard(ft.Container):
-    """Card displaying client version info and Check for Updates action button."""
+class XrayCoreCard(ft.Container):
+    """Card displaying Xray-Core binary version info and Check/Update Core action button."""
 
-    def __init__(self, on_check_update_click: Callable):
-        self._on_check_update_click = on_check_update_click
+    def __init__(self, on_check_core_click: Callable):
+        self._on_check_core_click = on_check_core_click
         WHITE = ft.Colors.WHITE
+
+        current_ver = XrayInstallerService.get_local_version() or "ND"
+        ver_display = f"v{current_ver}" if not current_ver.startswith("v") else current_ver
+
+        self._version_text = ft.Text(
+            t("settings.xray_core_version", default=ver_display, version=ver_display),
+            size=12,
+            color=AppColors.ON_SURFACE_VARIANT,
+        )
+
+        self._title_text = ft.Text(
+            "Xray-Core",
+            size=14,
+            weight=ft.FontWeight.W_700,
+            color=WHITE,
+        )
 
         info_col = ft.Column(
             [
-                ft.Text(
-                    "XenRay Client",
-                    size=14,
-                    weight=ft.FontWeight.W_700,
-                    color=WHITE,
-                ),
-                ft.Text(
-                    t("settings.version", default=f"v{APP_VERSION}", version=f"v{APP_VERSION}"),
-                    size=12,
-                    color=AppColors.ON_SURFACE_VARIANT,
-                ),
+                self._title_text,
+                self._version_text,
             ],
             spacing=2,
         )
 
-        self._btn_icon = ft.Icon(ft.Icons.SYSTEM_UPDATE_ALT, size=15, color=WHITE)
+        self._btn_icon = ft.Icon(ft.Icons.MEMORY, size=15, color=WHITE)
         self._btn_text = ft.Text(
-            t("settings.check_updates", default="Check for Updates"),
+            t("settings.check_core_update", default="بررسی آپدیت هسته"),
             size=12,
             color=AppColors.ON_PRIMARY,
             weight=ft.FontWeight.W_600,
@@ -85,14 +92,14 @@ class UpdateCard(ft.Container):
         )
 
     def set_checking(self, checking: bool) -> None:
-        """Toggle loading indicator on Check for Updates button."""
+        """Toggle loading indicator on Check Core button."""
         self._update_btn.disabled = checking
         self._btn_icon.visible = not checking
         self._progress_ring.visible = checking
         self._btn_text.value = (
-            t("settings.checking_updates", default="Checking...")
+            t("settings.checking_core_updates", default="در حال بررسی هسته...")
             if checking
-            else t("settings.check_updates", default="Check for Updates")
+            else t("settings.check_core_update", default="بررسی آپدیت هسته")
         )
         try:
             if self._update_btn.page:
@@ -100,6 +107,17 @@ class UpdateCard(ft.Container):
         except Exception:
             pass
 
+    def refresh_version(self) -> None:
+        """Refresh displayed Xray-Core version string."""
+        current_ver = XrayInstallerService.get_local_version() or "ND"
+        ver_display = f"v{current_ver}" if not current_ver.startswith("v") else current_ver
+        self._version_text.value = t("settings.xray_core_version", default=ver_display, version=ver_display)
+        try:
+            if self._version_text.page:
+                self._version_text.update()
+        except Exception:
+            pass
+
     def _handle_click(self, e):
-        if self._on_check_update_click:
-            self._on_check_update_click(e)
+        if self._on_check_core_click:
+            self._on_check_core_click(e)

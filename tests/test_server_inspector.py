@@ -6,11 +6,9 @@ import time
 from threading import Event
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from src.core.event_bus import TOPIC_SERVER_INSPECTED, event_bus
 from src.core.subscription_manager import SubscriptionManager
-from src.services.server_inspector import ServerInspector, server_inspector
+from src.services.server_inspector import ServerInspector
 from src.ui.services.navigation_service import NavigationService
 
 

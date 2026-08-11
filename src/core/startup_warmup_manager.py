@@ -45,11 +45,13 @@ class StartupWarmupManager:
             task_system_info = loop.run_in_executor(None, system_info_cache.warmup_system_info)
             task_logs = self._warmup_logs_engine()
             task_views = self._warmup_views_and_navigation()
+            task_i18n = self._warmup_i18n()
 
             await asyncio.gather(
                 task_system_info,
                 task_logs,
                 task_views,
+                task_i18n,
                 return_exceptions=True,
             )
 
@@ -65,6 +67,21 @@ class StartupWarmupManager:
         except Exception as e:
             logger.error(f"[StartupWarmupManager] Error during startup pre-warming: {e}")
             return False
+
+    async def _warmup_i18n(self) -> None:
+        """Load the remaining translation files in the background during the splash.
+
+        Only the active language is loaded eagerly for a fast splash; the other
+        locale JSONs are prefetched here (off the event loop) so a later language
+        switch is instant.
+        """
+        try:
+            from src.core.i18n import load_all_languages
+
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(None, load_all_languages)
+        except Exception as e:
+            logger.debug(f"[StartupWarmupManager] i18n pre-fill non-critical error: {e}")
 
     async def _warmup_logs_engine(self) -> None:
         """Pre-read and parse initial log streams into memory for instant LogsPage loading."""

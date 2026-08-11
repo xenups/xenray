@@ -2,10 +2,6 @@
 
 from __future__ import annotations
 
-import time
-
-import pytest
-
 from src.ui.controllers.dashboard_controller import DashboardController, DashboardState
 
 

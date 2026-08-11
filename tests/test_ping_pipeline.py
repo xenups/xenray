@@ -7,7 +7,6 @@ import time
 from unittest.mock import MagicMock, patch
 
 import flet as ft
-import pytest
 
 from src.core.event_bus import TOPIC_ACTIVE_SERVER_PING_UPDATED, event_bus
 from src.ui.components.dashboard.connection_button import ConnectionButton

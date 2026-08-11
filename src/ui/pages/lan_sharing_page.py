@@ -1,4 +1,4 @@
-"""LAN Proxy Sharing Page - full-page dedicated view with live QR code, settings state sync, and real-time toggle update."""
+"""LAN Proxy Sharing Page - full-page dedicated view with live QR code, settings sync, and toggle update."""
 
 from __future__ import annotations
 

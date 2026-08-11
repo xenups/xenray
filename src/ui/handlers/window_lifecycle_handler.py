@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-import asyncio
 import os
 from typing import TYPE_CHECKING
-
-import flet as ft
 
 from src.core.constants import WINDOW_HEIGHT, WINDOW_WIDTH
 from src.core.logger import logger

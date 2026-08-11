@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Callable, Optional
 
+import flet as ft
+
 from src.core.event_bus import event_bus
 from src.core.i18n import t
 from src.core.logger import logger
@@ -82,18 +84,29 @@ class SettingsController:
             return False
 
     def update_routing_country(self, code: str) -> bool:
-        """Persist selected routing country code."""
+        """Persist selected routing country code, emit events, and show feedback toast."""
         try:
             if self._app_context and hasattr(self._app_context, "settings"):
-                self._app_context.settings.set_routing_country(code)
+                if hasattr(self._app_context.settings, "set_routing_country"):
+                    self._app_context.settings.set_routing_country(code)
+                if hasattr(self._app_context.settings, "set_direct_country"):
+                    self._app_context.settings.set_direct_country(code)
+
             event_bus.publish("settings_updated", {"setting": "routing_country", "value": code})
+            event_bus.publish("routing_rules_updated", {"setting": "routing_country", "value": code})
+
+            code_display = (code or "NONE").upper()
+            msg = t("settings.country_saved", default=f"Direct Country updated: {code_display}", country=code_display)
+            self._show_toast(msg, "success")
             return True
         except Exception as e:
             logger.error(f"[SettingsController] Error setting routing country: {e}")
+            err = t("settings.country_save_error", default="Error updating Direct Country settings")
+            self._show_toast(err, "error")
             return False
 
     def update_language(self, code: str) -> bool:
-        """Persist selected UI language code."""
+        """Persist selected UI language code and show feedback toast."""
         try:
             from src.core.i18n import set_language
 
@@ -101,7 +114,340 @@ class SettingsController:
             if self._app_context and hasattr(self._app_context, "settings"):
                 self._app_context.settings.set_language(code)
             event_bus.publish("settings_updated", {"setting": "language", "value": code})
+            msg = t("settings.language_saved", default=f"Language set to {code.upper()}", code=code.upper())
+            self._show_toast(msg, "success")
             return True
         except Exception as e:
             logger.error(f"[SettingsController] Error setting language: {e}")
+            err = t("settings.language_save_error", default="Error updating language setting")
+            self._show_toast(err, "error")
             return False
+
+    def update_auto_reconnect(self, enabled: bool) -> bool:
+        """Persist auto-reconnect preference and trigger toast feedback."""
+        try:
+            if self._app_context and hasattr(self._app_context, "settings"):
+                self._app_context.settings.set_auto_reconnect_enabled(enabled)
+            event_bus.publish("settings_updated", {"setting": "auto_reconnect", "value": enabled})
+            msg = t("settings.auto_reconnect_enabled") if enabled else t("settings.auto_reconnect_disabled")
+            self._show_toast(msg, "success" if enabled else "info")
+            return True
+        except Exception as e:
+            logger.error(f"[SettingsController] Error setting auto-reconnect: {e}")
+            self._show_toast(t("settings.update_error", default="Error updating settings"), "error")
+            return False
+
+    def update_lan_sharing(self, enabled: bool) -> bool:
+        """Persist LAN proxy sharing setting and trigger toast feedback."""
+        try:
+            from src.ui.controllers.lan_sharing_controller import LanSharingController
+
+            controller = LanSharingController(app_context=self._app_context)
+            controller.set_lan_sharing_enabled(enabled)
+            msg = t("settings.lan_enabled") if enabled else t("settings.lan_disabled")
+            self._show_toast(msg, "success" if enabled else "info")
+            return True
+        except Exception as e:
+            logger.error(f"[SettingsController] Error setting LAN sharing: {e}")
+            self._show_toast(t("settings.update_error", default="Error updating settings"), "error")
+            return False
+
+    def update_startup(self, enabled: bool, on_register: Callable, on_unregister: Callable) -> bool:
+        """Handle OS startup task registration and trigger feedback toast."""
+        try:
+            if enabled:
+                success, _ = on_register()
+            else:
+                success, _ = on_unregister()
+
+            if success:
+                if self._app_context and hasattr(self._app_context, "settings"):
+                    self._app_context.settings.set_startup_enabled(enabled)
+                event_bus.publish("settings_updated", {"setting": "startup", "value": enabled})
+                self._show_toast(t("settings.startup_saved"), "success")
+                return True
+            else:
+                self._show_toast(t("settings.startup_error"), "error")
+                return False
+        except Exception as e:
+            logger.error(f"[SettingsController] Error setting startup preference: {e}")
+            self._show_toast(t("settings.startup_error"), "error")
+            return False
+
+    def check_for_updates(
+        self,
+        update_card_ref: Optional[object] = None,
+        page_ref: Optional[object] = None,
+        sync: bool = False,
+    ) -> tuple[bool, Optional[str], Optional[str], Optional[str]]:
+        """Check for application updates via AppUpdateService and provide UI toast/dialog feedback."""
+        if update_card_ref and hasattr(update_card_ref, "set_checking"):
+            update_card_ref.set_checking(True)
+
+        def _do_check():
+            try:
+                from src.services.app_update_service import AppUpdateService
+
+                update_avail, current_ver, latest_ver, download_url = AppUpdateService.check_for_updates()
+
+                if latest_ver is None:
+                    err_msg = t("settings.update_check_failed", default="خطا در بررسی بروزرسانی")
+                    self._show_toast(err_msg, "error")
+                elif update_avail:
+                    msg = t(
+                        "settings.update_available",
+                        default=f"New version {latest_ver} available!",
+                        version=latest_ver,
+                    )
+                    self._show_toast(msg, "success")
+                    if page_ref and hasattr(page_ref, "show_dialog"):
+                        self._show_update_dialog(page_ref, current_ver, latest_ver, download_url, update_card_ref)
+                else:
+                    msg = t("settings.up_to_date", default="شما از آخرین نسخه XenRay استفاده میکنید")
+                    self._show_toast(msg, "success")
+
+                return update_avail, current_ver, latest_ver, download_url
+            except Exception as e:
+                logger.error(f"[SettingsController] Error checking for updates: {e}")
+                err_msg = t("settings.update_check_failed", default="خطا در بررسی بروزرسانی")
+                self._show_toast(err_msg, "error")
+                return False, "0.3.0-beta", None, None
+            finally:
+                if update_card_ref and hasattr(update_card_ref, "set_checking"):
+                    update_card_ref.set_checking(False)
+
+        if sync:
+            return _do_check()
+        else:
+            import threading
+
+            threading.Thread(target=_do_check, daemon=True).start()
+            return False, None, None, None
+
+    def _show_update_dialog(
+        self,
+        page,
+        current: str,
+        latest: str,
+        download_url: Optional[str],
+        update_card_ref: Optional[object] = None,
+    ):
+        """Show app update confirmation modal dialog."""
+        if not page:
+            return
+
+        def close_dlg(e):
+            try:
+                page.pop_dialog()
+            except Exception:
+                pass
+
+        def start_update(e):
+            try:
+                page.pop_dialog()
+            except Exception:
+                pass
+
+            if not download_url:
+                self._show_toast(t("settings.download_failed", default="خطا در دانلود فایل بروزرسانی"), "error")
+                return
+
+            import threading
+            from src.services.app_update_service import AppUpdateService
+
+            self._show_toast(t("settings.downloading_update", default="در حال دانلود فایل بروزرسانی..."), "info")
+
+            def update_worker():
+                if update_card_ref and hasattr(update_card_ref, "set_checking"):
+                    update_card_ref.set_checking(True)
+                try:
+                    zip_path = AppUpdateService.download_update(download_url)
+                    if zip_path:
+                        self._show_toast(t("settings.applying_update", default="در حال اجرای بروزرسانی..."), "info")
+                        AppUpdateService.apply_update(zip_path)
+                    else:
+                        self._show_toast(t("settings.download_failed", default="خطا در دانلود فایل بروزرسانی"), "error")
+                except Exception as ex:
+                    logger.error(f"[SettingsController] App update download error: {ex}")
+                    self._show_toast(t("settings.download_failed", default="خطا در دانلود فایل بروزرسانی"), "error")
+                finally:
+                    if update_card_ref and hasattr(update_card_ref, "set_checking"):
+                        update_card_ref.set_checking(False)
+
+            threading.Thread(target=update_worker, daemon=True).start()
+
+        dlg = ft.AlertDialog(
+            modal=True,
+            title=ft.Text(t("app_update.title", default="Update Available")),
+            content=ft.Column(
+                [
+                    ft.Text(
+                        t(
+                            "app_update.available",
+                            default=f"Current: v{current} → Latest: v{latest}",
+                            current=current,
+                            latest=latest,
+                        )
+                    ),
+                    ft.Text(
+                        t("app_update.message", default="Would you like to download and install the update now?"),
+                        size=12,
+                        color=ft.Colors.ON_SURFACE_VARIANT,
+                    ),
+                ],
+                tight=True,
+                spacing=10,
+            ),
+            actions=[
+                ft.TextButton(t("common.cancel", default="Cancel"), on_click=close_dlg),
+                ft.TextButton(t("common.install", default="Install"), on_click=start_update),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+        try:
+            page.show_dialog(dlg)
+        except Exception as ex:
+            logger.error(f"[SettingsController] Failed to show update dialog: {ex}")
+
+    def check_xray_core_update(
+        self,
+        core_card_ref: Optional[object] = None,
+        page_ref: Optional[object] = None,
+        sync: bool = False,
+    ) -> tuple[bool, Optional[str], Optional[str]]:
+        """Check for Xray-Core binary updates from GitHub releases.
+
+        Returns (update_available: bool, current_version: str|None, latest_version: str|None).
+        """
+        if core_card_ref and hasattr(core_card_ref, "set_checking"):
+            core_card_ref.set_checking(True)
+
+        def _do_check():
+            try:
+                from src.services.xray_installer import XrayInstallerService
+
+                available, current_ver, latest_ver = XrayInstallerService.check_for_updates()
+
+                if latest_ver is None:
+                    err_msg = t("settings.xray_core_check_failed", default="خطا در بررسی آپدیت هسته Xray-Core")
+                    self._show_toast(err_msg, "error")
+                elif available:
+                    msg = t(
+                        "settings.xray_core_update_available",
+                        default=f"Xray-Core v{latest_ver} available!",
+                        version=latest_ver,
+                    )
+                    self._show_toast(msg, "success")
+                    if page_ref and hasattr(page_ref, "show_dialog"):
+                        self._show_xray_core_update_dialog(page_ref, current_ver, latest_ver, core_card_ref)
+                else:
+                    msg = t("settings.xray_core_up_to_date", default="هسته Xray-Core به روز است")
+                    self._show_toast(msg, "success")
+
+                return available, current_ver, latest_ver
+            except Exception as e:
+                logger.error(f"[SettingsController] Error checking for Xray-Core update: {e}")
+                err_msg = t("settings.xray_core_check_failed", default="خطا در بررسی آپدیت هسته Xray-Core")
+                self._show_toast(err_msg, "error")
+                return False, None, None
+            finally:
+                if core_card_ref and hasattr(core_card_ref, "set_checking"):
+                    core_card_ref.set_checking(False)
+
+        if sync:
+            return _do_check()
+        else:
+            import threading
+
+            threading.Thread(target=_do_check, daemon=True).start()
+            return False, None, None
+
+    def _show_xray_core_update_dialog(
+        self, page, current: Optional[str], latest: str, core_card_ref: Optional[object] = None
+    ):
+        """Show Xray-Core update confirmation modal dialog."""
+        if not page:
+            return
+
+        def close_dlg(e):
+            try:
+                page.pop_dialog()
+            except Exception:
+                pass
+
+        def start_core_install(e):
+            try:
+                page.pop_dialog()
+            except Exception:
+                pass
+
+            import threading
+            from src.services.xray_installer import XrayInstallerService
+
+            msg = t(
+                "settings.updating_xray_core",
+                default="در حال دانلود و جایگزینی هسته Xray-Core...",
+            )
+            self._show_toast(msg, "info")
+
+            def install_worker():
+                if core_card_ref and hasattr(core_card_ref, "set_checking"):
+                    core_card_ref.set_checking(True)
+                try:
+                    success = XrayInstallerService.install()
+                    if success:
+                        ok_msg = t(
+                            "settings.xray_core_updated",
+                            default="هسته Xray-Core با موفقیت بروزرسانی شد",
+                        )
+                        self._show_toast(ok_msg, "success")
+                        if core_card_ref and hasattr(core_card_ref, "refresh_version"):
+                            core_card_ref.refresh_version()
+                    else:
+                        err_msg = t(
+                            "settings.xray_core_update_failed",
+                            default="خطا در نصب هسته Xray-Core",
+                        )
+                        self._show_toast(err_msg, "error")
+                except Exception as ex:
+                    logger.error(f"[SettingsController] Xray-Core installation error: {ex}")
+                    err_msg = t(
+                        "settings.xray_core_update_failed",
+                        default="خطا در نصب هسته Xray-Core",
+                    )
+                    self._show_toast(err_msg, "error")
+                finally:
+                    if core_card_ref and hasattr(core_card_ref, "set_checking"):
+                        core_card_ref.set_checking(False)
+
+            threading.Thread(target=install_worker, daemon=True).start()
+
+        curr_str = current or "N/A"
+        dlg = ft.AlertDialog(
+            modal=True,
+            title=ft.Text(t("settings.xray_core_update_title", default="آپدیت هسته Xray-Core")),
+            content=ft.Column(
+                [
+                    ft.Text(f"Current: v{curr_str} → Latest: v{latest}"),
+                    ft.Text(
+                        t(
+                            "settings.xray_core_update_message",
+                            default="آیا از دانلود و جایگزینی فایل اجرایی هسته مطمئن هستید؟",
+                        ),
+                        size=12,
+                        color=ft.Colors.ON_SURFACE_VARIANT,
+                    ),
+                ],
+                tight=True,
+                spacing=10,
+            ),
+            actions=[
+                ft.TextButton(t("common.cancel", default="انصراف"), on_click=close_dlg),
+                ft.TextButton(t("common.install", default="نصب و بروزرسانی"), on_click=start_core_install),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+        try:
+            page.show_dialog(dlg)
+        except Exception as ex:
+            logger.error(f"[SettingsController] Failed to show Xray-Core update dialog: {ex}")

@@ -5,7 +5,6 @@ from __future__ import annotations
 import flet as ft
 
 from src.core.i18n import t
-from src.ui.theme import AppColors
 
 
 class Header(ft.Container):

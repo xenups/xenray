@@ -1,8 +1,9 @@
 """Platform detection and abstraction utilities."""
+
 import os
 import platform
 import sys
-from typing import Literal, Tuple
+from typing import Literal, Optional, Tuple
 
 PlatformType = Literal["windows", "macos", "linux"]
 ArchType = Literal["x86_64", "arm64", "x86", "unknown"]
@@ -241,9 +242,21 @@ class PlatformUtils:
             key_path = r"SYSTEM\CurrentControlSet\Services\Dnscache\Parameters"
             with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, key_path, access=winreg.KEY_SET_VALUE) as key:
                 # DisableSmartNameResolution: 0 = on, 1 = off
-                winreg.SetValueEx(key, "DisableSmartNameResolution", 0, winreg.REG_DWORD, 0 if enabled else 1)
+                winreg.SetValueEx(
+                    key,
+                    "DisableSmartNameResolution",
+                    0,
+                    winreg.REG_DWORD,
+                    0 if enabled else 1,
+                )
                 # Also toggle the parallel A+AAAA sub-feature
-                winreg.SetValueEx(key, "DisableParallelAandAAAA", 0, winreg.REG_DWORD, 0 if enabled else 1)
+                winreg.SetValueEx(
+                    key,
+                    "DisableParallelAandAAAA",
+                    0,
+                    winreg.REG_DWORD,
+                    0 if enabled else 1,
+                )
         except Exception as exc:
             from src.core.logger import logger  # lazy to avoid circular import at module level
 

@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING, Optional
 
 import flet as ft
 
-from src.core.logger import logger
 from src.ui.components.servers.add_server_dialog import AddServerDialog
 
 if TYPE_CHECKING:
@@ -146,7 +144,7 @@ class NavigationService:
 
     def open_lan_page(self) -> None:
         """Navigate to the dedicated LAN Sharing view (cached singleton)."""
-        from src.ui.pages.lan_sharing_page import LanSharingPage, LanSharingView
+        from src.ui.pages.lan_sharing_page import LanSharingView
 
         self._mw._active_tab = "lan"
         if hasattr(self._mw, "_nav_sidebar") and self._mw._nav_sidebar:

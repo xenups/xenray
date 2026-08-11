@@ -26,8 +26,18 @@ class CountryDropdownRow(ft.Container):
             ],
             border_color=ft.Colors.OUTLINE_VARIANT,
             focused_border_color=ft.Colors.PRIMARY,
-            on_select=on_change,
         )
+
+        original_on_change = on_change
+
+        def wrapped_on_change(e):
+            val = self._dropdown.value
+            if hasattr(e, "control") and e.control and hasattr(e.control, "value") and e.control.value:
+                val = e.control.value
+            original_on_change(val)
+
+        self._dropdown.on_select = wrapped_on_change
+        self._dropdown.on_change = wrapped_on_change
 
         super().__init__(
             content=ft.Row(

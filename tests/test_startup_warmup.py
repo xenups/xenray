@@ -9,7 +9,7 @@ import flet as ft
 import pytest
 
 from src.core.startup_warmup_manager import StartupWarmupManager
-from src.core.system_info_cache import SystemInfoCache, system_info_cache
+from src.core.system_info_cache import system_info_cache
 from src.ui.components.splash_screen import SplashScreen
 
 

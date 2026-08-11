@@ -5,12 +5,12 @@
 - SingboxService & XrayService process lifecycle and clean teardown
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
 from src.core.config_builders.singbox_config_builder import SingboxConfigBuilder
-from src.core.constants import DNS_IP_GOOGLE, TUN_GATEWAY_IPV4
+from src.core.constants import TUN_GATEWAY_IPV4
 from src.services.route_manager_service import RouteManagerService
 from src.services.singbox_service import SingboxService
 from src.services.xray_service import XrayService
@@ -25,7 +25,10 @@ class TestSingboxConfigBuilder:
         return SingboxConfigBuilder()
 
     def test_normalize_list(self, builder):
-        assert builder.normalize_list(["  1.1.1.1  ", "'DOMAIN.COM'"]) == ["1.1.1.1", "domain.com"]
+        assert builder.normalize_list(["  1.1.1.1  ", "'DOMAIN.COM'"]) == [
+            "1.1.1.1",
+            "domain.com",
+        ]
         assert builder.normalize_list(None) == []
 
     def test_filter_real_ips(self, builder):
@@ -92,7 +95,13 @@ class TestRouteManagerService:
         return RouteManagerService()
 
     def test_is_private_or_reserved(self, route_mgr):
-        for private_ip in ("10.0.0.1", "172.16.0.1", "192.168.1.1", "127.0.0.1", "169.254.1.1"):
+        for private_ip in (
+            "10.0.0.1",
+            "172.16.0.1",
+            "192.168.1.1",
+            "127.0.0.1",
+            "169.254.1.1",
+        ):
             assert route_mgr.is_private_or_reserved(private_ip) is True
         for public_ip in ("1.1.1.1", "8.8.8.8", "104.16.72.94"):
             assert route_mgr.is_private_or_reserved(public_ip) is False
@@ -153,7 +162,10 @@ class TestServicesSmhrDelegation:
     def test_singbox_service_smhr_delegation(self):
         with patch("src.utils.platform_utils.PlatformUtils.suppress_smhr", return_value=True) as mock_suppress:
             with patch("src.utils.platform_utils.PlatformUtils.restore_smhr") as mock_restore:
-                with patch("src.utils.process_utils.ProcessUtils.is_running", return_value=False):
+                with patch(
+                    "src.utils.process_utils.ProcessUtils.is_running",
+                    return_value=False,
+                ):
                     singbox = SingboxService()
                     singbox._smhr_was_enabled = PlatformUtils.suppress_smhr()
                     mock_suppress.assert_called_once()

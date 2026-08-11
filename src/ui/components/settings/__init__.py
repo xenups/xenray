@@ -13,6 +13,7 @@ from src.ui.components.settings.port_input_row import HttpPortInputRow, PortInpu
 from src.ui.components.settings.settings_drawer import SettingsDrawer
 from src.ui.components.settings.startup_toggle_row import StartupToggleRow
 from src.ui.components.settings.update_card import UpdateCard
+from src.ui.components.settings.xray_core_card import XrayCoreCard
 
 __all__ = [
     "SectionHeader",
@@ -21,6 +22,7 @@ __all__ = [
     "SettingsListTile",
     "BentoCard",
     "UpdateCard",
+    "XrayCoreCard",
     "ModeSwitchRow",
     "TunEngineRow",
     "CoreDropdownRow",

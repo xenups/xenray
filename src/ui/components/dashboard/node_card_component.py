@@ -1,4 +1,4 @@
-"""Node Card Component - Current Node statistics, server icon, location metadata, and change server action matching design screenshot."""
+"""Node Card Component - Current node stats, server icon, location metadata, and change server action."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from src.ui.theme import AppColors, create_glass_container
 
 
 class NodeCardComponent:
-    """Bento container showing current node details, location, protocol, server icon, and bottom Change Server button matching design screenshot."""
+    """Bento container showing current node details, location, protocol, server icon, and Change Server button."""
 
     def __init__(self, on_change_server_click: Callable):
         self._on_change_server_click = on_change_server_click
@@ -82,14 +82,15 @@ class NodeCardComponent:
             border=ft.Border.all(1, ft.Colors.with_opacity(0.2, WHITE)),
         )
 
-        detail_row = lambda label, value_control: ft.Row(
-            [
-                ft.Text(label, size=11, color=MUTED_WHITE, weight=ft.FontWeight.W_500),
-                value_control,
-            ],
-            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-            vertical_alignment=ft.CrossAxisAlignment.CENTER,
-        )
+        def detail_row(label, value_control):
+            return ft.Row(
+                [
+                    ft.Text(label, size=11, color=MUTED_WHITE, weight=ft.FontWeight.W_500),
+                    value_control,
+                ],
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            )
 
         content = ft.Column(
             [
