@@ -40,7 +40,7 @@ class LanguageDropdownRow(ft.Container):
             src=f"/flags/{current_flag}.svg",
             width=24,
             height=18,
-            fit=ft.BoxFit.COVER,
+            fit=ft.BoxFit.CONTAIN,
             border_radius=3,
             filter_quality=ft.FilterQuality.HIGH,
             anti_alias=True,

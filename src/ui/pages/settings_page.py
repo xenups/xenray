@@ -189,7 +189,7 @@ class SettingsPage(ft.Container):
                 scroll=ft.ScrollMode.AUTO,
                 expand=True,
             ),
-            padding=ft.Padding.only(left=20, right=20, top=20, bottom=40),
+            padding=ft.Padding.only(left=20, right=20, top=20, bottom=16),
             expand=True,
         )
 

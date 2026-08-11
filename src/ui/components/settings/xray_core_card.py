@@ -42,46 +42,47 @@ class XrayCoreCard(ft.Container):
             spacing=2,
         )
 
-        self._btn_icon = ft.Icon(ft.Icons.MEMORY, size=15, color=WHITE)
+        ACCENT = "#A3A8FE"
+        self._btn_icon = ft.Icon(ft.Icons.MEMORY, size=16, color=ACCENT)
         self._btn_text = ft.Text(
             t("settings.check_core_update", default="Check Core Update"),
             size=12,
-            color=AppColors.ON_PRIMARY,
+            color=ACCENT,
             weight=ft.FontWeight.W_600,
         )
         self._progress_ring = ft.ProgressRing(
-            width=18,
-            height=18,
+            width=16,
+            height=16,
             stroke_width=2,
-            color=WHITE,
+            color=ACCENT,
             visible=False,
         )
 
-        self._btn_container = ft.Container(
-            content=ft.Row(
-                [
-                    self._btn_icon,
-                    self._progress_ring,
-                    self._btn_text,
-                ],
-                spacing=6,
-                alignment=ft.MainAxisAlignment.CENTER,
-                vertical_alignment=ft.CrossAxisAlignment.CENTER,
-            ),
-            alignment=ft.Alignment.CENTER,
-            width=160,
-            height=24,
+        self._btn_container = ft.Row(
+            [
+                self._btn_icon,
+                self._progress_ring,
+                self._btn_text,
+            ],
+            spacing=6,
+            alignment=ft.MainAxisAlignment.CENTER,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            tight=True,
         )
 
-        self._update_btn = ft.ElevatedButton(
+        self._update_btn = ft.OutlinedButton(
             content=self._btn_container,
-            width=180,
-            height=40,
+            width=160,
+            height=34,
             style=ft.ButtonStyle(
-                bgcolor=AppColors.PRIMARY,
-                color=AppColors.ON_PRIMARY,
+                color=ACCENT,
+                side=ft.BorderSide(1, ACCENT),
                 shape=ft.RoundedRectangleBorder(radius=8),
-                padding=ft.Padding.symmetric(horizontal=8, vertical=4),
+                padding=ft.Padding(12, 0, 12, 0),
+                bgcolor={
+                    ft.ControlState.DEFAULT: ft.Colors.TRANSPARENT,
+                    ft.ControlState.HOVERED: ft.Colors.with_opacity(0.1, ACCENT),
+                },
             ),
             on_click=self._handle_click,
         )

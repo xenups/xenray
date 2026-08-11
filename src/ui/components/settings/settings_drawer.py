@@ -1,35 +1,34 @@
-"""Settings drawer component with i18n support."""
+"""Settings drawer component with i18n support.
+
+Thin composition shell: builds the presentational section components and wires their
+callbacks to the SettingsHandler. No backend services are called from this file.
+"""
 
 from __future__ import annotations
 
-import os
 import threading
-import time
 from typing import Optional
 
 import flet as ft
 from loguru import logger
 
 from src.core.app_context import AppContext
-from src.core.constants import APP_VERSION
-from src.core.i18n import set_language as set_app_language
 from src.core.i18n import t
 from src.core.types import ConnectionMode
 from src.services import task_scheduler
-from src.services.app_update_service import AppUpdateService
-from src.services.rule_update_service import RuleUpdateService
-from src.services.xray_installer import XrayInstallerService
 from src.ui.components.settings.auto_reconnect_toggle_row import AutoReconnectToggleRow
 from src.ui.components.settings.base_rows import SettingsListTile, SettingsSection
-from src.ui.components.settings.country_dropdown_row import CountryDropdownRow
-from src.ui.components.settings.engine_rows import TunEngineDropdownRow
 from src.ui.components.settings.lan_share_toggle_row import LanShareToggleRow
 from src.ui.components.settings.language_dropdown_row import LanguageDropdownRow
-from src.ui.components.settings.mode_switch_row import ModeSwitchRow
-from src.ui.components.settings.port_input_row import HttpPortInputRow, PortInputRow
+from src.ui.components.settings.sections import (
+    AutoReconnectSection,
+    ConnectivitySection,
+    StartupLanguageSection,
+    UpdatesSection,
+)
 from src.ui.components.settings.startup_toggle_row import StartupToggleRow
 from src.ui.controllers.settings_controller import SettingsController
-from src.utils.process_utils import ProcessUtils
+from src.ui.handlers.settings_handler import SettingsHandler
 
 
 class SettingsDrawer(ft.NavigationDrawer):
@@ -51,40 +50,37 @@ class SettingsDrawer(ft.NavigationDrawer):
         self._navigate_to = navigate_to
         self._navigate_back = navigate_back
 
+        # Backend persistence layer — validation, state mutation, EventBus emissions.
         self._settings_controller = SettingsController(
             app_context=self._app_context,
             toast_callback=self._show_toast,
+        )
+
+        # Orchestration layer — update flows, dialogs, navigation, save handling.
+        self._handler = SettingsHandler(
+            app_context=self._app_context,
+            controller=self._settings_controller,
+            show_toast=self._show_toast,
+            get_page=lambda: self.safe_page,
+            on_mode_changed=self._on_mode_changed,
+            navigate_to=self._navigate_to,
+            navigate_back=self._navigate_back,
+            on_installer_run=self._on_installer_run,
         )
 
         # Mode state
         current_mode = self._get_current_mode()
         is_proxy = current_mode == ConnectionMode.PROXY
 
-        # Components
-        self._mode_switch_row = ModeSwitchRow(is_proxy, self._handle_mode_change)
-        self._tun_dropdown_row = TunEngineDropdownRow(
-            self._app_context.settings.get_tun_engine(),
-            self._save_tun_engine,
+        # Self-contained rows (manage their own state / EventBus subscriptions)
+        self._lan_share_row = LanShareToggleRow(
+            app_context=self._app_context,
+            toast_callback=self._show_toast,
         )
-        self._tun_engine_row = self._tun_dropdown_row
-        self._port_row = PortInputRow(
-            self._app_context.settings.get_proxy_port(),
-            self._save_port,
+        self._auto_reconnect_row = AutoReconnectToggleRow(
+            app_context=self._app_context,
+            toast_callback=self._show_toast,
         )
-        self._http_port_row = HttpPortInputRow(
-            self._app_context.settings.get_http_port(),
-            self._save_http_port,
-        )
-        self._country_row = CountryDropdownRow(
-            self._app_context.settings.get_routing_country(),
-            self._save_country,
-        )
-        self._language_row = LanguageDropdownRow(
-            self._app_context.settings.get_language(),
-            self._save_language,
-        )
-
-        # Startup toggle (self-contained component)
         self._startup_row = StartupToggleRow(
             app_context=self._app_context,
             is_registered=task_scheduler.is_task_registered(),
@@ -93,17 +89,34 @@ class SettingsDrawer(ft.NavigationDrawer):
             on_unregister=task_scheduler.unregister_task,
             toast_callback=self._show_toast,
         )
-
-        # Auto-reconnect toggle (self-contained component)
-        self._auto_reconnect_row = AutoReconnectToggleRow(
-            app_context=self._app_context,
-            toast_callback=self._show_toast,
+        self._language_row = LanguageDropdownRow(
+            self._app_context.settings.get_language(),
+            self._on_language_change,
         )
 
-        # LAN proxy sharing toggle (self-contained component)
-        self._lan_share_row = LanShareToggleRow(
-            app_context=self._app_context,
-            toast_callback=self._show_toast,
+        # Presentational sections
+        self._connectivity_section = ConnectivitySection(
+            is_proxy=is_proxy,
+            on_mode_change=self._on_mode_change,
+            proxy_port=self._app_context.settings.get_proxy_port(),
+            on_save_port=self._on_save_port,
+            http_port=self._app_context.settings.get_http_port(),
+            on_save_http_port=self._on_save_http_port,
+            country_code=self._app_context.settings.get_routing_country(),
+            on_country_change=self._on_country_change,
+            tun_engine=self._app_context.settings.get_tun_engine(),
+            on_tun_engine_change=self._on_tun_engine_change,
+            lan_share_row=self._lan_share_row,
+        )
+        self._auto_reconnect_section = AutoReconnectSection(self._auto_reconnect_row)
+        self._startup_language_section = StartupLanguageSection(
+            self._startup_row,
+            self._language_row,
+        )
+        self._updates_section = UpdatesSection(
+            on_check_app_updates=self._handler.check_app_updates,
+            on_check_xray_core=self._handler.check_xray_core,
+            on_update_rules=self._handler.update_rules,
         )
 
         # Version text ref — populated lazily in background to avoid
@@ -112,6 +125,42 @@ class SettingsDrawer(ft.NavigationDrawer):
             "Xray: v...",
             size=11,
             color=ft.Colors.OUTLINE,
+        )
+
+        app_section = SettingsSection(
+            t("settings.application"),
+            [
+                self._startup_language_section,
+                self._auto_reconnect_section,
+                SettingsListTile(
+                    ft.Icons.ROUTE,
+                    t("settings.routing_rules"),
+                    t("settings.routing_description"),
+                    on_click=self._handler.open_routing_manager,
+                ),
+                SettingsListTile(
+                    ft.Icons.DNS,
+                    t("settings.dns_manager"),
+                    t("settings.dns_description"),
+                    on_click=self._handler.open_dns_manager,
+                ),
+                SettingsListTile(
+                    ft.Icons.RESTART_ALT,
+                    t("settings.reset_close_choice"),
+                    t("settings.reset_close_choice_desc"),
+                    on_click=self._handler.reset_close_preference,
+                ),
+            ],
+        )
+
+        version_footer = ft.Container(
+            content=ft.Row(
+                [self._xray_version_text],
+                spacing=10,
+                alignment=ft.MainAxisAlignment.CENTER,
+            ),
+            alignment=ft.Alignment.CENTER,
+            padding=20,
         )
 
         # Build UI — glass container wrapping all content
@@ -138,99 +187,23 @@ class SettingsDrawer(ft.NavigationDrawer):
                 # Scrollable content including version footer
                 ft.Column(
                     [
-                        # Connection Section (LAN Share comes before TUN Engine)
-                        SettingsSection(
-                            t("settings.connection"),
-                            [
-                                self._mode_switch_row,
-                                self._port_row,
-                                self._http_port_row,
-                                self._country_row,
-                                self._lan_share_row,
-                                self._tun_dropdown_row,
-                            ],
-                        ),
+                        self._connectivity_section,
                         ft.Divider(
                             height=1,
                             color=ft.Colors.OUTLINE_VARIANT,
                             opacity=0.2,
                         ),
                         ft.Container(height=10),
-                        # App Settings
-                        SettingsSection(
-                            t("settings.application"),
-                            [
-                                self._startup_row,
-                                self._auto_reconnect_row,
-                                SettingsListTile(
-                                    ft.Icons.ROUTE,
-                                    t("settings.routing_rules"),
-                                    t("settings.routing_description"),
-                                    on_click=self._open_routing_manager,
-                                ),
-                                SettingsListTile(
-                                    ft.Icons.DNS,
-                                    t("settings.dns_manager"),
-                                    t("settings.dns_description"),
-                                    on_click=self._open_dns_manager,
-                                ),
-                                SettingsListTile(
-                                    ft.Icons.RESTART_ALT,
-                                    t("settings.reset_close_choice"),
-                                    t("settings.reset_close_choice_desc"),
-                                    on_click=self._reset_close_preference,
-                                ),
-                            ],
-                        ),
+                        app_section,
                         ft.Divider(
                             height=1,
                             color=ft.Colors.OUTLINE_VARIANT,
                             opacity=0.2,
                         ),
                         ft.Container(height=10),
-                        # System Section
-                        SettingsSection(
-                            t("settings.system"),
-                            [
-                                SettingsListTile(
-                                    ft.Icons.UPGRADE,
-                                    t("settings.check_app_updates"),
-                                    t("settings.app_update_description"),
-                                    on_click=self._check_app_updates,
-                                ),
-                                SettingsListTile(
-                                    ft.Icons.SYSTEM_UPDATE_ALT,
-                                    t("settings.check_updates"),
-                                    t("settings.update_xray"),
-                                    on_click=lambda e: self._on_installer_run("xray"),
-                                ),
-                                SettingsListTile(
-                                    ft.Icons.PUBLIC,
-                                    t("settings.update_rules"),
-                                    t("settings.update_rules_desc"),
-                                    on_click=self._update_rules,
-                                ),
-                                SettingsListTile(
-                                    ft.Icons.INFO_OUTLINE,
-                                    t("settings.about"),
-                                    f"v{APP_VERSION} by Xenups",
-                                    show_chevron=False,
-                                ),
-                                self._language_row,
-                            ],
-                        ),
+                        self._updates_section,
                         # Version Footer inside scrollable area
-                        ft.Container(
-                            content=ft.Row(
-                                [
-                                    self._xray_version_text,
-                                ],
-                                spacing=10,
-                                alignment=ft.MainAxisAlignment.CENTER,
-                            ),
-                            alignment=ft.Alignment.CENTER,
-                            padding=20,
-                        ),
+                        version_footer,
                     ],
                     scroll=ft.ScrollMode.HIDDEN,
                     expand=True,
@@ -238,6 +211,7 @@ class SettingsDrawer(ft.NavigationDrawer):
                 ),
             ],
             spacing=0,
+            expand=True,
         )
 
         glass_content = ft.Container(
@@ -250,6 +224,7 @@ class SettingsDrawer(ft.NavigationDrawer):
         drawer_container = ft.Container(
             content=glass_content,
             width=320,
+            expand=True,
         )
 
         super().__init__(
@@ -271,12 +246,7 @@ class SettingsDrawer(ft.NavigationDrawer):
 
     def _refresh_versions(self):
         """Read installed Xray version in a background thread and update UI."""
-        try:
-            xray_ver = XrayInstallerService.get_local_version() or "ND"
-        except Exception:
-            xray_ver = "ND"
-
-        new_xray = f"Xray: v{xray_ver}"
+        new_xray = self._handler.get_xray_version()
 
         if self._xray_version_text.value != new_xray:
             self._xray_version_text.value = new_xray
@@ -295,52 +265,6 @@ class SettingsDrawer(ft.NavigationDrawer):
             except Exception:
                 pass
 
-    def _handle_mode_change(self, e):
-        """Handle VPN/Proxy mode switch."""
-        is_proxy = bool(e.control.value) if (e and hasattr(e, "control") and e.control) else self._mode_switch_row.value
-
-        if not is_proxy and not ProcessUtils.is_admin():
-            self._mode_switch_row.value = True
-            self._show_admin_restart_dialog()
-            return
-
-        new_mode = ConnectionMode.PROXY if is_proxy else ConnectionMode.VPN
-        self._on_mode_changed(new_mode)
-
-    def _show_admin_restart_dialog(self):
-        """Show dialog to restart as admin for VPN mode."""
-        page = self.safe_page
-        if not page:
-            return
-
-        def close_dlg(e):
-            if page is not None:
-                try:
-                    page.pop_dialog()
-                except Exception:
-                    pass
-
-        def confirm_restart(e):
-            if page is not None:
-                try:
-                    page.pop_dialog()
-                except Exception:
-                    pass
-            self._app_context.settings.set_connection_mode(ConnectionMode.VPN.value)
-            ProcessUtils.restart_as_admin()
-
-        dlg = ft.AlertDialog(
-            modal=True,
-            title=ft.Text(t("admin.title")),
-            content=ft.Text(t("admin.message")),
-            actions=[
-                ft.TextButton(t("admin.cancel"), on_click=close_dlg),
-                ft.TextButton(t("admin.restart"), on_click=confirm_restart),
-            ],
-            actions_alignment=ft.MainAxisAlignment.END,
-        )
-        page.show_dialog(dlg)
-
     @property
     def safe_page(self) -> Optional[ft.Page]:
         """RuntimeError-safe page property getter."""
@@ -357,495 +281,23 @@ class SettingsDrawer(ft.NavigationDrawer):
         elif page:
             logger.warning("Toast manager not available, message not shown")
 
-    def _save_port(self, value: str):
-        """Save the SOCKS port setting."""
-        success, _ = self._settings_controller.update_socks_port(value)
-        if success:
-            self._port_row.set_border_color(ft.Colors.GREEN_400)
-        else:
-            self._port_row.set_border_color(ft.Colors.RED_400)
-        page = self.safe_page
-        if page:
-            try:
-                page.update()
-            except Exception:
-                pass
-
-    def _save_http_port(self, value: str):
-        """Save the HTTP proxy port setting."""
-        success, _ = self._settings_controller.update_http_port(value)
-        if success:
-            self._http_port_row.set_border_color(ft.Colors.GREEN_400)
-        else:
-            self._http_port_row.set_border_color(ft.Colors.RED_400)
-        page = self.safe_page
-        if page:
-            try:
-                page.update()
-            except Exception:
-                pass
-
-    def _save_country(self, val):
-        """Save the direct country setting."""
-        code = val if isinstance(val, str) else self._country_row.value
-        self._settings_controller.update_routing_country(code)
-        page = self.safe_page
-        if page:
-            try:
-                page.update()
-            except Exception:
-                pass
-
-    def _save_tun_engine(self, e):
-        """Save the TUN implementation setting."""
-        val = self._tun_dropdown_row.value
-        self._settings_controller.update_tun_engine(val)
-        page = self.safe_page
-        if page:
-            try:
-                page.update()
-            except Exception:
-                pass
-
-    def _save_language(self, e):
-        """Save the language setting and update i18n."""
-        page = self.safe_page
-
-        lang = None
-        if e is not None and hasattr(e, "control") and e.control is not None:
-            lang = getattr(e.control, "value", None)
-        if not lang:
-            lang = self._language_row.value
-        if not lang:
-            lang = getattr(e, "data", None)
-        if not lang:
-            return
-
-        self._app_context.settings.set_language(lang)
-        set_app_language(lang)
-
-        if not page:
-            return
-
-        # Notify user - app needs restart for full effect
-        msg = t("settings.language_restart_msg")
-        self._show_toast(msg, "success")
-        page.update()
-
-    def _reset_close_preference(self, e):
-        """Reset the 'Remember Choice' for close dialog."""
-        page = self.safe_page
-        if not page:
-            return
-
-        self._app_context.settings.set_remember_close_choice(False)
-        self._show_toast(t("settings.reset_close_success"), "success")
-        page.update()
-
-    def _on_installer_run(self, component: str):
-        """Handle update/install request."""
-        page = self.safe_page
-        if not page:
-            return
-
-        if component == "xray":
-            self._show_toast(t("update.checking"), "info")
-
-            try:
-                available, current, latest = XrayInstallerService.check_for_updates()
-
-                # If up to date, show message and return
-                if not available and current:
-                    self._show_toast(t("update.up_to_date", version=current), "info")
-                    page.update()
-                    return
-
-                # If update is available, show update dialog
-                if available and latest:
-                    self._show_update_dialog(page, current, latest)
-                else:
-                    # Failed to check or no update info
-                    self._show_toast(t("update.check_failed"), "error")
-                    page.update()
-
-            except Exception as e:
-                logger.error(f"Update check failed: {e}")
-                self._show_toast(t("update.check_failed"), "error")
-                page.update()
-
-    def _show_update_dialog(self, page, current: str, latest: str):
-        """Show update confirmation dialog."""
-        msg = t("update.available", current=current, latest=latest) if current else t("update.install", version=latest)
-
-        def close_dlg(e):
-            if page is not None:
-                try:
-                    page.pop_dialog()
-                except Exception:
-                    pass
-
-        def start_update(e):
-            if page is not None:
-                try:
-                    page.pop_dialog()
-                except Exception:
-                    pass
-            self._run_update_process(page, latest)
-
-        dlg = ft.AlertDialog(
-            modal=True,
-            title=ft.Text(t("update.title")),
-            content=ft.Text(msg),
-            actions=[
-                ft.TextButton(t("add_dialog.cancel"), on_click=close_dlg),
-                ft.TextButton(t("add_dialog.add"), on_click=start_update),
-            ],
-            actions_alignment=ft.MainAxisAlignment.END,
-        )
-        page.show_dialog(dlg)
-
-    def _run_update_process(self, page, latest_version: str):
-        """Run the update process with progress dialog."""
-        progress_ring = ft.ProgressRing(width=16, height=16, stroke_width=2)
-        status_text = ft.Text(t("update.starting"), size=12)
-
-        progress_dlg = ft.AlertDialog(
-            modal=True,
-            title=ft.Text(t("update.updating")),
-            content=ft.Column(
-                [
-                    ft.Row(
-                        [progress_ring, status_text],
-                        spacing=10,
-                        alignment=ft.MainAxisAlignment.CENTER,
-                    ),
-                ],
-                tight=True,
-                alignment=ft.MainAxisAlignment.CENTER,
-            ),
-            actions=[],
-        )
-        page.show_dialog(progress_dlg)
-        page.update()
-
-        def update_task():
-            def on_progress(msg):
-                status_text.value = msg
-                status_text.update()
-
-            def stop_service():
-                if self._app_context and hasattr(self._app_context, "connection_manager"):
-                    try:
-                        self._app_context.connection_manager.stop_connection()
-                    except Exception:
-                        pass
-
-            success = XrayInstallerService.install(
-                progress_callback=on_progress,
-                stop_service_callback=stop_service,
-                target_version=latest_version,
-            )
-
-            if page is not None:
-                try:
-                    page.pop_dialog()
-                except Exception:
-                    pass
-            if success:
-                self._show_toast(t("update.success"), "success")
-                # Refresh version footer after successful update
-                threading.Thread(target=self._refresh_versions, daemon=True).start()
-            else:
-                self._show_toast(t("update.failed"), "error")
-            page.update()
-
-        threading.Thread(target=update_task, daemon=True).start()
-
-    def _on_subpage_back(self, e):
-        """Handle navigation back from subpage."""
-        self._navigate_back()
-
-    def _open_routing_manager(self, e):
-        """Open the routing rules page."""
-        from src.ui.pages.routing_page import RoutingPage
-
-        page = self.safe_page
-        if page:
-            try:
-                page.run_task(page.close_end_drawer)
-            except RuntimeError:
-                pass
-        routing_page = RoutingPage(self._app_context, on_back=self._on_subpage_back)
-        self._navigate_to(routing_page)
-
-    def _open_dns_manager(self, e):
-        """Open the DNS settings page."""
-        from src.ui.pages.dns_page import DNSPage
-
-        page = self.safe_page
-        if page:
-            try:
-                page.run_task(page.close_end_drawer)
-            except RuntimeError:
-                pass
-        dns_page = DNSPage(self._app_context, on_back=self._on_subpage_back)
-        self._navigate_to(dns_page)
-
-    def _check_app_updates(self, e):
-        """Check for app updates."""
-        page = self.safe_page
-        if not page:
-            return
-
-        self._show_toast(t("app_update.checking"), "info")
-
-        def check_task():
-            try:
-                (
-                    available,
-                    current,
-                    latest,
-                    download_url,
-                ) = AppUpdateService.check_for_updates()
-
-                if not available and current:
-                    self._show_toast(t("app_update.up_to_date", version=current), "info")
-                    page.update()
-                    return
-
-                if available and download_url:
-                    self._show_app_update_dialog(page, current, latest, download_url)
-                else:
-                    self._show_toast(t("app_update.check_failed"), "error")
-                    page.update()
-            except Exception:
-                self._show_toast(t("app_update.check_failed"), "error")
-                page.update()
-
-        threading.Thread(target=check_task, daemon=True).start()
-
-    def _show_app_update_dialog(self, page, current: str, latest: str, download_url: str):
-        """Show app update confirmation dialog."""
-        msg = (
-            t("app_update.available", current=current, latest=latest)
-            if current
-            else t("app_update.install", version=latest)
-        )
-
-        def close_dlg(e):
-            if page is not None:
-                try:
-                    page.pop_dialog()
-                except Exception:
-                    pass
-
-        def start_update(e):
-            if page is not None:
-                try:
-                    page.pop_dialog()
-                except Exception:
-                    pass
-            self._run_app_update_process(page, download_url)
-
-        dlg = ft.AlertDialog(
-            modal=True,
-            title=ft.Text(t("app_update.title")),
-            content=ft.Column(
-                [
-                    ft.Text(msg),
-                    ft.Text(
-                        t("app_update.message"),
-                        size=12,
-                        color=ft.Colors.ON_SURFACE_VARIANT,
-                    ),
-                ],
-                tight=True,
-                spacing=10,
-            ),
-            actions=[
-                ft.TextButton(t("app_update.cancel"), on_click=close_dlg),
-                ft.TextButton(t("app_update.confirm"), on_click=start_update),
-            ],
-            actions_alignment=ft.MainAxisAlignment.END,
-        )
-        page.show_dialog(dlg)
-
-    def _run_app_update_process(self, page, download_url: str):
-        """Run the app update process with progress dialog."""
-        progress_ring = ft.ProgressRing(width=16, height=16, stroke_width=2)
-        status_text = ft.Text(t("app_update.downloading", progress=0), size=12)
-
-        progress_dlg = ft.AlertDialog(
-            modal=True,
-            title=ft.Text(t("app_update.title")),
-            content=ft.Column(
-                [
-                    ft.Row(
-                        [progress_ring, status_text],
-                        spacing=10,
-                        alignment=ft.MainAxisAlignment.CENTER,
-                    ),
-                ],
-                tight=True,
-                alignment=ft.MainAxisAlignment.CENTER,
-            ),
-            actions=[],
-        )
-        page.show_dialog(progress_dlg)
-        page.update()
-
-        def update_task():
-            def on_progress(progress: int):
-                status_text.value = t("app_update.downloading", progress=progress)
-                status_text.update()
-
-            # Download update
-            zip_path = AppUpdateService.download_update(download_url, on_progress)
-
-            if not zip_path:
-                if page is not None:
-                    try:
-                        page.pop_dialog()
-                    except Exception:
-                        pass
-                self._show_toast(t("app_update.download_failed"), "error")
-                return
-
-            # Update status
-            status_text.value = t("app_update.extracting")
-            status_text.update()
-
-            # Apply update (launches updater and exits)
-            success = AppUpdateService.apply_update(zip_path)
-
-            if success:
-                # The updater will handle the rest, signal app to close
-                status_text.value = t("app_update.restarting")
-                status_text.update()
-                time.sleep(1)
-
-                # Trigger app exit
-                ProcessUtils.kill_process_tree()
-                os._exit(0)
-            else:
-                if page is not None:
-                    try:
-                        page.pop_dialog()
-                    except Exception:
-                        pass
-                self._show_toast(t("app_update.extract_failed"), "error")
-                page.update()
-
-        threading.Thread(target=update_task, daemon=True).start()
-
     # ------------------------------------------------------------------
-    # Rule updates (geoip / geosite)
+    # Callback wiring (presentation -> handler)
     # ------------------------------------------------------------------
+    def _on_mode_change(self, e):
+        self._handler.handle_mode_change(self._connectivity_section.mode_switch_row, e)
 
-    def _update_rules(self, e):
-        """Check for and update geoip/geosite rule files."""
-        page = self.safe_page
-        if not page:
-            return
+    def _on_save_port(self, value):
+        self._handler.save_port(self._connectivity_section.port_row, value)
 
-        self._show_toast(t("rules_update.checking"), "info")
+    def _on_save_http_port(self, value):
+        self._handler.save_http_port(self._connectivity_section.http_port_row, value)
 
-        def check_task():
-            try:
-                available, local, latest = RuleUpdateService.check_for_updates()
+    def _on_country_change(self, val):
+        self._handler.save_country(self._connectivity_section.country_row, val)
 
-                if not available and local:
-                    self._show_toast(t("rules_update.up_to_date"), "info")
-                    page.update()
-                    return
+    def _on_tun_engine_change(self, e):
+        self._handler.save_tun_engine(self._connectivity_section.tun_dropdown_row, e)
 
-                if available:
-                    self._show_rule_update_dialog(page, latest)
-                else:
-                    self._show_toast(t("rules_update.check_failed"), "error")
-                    page.update()
-            except Exception:
-                self._show_toast(t("rules_update.check_failed"), "error")
-                page.update()
-
-        threading.Thread(target=check_task, daemon=True).start()
-
-    def _show_rule_update_dialog(self, page, latest_version=None):
-        """Show confirmation dialog for rule update."""
-        msg = t("rules_update.message")
-        if latest_version:
-            msg += f"\n\nLatest: v{latest_version}"
-
-        def close_dlg(e):
-            if page is not None:
-                try:
-                    page.pop_dialog()
-                except Exception:
-                    pass
-
-        def start_update(e):
-            if page is not None:
-                try:
-                    page.pop_dialog()
-                except Exception:
-                    pass
-            self._run_rule_update(page)
-
-        dlg = ft.AlertDialog(
-            modal=True,
-            title=ft.Text(t("rules_update.title")),
-            content=ft.Text(msg),
-            actions=[
-                ft.TextButton(t("rules_update.cancel"), on_click=close_dlg),
-                ft.ElevatedButton(t("rules_update.confirm"), on_click=start_update),
-            ],
-        )
-        page.show_dialog(dlg)
-
-    def _run_rule_update(self, page):
-        """Run the rule update process with progress dialog."""
-        progress_ring = ft.ProgressRing(width=16, height=16, stroke_width=2)
-        status_text = ft.Text(t("rules_update.installing"), size=12)
-
-        progress_dlg = ft.AlertDialog(
-            modal=True,
-            title=ft.Text(t("rules_update.title")),
-            content=ft.Column(
-                [
-                    ft.Row(
-                        [progress_ring, status_text],
-                        spacing=10,
-                        alignment=ft.MainAxisAlignment.CENTER,
-                    ),
-                ],
-                tight=True,
-                alignment=ft.MainAxisAlignment.CENTER,
-            ),
-            actions=[],
-        )
-        page.show_dialog(progress_dlg)
-        page.update()
-
-        def on_progress(msg):
-            try:
-                status_text.value = msg
-                status_text.update()
-            except Exception:
-                pass
-
-        def update_task():
-            try:
-                success = RuleUpdateService.update_rules(progress_callback=on_progress)
-            finally:
-                if page is not None:
-                    try:
-                        page.pop_dialog()
-                    except Exception:
-                        pass
-            if success:
-                self._show_toast(t("rules_update.success"), "success")
-            else:
-                self._show_toast(t("rules_update.failed"), "error")
-            page.update()
-
-        threading.Thread(target=update_task, daemon=True).start()
+    def _on_language_change(self, e):
+        self._handler.save_language(self._language_row, e)

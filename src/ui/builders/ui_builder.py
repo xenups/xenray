@@ -118,24 +118,25 @@ class UIBuilder:
 
         # SettingsView — reuse drawer's component instances
         drawer = self._main._settings_drawer
-        is_proxy = drawer._mode_switch_row.value
+        connectivity = drawer._connectivity_section
+        is_proxy = connectivity.mode_switch_row.value
         self._main._stitch_settings_view = SettingsView(
             mode_switch_row=ModeSwitchRow(
                 is_proxy,
-                drawer._handle_mode_change,
+                drawer._on_mode_change,
             ),
-            tun_engine_row=getattr(drawer, "_tun_engine_row", getattr(drawer, "_tun_dropdown_row", None)),
-            port_row=drawer._port_row,
-            country_row=drawer._country_row,
+            tun_engine_row=connectivity.tun_dropdown_row,
+            port_row=connectivity.port_row,
+            country_row=connectivity.country_row,
             language_row=drawer._language_row,
             reconnect_row=drawer._auto_reconnect_row,
             startup_row=drawer._startup_row,
-            on_check_update_click=drawer._check_app_updates,
+            on_check_update_click=drawer._handler.check_app_updates,
             settings_controller=getattr(drawer, "_settings_controller", None),
-            on_open_routing_click=drawer._open_routing_manager,
-            on_open_dns_click=drawer._open_dns_manager,
+            on_open_routing_click=drawer._handler.open_routing_manager,
+            on_open_dns_click=drawer._handler.open_dns_manager,
             lan_share_row=getattr(drawer, "_lan_share_row", None),
-            http_port_row=getattr(drawer, "_http_port_row", None),
+            http_port_row=connectivity.http_port_row,
         )
 
         self._main._stitch_logs_view = LogsView(
@@ -228,10 +229,13 @@ class UIBuilder:
                     weight=ft.FontWeight.W_800,
                     color=ft.Colors.WHITE,
                 ),
-                ft.Text(
-                    f"v{APP_VERSION}",
-                    size=11,
-                    color="#8A8F9E",
+                ft.Container(
+                    content=ft.Text(
+                        f"v{APP_VERSION}",
+                        size=10,
+                        color="#8A8F9E",
+                    ),
+                    margin=ft.Margin.only(top=4),
                 ),
             ],
             spacing=8,
