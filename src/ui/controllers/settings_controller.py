@@ -253,6 +253,7 @@ class SettingsController:
                 return
 
             import threading
+
             from src.services.app_update_service import AppUpdateService
 
             self._show_toast(t("settings.downloading_update", default="در حال دانلود فایل بروزرسانی..."), "info")
@@ -382,6 +383,7 @@ class SettingsController:
                 pass
 
             import threading
+
             from src.services.xray_installer import XrayInstallerService
 
             msg = t(

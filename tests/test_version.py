@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import flet as ft
 
-from src.__version__ import APP_VERSION as ROOT_APP_VERSION, __version__
+from src.__version__ import APP_VERSION as ROOT_APP_VERSION
+from src.__version__ import __version__
 from src.core.constants import APP_VERSION as CONSTANTS_APP_VERSION
 
 
