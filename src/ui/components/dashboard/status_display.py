@@ -80,6 +80,8 @@ class StatusDisplay(ft.Container):
 
     def set_step(self, msg: str):
         """Updates the status text during connection steps."""
+        if self._is_connected or not msg:
+            return
         self._update_label(msg, ft.Colors.AMBER_400)
 
     def set_status(self, msg: str):

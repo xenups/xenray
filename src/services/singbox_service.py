@@ -14,6 +14,7 @@ from typing import List, Optional, Union
 
 from src.core.config_builders.singbox_config_builder import SingboxConfigBuilder
 from src.core.constants import SINGBOX_CONFIG_PATH, SINGBOX_EXECUTABLE, SINGBOX_LOG_FILE, SINGBOX_PID_FILE
+from src.core.event_bus import EVENT_CORE_PROCESS_STOPPED, event_bus
 from src.core.logger import logger
 from src.services.route_manager_service import RouteManagerService
 from src.utils.network_interface import NetworkInterfaceDetector
@@ -22,7 +23,7 @@ from src.utils.process_utils import ProcessUtils
 
 XRAY_READY_RETRY_COUNT = 20
 XRAY_READY_RETRY_DELAY = 0.5
-PROCESS_TERMINATE_TIMEOUT = 8.0
+PROCESS_TERMINATE_TIMEOUT = 1.0
 SINGBOX_CHECK_TIMEOUT = 15.0
 LOOP_START_TIMEOUT = 2.0
 
@@ -327,6 +328,7 @@ class SingboxService:
             PlatformUtils.restore_smhr(self._smhr_was_enabled)
             self._smhr_was_enabled = None
             logger.info("[SingboxService] Stopped.")
+            event_bus.publish(EVENT_CORE_PROCESS_STOPPED, {"engine": "singbox", "pid": pid_to_kill})
 
     def is_running(self) -> bool:
         if self._pid and ProcessUtils.is_running(self._pid):

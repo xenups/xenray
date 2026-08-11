@@ -36,7 +36,9 @@ class SettingsPage(ft.Container):
         language_row: LanguageDropdownRow,
         reconnect_row: AutoReconnectToggleRow,
         startup_row: StartupToggleRow,
-        on_check_update_click: Callable,
+        on_check_update_click: Optional[Callable] = None,
+        on_check_core_click: Optional[Callable] = None,
+        settings_controller: Optional[object] = None,
         on_open_routing_click: Optional[Callable] = None,
         on_open_dns_click: Optional[Callable] = None,
         lan_share_row: Optional[LanShareToggleRow] = None,
@@ -54,6 +56,8 @@ class SettingsPage(ft.Container):
         self._startup_row = startup_row
         self._lan_share_row = lan_share_row
         self._on_check_update_click = on_check_update_click
+        self._on_check_core_click = on_check_core_click
+        self._settings_controller = settings_controller
         self._on_open_routing_click = on_open_routing_click
         self._on_open_dns_click = on_open_dns_click
 
@@ -127,25 +131,46 @@ class SettingsPage(ft.Container):
         )
 
         def _handle_update_click(e):
-            if self._on_check_update_click:
-                try:
+            page_ref = getattr(e, "page", None)
+            if not page_ref and hasattr(self, "page"):
+                page_ref = self.page
+
+            try:
+                if self._settings_controller:
+                    self._settings_controller.check_for_updates(
+                        update_card_ref=self._update_card,
+                        page_ref=page_ref,
+                    )
+                elif self._on_check_update_click:
                     self._on_check_update_click(e)
-                except Exception:
-                    pass
-            elif hasattr(self, "_settings_controller") and self._settings_controller:
-                self._settings_controller.check_for_updates(
-                    update_card_ref=self._update_card,
-                    page_ref=self.page if hasattr(self, "page") else None,
-                )
+            except Exception as err:
+                from src.core.logger import logger
+                from src.ui.components.common.toast import ToastManager
+
+                logger.error(f"[SettingsPage] Error in App update click: {err}")
+                ToastManager.show_error(page_ref, f"Update check error: {err}")
 
         self._update_card = UpdateCard(on_check_update_click=_handle_update_click)
 
         def _handle_core_update_click(e):
-            if hasattr(self, "_settings_controller") and self._settings_controller:
-                self._settings_controller.check_xray_core_update(
-                    core_card_ref=self._xray_core_card,
-                    page_ref=self.page if hasattr(self, "page") else None,
-                )
+            page_ref = getattr(e, "page", None)
+            if not page_ref and hasattr(self, "page"):
+                page_ref = self.page
+
+            try:
+                if self._on_check_core_click:
+                    self._on_check_core_click(e)
+                elif self._settings_controller:
+                    self._settings_controller.check_xray_core_update(
+                        core_card_ref=self._xray_core_card,
+                        page_ref=page_ref,
+                    )
+            except Exception as err:
+                from src.core.logger import logger
+                from src.ui.components.common.toast import ToastManager
+
+                logger.error(f"[SettingsPage] Error in Core update click: {err}")
+                ToastManager.show_error(page_ref, f"Xray-Core update check error: {err}")
 
         from src.ui.components.settings.xray_core_card import XrayCoreCard
 
@@ -179,6 +204,13 @@ class SettingsPage(ft.Container):
                         self._country_row.update()
         except Exception:
             pass
+
+    def update_labels(self) -> None:
+        """Refresh dynamic component translations on language change."""
+        if hasattr(self._update_card, "update_labels"):
+            self._update_card.update_labels()
+        if hasattr(self._xray_core_card, "update_labels"):
+            self._xray_core_card.update_labels()
 
 
 # Backward-compatibility alias

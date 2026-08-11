@@ -16,6 +16,7 @@ from src.core.constants import (
     XRAY_LOG_FILE,
     XRAY_PID_FILE,
 )
+from src.core.event_bus import EVENT_CORE_PROCESS_STOPPED, event_bus
 from src.core.logger import logger
 from src.utils.process_utils import ProcessUtils
 
@@ -543,7 +544,14 @@ class XrayService:
 
         try:
             logger.info(f"[XrayService] Stopping process {pid_to_kill}")
-            ProcessUtils.kill_process(pid_to_kill)
+            ProcessUtils.kill_process(pid_to_kill, force=False)
+            deadline = time.monotonic() + 1.0
+            while ProcessUtils.is_running(pid_to_kill) and time.monotonic() < deadline:
+                time.sleep(0.05)
+            if ProcessUtils.is_running(pid_to_kill):
+                logger.warning(f"[XrayService] Graceful stop timed out for PID {pid_to_kill}, forcing kill")
+                ProcessUtils.kill_process(pid_to_kill, force=True)
+
             self._pid = None
             self._process = None
 
@@ -554,6 +562,7 @@ class XrayService:
                 except Exception as e:
                     logger.warning(f"[XrayService] Failed to remove PID file: {e}")
 
+            event_bus.publish(EVENT_CORE_PROCESS_STOPPED, {"engine": "xray", "pid": pid_to_kill})
             return True
         except Exception as e:
             logger.error(f"[XrayService] Failed to stop Xray: {e}")

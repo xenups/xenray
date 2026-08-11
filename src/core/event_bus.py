@@ -9,12 +9,23 @@ from src.core.logger import logger
 
 # Canonical event topic names shared across producers and subscribers.
 TOPIC_CONNECTION_STATE_CHANGED = "connection_state_changed"
+TOPIC_FSM_STATE_CHANGED = "fsm_state_changed"
 TOPIC_TELEMETRY_UPDATED = "telemetry_updated"
 TOPIC_PROFILE_SELECTED = "profile_selected"
 TOPIC_LAN_TOGGLED = "lan_toggled"
 TOPIC_LAN_SHARING_CHANGED = "lan_sharing_changed"
 TOPIC_ACTIVE_SERVER_PING_UPDATED = "active_server_ping_updated"
 TOPIC_SERVER_INSPECTED = "server_inspected"
+
+# FSM and Core Event Topics
+EVENT_CONNECT_REQUESTED = "connect_requested"
+EVENT_DISCONNECT_REQUESTED = "disconnect_requested"
+EVENT_PREPARING_STARTED = "preparing_started"
+EVENT_CONNECTED = "connected"
+EVENT_STOPPING_STARTED = "stopping_started"
+EVENT_CORE_PROCESS_STOPPED = "core_process_stopped"
+EVENT_CORE_CRASHED = "core_crashed"
+EVENT_ERROR = "error"
 
 
 class EventBus:

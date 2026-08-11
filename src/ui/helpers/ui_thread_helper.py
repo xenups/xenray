@@ -21,6 +21,13 @@ class UIThreadHelper:
         """
         Execute a UI update in a thread-safe manner.
 
+        From a background thread the update is scheduled onto the Flet event loop
+        via ``page.run_task`` (``loop.call_soon_threadsafe``). When the caller is
+        ALREADY executing on the page's event loop, ``run_coroutine_threadsafe``
+        is not allowed — the update runs inline instead, which is the correct
+        thread for Flet control mutations (a dropped update here is what made the
+        disconnecting red animation silently not appear).
+
         Args:
             fn: Function to execute on UI thread (sync or async)
             *args: Positional arguments for the function
@@ -33,6 +40,26 @@ class UIThreadHelper:
         import asyncio
 
         _is_coro = asyncio.iscoroutinefunction(fn)
+
+        def _run_inline() -> None:
+            """Run fn inline (caller is on the page event loop)."""
+            try:
+                if _is_coro:
+                    try:
+                        loop = asyncio.get_running_loop()
+                        loop.create_task(fn(*args, **kwargs))
+                    except RuntimeError:
+                        pass
+                else:
+                    fn(*args, **kwargs)
+                if update_page:
+                    try:
+                        self._page.update()
+                    except Exception:
+                        pass
+            except Exception as e:
+                fn_name = fn.__name__ if hasattr(fn, "__name__") else "lambda"
+                logger.debug(f"[DEBUG] UI call error (inline) in {fn_name}: {e}")
 
         async def _coro():
             try:
@@ -60,4 +87,7 @@ class UIThreadHelper:
             if "Event loop is closed" in msg or "destroyed session" in msg:
                 pass
             else:
-                logger.warning(f"[DEBUG] RuntimeError in ui_call: {e}")
+                # We are already on the page's event loop (run_task cannot be
+                # scheduled from the running loop) — execute inline instead of
+                # silently dropping the UI update.
+                _run_inline()

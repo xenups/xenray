@@ -131,6 +131,7 @@ class UIBuilder:
             reconnect_row=drawer._auto_reconnect_row,
             startup_row=drawer._startup_row,
             on_check_update_click=drawer._check_app_updates,
+            settings_controller=getattr(drawer, "_settings_controller", None),
             on_open_routing_click=drawer._open_routing_manager,
             on_open_dns_click=drawer._open_dns_manager,
             lan_share_row=getattr(drawer, "_lan_share_row", None),

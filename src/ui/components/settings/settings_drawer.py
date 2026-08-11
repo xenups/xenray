@@ -534,8 +534,11 @@ class SettingsDrawer(ft.NavigationDrawer):
                 status_text.update()
 
             def stop_service():
-                ProcessUtils.kill_process_by_name("xray.exe")
-                ProcessUtils.kill_process_by_name("sing-box.exe")
+                if self._app_context and hasattr(self._app_context, "connection_manager"):
+                    try:
+                        self._app_context.connection_manager.stop_connection()
+                    except Exception:
+                        pass
 
             success = XrayInstallerService.install(
                 progress_callback=on_progress,

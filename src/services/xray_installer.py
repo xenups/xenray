@@ -353,12 +353,14 @@ class XrayInstallerService:
             return None
 
     @staticmethod
-    def check_for_updates() -> tuple[bool, Optional[str], Optional[str]]:
+    def check_for_updates(include_prerelease: bool = True) -> tuple[bool, Optional[str], Optional[str]]:
         """
         Check for updates via GitHub API.
-        Fetches the releases list (including pre-releases) and extracts
-        the latest version tag from the first element, then compares
-        using strict semantic version parsing.
+        Fetches the releases list (including pre-releases if requested) and extracts
+        the latest version tag, then compares using strict semantic version parsing.
+
+        Args:
+            include_prerelease: If True, include pre-release versions (default: True).
 
         Returns: (update_available, current_version, latest_version)
         """
@@ -373,8 +375,20 @@ class XrayInstallerService:
                 logger.error("Unexpected response format from GitHub API")
                 return False, current_version, None
 
-            tag_name = data[0].get("tag_name", "")  # e.g., "v1.8.4" or "v26.7.11"
+            target_release = None
+            if include_prerelease:
+                target_release = data[0]
+            else:
+                for rel in data:
+                    if not rel.get("prerelease", False):
+                        target_release = rel
+                        break
 
+            if not target_release:
+                logger.warning("No suitable release found in GitHub API response")
+                return False, current_version, None
+
+            tag_name = target_release.get("tag_name", "")  # e.g., "v1.8.4" or "v26.7.11"
             latest_version = tag_name.lstrip("v")
             current_version_normalized = current_version.lstrip("v") if current_version else None
 

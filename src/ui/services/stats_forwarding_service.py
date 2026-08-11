@@ -112,7 +112,7 @@ class StatsForwardingService:
                 pass
 
     def wrap_status_display(self) -> None:
-        """Wrap status_display methods to forward step messages to dashboard view."""
+        """Wrap status_display set_step to forward step messages to active dashboard view."""
         if not self._mw._status_display:
             return
         sd = self._mw._status_display
@@ -128,65 +128,3 @@ class StatsForwardingService:
                 pass
 
         sd.set_step = wrapped_set_step
-
-        orig_set_connecting = sd.set_connecting
-
-        def wrapped_set_connecting():
-            orig_set_connecting()
-            try:
-                if hasattr(self._mw, "_stitch_dashboard_view") and self._mw._stitch_dashboard_view:
-                    self._mw._stitch_dashboard_view.set_connection_state(is_connected=False, is_connecting=True)
-            except Exception:
-                pass
-
-        sd.set_connecting = wrapped_set_connecting
-
-        orig_set_connected = sd.set_connected
-
-        def wrapped_set_connected(country_data=None):
-            orig_set_connected(country_data)
-            try:
-                if hasattr(self._mw, "_stitch_dashboard_view") and self._mw._stitch_dashboard_view:
-                    self._mw._stitch_dashboard_view.set_connection_state(is_connected=True)
-            except Exception:
-                pass
-
-        sd.set_connected = wrapped_set_connected
-
-        orig_set_disconnected = sd.set_disconnected
-
-        def wrapped_set_disconnected():
-            orig_set_disconnected()
-            try:
-                if hasattr(self._mw, "_stitch_dashboard_view") and self._mw._stitch_dashboard_view:
-                    self._mw._stitch_dashboard_view.set_connection_state(is_connected=False)
-            except Exception:
-                pass
-
-        sd.set_disconnected = wrapped_set_disconnected
-
-        orig_set_disconnecting = sd.set_disconnecting
-
-        def wrapped_set_disconnecting():
-            orig_set_disconnecting()
-            try:
-                if hasattr(self._mw, "_stitch_dashboard_view") and self._mw._stitch_dashboard_view:
-                    self._mw._stitch_dashboard_view.set_connection_state(is_connected=False, is_disconnecting=True)
-            except Exception:
-                pass
-
-        sd.set_disconnecting = wrapped_set_disconnecting
-
-        orig_set_pre_connection_ping = getattr(sd, "set_pre_connection_ping", None)
-
-        def wrapped_set_pre_connection_ping(latency_text, is_success):
-            if orig_set_pre_connection_ping:
-                orig_set_pre_connection_ping(latency_text, is_success)
-            try:
-                if hasattr(self._mw, "_stitch_dashboard_view") and self._mw._stitch_dashboard_view:
-                    self._mw._stitch_dashboard_view.set_pre_connection_ping(latency_text, is_success)
-            except Exception:
-                pass
-
-        if orig_set_pre_connection_ping:
-            sd.set_pre_connection_ping = wrapped_set_pre_connection_ping

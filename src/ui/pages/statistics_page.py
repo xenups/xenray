@@ -121,6 +121,7 @@ class StatisticsPage(ft.Container):
         self,
         is_connected: bool,
         is_connecting: bool = False,
+        is_disconnecting: bool = False,
     ) -> None:
         self._is_connected = is_connected
         if not is_connected and not is_connecting:

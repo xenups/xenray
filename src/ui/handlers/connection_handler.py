@@ -38,6 +38,12 @@ class ConnectionHandler:
         self._network_stats = network_stats
         self._state_lock = threading.Lock()  # Thread safety for shared state
 
+        # Operation generation token: bumped on every connect/disconnect/reconnect
+        # initiation so stale background workers (e.g. a disconnect task that is
+        # sleeping to let the disconnecting animation render) can detect they were
+        # superseded by a newer user action and skip their trailing UI reset.
+        self._generation = 0
+
         # UI components (set via setup)
         self._ui_helper = None
         self._connection_button = None
@@ -108,24 +114,42 @@ class ConnectionHandler:
         if self._is_connecting():
             return
 
+        with self._state_lock:
+            self._generation += 1
+            current_gen = self._generation
+
         self._set_connecting(True)
         self._show_connecting_ui()
-        threading.Thread(target=self._perform_connect_task, daemon=True).start()
+        threading.Thread(target=lambda: self._perform_connect_task(current_gen), daemon=True).start()
 
     def reconnect(self):
         """Fast reconnect for server switching while already connected."""
         if self._is_connecting():
             return
 
+        with self._state_lock:
+            self._generation += 1
+            current_gen = self._generation
+
         self._set_connecting(True)
         self._show_connecting_ui()
-        threading.Thread(target=self._fast_reconnect_task, daemon=True).start()
+        threading.Thread(target=lambda: self._fast_reconnect_task(current_gen), daemon=True).start()
 
     def disconnect(self):
-        """Disconnect from VPN/Proxy."""
+        """Disconnect from VPN/Proxy.
+
+        Clicking disconnect MUST immediately invalidate any in-flight connect
+        worker and issue the process stop — it never waits for UI text-cycling
+        animation timers.
+        """
         is_running = self._is_running_getter() if self._is_running_getter else False
         if not is_running:
             return
+
+        # Invalidate any pending connect/reconnect worker and any stale
+        # disconnect task's trailing UI reset.
+        with self._state_lock:
+            self._generation += 1
 
         self._show_disconnecting_ui()
         threading.Thread(target=self._disconnect_task, daemon=True).start()
@@ -165,18 +189,27 @@ class ConnectionHandler:
             self._ui_helper.call(callback)
 
     def _show_connecting_ui(self):
-        """Show connecting glow only.
-
-        The connecting status text is driven exclusively by the controller state
-        machine (``_set_connecting`` -> ``_sync_dashboard_connection_state``) and
-        the orchestrator's ``step_callback`` — never set directly here — so each
-        intermediate status ("در حال اوج‌گیری" / initializing) fires exactly once.
-        """
+        """Show connecting state on button, status display, and horizon glow."""
+        if self._connection_button:
+            self._ui_call(self._connection_button.set_connecting)
+        if self._status_display:
+            self._ui_call(self._status_display.set_connecting)
         if self._update_horizon_glow_callback:
             self._ui_call(lambda: self._update_horizon_glow_callback("connecting"))
 
     def _show_disconnecting_ui(self):
-        """Show disconnecting glow only (status text flows through the controller)."""
+        """Show the disconnecting red animation on the button + status + glow.
+
+        The button's existing red pulse/glow animation is invoked here so it
+        starts the instant the user requests a disconnect and persists while
+        process teardown (``SingboxService.stop`` / ``XrayService.stop``) runs in
+        the background. ``ConnectionButton.set_disconnecting`` drives the pulse;
+        it is later stopped by ``set_disconnected`` when teardown completes.
+        ``_ui_call`` is safe from the Flet loop thread (executes inline) and from
+        background threads (systray) alike.
+        """
+        if self._connection_button:
+            self._ui_call(self._connection_button.set_disconnecting)
         if self._status_display:
             self._ui_call(self._status_display.set_disconnecting)
         if self._update_horizon_glow_callback:
@@ -230,10 +263,19 @@ class ConnectionHandler:
     # Connection Task (broken into smaller methods)
     # -------------------------------------------------------------------------
 
-    def _perform_connect_task(self):
-        """Core connection logic - runs in background thread."""
+    def _perform_connect_task(self, gen=None):
+        """Core connection logic - runs in background thread.
+
+        Args:
+            gen: Operation generation captured at connect time. When a newer
+                disconnect/reconnect superseded this worker, the UI-reset paths
+                are skipped so stale frames never clobber the newer action.
+        """
+        if gen is not None and gen != self._generation:
+            logger.debug("[ConnectionHandler] Connect task superseded, aborting")
+            return
         try:
-            if not self._check_internet():
+            if not self._check_internet(gen):
                 return
 
             profile, mode_str = self._prepare_connection()
@@ -243,7 +285,7 @@ class ConnectionHandler:
             self._start_log_tailing(mode_str)
             config_path = self._write_temp_config(profile)
 
-            if not self._establish_connection(config_path, mode_str):
+            if not self._establish_connection(config_path, mode_str, gen):
                 return
 
             self._set_running_state(True)
@@ -255,15 +297,16 @@ class ConnectionHandler:
 
         except Exception as e:
             logger.error(f"[ConnectionHandler] Connection error: {e}")
-            self._handle_connection_failure()
+            self._handle_connection_failure(gen)
 
-    def _check_internet(self) -> bool:
+    def _check_internet(self, gen=None) -> bool:
         """Check internet connectivity before connecting."""
         from src.utils.network_utils import NetworkUtils
 
         if not NetworkUtils.check_internet_connection():
             self._set_connecting(False)
-            self._ui_call(self.reset_ui_disconnected)
+            if gen is None or gen == self._generation:
+                self._ui_call(self.reset_ui_disconnected)
             self._show_toast("connection.no_internet")
             return False
         return True
@@ -315,18 +358,21 @@ class ConnectionHandler:
 
         return config_path
 
-    def _establish_connection(self, config_path: str, mode_str: str) -> bool:
+    def _establish_connection(self, config_path: str, mode_str: str, gen=None) -> bool:
         """Establish connection via ConnectionManager."""
 
         def on_step(msg: str):
             if self._status_display:
                 self._ui_call(lambda: self._status_display.set_step(msg))
+            if self._connection_button:
+                self._ui_call(lambda: self._connection_button.set_step(msg))
 
         success = self._connection_manager.connect(config_path, mode_str, step_callback=on_step)
 
         if not success:
             self._set_connecting(False)
-            self._ui_call(self.reset_ui_disconnected)
+            if gen is None or gen == self._generation:
+                self._ui_call(self.reset_ui_disconnected)
             self._show_toast("status.connection_failed")
 
         return success
@@ -398,18 +444,24 @@ class ConnectionHandler:
         except Exception as e:
             logger.warning(f"[ConnectionHandler] Failed to start network stats: {e}")
 
-    def _handle_connection_failure(self):
+    def _handle_connection_failure(self, gen=None):
         """Handle connection failure cleanup."""
         self._set_connecting(False)
-        self._ui_call(self.reset_ui_disconnected)
+        if gen is None or gen == self._generation:
+            self._ui_call(self.reset_ui_disconnected)
 
     # -------------------------------------------------------------------------
     # Reconnect Task
     # -------------------------------------------------------------------------
 
-    def _fast_reconnect_task(self):
+    def _fast_reconnect_task(self, gen=None):
         """Fast reconnect task - disconnect and reconnect immediately."""
         try:
+            with self._state_lock:
+                if gen is not None and gen != self._generation:
+                    logger.debug("[ConnectionHandler] Reconnect superseded, aborting")
+                    return
+
             self._set_running_state(False)
 
             try:
@@ -417,19 +469,39 @@ class ConnectionHandler:
             except Exception as e:
                 logger.warning(f"[ConnectionHandler] Disconnect during reconnect: {e}")
 
-            self._perform_connect_task()
+            # If the user issued a disconnect while the fast-reconnect was
+            # running, abort before starting a fresh connection.
+            with self._state_lock:
+                if gen is not None and gen != self._generation:
+                    logger.debug("[ConnectionHandler] Reconnect cancelled after disconnect, aborting")
+                    return
+
+            self._perform_connect_task(gen)
 
         except Exception as e:
             logger.error(f"[ConnectionHandler] Reconnect error: {e}")
-            self._handle_connection_failure()
+            self._handle_connection_failure(gen)
 
     # -------------------------------------------------------------------------
     # Disconnect Task
     # -------------------------------------------------------------------------
 
     def _disconnect_task(self):
-        """Disconnect task - runs in background thread."""
-        self._set_running_state(False)
+        """Disconnect task - runs in background thread.
+
+        Order matters: ``ConnectionManager.disconnect`` is invoked FIRST so the
+        FSM transitions to STOPPING and the existing red disconnecting animation
+        renders (and stays rendered) while process teardown runs. Only after the
+        teardown completes (FSM -> DISCONNECTED) do we flip the running flags.
+
+        The trailing ``reset_ui_disconnected`` is guarded by the generation token:
+        if the user already started a new connection while this task was sleeping
+        (to let the disconnecting animation render), the stale reset is skipped so
+        it can never clobber the new CONNECTING state or skip initial connect steps.
+        """
+        with self._state_lock:
+            gen = self._generation
+
         self._stop_network_stats()
 
         try:
@@ -437,9 +509,15 @@ class ConnectionHandler:
         except Exception as e:
             logger.warning(f"[ConnectionHandler] Disconnect error: {e}")
 
+        self._set_running_state(False)
         self._stop_log_tailing()
 
         time.sleep(1.0)  # Allow UI to show disconnecting state
+
+        with self._state_lock:
+            if gen != self._generation:
+                logger.debug("[ConnectionHandler] Disconnect superseded — skipping stale UI reset")
+                return
 
         self._ui_call(self.reset_ui_disconnected)
 

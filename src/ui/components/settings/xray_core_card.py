@@ -44,20 +44,20 @@ class XrayCoreCard(ft.Container):
 
         self._btn_icon = ft.Icon(ft.Icons.MEMORY, size=15, color=WHITE)
         self._btn_text = ft.Text(
-            t("settings.check_core_update", default="بررسی آپدیت هسته"),
+            t("settings.check_core_update", default="Check Core Update"),
             size=12,
             color=AppColors.ON_PRIMARY,
             weight=ft.FontWeight.W_600,
         )
         self._progress_ring = ft.ProgressRing(
-            width=14,
-            height=14,
+            width=18,
+            height=18,
             stroke_width=2,
             color=WHITE,
             visible=False,
         )
 
-        self._update_btn = ft.ElevatedButton(
+        self._btn_container = ft.Container(
             content=ft.Row(
                 [
                     self._btn_icon,
@@ -65,12 +65,23 @@ class XrayCoreCard(ft.Container):
                     self._btn_text,
                 ],
                 spacing=6,
+                alignment=ft.MainAxisAlignment.CENTER,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
             ),
+            alignment=ft.Alignment.CENTER,
+            width=160,
+            height=24,
+        )
+
+        self._update_btn = ft.ElevatedButton(
+            content=self._btn_container,
+            width=180,
+            height=40,
             style=ft.ButtonStyle(
                 bgcolor=AppColors.PRIMARY,
                 color=AppColors.ON_PRIMARY,
                 shape=ft.RoundedRectangleBorder(radius=8),
-                padding=ft.Padding.symmetric(horizontal=16, vertical=10),
+                padding=ft.Padding.symmetric(horizontal=8, vertical=4),
             ),
             on_click=self._handle_click,
         )
@@ -97,9 +108,9 @@ class XrayCoreCard(ft.Container):
         self._btn_icon.visible = not checking
         self._progress_ring.visible = checking
         self._btn_text.value = (
-            t("settings.checking_core_updates", default="در حال بررسی هسته...")
+            t("settings.checking_core_updates", default="Checking core updates...")
             if checking
-            else t("settings.check_core_update", default="بررسی آپدیت هسته")
+            else t("settings.check_core_update", default="Check Core Update")
         )
         try:
             if self._update_btn.page:
@@ -111,10 +122,23 @@ class XrayCoreCard(ft.Container):
         """Refresh displayed Xray-Core version string."""
         current_ver = XrayInstallerService.get_local_version() or "ND"
         ver_display = f"v{current_ver}" if not current_ver.startswith("v") else current_ver
-        self._version_text.value = t("settings.xray_core_version", default=ver_display, version=ver_display)
+        self._version_text.value = t("settings.xray_core_version", default=f"Xray-Core {ver_display}", version=ver_display)
         try:
             if self._version_text.page:
                 self._version_text.update()
+        except Exception:
+            pass
+
+    def update_labels(self) -> None:
+        """Update localized UI text labels dynamically."""
+        self.refresh_version()
+        if not getattr(self._update_btn, "disabled", False):
+            self._btn_text.value = t("settings.check_core_update", default="Check Core Update")
+        else:
+            self._btn_text.value = t("settings.checking_core_updates", default="Checking core updates...")
+        try:
+            if self.page:
+                self.update()
         except Exception:
             pass
 

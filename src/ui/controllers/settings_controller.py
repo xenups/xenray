@@ -18,7 +18,22 @@ class SettingsController:
         self._app_context = app_context
         self._toast_callback = toast_callback
 
-    def _show_toast(self, message: str, message_type: str = "info") -> None:
+    def _show_toast(self, message: str, message_type: str = "info", page: Optional[object] = None) -> None:
+        if page:
+            try:
+                from src.ui.components.common.toast import ToastManager
+
+                if message_type == "success":
+                    ToastManager.show_success(page, message)
+                elif message_type == "error":
+                    ToastManager.show_error(page, message)
+                elif message_type == "warning":
+                    ToastManager.show_warning(page, message)
+                else:
+                    ToastManager.show_info(page, message)
+            except Exception as ex:
+                logger.error(f"[SettingsController] ToastManager error: {ex}")
+
         if self._toast_callback:
             try:
                 self._toast_callback(message, message_type)
@@ -191,26 +206,26 @@ class SettingsController:
                 update_avail, current_ver, latest_ver, download_url = AppUpdateService.check_for_updates()
 
                 if latest_ver is None:
-                    err_msg = t("settings.update_check_failed", default="خطا در بررسی بروزرسانی")
-                    self._show_toast(err_msg, "error")
+                    err_msg = t("settings.update_check_failed", default="Failed to check for updates")
+                    self._show_toast(err_msg, "error", page=page_ref)
                 elif update_avail:
                     msg = t(
                         "settings.update_available",
                         default=f"New version {latest_ver} available!",
                         version=latest_ver,
                     )
-                    self._show_toast(msg, "success")
+                    self._show_toast(msg, "success", page=page_ref)
                     if page_ref and hasattr(page_ref, "show_dialog"):
                         self._show_update_dialog(page_ref, current_ver, latest_ver, download_url, update_card_ref)
                 else:
-                    msg = t("settings.up_to_date", default="شما از آخرین نسخه XenRay استفاده میکنید")
-                    self._show_toast(msg, "success")
+                    msg = t("settings.up_to_date", default="XenRay is up to date")
+                    self._show_toast(msg, "success", page=page_ref)
 
                 return update_avail, current_ver, latest_ver, download_url
             except Exception as e:
                 logger.error(f"[SettingsController] Error checking for updates: {e}")
-                err_msg = t("settings.update_check_failed", default="خطا در بررسی بروزرسانی")
-                self._show_toast(err_msg, "error")
+                err_msg = t("settings.update_check_failed", default="Failed to check for updates")
+                self._show_toast(err_msg, "error", page=page_ref)
                 return False, "0.3.0-beta", None, None
             finally:
                 if update_card_ref and hasattr(update_card_ref, "set_checking"):
@@ -249,14 +264,14 @@ class SettingsController:
                 pass
 
             if not download_url:
-                self._show_toast(t("settings.download_failed", default="خطا در دانلود فایل بروزرسانی"), "error")
+                self._show_toast(t("settings.download_failed", default="Failed to download update"), "error", page=page)
                 return
 
             import threading
 
             from src.services.app_update_service import AppUpdateService
 
-            self._show_toast(t("settings.downloading_update", default="در حال دانلود فایل بروزرسانی..."), "info")
+            self._show_toast(t("settings.downloading_update", default="Downloading update..."), "info", page=page)
 
             def update_worker():
                 if update_card_ref and hasattr(update_card_ref, "set_checking"):
@@ -264,13 +279,13 @@ class SettingsController:
                 try:
                     zip_path = AppUpdateService.download_update(download_url)
                     if zip_path:
-                        self._show_toast(t("settings.applying_update", default="در حال اجرای بروزرسانی..."), "info")
+                        self._show_toast(t("settings.applying_update", default="Applying update..."), "info", page=page)
                         AppUpdateService.apply_update(zip_path)
                     else:
-                        self._show_toast(t("settings.download_failed", default="خطا در دانلود فایل بروزرسانی"), "error")
+                        self._show_toast(t("settings.download_failed", default="Failed to download update"), "error", page=page)
                 except Exception as ex:
                     logger.error(f"[SettingsController] App update download error: {ex}")
-                    self._show_toast(t("settings.download_failed", default="خطا در دانلود فایل بروزرسانی"), "error")
+                    self._show_toast(t("settings.download_failed", default="Failed to download update"), "error", page=page)
                 finally:
                     if update_card_ref and hasattr(update_card_ref, "set_checking"):
                         update_card_ref.set_checking(False)
@@ -327,29 +342,32 @@ class SettingsController:
             try:
                 from src.services.xray_installer import XrayInstallerService
 
-                available, current_ver, latest_ver = XrayInstallerService.check_for_updates()
+                try:
+                    available, current_ver, latest_ver = XrayInstallerService.check_for_updates(include_prerelease=True)
+                except TypeError:
+                    available, current_ver, latest_ver = XrayInstallerService.check_for_updates()
 
                 if latest_ver is None:
-                    err_msg = t("settings.xray_core_check_failed", default="خطا در بررسی آپدیت هسته Xray-Core")
-                    self._show_toast(err_msg, "error")
+                    err_msg = t("settings.xray_core_check_failed", default="Failed to check Xray-Core update")
+                    self._show_toast(err_msg, "error", page=page_ref)
                 elif available:
                     msg = t(
                         "settings.xray_core_update_available",
                         default=f"Xray-Core v{latest_ver} available!",
                         version=latest_ver,
                     )
-                    self._show_toast(msg, "success")
+                    self._show_toast(msg, "success", page=page_ref)
                     if page_ref and hasattr(page_ref, "show_dialog"):
                         self._show_xray_core_update_dialog(page_ref, current_ver, latest_ver, core_card_ref)
                 else:
-                    msg = t("settings.xray_core_up_to_date", default="هسته Xray-Core به روز است")
-                    self._show_toast(msg, "success")
+                    msg = t("settings.xray_core_up_to_date", default="Xray-Core is up to date")
+                    self._show_toast(msg, "success", page=page_ref)
 
                 return available, current_ver, latest_ver
             except Exception as e:
                 logger.error(f"[SettingsController] Error checking for Xray-Core update: {e}")
-                err_msg = t("settings.xray_core_check_failed", default="خطا در بررسی آپدیت هسته Xray-Core")
-                self._show_toast(err_msg, "error")
+                err_msg = t("settings.xray_core_check_failed", default="Failed to check Xray-Core update")
+                self._show_toast(err_msg, "error", page=page_ref)
                 return False, None, None
             finally:
                 if core_card_ref and hasattr(core_card_ref, "set_checking"):
@@ -388,36 +406,36 @@ class SettingsController:
 
             msg = t(
                 "settings.updating_xray_core",
-                default="در حال دانلود و جایگزینی هسته Xray-Core...",
+                default="Downloading and replacing Xray-Core...",
             )
-            self._show_toast(msg, "info")
+            self._show_toast(msg, "info", page=page)
 
             def install_worker():
                 if core_card_ref and hasattr(core_card_ref, "set_checking"):
                     core_card_ref.set_checking(True)
                 try:
-                    success = XrayInstallerService.install()
+                    success = XrayInstallerService.install(target_version=latest)
                     if success:
                         ok_msg = t(
                             "settings.xray_core_updated",
-                            default="هسته Xray-Core با موفقیت بروزرسانی شد",
+                            default="Xray-Core updated successfully",
                         )
-                        self._show_toast(ok_msg, "success")
+                        self._show_toast(ok_msg, "success", page=page)
                         if core_card_ref and hasattr(core_card_ref, "refresh_version"):
                             core_card_ref.refresh_version()
                     else:
                         err_msg = t(
                             "settings.xray_core_update_failed",
-                            default="خطا در نصب هسته Xray-Core",
+                            default="Failed to update Xray-Core",
                         )
-                        self._show_toast(err_msg, "error")
+                        self._show_toast(err_msg, "error", page=page)
                 except Exception as ex:
                     logger.error(f"[SettingsController] Xray-Core installation error: {ex}")
                     err_msg = t(
                         "settings.xray_core_update_failed",
-                        default="خطا در نصب هسته Xray-Core",
+                        default="Failed to update Xray-Core",
                     )
-                    self._show_toast(err_msg, "error")
+                    self._show_toast(err_msg, "error", page=page)
                 finally:
                     if core_card_ref and hasattr(core_card_ref, "set_checking"):
                         core_card_ref.set_checking(False)
@@ -427,14 +445,14 @@ class SettingsController:
         curr_str = current or "N/A"
         dlg = ft.AlertDialog(
             modal=True,
-            title=ft.Text(t("settings.xray_core_update_title", default="آپدیت هسته Xray-Core")),
+            title=ft.Text(t("settings.xray_core_update_title", default="Xray-Core Update")),
             content=ft.Column(
                 [
                     ft.Text(f"Current: v{curr_str} → Latest: v{latest}"),
                     ft.Text(
                         t(
                             "settings.xray_core_update_message",
-                            default="آیا از دانلود و جایگزینی فایل اجرایی هسته مطمئن هستید؟",
+                            default="Are you sure you want to download and update Xray-Core?",
                         ),
                         size=12,
                         color=ft.Colors.ON_SURFACE_VARIANT,
@@ -444,8 +462,8 @@ class SettingsController:
                 spacing=10,
             ),
             actions=[
-                ft.TextButton(t("common.cancel", default="انصراف"), on_click=close_dlg),
-                ft.TextButton(t("common.install", default="نصب و بروزرسانی"), on_click=start_core_install),
+                ft.TextButton(t("common.cancel", default="Cancel"), on_click=close_dlg),
+                ft.TextButton(t("common.install", default="Install & Update"), on_click=start_core_install),
             ],
             actions_alignment=ft.MainAxisAlignment.END,
         )

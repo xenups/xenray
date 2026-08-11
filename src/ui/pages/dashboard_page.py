@@ -197,11 +197,54 @@ class DashboardPage(ft.Container):
             pass
 
     def _on_connection_state_event(self, data) -> None:
-        """Handle connection_state_changed EventBus events in real time."""
+        """Handle connection_state_changed EventBus events in real time.
+
+        The payload arrives in two shapes:
+        - ConnectionManager events: ``{"event": ..., "data": ...}``
+        - ConnectionFSM transitions: ``{"old_state": ..., "new_state": ..., "state": ...}``
+
+        Both are mapped to the same reactive UI state so a core crash (which
+        drives the FSM directly to ``ERROR`` without emitting a ConnectionManager
+        event) still resets the button to DISCONNECTED.
+
+        EventBus handlers execute on whatever thread published the event (the
+        background connect/disconnect workers or the health-monitor thread), so
+        every UI mutation is marshaled onto the Flet event loop via ``run_task``
+        (``loop.call_soon_threadsafe`` under the hood) instead of mutating Flet
+        controls directly from a foreign thread.
+        """
         if not isinstance(data, dict):
             return
+        page = self._safe_page()
+        if page is not None:
+            try:
+                page.run_task(self._run_connection_event, data)
+                return
+            except Exception:
+                pass
+        self._apply_connection_event(data)
+
+    def _safe_page(self):
+        """Return the Flet page this control is mounted on, or None.
+
+        ``Control.page`` raises RuntimeError when the control is not mounted,
+        which happens in headless tests and during teardown — treat that as None.
+        """
+        try:
+            return self.page
+        except Exception:
+            return None
+
+    async def _run_connection_event(self, data) -> None:
+        """Async wrapper executed on the Flet event loop."""
+        self._apply_connection_event(data)
+
+    def _apply_connection_event(self, data) -> None:
         try:
             evt = data.get("event")
+            if evt is None:
+                self._apply_fsm_state_event(data)
+                return
             payload = data.get("data") or {}
             connected_at = payload.get("connected_at")
             if evt == "connected":
@@ -212,6 +255,26 @@ class DashboardPage(ft.Container):
                 self.set_connection_state(is_connected=False, is_disconnecting=True)
             elif evt in ("disconnected", "connect_failed"):
                 self.set_connection_state(is_connected=False)
+        except Exception:
+            pass
+
+    def _apply_fsm_state_event(self, data) -> None:
+        """React to raw ConnectionFSM transition payloads (no 'event' key).
+
+        FSM transitions are the single source of truth for the connection
+        lifecycle; a ``ERROR`` state (e.g. core crash) must reset the UI to
+        DISCONNECTED exactly like an explicit disconnect.
+        """
+        try:
+            new_state = data.get("new_state") or data.get("state")
+            if new_state in ("error", "disconnected"):
+                self.set_connection_state(is_connected=False)
+            elif new_state == "connected":
+                self.set_connection_state(is_connected=True)
+            elif new_state in ("starting", "preparing"):
+                self.set_connection_state(is_connected=False, is_connecting=True)
+            elif new_state == "stopping":
+                self.set_connection_state(is_connected=False, is_disconnecting=True)
         except Exception:
             pass
 
@@ -262,7 +325,25 @@ class DashboardPage(ft.Container):
         self.set_connection_state(is_connected=False, is_disconnecting=True)
 
     def update_uptime(self, elapsed: int | str) -> None:
-        """Update uptime counter."""
+        """Update uptime counter.
+
+        The uptime timer runs on a plain daemon thread, so the Flet control
+        mutation is marshaled to the event loop unless already executing there.
+        """
+        page = self._safe_page()
+        if page is not None:
+            try:
+                page.run_task(self._run_uptime_update, elapsed)
+                return
+            except Exception:
+                pass
+        self._apply_uptime_update(elapsed)
+
+    async def _run_uptime_update(self, elapsed: int | str) -> None:
+        """Async wrapper executed on the Flet event loop."""
+        self._apply_uptime_update(elapsed)
+
+    def _apply_uptime_update(self, elapsed: int | str) -> None:
         self._toggle_button.update_uptime(elapsed)
 
     def update_glow_intensity(self, total_bps: float = 0.0) -> None:

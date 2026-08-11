@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from src.core.event_bus import TOPIC_LAN_SHARING_CHANGED, event_bus
+from src.core.event_bus import (
+    EVENT_CORE_CRASHED,
+    TOPIC_CONNECTION_STATE_CHANGED,
+    TOPIC_LAN_SHARING_CHANGED,
+    event_bus,
+)
 
 if TYPE_CHECKING:
     from src.ui.main_window import MainWindow
@@ -94,7 +99,16 @@ class HandlerBindingService:
         mw._background_task_handler.start()
 
         event_bus.subscribe("profile_selected", mw._update_selected_profile_ui)
-        event_bus.subscribe("connection_state_changed", lambda _: mw._sync_dashboard_connection_state())
+        event_bus.subscribe(
+            TOPIC_CONNECTION_STATE_CHANGED,
+            # EventBus handlers run on the publisher's thread (background
+            # connect/disconnect workers), so marshal the UI-sync onto the Flet
+            # event loop instead of mutating controls from a foreign thread.
+            lambda _: mw._ui_helper.call(mw._sync_dashboard_connection_state),
+        )
+        # Core-process crash (sing-box/Xray-core died unexpectedly): reset the UI
+        # back to DISCONNECTED and surface the Persian error toast.
+        event_bus.subscribe(EVENT_CORE_CRASHED, mw._on_core_crashed)
         event_bus.subscribe(
             TOPIC_LAN_SHARING_CHANGED,
             lambda d: (mw._nav_sidebar.update_lan_button(d.get("enabled", False)) if mw._nav_sidebar else None),

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from typing import Optional
 
 import flet as ft
 
@@ -93,9 +94,15 @@ class ToastManager:
             margin=ft.Margin.only(top=20),
         )
 
-        # Add to overlay — one page.update() to mount the toast
+        # Add to overlay and update overlay layer target specifically to render without full page scroll flicker
         self._page.overlay.append(toast_container)
-        self._page.update()
+        try:
+            self._page.update(self._page.overlay)
+        except Exception:
+            try:
+                self._page.update(toast_container)
+            except Exception:
+                pass
 
         # Auto-dismiss with smooth entrance/exit slide animation
         async def auto_dismiss():
@@ -105,21 +112,30 @@ class ToastManager:
                 # Fade and slide up out
                 toast.opacity = 0
                 toast.offset = ft.Offset(0, -0.2)
-                toast.update()
+                try:
+                    toast.update()
+                except Exception:
+                    pass
 
                 # Wait for animation
                 await asyncio.sleep(0.3)
 
-                # Remove from overlay
+                # Remove from overlay and update overlay layer
                 if toast_container in self._page.overlay:
                     self._page.overlay.remove(toast_container)
-                    self._page.update()
+                    try:
+                        self._page.update(self._page.overlay)
+                    except Exception:
+                        pass
             except Exception:
                 # Cleanup on error
                 try:
                     if toast_container in self._page.overlay:
                         self._page.overlay.remove(toast_container)
-                        self._page.update()
+                        try:
+                            self._page.update(self._page.overlay)
+                        except Exception:
+                            pass
                 except Exception:
                     pass
 
@@ -141,3 +157,55 @@ class ToastManager:
     def warning(self, message: str, duration: int = 3000):
         """Show a warning toast."""
         self.show(message, "warning", duration)
+
+    @staticmethod
+    def show_info(page: Optional[ft.Page], message: str, duration: int = 3000):
+        """Static helper to safely display an info toast on page."""
+        if not page:
+            return
+        try:
+            if hasattr(page, "_toast_manager") and page._toast_manager:
+                page._toast_manager.info(message, duration)
+            else:
+                ToastManager(page).info(message, duration)
+        except Exception:
+            pass
+
+    @staticmethod
+    def show_success(page: Optional[ft.Page], message: str, duration: int = 3000):
+        """Static helper to safely display a success toast on page."""
+        if not page:
+            return
+        try:
+            if hasattr(page, "_toast_manager") and page._toast_manager:
+                page._toast_manager.success(message, duration)
+            else:
+                ToastManager(page).success(message, duration)
+        except Exception:
+            pass
+
+    @staticmethod
+    def show_error(page: Optional[ft.Page], message: str, duration: int = 3000):
+        """Static helper to safely display an error toast on page."""
+        if not page:
+            return
+        try:
+            if hasattr(page, "_toast_manager") and page._toast_manager:
+                page._toast_manager.error(message, duration)
+            else:
+                ToastManager(page).error(message, duration)
+        except Exception:
+            pass
+
+    @staticmethod
+    def show_warning(page: Optional[ft.Page], message: str, duration: int = 3000):
+        """Static helper to safely display a warning toast on page."""
+        if not page:
+            return
+        try:
+            if hasattr(page, "_toast_manager") and page._toast_manager:
+                page._toast_manager.warning(message, duration)
+            else:
+                ToastManager(page).warning(message, duration)
+        except Exception:
+            pass

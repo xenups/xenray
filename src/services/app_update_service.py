@@ -73,9 +73,12 @@ class AppUpdateService:
             return current_normalized != latest_normalized
 
     @staticmethod
-    def check_for_updates() -> Tuple[bool, Optional[str], Optional[str], Optional[str]]:
+    def check_for_updates(include_prerelease: bool = False) -> Tuple[bool, Optional[str], Optional[str], Optional[str]]:
         """
         Check for updates via GitHub API.
+
+        Args:
+            include_prerelease: Whether to include pre-releases when querying releases.
 
         Returns:
             Tuple of (update_available, current_version, latest_version, download_url)
@@ -83,13 +86,22 @@ class AppUpdateService:
         current_version = AppUpdateService.get_current_version()
 
         try:
-            logger.info(f"Checking for updates... Current version: {current_version}")
+            logger.info(f"Checking for updates... Current version: {current_version} (include_prerelease={include_prerelease})")
 
             # Query GitHub API
-            response = requests.get(GITHUB_API_URL, timeout=10)
-            response.raise_for_status()
+            if include_prerelease:
+                url = f"https://api.github.com/repos/{GITHUB_REPO}/releases"
+                response = requests.get(url, timeout=10)
+                response.raise_for_status()
+                data_list = response.json()
+                if not data_list or not isinstance(data_list, list):
+                    return False, current_version, None, None
+                data = data_list[0]
+            else:
+                response = requests.get(GITHUB_API_URL, timeout=10)
+                response.raise_for_status()
+                data = response.json()
 
-            data = response.json()
             tag_name = data.get("tag_name", "")
             latest_version = AppUpdateService.parse_version(tag_name)
 

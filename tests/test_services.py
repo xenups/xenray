@@ -54,7 +54,7 @@ class TestXrayService:
         with patch("os.remove") as mock_remove:
             assert xray_service.stop() is True
             assert xray_service.pid is None
-            mock_kill.assert_called_with(1234)
+            mock_kill.assert_called_with(1234, force=False)
             mock_remove.assert_called()
 
     def _run_windows_tun_start(self, xray_service, tun_dns, mock_run):

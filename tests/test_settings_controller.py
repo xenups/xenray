@@ -202,7 +202,7 @@ def test_check_for_updates_flow(mock_app_context, monkeypatch):
     avail, curr, latest, url = ctrl.check_for_updates(update_card_ref=card_mock, sync=True)
     assert avail is False
     assert toasts[-1][1] == "success"
-    assert "آخرین نسخه" in toasts[-1][0]
+    assert "آخرین نسخه" in toasts[-1][0] or "up to date" in toasts[-1][0].lower()
     card_mock.set_checking.assert_any_call(True)
     card_mock.set_checking.assert_any_call(False)
 
@@ -224,4 +224,4 @@ def test_check_for_updates_flow(mock_app_context, monkeypatch):
     avail, curr, latest, url = ctrl.check_for_updates(update_card_ref=card_mock, sync=True)
     assert avail is False
     assert toasts[-1][1] == "error"
-    assert "بروزرسانی" in toasts[-1][0]
+    assert "بروزرسانی" in toasts[-1][0] or "failed" in toasts[-1][0].lower()

@@ -1,6 +1,40 @@
 import flet as ft
 
 
+def _schedule_animation_task(page, coro_factory):
+    """Schedule an animation coroutine onto the Flet event loop without RuntimeError.
+
+    Flet's ``Page.run_task`` schedules via ``asyncio.run_coroutine_threadsafe``,
+    which raises ``RuntimeError`` when called from the running event loop. The
+    animation methods are invoked BOTH from background workers (via ``run_task``)
+    and directly on the Flet UI event loop (connection-state events are marshaled
+    onto the loop), so:
+
+    - Already on the Flet event loop -> ``asyncio.create_task`` (no raise, the
+      animation actually starts rendering).
+    - Any other thread / foreign loop -> ``page.run_task`` (thread-safe).
+    """
+    import asyncio
+
+    if page is None:
+        return None
+
+    try:
+        running = asyncio.get_running_loop()
+    except RuntimeError:
+        running = None
+
+    page_loop = getattr(getattr(getattr(page, "session", None), "connection", None), "loop", None)
+
+    try:
+        if running is not None and page_loop is not None and running is page_loop:
+            return asyncio.create_task(coro_factory())
+        return page.run_task(coro_factory)
+    except RuntimeError:
+        # Page loop closed/destroyed — the animation cannot be scheduled.
+        return None
+
+
 class ConnectionButton(ft.Container):
     """Connection button with animated glow based on network activity and embedded status/timer."""
 
@@ -33,6 +67,28 @@ class ConnectionButton(ft.Container):
             font_family="monospace",
             text_align=ft.TextAlign.CENTER,
         )
+
+        # FSM / Animation generation cancellation token
+        self._state_generation = 0
+        self._anim_task = None
+
+        # Wrap on_click callback to log click event with generation ID
+        self._user_on_click = on_click
+
+        def _wrapped_on_click(e):
+            try:
+                from src.core.fsm.connection_fsm import connection_fsm
+
+                fsm_st = connection_fsm.state.value
+            except Exception:
+                fsm_st = "unknown"
+            from src.core.logger import logger
+
+            logger.info(f"[UI_BUTTON] Clicked in state={fsm_st} | Gen: {self._state_generation}")
+            if self._user_on_click:
+                self._user_on_click(e)
+
+        self._on_click_handler = _wrapped_on_click
 
         # Vertical Column strictly centered inside circular power button
         self._content_column = ft.Column(
@@ -72,7 +128,7 @@ class ConnectionButton(ft.Container):
             border_radius=82.5,
             bgcolor=ft.Colors.with_opacity(0.15, "#1e293b"),
             border=ft.Border.all(1.5, ft.Colors.with_opacity(0.2, ft.Colors.WHITE)),
-            on_click=on_click,
+            on_click=self._on_click_handler,
             alignment=ft.Alignment.CENTER,
             padding=ft.Padding.symmetric(horizontal=10, vertical=6),
         )
@@ -109,10 +165,34 @@ class ConnectionButton(ft.Container):
         except Exception:
             pass
 
+    def _cancel_anim_task(self):
+        """Cancel any running UI animation loop."""
+        if self._anim_task and hasattr(self._anim_task, "cancel"):
+            try:
+                self._anim_task.cancel()
+            except Exception:
+                pass
+        self._anim_task = None
+
+    def _schedule_animation(self, coro_factory):
+        """Schedule an animation loop, safe from the UI loop and background threads."""
+        try:
+            page = self.page
+        except Exception:
+            page = None
+        if page is None:
+            return None
+        return _schedule_animation_task(page, coro_factory)
+
     def set_connected(self, status_label: str = None):
         """Set button to connected state with subtle purple glass glow."""
         from src.core.i18n import t
+        from src.core.logger import logger
         from src.ui.helpers.status_helper import get_short_status_label
+
+        self._cancel_anim_task()
+        self._state_generation += 1
+        current_gen = self._state_generation
 
         self._is_connected = True
         self._is_connecting = False
@@ -157,7 +237,7 @@ class ConnectionButton(ft.Container):
 
             async def _connected_breath():
                 grow = True
-                while self._state == "connected":
+                while self._state == "connected" and self._state_generation == current_gen:
                     try:
                         _ = self.page
                     except Exception:
@@ -171,19 +251,26 @@ class ConnectionButton(ft.Container):
                                 self._glow_layer.opacity = 0.5
                                 self._glow_layer.scale = 1.0
                             self._glow_layer.update()
+                            logger.debug(
+                                f"[UI_ANIM] Frame rendered: {self._status_text.value} | Active Gen: {current_gen}"
+                            )
 
                         grow = not grow
                         await asyncio.sleep(1.2)
+                    except asyncio.CancelledError:
+                        break
                     except Exception:
                         break
 
-            self.page.run_task(_connected_breath)
+            self._anim_task = self._schedule_animation(_connected_breath)
 
     def set_disconnected(self, status_label: str = None):
         """Set button to disconnected state."""
         from src.core.i18n import t
         from src.ui.helpers.status_helper import get_short_status_label
 
+        self._cancel_anim_task()
+        self._state_generation += 1
         self._is_connected = False
         self._is_connecting = False
         self._state = "disconnected"
@@ -218,7 +305,12 @@ class ConnectionButton(ft.Container):
     def set_connecting(self, status_label: str = None):
         """Set connecting state with subtle amber glass pulse."""
         from src.core.i18n import t
+        from src.core.logger import logger
         from src.ui.helpers.status_helper import get_short_status_label
+
+        self._cancel_anim_task()
+        self._state_generation += 1
+        current_gen = self._state_generation
 
         self._is_connected = False
         self._is_connecting = True
@@ -232,7 +324,6 @@ class ConnectionButton(ft.Container):
         self._icon.color = ft.Colors.WHITE
         self._status_text.value = label
         self._status_text.color = ft.Colors.WHITE
-        self._uptime_text.value = "00:00:00"
         self._uptime_text.value = "00:00:00"
         try:
             self._button.update()
@@ -262,7 +353,7 @@ class ConnectionButton(ft.Container):
 
             async def _pulse_loop():
                 grow = True
-                while self._is_connecting:
+                while self._is_connecting and self._state_generation == current_gen:
                     try:
                         _ = self.page
                     except Exception:
@@ -276,15 +367,24 @@ class ConnectionButton(ft.Container):
                             self._glow_layer.scale = 1.0
 
                         self._glow_layer.update()
+                        logger.debug(f"[UI_ANIM] Frame rendered: {self._status_text.value} | Active Gen: {current_gen}")
                         grow = not grow
                         await asyncio.sleep(0.8)
+                    except asyncio.CancelledError:
+                        break
                     except Exception:
                         break
 
-            self.page.run_task(_pulse_loop)
+            self._anim_task = self._schedule_animation(_pulse_loop)
 
     def set_disconnecting(self, status_label: str = "Disconnecting..."):
         """Set disconnecting state with red glass pulse."""
+        from src.core.logger import logger
+
+        self._cancel_anim_task()
+        self._state_generation += 1
+        current_gen = self._state_generation
+
         self._is_connected = False
         self._is_connecting = False
         self._state = "disconnecting"
@@ -322,7 +422,7 @@ class ConnectionButton(ft.Container):
 
             async def _disconnecting_pulse():
                 grow = True
-                while self._state == "disconnecting":
+                while self._state == "disconnecting" and self._state_generation == current_gen:
                     try:
                         _ = self.page
                     except Exception:
@@ -336,18 +436,23 @@ class ConnectionButton(ft.Container):
                             self._glow_layer.scale = 1.0
 
                         self._glow_layer.update()
+                        logger.debug(f"[UI_ANIM] Frame rendered: {self._status_text.value} | Active Gen: {current_gen}")
                         grow = not grow
                         await asyncio.sleep(0.4)
+                    except asyncio.CancelledError:
+                        break
                     except Exception:
                         break
 
-            self.page.run_task(_disconnecting_pulse)
+            self._anim_task = self._schedule_animation(_disconnecting_pulse)
 
     def set_step(self, step_msg: str) -> None:
         """Update the center status text during connection step transitions."""
-        if not step_msg:
+        if not step_msg or self._state != "connecting":
             return
-        self._status_text.value = step_msg
+        from src.ui.helpers.status_helper import get_short_status_label
+
+        self._status_text.value = get_short_status_label(step_msg)
         self._status_text.color = ft.Colors.AMBER_400
         try:
             self._status_text.update()

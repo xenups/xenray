@@ -18,6 +18,14 @@ class UpdateCard(ft.Container):
         self._on_check_update_click = on_check_update_click
         WHITE = ft.Colors.WHITE
 
+        ver_display = f"v{APP_VERSION}" if not str(APP_VERSION).startswith("v") else APP_VERSION
+
+        self._version_text = ft.Text(
+            t("settings.version", default=ver_display, version=ver_display),
+            size=12,
+            color=AppColors.ON_SURFACE_VARIANT,
+        )
+
         info_col = ft.Column(
             [
                 ft.Text(
@@ -26,11 +34,7 @@ class UpdateCard(ft.Container):
                     weight=ft.FontWeight.W_700,
                     color=WHITE,
                 ),
-                ft.Text(
-                    t("settings.version", default=f"v{APP_VERSION}", version=f"v{APP_VERSION}"),
-                    size=12,
-                    color=AppColors.ON_SURFACE_VARIANT,
-                ),
+                self._version_text,
             ],
             spacing=2,
         )
@@ -43,14 +47,14 @@ class UpdateCard(ft.Container):
             weight=ft.FontWeight.W_600,
         )
         self._progress_ring = ft.ProgressRing(
-            width=14,
-            height=14,
+            width=18,
+            height=18,
             stroke_width=2,
             color=WHITE,
             visible=False,
         )
 
-        self._update_btn = ft.ElevatedButton(
+        self._btn_container = ft.Container(
             content=ft.Row(
                 [
                     self._btn_icon,
@@ -58,12 +62,23 @@ class UpdateCard(ft.Container):
                     self._btn_text,
                 ],
                 spacing=6,
+                alignment=ft.MainAxisAlignment.CENTER,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
             ),
+            alignment=ft.Alignment.CENTER,
+            width=160,
+            height=24,
+        )
+
+        self._update_btn = ft.ElevatedButton(
+            content=self._btn_container,
+            width=180,
+            height=40,
             style=ft.ButtonStyle(
                 bgcolor=AppColors.PRIMARY,
                 color=AppColors.ON_PRIMARY,
                 shape=ft.RoundedRectangleBorder(radius=8),
-                padding=ft.Padding.symmetric(horizontal=16, vertical=10),
+                padding=ft.Padding.symmetric(horizontal=8, vertical=4),
             ),
             on_click=self._handle_click,
         )
@@ -97,6 +112,20 @@ class UpdateCard(ft.Container):
         try:
             if self._update_btn.page:
                 self._update_btn.update()
+        except Exception:
+            pass
+
+    def update_labels(self) -> None:
+        """Update localized UI text labels dynamically."""
+        ver_display = f"v{APP_VERSION}" if not str(APP_VERSION).startswith("v") else APP_VERSION
+        self._version_text.value = t("settings.version", default=ver_display, version=ver_display)
+        if not getattr(self._update_btn, "disabled", False):
+            self._btn_text.value = t("settings.check_updates", default="Check for Updates")
+        else:
+            self._btn_text.value = t("settings.checking_updates", default="Checking...")
+        try:
+            if self.page:
+                self.update()
         except Exception:
             pass
 

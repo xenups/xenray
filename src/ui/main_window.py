@@ -250,15 +250,25 @@ class MainWindow:
 
     def _sync_dashboard_connection_state(self) -> None:
         try:
+            # FSM is the single source of truth for the connection lifecycle.
+            # While it is STOPPING (process teardown in progress), the sync must
+            # preserve the existing red disconnecting animation instead of forcing
+            # the button straight back to DISCONNECTED (which would cut the pulse).
+            from src.core.fsm.connection_fsm import ConnectionState, connection_fsm
+
+            is_disconnecting = connection_fsm.state == ConnectionState.STOPPING
+
             if hasattr(self, "_stitch_dashboard_view") and self._stitch_dashboard_view:
                 self._stitch_dashboard_view.set_connection_state(
                     is_connected=self._is_running,
                     is_connecting=self._connecting,
+                    is_disconnecting=is_disconnecting,
                 )
             if hasattr(self, "_stitch_statistics_view") and self._stitch_statistics_view:
                 self._stitch_statistics_view.set_connection_state(
                     is_connected=self._is_running,
                     is_connecting=self._connecting,
+                    is_disconnecting=is_disconnecting,
                 )
             if hasattr(self, "_nav_sidebar") and self._nav_sidebar:
                 server_name = self._selected_profile.get("name", "") if self._selected_profile else ""
@@ -298,23 +308,33 @@ class MainWindow:
         return self._ui_builder.create_dashboard_view()
 
     def _on_connect_clicked_impl(self, e=None) -> None:
+        from src.core.event_bus import EVENT_DISCONNECT_REQUESTED, event_bus
+        from src.core.fsm.connection_fsm import ConnectionState, connection_fsm
+
         if not self._selected_profile:
             self._show_toast(t("status.select_server"), "warning")
             return
-        if self._connecting:
-            self._show_toast(t("status.connection_in_progress"))
+
+        current_state = connection_fsm.state
+        if (
+            self._is_running
+            or self._connecting
+            or current_state
+            in {
+                ConnectionState.CONNECTED,
+                ConnectionState.STARTING,
+                ConnectionState.PREPARING,
+            }
+        ):
+            event_bus.publish(EVENT_DISCONNECT_REQUESTED)
+            self._disconnect()
             return
 
-        if not self._is_running:
-            if self._current_mode == ConnectionMode.VPN and not ProcessUtils.is_admin():
-                self._show_admin_restart_dialog()
-                return
+        if self._current_mode == ConnectionMode.VPN and not ProcessUtils.is_admin():
+            self._show_admin_restart_dialog()
+            return
 
-            # Status text is driven exclusively by the controller state machine
-            # (see ConnectionHandler.connect_async -> _set_connecting -> sync).
-            self._connect_async()
-        else:
-            self._disconnect()
+        self._connect_async()
 
     def _show_admin_restart_dialog(self) -> None:
         dialog = AdminRestartDialog(on_restart=self._on_admin_restart_confirmed)
@@ -338,6 +358,32 @@ class MainWindow:
 
     def _reset_ui_disconnected(self) -> None:
         self._connection_handler.reset_ui_disconnected()
+
+    def _on_core_crashed(self, payload=None) -> None:
+        """Reactive handler for EVENT_CORE_CRASHED.
+
+        Drives the UI (button/status/glow/LAN card) back to a clean DISCONNECTED
+        state and notifies the user, ensuring the app never stays stuck showing
+        CONNECTED after a sing-box/Xray-core crash. Runs on the CoreHealthMonitor
+        background thread, so all Flet mutations are marshaled to the event loop.
+        """
+        self._ui_helper.call(self._apply_core_crash_ui)
+
+    def _apply_core_crash_ui(self) -> None:
+        try:
+            if self._connection_handler:
+                self._connection_handler._stop_network_stats()
+                self._connection_handler.reset_ui_disconnected()
+            self._show_toast(t("connection.core_crashed"), "error")
+            if self._systray:
+                try:
+                    self._systray.update_state()
+                except Exception:
+                    pass
+        except Exception as e:
+            from loguru import logger
+
+            logger.warning(f"[MainWindow] Core crash UI reset error: {e}")
 
     def _copy_logs(self) -> None:
         if self._log_viewer:
