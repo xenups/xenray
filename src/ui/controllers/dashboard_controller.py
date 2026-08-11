@@ -36,6 +36,8 @@ class DashboardController:
         self._on_uptime_updated = on_uptime_updated
         self._on_stats_updated = on_stats_updated
 
+        self._last_ping: str = ""
+        self._last_ping_success: bool = True
         self._timer_running: bool = False
         self._start_time: float = 0.0
         self._timer_thread: Optional[threading.Thread] = None
@@ -45,6 +47,29 @@ class DashboardController:
     def state(self) -> DashboardState:
         """Current dashboard connection state."""
         return self._state
+
+    def update_ping(self, ping_text: str, is_success: bool = True) -> Optional[str]:
+        """Update active server ping value for the disconnected state."""
+        self._last_ping = ping_text
+        self._last_ping_success = is_success
+        label = self.get_disconnected_label()
+        if self._state == DashboardState.DISCONNECTED and self._on_state_changed:
+            self._on_state_changed(self._state, label)
+        return label
+
+    def get_disconnected_label(self) -> str:
+        """Format the disconnected label using active server ping if available."""
+        if not self._last_ping or self._last_ping in ("...", ""):
+            return t("connection.testing_latency", default=t("app.disconnected"))
+
+        import re
+
+        has_number = bool(re.search(r"\d+", self._last_ping))
+        if has_number and self._last_ping_success:
+            prefix = t("connection.ping_prefix", default="پینگ:")
+            if prefix and not self._last_ping.startswith(prefix):
+                return f"{prefix} {self._last_ping}"
+        return self._last_ping
 
     def set_connection_state(
         self,
@@ -72,7 +97,7 @@ class DashboardController:
                 label = get_short_status_label(t("app.connected"))
             else:
                 target = DashboardState.DISCONNECTED
-                label = get_short_status_label(t("app.disconnected"))
+                label = self.get_disconnected_label()
 
             old_state = self._state
 

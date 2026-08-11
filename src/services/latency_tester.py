@@ -6,6 +6,7 @@ import asyncio
 import re
 import threading
 import time
+import uuid
 from typing import Any, Callable, List, Optional, Tuple
 
 import flet as ft
@@ -64,6 +65,9 @@ class LatencyTester:
         """
         Test a list of profiles for latency, concurrently via ``asyncio.gather``.
 
+        This is a manual user trigger (PRIORITY_MANUAL), so it is queued through
+        :class:`PingManager` and pre-empts any pending import / interval pings.
+
         Args:
             profiles: List of profile dicts with 'id' and 'config'
             fetch_flags: Whether to fetch country data for profiles without it
@@ -88,8 +92,10 @@ class LatencyTester:
                     except Exception:
                         pass
 
-        self._test_thread = threading.Thread(target=_run_tests, daemon=True)
-        self._test_thread.start()
+        # Unique batch key so successive manual runs never collide on dedup.
+        from src.services.ping_service import PRIORITY_MANUAL, ping_manager
+
+        ping_manager.submit(PRIORITY_MANUAL, f"manual:{uuid.uuid4()}", _run_tests)
 
     async def _run_tests_async(self, profiles: List[dict], fetch_flags: bool) -> None:
         """Run per-profile tests concurrently with a bounded semaphore."""

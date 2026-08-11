@@ -354,6 +354,17 @@ class ConnectionButton(ft.Container):
         except Exception:
             pass
 
+    def set_pre_connection_ping(self, latency_text: str, is_success: bool) -> None:
+        """Show a pre-connection latency result on the button's status line."""
+        from src.ui.helpers.status_helper import get_short_status_label
+
+        self._status_text.value = get_short_status_label(latency_text)
+        self._status_text.color = ft.Colors.GREEN_400 if is_success else ft.Colors.RED_400
+        try:
+            self._status_text.update()
+        except Exception:
+            pass
+
     def update_uptime(self, elapsed: int | str) -> None:
         """Update the uptime timer text inside the button."""
         if isinstance(elapsed, (int, float)):

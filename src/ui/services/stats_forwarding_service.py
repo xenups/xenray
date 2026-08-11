@@ -178,3 +178,17 @@ class StatsForwardingService:
                 pass
 
         sd.set_disconnecting = wrapped_set_disconnecting
+
+        orig_set_pre_connection_ping = getattr(sd, "set_pre_connection_ping", None)
+
+        def wrapped_set_pre_connection_ping(latency_text, is_success):
+            if orig_set_pre_connection_ping:
+                orig_set_pre_connection_ping(latency_text, is_success)
+            try:
+                if hasattr(self._mw, "_stitch_dashboard_view") and self._mw._stitch_dashboard_view:
+                    self._mw._stitch_dashboard_view.set_pre_connection_ping(latency_text, is_success)
+            except Exception:
+                pass
+
+        if orig_set_pre_connection_ping:
+            sd.set_pre_connection_ping = wrapped_set_pre_connection_ping

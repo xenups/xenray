@@ -103,13 +103,24 @@ class NavigationService:
 
     def add_server_profile(self, name: str, config: dict) -> None:
         """Save a newly added server profile and refresh server list."""
-        self._mw._app_context.profiles.save(name, config)
+        from src.services.server_inspector import server_inspector
+
+        pid = self._mw._app_context.profiles.save(name, config)
+        if pid:
+            # Auto-ping + location detection for the imported server (background).
+            server_inspector.inspect({"id": pid, "name": name, "config": config})
         if self._mw._server_list:
             self._mw._server_list._load_profiles(update_ui=True)
 
     def add_subscription(self, name: str, url: str) -> None:
-        """Save a newly added subscription and refresh server list."""
-        self._mw._app_context.subscriptions.save(name, url)
+        """Save a newly added subscription, fetch its servers, and refresh."""
+        from src.core.subscription_manager import SubscriptionManager
+
+        sub_id = self._mw._app_context.subscriptions.save(name, url)
+        if sub_id:
+            # Fetch + parse immediately so the imported servers get inspected in
+            # the background (the update flow publishes server_inspected events).
+            SubscriptionManager(self._mw._app_context).update_subscription(sub_id, callback=None)
         if self._mw._server_list:
             self._mw._server_list._load_profiles(update_ui=True)
 

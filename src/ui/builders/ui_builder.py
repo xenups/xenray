@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import flet as ft
 
 from src.core.i18n import t
+from src.core.logger import logger
 from src.ui.components.common.header import Header
 from src.ui.components.common.nav_sidebar import NavSidebar
 from src.ui.components.dashboard.connection_button import ConnectionButton
@@ -87,6 +88,12 @@ class UIBuilder:
 
     def build_stitch_views(self):
         """Step 2: Construct Stitch views and dual-pane layout after drawers are setup."""
+        # Guard against double construction (MainWindow init AND the warmup
+        # pipeline). Rebuilding creates a SECOND _view_switcher / views that are
+        # never mounted — breaking tab rendering after the splash.
+        if getattr(self._main, "_stitch_dashboard_view", None) is not None:
+            return
+
         page = self._main._page
 
         # Build Stitch Views
@@ -292,10 +299,35 @@ class UIBuilder:
             maximizable=False,
         )
 
+        from src.ui.components.splash_screen import SplashScreen
+
+        def _dismiss_splash_overlay() -> None:
+            """Properly unmount the splash overlay and repaint the page.
+
+            Removing the control from the stack (instead of merely toggling
+            visibility) prevents a transparent overlay from trapping focus and
+            freezing the main window until the user minimizes/restores.
+            """
+            try:
+                splash = self._main._splash_screen
+                stack = self._main._stack
+                if splash is not None and stack is not None and splash in stack.controls:
+                    stack.controls.remove(splash)
+            except Exception:
+                pass
+            try:
+                self._main._page.update()
+            except Exception:
+                pass
+            logger.debug("[MainWindow] Splash screen dismissed")
+
+        self._main._splash_screen = SplashScreen(on_dismiss=_dismiss_splash_overlay)
+
         self._main._stack = ft.Stack(
             controls=[
                 _drag_bg,
                 self._main._main_content,
+                self._main._splash_screen,
             ],
             expand=True,
         )

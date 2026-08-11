@@ -109,6 +109,9 @@ class MainWindow:
         self._logs_heartbeat = None
 
         # Managers & Sub-Services
+        from src.core.startup_warmup_manager import StartupWarmupManager
+
+        self._startup_warmup_manager = StartupWarmupManager(self)
         self._drawer_manager = DrawerManager(self)
         self._ui_builder = UIBuilder(self)
         self._glow_helper = GlowHelper(self)
@@ -141,6 +144,28 @@ class MainWindow:
 
         self._sync_dashboard_connection_state()
         self._handler_binding_service.bind_handlers()
+
+        # NOTE: The startup active-server ping is now dispatched by the
+        # StartupWarmupManager pipeline (PRIORITY_MANUAL, awaited during the
+        # splash) — no redundant immediate trigger here.
+
+    def start_warmup_pipeline(self) -> None:
+        """Trigger background startup pre-warming and splash screen fade-out."""
+        if hasattr(self, "_splash_screen") and self._splash_screen:
+            self._splash_screen.trigger_entrance_animation()
+
+            async def _run_warmup():
+                # run_task requires a coroutine function — pass the bound async
+                # method (with its kwarg), NOT a lambda wrapping it.
+                warmup_task = self._page.run_task(
+                    self._startup_warmup_manager.execute_startup_pipeline,
+                    progress_callback=self._splash_screen.update_status if self._splash_screen else None,
+                )
+                await self._splash_screen.dismiss_when_ready(warmup_task)
+
+            self._page.run_task(_run_warmup)
+        else:
+            self._page.run_task(self._startup_warmup_manager.execute_startup_pipeline)
 
     # --- Navigation & Subpage Forwarders ---
     def navigate_to(self, control: ft.Control) -> None:

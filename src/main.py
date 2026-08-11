@@ -59,6 +59,7 @@ async def main(page: ft.Page):
     # 5. Build UI — first page.update() flushes dimensions + center + content in one frame
     window = container.main_window(page=page)
     page.add(window._stack)
+    window.start_warmup_pipeline()
 
     # 6. Window event handler — checks both e.data and e.type
     async def on_window_event(e):

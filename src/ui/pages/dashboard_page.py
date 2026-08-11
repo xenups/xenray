@@ -6,7 +6,12 @@ from typing import Callable, Optional
 
 import flet as ft
 
-from src.core.event_bus import TOPIC_CONNECTION_STATE_CHANGED, TOPIC_TELEMETRY_UPDATED, event_bus
+from src.core.event_bus import (
+    TOPIC_ACTIVE_SERVER_PING_UPDATED,
+    TOPIC_CONNECTION_STATE_CHANGED,
+    TOPIC_TELEMETRY_UPDATED,
+    event_bus,
+)
 from src.core.i18n import t
 from src.ui.components.dashboard.connection_button import ConnectionButton
 from src.ui.components.dashboard.traffic_cards import TrafficCards
@@ -51,6 +56,7 @@ class DashboardPage(ft.Container):
 
         event_bus.subscribe(TOPIC_TELEMETRY_UPDATED, self._on_telemetry_event)
         event_bus.subscribe(TOPIC_CONNECTION_STATE_CHANGED, self._on_connection_state_event)
+        event_bus.subscribe(TOPIC_ACTIVE_SERVER_PING_UPDATED, self._on_active_server_ping_updated)
 
         hero_center_section = ft.Container(
             content=self._toggle_button,
@@ -138,6 +144,7 @@ class DashboardPage(ft.Container):
         """Release EventBus subscriptions held by this view."""
         event_bus.unsubscribe(TOPIC_TELEMETRY_UPDATED, self._on_telemetry_event)
         event_bus.unsubscribe(TOPIC_CONNECTION_STATE_CHANGED, self._on_connection_state_event)
+        event_bus.unsubscribe(TOPIC_ACTIVE_SERVER_PING_UPDATED, self._on_active_server_ping_updated)
 
     def _on_controller_state_changed(self, state: DashboardState, label: str) -> None:
         """Handle state change notification from DashboardController."""
@@ -170,6 +177,22 @@ class DashboardPage(ft.Container):
                 upload_bps=float(data.get("upload_bps", 0.0)),
                 total_bps=float(data.get("total_bps", 0.0)),
             )
+        except Exception:
+            pass
+
+    def _on_active_server_ping_updated(self, data) -> None:
+        """Handle active_server_ping_updated events and render latency live."""
+        if not isinstance(data, dict):
+            return
+        # Only meaningful while disconnected — once connected the status text is
+        # driven by the connection state machine.
+        if self._is_connected or self._is_connecting or self._is_disconnecting:
+            return
+        result_str = data.get("result_str")
+        if not result_str:
+            return
+        try:
+            self._toggle_button.set_pre_connection_ping(result_str, bool(data.get("success", False)))
         except Exception:
             pass
 
@@ -215,6 +238,12 @@ class DashboardPage(ft.Container):
         if not step_text:
             return
         self._toggle_button.set_step(get_short_status_label(step_text))
+
+    def set_pre_connection_ping(self, latency_text: str, is_success: bool = True) -> None:
+        """Update active server ping on controller and connection button when disconnected."""
+        label = self._controller.update_ping(latency_text, is_success)
+        if label and not self._is_connected and not self._is_connecting and not self._is_disconnecting:
+            self._toggle_button.set_disconnected(label)
 
     def set_state_disconnected(self) -> None:
         """Update UI to disconnected state."""

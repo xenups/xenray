@@ -103,3 +103,27 @@ def test_dashboard_controller_process_network_stats():
     )
     dl_text, ul_text, total_bps = stats_history[1]
     assert ul_text == "2.0 MB/s"
+
+
+def test_dashboard_controller_dynamic_ping_when_disconnected():
+    """Test displaying real server ping on DISCONNECTED state."""
+    state_history = []
+
+    def on_state_changed(state: DashboardState, label: str):
+        state_history.append((state, label))
+
+    ctrl = DashboardController(on_state_changed=on_state_changed)
+
+    # 1. Update ping when disconnected -> fires callback with formatted ping
+    ctrl.update_ping("142 ms", is_success=True)
+    assert state_history[-1][1] in ("پینگ: 142 ms", "142 ms", "Ping: 142 ms")
+
+    # 2. Transitioning to CONNECTING overrides ping with connecting label
+    ctrl.set_connection_state(is_connected=False, is_connecting=True)
+    assert state_history[-1][0] == DashboardState.CONNECTING
+    assert state_history[-1][1] != "142 ms"
+
+    # 3. Transitioning back to DISCONNECTED restores ping
+    ctrl.set_connection_state(is_connected=False)
+    assert state_history[-1][0] == DashboardState.DISCONNECTED
+    assert "142 ms" in state_history[-1][1]

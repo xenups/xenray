@@ -1,4 +1,5 @@
 """Subscription Manager."""
+
 import base64
 import json
 import re
@@ -138,6 +139,12 @@ class SubscriptionManager:
                 sub["updated_at"] = str(time.time())
 
                 self._app_context.subscriptions.update(sub)
+
+                # Auto-inspect the imported servers (ping + location) in the
+                # background, concurrently, without blocking the UI thread.
+                from src.services.server_inspector import server_inspector
+
+                server_inspector.inspect_batch(profiles)
 
                 if callback:
                     callback(True, t("server_list.subscription_updated", count=len(profiles)))

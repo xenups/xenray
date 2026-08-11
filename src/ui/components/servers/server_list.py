@@ -9,10 +9,12 @@ from typing import Callable, Optional
 import flet as ft
 
 from src.core.app_context import AppContext
+from src.core.event_bus import TOPIC_SERVER_INSPECTED, event_bus
 from src.core.i18n import t
 from src.core.logger import logger
 from src.core.subscription_manager import SubscriptionManager
 from src.services.latency_tester import LatencyTester
+from src.services.server_inspector import server_inspector
 from src.ui.components.chain.chain_list_item import ChainListItem
 from src.ui.components.servers.add_server_dialog import AddServerDialog
 from src.ui.components.servers.server_list_header import ServerListHeader
@@ -65,6 +67,9 @@ class ServerList(ft.Container):
             on_all_complete=self._on_all_latency_tests_complete,
             app_context=self._app_context,
         )
+
+        # Live updates for auto-inspected (newly imported) servers.
+        event_bus.subscribe(TOPIC_SERVER_INSPECTED, self._on_server_inspected)
 
         # Header Component
         self._header = ServerListHeader(
@@ -500,18 +505,90 @@ class ServerList(ft.Container):
             self._page.update()
 
     def _handle_server_added(self, name: str, config: dict):
-        """Handle a new server being added."""
-        self._app_context.profiles.save(name, config)
+        """Handle a new server being added (auto-inspects in the background)."""
+        pid = self._app_context.profiles.save(name, config)
+        if pid:
+            server_inspector.inspect({"id": pid, "name": name, "config": config})
         if self._toast:
             self._toast.success(t("add_dialog.server_added", name=name))
         self._load_profiles(update_ui=True)
 
     def _handle_subscription_added(self, name: str, url: str):
-        """Handle a new subscription being added."""
-        self._app_context.subscriptions.save(name, url)
+        """Handle a new subscription being added (fetches + auto-inspects)."""
+        sub_id = self._app_context.subscriptions.save(name, url)
+        if sub_id:
+            self._subscription_manager.update_subscription(sub_id, callback=None)
         if self._toast:
             self._toast.success(t("add_dialog.subscription_added", name=name))
         self._load_profiles(update_ui=True)
+
+    # --- Auto-Inspection Live Updates ---
+    def _on_server_inspected(self, data) -> None:
+        """Update the specific server card live when an import inspection finishes."""
+        if not isinstance(data, dict):
+            return
+        server_id = data.get("server_id")
+        if not server_id:
+            return
+
+        success = data.get("success", False)
+        result_str = data.get("result_str")
+        location = data.get("location") or {}
+        ping_ms = data.get("ping")
+
+        # Persist so the data survives reloads (and shows if the item isn't live yet).
+        updates = {}
+        if result_str:
+            updates["last_latency"] = result_str if success else None
+            updates["last_latency_val"] = ping_ms if success else None
+        if location.get("country_code"):
+            updates["country_code"] = location["country_code"]
+            updates["country_name"] = location.get("country_name", location["country_code"])
+            if location.get("city"):
+                updates["city"] = location.get("city")
+        if updates:
+            self._persist_profile_updates(server_id, updates)
+
+        item = self._item_map.get(server_id)
+        if item is None:
+            return
+        if hasattr(item, "_profile"):
+            item._profile.update(updates)
+
+        if result_str and hasattr(item, "update_ping"):
+            color = self._inspection_color(success, ping_ms)
+            self._ui(lambda: item.update_ping(result_str, color))
+
+        if location.get("country_code") and hasattr(item, "update_icon"):
+            cc = location["country_code"]
+            cn = location.get("country_name", cc)
+            self._ui(lambda: item.update_icon(cc, cn))
+
+    @staticmethod
+    def _inspection_color(success: bool, ping_ms: Optional[int]) -> str:
+        """Map an inspection result to a ping badge color."""
+        if not success or ping_ms is None:
+            return ft.Colors.RED_400
+        if ping_ms < 1000:
+            return ft.Colors.GREEN_400
+        if ping_ms < 2000:
+            return ft.Colors.ORANGE_400
+        return ft.Colors.RED_400
+
+    def _persist_profile_updates(self, pid: str, updates: dict) -> None:
+        """Persist inspection results to the owning repository (profiles or subscription)."""
+        try:
+            if self._app_context.profiles.get_by_id(pid):
+                self._app_context.profiles.update(pid, updates)
+                return
+            for sub in self._app_context.subscriptions.load_all():
+                for profile in sub.get("profiles", []):
+                    if profile.get("id") == pid:
+                        profile.update(updates)
+                        self._app_context.subscriptions.update(sub)
+                        return
+        except Exception:
+            pass
 
     # --- Chain Management ---
     def _select_chain(self, chain: dict):

@@ -13,6 +13,7 @@ from src.ui.controllers.settings_controller import SettingsController
 @pytest.fixture
 def mock_app_context():
     """Create a mock app context with in-memory settings."""
+
     class MockSettings:
         def __init__(self):
             self.proxy_port = 10808
