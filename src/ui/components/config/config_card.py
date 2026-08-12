@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-import math
 import json
+import math
 from typing import Callable, Optional
 
 import flet as ft

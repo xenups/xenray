@@ -10,13 +10,7 @@ from typing import Callable, Optional
 import requests
 from loguru import logger
 
-from src.core.constants import (
-    BIN_DIR,
-    WINTUN_DLL,
-    WINTUN_DOWNLOAD_URL,
-    XRAY_EXECUTABLE,
-    XRAY_VERSION,
-)
+from src.core.constants import BIN_DIR, WINTUN_DLL, WINTUN_DOWNLOAD_URL, XRAY_EXECUTABLE, XRAY_VERSION
 from src.utils.platform_utils import PlatformUtils
 
 # Constants

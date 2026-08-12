@@ -33,9 +33,7 @@ from src.ui.components.servers.server_list_item import ServerListItem
 from src.ui.components.servers.server_list_latency import ServerListLatencyMixin
 from src.ui.components.servers.server_list_loader import ServerListLoaderMixin
 from src.ui.components.servers.server_list_sort import ServerListSortMixin
-from src.ui.components.servers.server_list_subscriptions import (
-    ServerListSubscriptionMixin,
-)
+from src.ui.components.servers.server_list_subscriptions import ServerListSubscriptionMixin
 
 
 class ServerList(

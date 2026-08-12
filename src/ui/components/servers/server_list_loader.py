@@ -1,10 +1,13 @@
 """Profile loading / list building for the ServerList component (single-responsibility mixin)."""
 
 from __future__ import annotations
+
 import asyncio
 import threading
 import time
+
 import flet as ft
+
 from src.core.logger import logger
 from src.ui.components.chain.chain_list_item import ChainListItem
 from src.ui.components.servers.server_list_item import ServerListItem

@@ -1,9 +1,6 @@
 """Servers page component package."""
 
-from src.ui.components.servers.add_server_dialog import (
-    AddServerDialog,
-    AddServerModalContainer,
-)
+from src.ui.components.servers.add_server_dialog import AddServerDialog, AddServerModalContainer
 from src.ui.components.servers.server_list import ServerList
 from src.ui.components.servers.server_list_header import ServerListHeader
 from src.ui.components.servers.server_list_item import ServerListItem

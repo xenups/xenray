@@ -1,7 +1,9 @@
 """Subscription folder navigation + actions for the ServerList component."""
 
 from __future__ import annotations
+
 import flet as ft
+
 from src.core.i18n import t
 from src.ui.components.servers.server_list_item import ServerListItem
 

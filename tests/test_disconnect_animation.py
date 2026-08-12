@@ -8,18 +8,17 @@ and is cleanly replaced by "Ready for Flight" on DISCONNECTED.
 import threading
 from unittest.mock import MagicMock, patch
 
+from src.core.connection_manager import ConnectionManager
+from src.core.event_bus import event_bus
+from src.core.fsm.connection_fsm import ConnectionState, connection_fsm
+
 # Imported first to pre-warm the UI package graph (avoids the pre-existing
 # server_list <-> chain_builder_page circular import when a pages module is the
 # first UI import in the process). Same pattern as test_ui_views_and_services.py.
 from src.ui.components.common.toast import ToastManager  # noqa: F401
-
-from src.core.connection_manager import ConnectionManager
-from src.core.event_bus import event_bus
-from src.core.fsm.connection_fsm import ConnectionState, connection_fsm
 from src.ui.handlers.connection_handler import ConnectionHandler
 from src.ui.helpers.ui_thread_helper import UIThreadHelper
 from src.ui.main_window import MainWindow
-
 
 # ---------------------------------------------------------------------------
 # ConnectionHandler: disconnect click invokes the red animation

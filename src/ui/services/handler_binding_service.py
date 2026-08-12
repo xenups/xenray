@@ -4,12 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from src.core.event_bus import (
-    EVENT_CORE_CRASHED,
-    TOPIC_CONNECTION_STATE_CHANGED,
-    TOPIC_LAN_SHARING_CHANGED,
-    event_bus,
-)
+from src.core.event_bus import EVENT_CORE_CRASHED, TOPIC_CONNECTION_STATE_CHANGED, TOPIC_LAN_SHARING_CHANGED, event_bus
 
 if TYPE_CHECKING:
     from src.ui.main_window import MainWindow

@@ -88,11 +88,7 @@ class ConnectionManager:
         # and to graceful core-process stop completions. Keeps the deterministic
         # ConnectionFSM / session state in sync even when the crash bypasses the
         # normal connect/disconnect flow.
-        from src.core.event_bus import (
-            EVENT_CORE_CRASHED,
-            EVENT_CORE_PROCESS_STOPPED,
-            event_bus,
-        )
+        from src.core.event_bus import EVENT_CORE_CRASHED, EVENT_CORE_PROCESS_STOPPED, event_bus
 
         self._core_crash_event = EVENT_CORE_CRASHED
         self._core_process_stopped_event = EVENT_CORE_PROCESS_STOPPED

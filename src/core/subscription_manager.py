@@ -145,10 +145,7 @@ class SubscriptionManager:
                 # Batches larger than AUTO_INSPECT_LIMIT skip auto-pinging to
                 # avoid network bloat / UI strain — those stay uninspected
                 # (idle) until the user manually triggers "Ping All".
-                from src.services.server_inspector import (
-                    AUTO_INSPECT_LIMIT,
-                    server_inspector,
-                )
+                from src.services.server_inspector import AUTO_INSPECT_LIMIT, server_inspector
 
                 if len(profiles) <= AUTO_INSPECT_LIMIT:
                     server_inspector.inspect_batch(profiles)

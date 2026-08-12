@@ -2,6 +2,50 @@
 
 All notable changes to XenRay will be documented in this file.
 
+## [0.3.0-beta] - 2026-08-12
+
+### Added
+- **Native GPU Neon Sweep Animations**: Config cards and the main Connect button now render a thin neon border trace via Flet's `animate_rotation` (60 FPS on the GPU) during ping/inspection.
+  - Instant frame-0 start (baseline arming on `did_mount` + frame-flush before the first nudge).
+  - Opaque mask layer keeps the gradient confined to a thin outer ring (no solid radar wedge).
+  - Mask/disc hidden post-ping so buttons keep their native colors.
+  - Only the 3 servers actively inside the inspection Semaphore animate at once.
+- **Ping "Stop" Toggle**: The Ping All header button now switches to "Stop Ping" while a batch runs; clicking it cancels all in-flight inspection tasks (master-task cancellation), releases the worker/semaphore immediately, and allows an instant new Ping All.
+- **Auto-Inspection Threshold**: Subscriptions/batches larger than 20 servers skip automatic pinging (stay idle) — pings only run on manual trigger.
+- **Strict Batch Concurrency**: Inspections run through `asyncio.Semaphore(3)` — never more than 3 Xray/socket runners at once.
+- **Interactive Update Modal** (`UpdateDialog`): version comparison (`v2.4.0 -> v2.5.0`), release-notes area, in-place live `ProgressBar`, and Update Now / Remind Later / Cancel buttons. Update button now shows a notification when up to date and opens the modal when an update is available.
+- **File-Lock-Safe Xray Core Extraction**: kills active `xray.exe` before replacing, safely renames locked binaries to `.old`, and rolls back on failure.
+- **Search by Country**: Search now matches `country_name`, `country_code`, and the localized country name (e.g. Persian `فنلاند` for FI) via pycountry.
+- **In-Memory Latency Sorting**: "Sort by Ping" reads freshly resolved in-memory latency (never stale disk values); uninspected/timeout servers sort to the bottom.
+- **Traffic Metrics Zero-Reset on Disconnect**: Download/Upload badges reset to `0 B/s` in place when the FSM reaches DISCONNECTED/STOPPING/ERROR, and the stats buffer is flushed.
+- **`PINGING` FSM State**: Pre-connection latency check registered in the connection FSM, with clean `PINGING -> CONNECTING` interruption.
+
+### Changed
+- **Add-Server Modal Isolation**: The Add modal is now a custom in-page Stack overlay (`AddServerModalContainer`) — opening/closing it never touches the server list or `page._dialogs`.
+- **Chunked List Rendering**: Large subscriptions (1000+ servers) render the first 30 cards instantly and append the rest in background micro-chunks — no more UI freeze or dataclass crash.
+- **Zero Per-Card EventBus Subscribers**: Cards no longer subscribe to `server_inspecting`/`server_inspected`; the ServerList is the single subscriber and delegates via `_item_map` (was 2000+ subscribers for a 1000-server list).
+- **New Servers Insert at Top**: Adding a server places its card at index 0 (in place, no re-render).
+- **Toast Pipeline**: `ToastManager` now renders into a persistent isolated top-center overlay layer (fixes toasts being silently dropped); settings toasts dispatch through exactly one path (no double toasts).
+- **Blocking DNS Off The Event Loop**: `resolve_server_ip` is non-blocking; DNS resolves in a background thread and refreshes the display.
+- **Ping Results Stay In-Memory**: Latency is no longer written to `profiles.json` on every ping (avoids `profiles.json.tmp` PermissionError); `atomic_write` is protected by a thread lock.
+- **"Revving Up" Emitted Once**: A single engine `connecting` event now drives exactly one PREPARING state transition (previously 3 duplicate dispatches).
+
+### Fixed
+- **FSM Warning**: `disconnected -> stopping` no longer logs a blocked-transition warning (defensive disconnect flow accepted).
+- **`PermissionError [Errno 13]`**: Concurrent batch-ping disk writes and `xray.exe` replacement no longer collide on Windows file locks.
+- **Headless CI**: `pystray`/Xlib are lazily imported (fixes `Xlib.error.DisplayNameError` during test collection).
+- **Missing Import**: `ServerListItem` import in the server-list subscription mixin.
+- **Flet 0.86 syntax**: `ft.Border.all` / `ft.BoxFit.CONTAIN` fixes across components.
+
+### Performance & Architecture
+- **SRP Refactors**: `settings_drawer.py` (854 → ~300 lines) split into a `SettingsHandler` + `sections/` package; `server_list.py` (829 → ~200 lines) split into single-responsibility mixins (loader, sort, events, latency, subscriptions, chains, actions).
+- **No `page.update()` for Local Changes**: 24 global `page.update()` calls reduced to 12 (only bootstrap/window/theme); local state changes use targeted `control.update()`.
+- **Removed Diagnostic Stack-Trace Logging** from the server list loader (single-line logs only).
+
+### Technical
+- 633 unit tests passing.
+- `black --check src tests` clean.
+
 ## [0.2.5-beta] - 2026-08-06
 
 ### Changed

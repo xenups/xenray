@@ -7,11 +7,7 @@ import time
 from threading import Event
 from unittest.mock import MagicMock, patch
 
-from src.core.event_bus import (
-    TOPIC_SERVER_INSPECTED,
-    TOPIC_SERVER_INSPECTING,
-    event_bus,
-)
+from src.core.event_bus import TOPIC_SERVER_INSPECTED, TOPIC_SERVER_INSPECTING, event_bus
 from src.core.subscription_manager import SubscriptionManager
 from src.services.server_inspector import ServerInspector
 from src.ui.services.navigation_service import NavigationService

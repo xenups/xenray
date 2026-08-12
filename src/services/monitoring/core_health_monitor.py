@@ -16,8 +16,10 @@ import asyncio
 import threading
 from typing import Callable, Optional
 
-from src.core.event_bus import EVENT_CORE_CRASHED, event_bus as default_event_bus
-from src.core.fsm.connection_fsm import ConnectionState, connection_fsm as default_fsm
+from src.core.event_bus import EVENT_CORE_CRASHED
+from src.core.event_bus import event_bus as default_event_bus
+from src.core.fsm.connection_fsm import ConnectionState
+from src.core.fsm.connection_fsm import connection_fsm as default_fsm
 from src.core.logger import logger
 from src.utils.process_utils import ProcessUtils
 

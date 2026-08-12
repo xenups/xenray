@@ -6,16 +6,12 @@ over EventBus for UI and service subscribers.
 
 from __future__ import annotations
 
-from enum import Enum
 import threading
+from enum import Enum
 from typing import Any, Optional
 
-from src.core.event_bus import (
-    TOPIC_CONNECTION_STATE_CHANGED,
-    TOPIC_FSM_STATE_CHANGED,
-    EventBus,
-    event_bus as default_event_bus,
-)
+from src.core.event_bus import TOPIC_CONNECTION_STATE_CHANGED, TOPIC_FSM_STATE_CHANGED, EventBus
+from src.core.event_bus import event_bus as default_event_bus
 from src.core.logger import logger
 
 

@@ -1,8 +1,11 @@
 """Latency-testing callbacks for the ServerList component."""
 
 from __future__ import annotations
+
 from typing import Optional
+
 import flet as ft
+
 from src.core.i18n import t
 
 

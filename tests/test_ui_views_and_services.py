@@ -9,11 +9,7 @@ import flet as ft
 from src.core.i18n import set_language, t
 from src.ui.components.common.nav_sidebar import NavSidebar
 from src.ui.components.common.toast import ToastManager
-from src.ui.pages.lan_sharing_page import (
-    LanSharingView,
-    generate_qr_base64,
-    get_real_physical_lan_ip,
-)
+from src.ui.pages.lan_sharing_page import LanSharingView, generate_qr_base64, get_real_physical_lan_ip
 from src.ui.pages.logs_page import LogsView
 
 

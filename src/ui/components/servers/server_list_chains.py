@@ -1,7 +1,9 @@
 """Chain management actions for the ServerList component."""
 
 from __future__ import annotations
+
 from typing import Optional
+
 from src.core.i18n import t
 from src.core.logger import logger
 from src.ui.pages.chain_builder_page import ChainBuilderPage
