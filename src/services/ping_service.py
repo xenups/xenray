@@ -41,6 +41,7 @@ class PingManager:
         self._seq = itertools.count()
         self._keys_guard = threading.Lock()
         self._active_keys: set = set()
+        self._canceled_keys: set = set()
         self._busy = threading.Event()
         self._worker: Optional[threading.Thread] = None
         self._start_lock = threading.Lock()
@@ -89,6 +90,40 @@ class PingManager:
         """
         return self.is_busy()
 
+    def cancel(self, key: str) -> None:
+        """Best-effort cancel of a queued ping operation by dedup key.
+
+        - A not-yet-started job is removed from the queue entirely.
+        - A job already running cannot be interrupted from Python (blocking
+          socket probe), but its result is DROPPED (never delivered to the UI)
+          via the canceled-keys set, so a stale ping can never clobber a newer
+          connect state.
+        """
+        if not key:
+            return
+        with self._keys_guard:
+            self._canceled_keys.add(key)
+
+        # Drain the queue, dropping any not-yet-running item with this key.
+        drained: list = []
+        while True:
+            try:
+                drained.append(self._queue.get_nowait())
+            except _queue.Empty:
+                break
+        removed_queued = False
+        for item in drained:
+            if item[2] == key:
+                removed_queued = True
+                with self._keys_guard:
+                    self._active_keys.discard(key)
+            else:
+                self._queue.put(item)
+
+        if removed_queued:
+            with self._keys_guard:
+                self._canceled_keys.discard(key)
+
     # -------------------------------------------------------------- internals
     def _enqueue(
         self,
@@ -124,13 +159,24 @@ class PingManager:
             _, _, key, fn, on_done, future = item
             self._busy.set()
             try:
+                with self._keys_guard:
+                    canceled = key in self._canceled_keys
                 result: object = None
                 error: Optional[BaseException] = None
-                try:
-                    result = fn()
-                except BaseException as e:  # noqa: BLE001 - keep worker alive
-                    error = e
-                    logger.error(f"[PingManager] Ping task raised: {e}")
+                if not canceled:
+                    try:
+                        result = fn()
+                    except BaseException as e:  # noqa: BLE001 - keep worker alive
+                        error = e
+                        logger.error(f"[PingManager] Ping task raised: {e}")
+
+                # A cancel may land while the probe is mid-flight — drop the
+                # result so a stale ping never updates the UI after Connect.
+                with self._keys_guard:
+                    canceled = canceled or key in self._canceled_keys
+
+                if canceled:
+                    continue
 
                 if future is not None:
                     try:
@@ -150,6 +196,7 @@ class PingManager:
             finally:
                 with self._keys_guard:
                     self._active_keys.discard(key)
+                    self._canceled_keys.discard(key)
                 self._busy.clear()
 
 

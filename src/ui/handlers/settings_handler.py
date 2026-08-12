@@ -119,24 +119,20 @@ class SettingsHandler:
         """Save the SOCKS port setting."""
         success, _ = self._controller.update_socks_port(value)
         port_row.set_border_color(ft.Colors.GREEN_400 if success else ft.Colors.RED_400)
-        self._refresh_page()
 
     def save_http_port(self, http_row, value: str):
         """Save the HTTP proxy port setting."""
         success, _ = self._controller.update_http_port(value)
         http_row.set_border_color(ft.Colors.GREEN_400 if success else ft.Colors.RED_400)
-        self._refresh_page()
 
     def save_country(self, country_row, val):
         """Save the direct country setting."""
         code = val if isinstance(val, str) else country_row.value
         self._controller.update_routing_country(code)
-        self._refresh_page()
 
     def save_tun_engine(self, tun_row, e=None):
         """Save the TUN implementation setting."""
         self._controller.update_tun_engine(tun_row.value)
-        self._refresh_page()
 
     def save_language(self, lang_row, e=None):
         """Save the language setting and notify the user a restart is needed."""
@@ -157,7 +153,6 @@ class SettingsHandler:
         if not page:
             return
         self._show_toast(t("settings.language_restart_msg"), "success")
-        self._refresh_page()
 
     def reset_close_preference(self, e=None):
         """Reset the 'Remember Choice' flag for the close dialog."""
@@ -166,15 +161,6 @@ class SettingsHandler:
             return
         self._app_context.settings.set_remember_close_choice(False)
         self._show_toast(t("settings.reset_close_success"), "success")
-        self._refresh_page()
-
-    def _refresh_page(self):
-        page = self._page()
-        if page:
-            try:
-                page.update()
-            except Exception:
-                pass
 
     # ------------------------------------------------------------------
     # Update flows
@@ -198,27 +184,24 @@ class SettingsHandler:
 
                 if not available and current:
                     self._show_toast(t("app_update.up_to_date", version=current), "info")
-                    self._refresh_page()
                     return
 
                 if available and download_url:
                     self._show_app_update_dialog(page, current, latest, download_url)
                 else:
                     self._show_toast(t("app_update.check_failed"), "error")
-                    self._refresh_page()
             except Exception:
                 self._show_toast(t("app_update.check_failed"), "error")
-                self._refresh_page()
 
         threading.Thread(target=check_task, daemon=True).start()
 
     def _show_app_update_dialog(self, page, current: str, latest: str, download_url: str):
-        """Show app update confirmation dialog."""
-        msg = (
-            t("app_update.available", current=current, latest=latest)
-            if current
-            else t("app_update.install", version=latest)
-        )
+        """Show the interactive UpdateDialog with live download progress.
+
+        An update is AVAILABLE -> modal. (Up-to-date results are reported as
+        toasts by check_app_updates.)
+        """
+        from src.ui.components.dialogs.update_dialog import UpdateDialog
 
         def close_dlg(e):
             try:
@@ -226,104 +209,51 @@ class SettingsHandler:
             except Exception:
                 pass
 
-        def start_update(e):
-            try:
-                page.pop_dialog()
-            except Exception:
-                pass
-            self._run_app_update_process(page, download_url)
-
-        dlg = ft.AlertDialog(
-            modal=True,
-            title=ft.Text(t("app_update.title")),
-            content=ft.Column(
-                [
-                    ft.Text(msg),
-                    ft.Text(
-                        t("app_update.message"),
-                        size=12,
-                        color=ft.Colors.ON_SURFACE_VARIANT,
-                    ),
-                ],
-                tight=True,
-                spacing=10,
-            ),
-            actions=[
-                ft.TextButton(t("app_update.cancel"), on_click=close_dlg),
-                ft.TextButton(t("app_update.confirm"), on_click=start_update),
-            ],
-            actions_alignment=ft.MainAxisAlignment.END,
+        dlg = UpdateDialog(
+            current_version=current or "?",
+            latest_version=latest,
+            release_notes="",
+            on_update_now=lambda e: self._run_app_update_process(dlg, download_url),
+            on_cancel=close_dlg,
+            on_remind_later=close_dlg,
+            title_text=t("app_update.title"),
         )
         page.show_dialog(dlg)
 
-    def _run_app_update_process(self, page, download_url: str):
-        """Run the app update process with a progress dialog."""
-        progress_ring = ft.ProgressRing(width=16, height=16, stroke_width=2)
-        status_text = ft.Text(t("app_update.downloading", progress=0), size=12)
+    def _run_app_update_process(self, dlg, download_url: str):
+        """Run the app update process, updating the UpdateDialog in place.
 
-        progress_dlg = ft.AlertDialog(
-            modal=True,
-            title=ft.Text(t("app_update.title")),
-            content=ft.Column(
-                [
-                    ft.Row(
-                        [progress_ring, status_text],
-                        spacing=10,
-                        alignment=ft.MainAxisAlignment.CENTER,
-                    ),
-                ],
-                tight=True,
-                alignment=ft.MainAxisAlignment.CENTER,
-            ),
-            actions=[],
-        )
-        page.show_dialog(progress_dlg)
-        self._refresh_page()
+        Result is reported via toast notifications on failure; a successful
+        client update launches the detached updater and the app restarts.
+        """
+        dlg.set_status(t("app_update.downloading", progress=0))
 
         def update_task():
             def on_progress(progress: int):
-                status_text.value = t("app_update.downloading", progress=progress)
-                try:
-                    status_text.update()
-                except Exception:
-                    pass
+                dlg.set_progress(progress / 100.0)
+                dlg.set_status(t("app_update.downloading", progress=progress))
 
             zip_path = AppUpdateService.download_update(download_url, on_progress)
 
             if not zip_path:
-                try:
-                    page.pop_dialog()
-                except Exception:
-                    pass
+                dlg.set_status(t("app_update.download_failed"))
                 self._show_toast(t("app_update.download_failed"), "error")
                 return
 
-            status_text.value = t("app_update.extracting")
-            try:
-                status_text.update()
-            except Exception:
-                pass
+            dlg.set_status(t("app_update.extracting"))
 
             success = AppUpdateService.apply_update(zip_path)
 
             if success:
-                status_text.value = t("app_update.restarting")
-                try:
-                    status_text.update()
-                except Exception:
-                    pass
+                dlg.set_status(t("app_update.restarting"))
                 time.sleep(1)
                 ProcessUtils.kill_process_tree()
                 import os
 
                 os._exit(0)
             else:
-                try:
-                    page.pop_dialog()
-                except Exception:
-                    pass
+                dlg.set_status(t("app_update.extract_failed"))
                 self._show_toast(t("app_update.extract_failed"), "error")
-                self._refresh_page()
 
         threading.Thread(target=update_task, daemon=True).start()
 
@@ -344,17 +274,14 @@ class SettingsHandler:
 
                 if not available and local:
                     self._show_toast(t("rules_update.up_to_date"), "info")
-                    self._refresh_page()
                     return
 
                 if available:
                     self._show_rule_update_dialog(page, latest)
                 else:
                     self._show_toast(t("rules_update.check_failed"), "error")
-                    self._refresh_page()
             except Exception:
                 self._show_toast(t("rules_update.check_failed"), "error")
-                self._refresh_page()
 
         threading.Thread(target=check_task, daemon=True).start()
 
@@ -410,7 +337,6 @@ class SettingsHandler:
             actions=[],
         )
         page.show_dialog(progress_dlg)
-        self._refresh_page()
 
         def on_progress(msg):
             try:
@@ -431,7 +357,6 @@ class SettingsHandler:
                 self._show_toast(t("rules_update.success"), "success")
             else:
                 self._show_toast(t("rules_update.failed"), "error")
-            self._refresh_page()
 
         threading.Thread(target=update_task, daemon=True).start()
 

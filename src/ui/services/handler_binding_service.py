@@ -80,6 +80,7 @@ class HandlerBindingService:
             is_running_getter=lambda: mw._is_running,
             connecting_getter=lambda: mw._connecting,
             selected_profile_getter=lambda: mw._selected_profile,
+            connection_button=mw._connection_button,
         )
 
         mw._network_stats_handler.setup(

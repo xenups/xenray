@@ -142,9 +142,22 @@ class SubscriptionManager:
 
                 # Auto-inspect the imported servers (ping + location) in the
                 # background, concurrently, without blocking the UI thread.
-                from src.services.server_inspector import server_inspector
+                # Batches larger than AUTO_INSPECT_LIMIT skip auto-pinging to
+                # avoid network bloat / UI strain — those stay uninspected
+                # (idle) until the user manually triggers "Ping All".
+                from src.services.server_inspector import (
+                    AUTO_INSPECT_LIMIT,
+                    server_inspector,
+                )
 
-                server_inspector.inspect_batch(profiles)
+                if len(profiles) <= AUTO_INSPECT_LIMIT:
+                    server_inspector.inspect_batch(profiles)
+                else:
+                    logger.info(
+                        f"[SubscriptionManager] Skipping auto-inspection for "
+                        f"{len(profiles)} servers (> {AUTO_INSPECT_LIMIT}); "
+                        f"manual ping required"
+                    )
 
                 if callback:
                     callback(True, t("server_list.subscription_updated", count=len(profiles)))

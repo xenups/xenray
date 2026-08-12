@@ -22,12 +22,14 @@ from src.ui.components.dashboard import (
     TrafficChartComponent,
     WaveVisualizer,
 )
+from src.ui.components.config import ConfigCard, ConfigListItem
 from src.ui.components.dns import DNSServerRow
 from src.ui.components.lan import LanSharingCard, MicroChip, QRCard
 from src.ui.components.logs import LogsDrawer, LogViewer, TerminalWindow
 from src.ui.components.routing import RoutingToggleRow, RuleItemRow
 from src.ui.components.servers import (
     AddServerDialog,
+    AddServerModalContainer,
     ServerList,
     ServerListHeader,
     ServerListItem,
@@ -68,8 +70,12 @@ __all__ = [
     "TrafficCards",
     "TrafficChartComponent",
     "WaveVisualizer",
+    # Config
+    "ConfigCard",
+    "ConfigListItem",
     # Servers
     "AddServerDialog",
+    "AddServerModalContainer",
     "ServerList",
     "ServerListHeader",
     "ServerListItem",

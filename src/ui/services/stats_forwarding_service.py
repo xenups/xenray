@@ -41,6 +41,26 @@ class StatsForwardingService:
                 if is_running and not _was_running:
                     _session_dl_bytes = 0.0
                     _session_ul_bytes = 0.0
+                elif (not is_running) and _was_running:
+                    # Connection just dropped — zero-reset the speed badges
+                    # in-place so Download/Upload don't stay stuck on their last
+                    # recorded values after the FSM reaches DISCONNECTED.
+                    _session_dl_bytes = 0.0
+                    _session_ul_bytes = 0.0
+                    event_bus.publish(
+                        TOPIC_TELEMETRY_UPDATED,
+                        {
+                            "rate_str": "0 B/s",
+                            "upload_str": "0 B/s",
+                            "download_str": "0 B/s",
+                            "download_bps": 0.0,
+                            "upload_bps": 0.0,
+                            "total_bps": 0.0,
+                            "download_total": "0 B",
+                            "upload_total": "0 B",
+                            "is_connected": False,
+                        },
+                    )
                 _was_running = is_running
 
                 if not is_running or self._mw._nav_locked:

@@ -97,7 +97,7 @@ class RoutingPage(ft.Container):
                 content_padding=10,
                 border_radius=8,
             )
-            input_field.on_submit = lambda e, k=tab_key, inp=input_field: self._add_rule(k, inp)
+            input_field.on_submit = lambda e, k=tab_key, inp=input_field: (self._add_rule(k, inp))
             add_btn = ft.ElevatedButton(
                 t("routing.add"),
                 icon=ft.Icons.ADD,
@@ -168,27 +168,32 @@ class RoutingPage(ft.Container):
         if idx > 0:
             self._refresh_list(self._current_tab, update=True)
 
+    def _build_empty_state(self, tab_key: str) -> ft.Container:
+        """Empty-state placeholder shown when a rule list has no entries."""
+        tab_name = t(f"routing.{tab_key}")
+        return ft.Container(
+            content=ft.Column(
+                [
+                    ft.Icon(ft.Icons.LIST_ALT, size=48, color=ft.Colors.OUTLINE_VARIANT),
+                    ft.Text(
+                        t("routing.no_rules", type=tab_name),
+                        color=ft.Colors.ON_SURFACE_VARIANT,
+                    ),
+                ],
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
+            alignment=ft.Alignment.CENTER,
+            padding=50,
+            opacity=0.5,
+        )
+
     def _refresh_list(self, tab_key: str, update: bool = True) -> None:
         list_view = self._rule_tabs[tab_key]["list_view"]
         list_view.controls.clear()
         items = self._controller.rules.get(tab_key, [])
 
         if not items:
-            tab_name = t(f"routing.{tab_key}")
-            list_view.controls.append(
-                ft.Container(
-                    content=ft.Column(
-                        [
-                            ft.Icon(ft.Icons.LIST_ALT, size=48, color=ft.Colors.OUTLINE_VARIANT),
-                            ft.Text(t("routing.no_rules", type=tab_name), color=ft.Colors.ON_SURFACE_VARIANT),
-                        ],
-                        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                    ),
-                    alignment=ft.Alignment.CENTER,
-                    padding=50,
-                    opacity=0.5,
-                )
-            )
+            list_view.controls.append(self._build_empty_state(tab_key))
 
         for item in items:
             list_view.controls.append(RuleItemRow(item=item, on_delete=self._delete_rule))
@@ -198,13 +203,48 @@ class RoutingPage(ft.Container):
 
     def _add_rule(self, tab_key: str, input_field: ft.TextField) -> None:
         val = input_field.value.strip()
-        if self._controller.add_rule(tab_key, val):
-            self._refresh_list(tab_key, update=True)
+        if not self._controller.add_rule(tab_key, val):
+            input_field.value = ""
+            input_field.focus()
+            input_field.update()
+            return
+
+        # In-place append (no full list rebuild): remove the empty-state
+        # placeholder first, then add the single new row.
+        list_view = self._rule_tabs[tab_key]["list_view"]
+        if list_view.controls and not isinstance(list_view.controls[0], RuleItemRow):
+            list_view.controls.clear()
+        list_view.controls.append(RuleItemRow(item=val, on_delete=self._delete_rule))
+        try:
+            if list_view.page:
+                list_view.update()
+        except Exception:
+            pass
 
         input_field.value = ""
         input_field.focus()
         input_field.update()
 
     def _delete_rule(self, item: str) -> None:
-        if self._controller.delete_rule(self._current_tab, item):
-            self._refresh_list(self._current_tab, update=True)
+        if not self._controller.delete_rule(self._current_tab, item):
+            return
+
+        # In-place removal (no full list rebuild).
+        list_view = self._rule_tabs[self._current_tab]["list_view"]
+        for row in list_view.controls[:]:
+            if (
+                isinstance(row, RuleItemRow)
+                and row.content
+                and row.content.controls
+                and getattr(row.content.controls[0], "value", None) == item
+            ):
+                list_view.controls.remove(row)
+                break
+
+        if not list_view.controls:
+            list_view.controls.append(self._build_empty_state(self._current_tab))
+        try:
+            if list_view.page:
+                list_view.update()
+        except Exception:
+            pass

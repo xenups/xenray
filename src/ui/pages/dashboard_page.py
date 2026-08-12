@@ -239,6 +239,17 @@ class DashboardPage(ft.Container):
         """Async wrapper executed on the Flet event loop."""
         self._apply_connection_event(data)
 
+    def _reset_traffic_metrics(self) -> None:
+        """Reset Download/Upload speed badges to zero in-place (no page re-render).
+
+        Called when the connection FSM reaches DISCONNECTED / STOPPING / ERROR so
+        the throughput cards never stay stuck on their last recorded values.
+        """
+        try:
+            self._traffic_cards.update_speeds("0 B/s", "0 B/s")
+        except Exception:
+            pass
+
     def _apply_connection_event(self, data) -> None:
         try:
             evt = data.get("event")
@@ -255,6 +266,7 @@ class DashboardPage(ft.Container):
                 self.set_connection_state(is_connected=False, is_disconnecting=True)
             elif evt in ("disconnected", "connect_failed"):
                 self.set_connection_state(is_connected=False)
+                self._reset_traffic_metrics()
         except Exception:
             pass
 
@@ -267,8 +279,9 @@ class DashboardPage(ft.Container):
         """
         try:
             new_state = data.get("new_state") or data.get("state")
-            if new_state in ("error", "disconnected"):
+            if new_state in ("error", "disconnected", "stopping"):
                 self.set_connection_state(is_connected=False)
+                self._reset_traffic_metrics()
             elif new_state == "connected":
                 self.set_connection_state(is_connected=True)
             elif new_state in ("starting", "preparing"):

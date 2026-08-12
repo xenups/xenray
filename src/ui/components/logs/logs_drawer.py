@@ -114,7 +114,12 @@ class LogsDrawer(ft.NavigationDrawer):
             self._pause_button.tooltip = t("logs.pause")
             self._pause_button.icon_color = ft.Colors.RED_600
 
-        e.control.page.update()
+        # Targeted update: only the pause button re-renders (no full page repaint).
+        try:
+            if self._pause_button.page:
+                self._pause_button.update()
+        except Exception:
+            pass
 
     def update_network_stats(self, download_speed: str, upload_speed: str):
         """Update network stats elements (Idempotent)."""

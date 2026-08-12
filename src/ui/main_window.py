@@ -316,6 +316,13 @@ class MainWindow:
             return
 
         current_state = connection_fsm.state
+        if current_state == ConnectionState.PINGING:
+            # User clicked Connect during the initial ping check: cancel the
+            # background probe, stop the neon sweep instantly, and let the
+            # engine startup take over (FSM PINGING -> STARTING is driven by
+            # the engine's "connecting" event).
+            self._cancel_active_ping()
+            current_state = connection_fsm.state
         if (
             self._is_running
             or self._connecting
@@ -335,6 +342,28 @@ class MainWindow:
             return
 
         self._connect_async()
+
+    def _cancel_active_ping(self) -> None:
+        """Cancel the in-flight initial ping and stop its neon sweep (in-place).
+
+        Used when the user clicks Connect while the FSM is in PINGING: the
+        background probe is dropped (its result can never clobber the newer
+        connect state) and the sweep disc is cleared instantly.
+        """
+        try:
+            if self._latency_monitor_handler:
+                key = self._latency_monitor_handler.cancel_active_ping()
+                if key:
+                    from src.services.ping_service import ping_manager
+
+                    ping_manager.cancel(key)
+        except Exception:
+            pass
+        try:
+            if self._connection_button:
+                self._connection_button.stop_ping_animation()
+        except Exception:
+            pass
 
     def _show_admin_restart_dialog(self) -> None:
         dialog = AdminRestartDialog(on_restart=self._on_admin_restart_confirmed)

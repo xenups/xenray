@@ -70,10 +70,30 @@ class Toast(ft.Container):
 
 
 class ToastManager:
-    """Manages toast notifications for the application."""
+    """Manages toast notifications for the application.
+
+    Toasts render inside a persistent, isolated ``ft.Stack`` layer mounted ONCE
+    on ``page.overlay`` (top-center). Each ``show()`` appends into that layer and
+    calls ``toast_layer.update()`` — it never diffs the whole ``page.overlay``
+    (whose control-list snapshot can desync after drawer/sheet/dialog toggles,
+    causing newly added toasts to be silently dropped by the patch engine).
+    """
 
     def __init__(self, page: ft.Page):
         self._page = page
+        # Persistent top-center overlay layer (full width, content height).
+        self._toast_layer = ft.Stack(
+            controls=[],
+            left=0,
+            right=0,
+            top=0,
+            alignment=ft.Alignment.TOP_CENTER,
+        )
+        try:
+            page.overlay.append(self._toast_layer)
+            page.update(page.overlay)
+        except Exception:
+            pass
 
     def show(
         self,
@@ -81,66 +101,75 @@ class ToastManager:
         message_type: str = "info",
         duration: int = 3000,
     ):
-        """Show a toast notification floating in the bottom corner of the main content view."""
+        """Show a toast notification floating at the Top-Center of the screen."""
         toast = Toast(message, message_type, duration)
 
-        # Floating toast container at Top-Center with top margin
+        # Full-width top-anchored row; the toast content is centered inside it.
         toast_container = ft.Container(
             content=toast,
             top=20,
             left=0,
             right=0,
             alignment=ft.Alignment.TOP_CENTER,
-            margin=ft.Margin.only(top=20),
         )
 
-        # Add to overlay and update overlay layer target specifically to render without full page scroll flicker
-        self._page.overlay.append(toast_container)
+        # Re-mount the layer if it was somehow not attached (e.g. a fresh page).
         try:
-            self._page.update(self._page.overlay)
+            if toast_container.page is None:
+                try:
+                    attached = self._toast_layer in self._page.overlay
+                except Exception:
+                    attached = False
+                if not attached:
+                    self._page.overlay.append(self._toast_layer)
         except Exception:
+            pass
+
+        # Replace any previous toast so only one floats at a time.
+        self._toast_layer.controls.clear()
+        self._toast_layer.controls.append(toast_container)
+        self._toast_layer.visible = True
+        try:
+            self._toast_layer.update()
+        except Exception:
+            pass
+
+        # Auto-dismiss with smooth entrance/exit slide animation.
+        self._page.run_task(self._auto_dismiss, toast_container, duration)
+
+    async def _auto_dismiss(self, toast_container: ft.Container, duration: int):
+        try:
+            await asyncio.sleep(duration / 1000)
+
+            # Fade and slide up out
+            toast_container.opacity = 0
+            toast_container.offset = ft.Offset(0, -0.2)
             try:
-                self._page.update(toast_container)
+                toast_container.update()
             except Exception:
                 pass
 
-        # Auto-dismiss with smooth entrance/exit slide animation
-        async def auto_dismiss():
-            try:
-                await asyncio.sleep(duration / 1000)
+            # Wait for animation
+            await asyncio.sleep(0.3)
 
-                # Fade and slide up out
-                toast.opacity = 0
-                toast.offset = ft.Offset(0, -0.2)
+            # Remove from the toast layer and update ONLY it (never the whole overlay)
+            if toast_container in self._toast_layer.controls:
+                self._toast_layer.controls.remove(toast_container)
                 try:
-                    toast.update()
+                    self._toast_layer.update()
                 except Exception:
                     pass
-
-                # Wait for animation
-                await asyncio.sleep(0.3)
-
-                # Remove from overlay and update overlay layer
-                if toast_container in self._page.overlay:
-                    self._page.overlay.remove(toast_container)
+        except Exception:
+            # Cleanup on error (page may have unmounted)
+            try:
+                if toast_container in self._toast_layer.controls:
+                    self._toast_layer.controls.remove(toast_container)
                     try:
-                        self._page.update(self._page.overlay)
+                        self._toast_layer.update()
                     except Exception:
                         pass
             except Exception:
-                # Cleanup on error
-                try:
-                    if toast_container in self._page.overlay:
-                        self._page.overlay.remove(toast_container)
-                        try:
-                            self._page.update(self._page.overlay)
-                        except Exception:
-                            pass
-                except Exception:
-                    pass
-
-        # Use page.run_task for proper async execution
-        self._page.run_task(auto_dismiss)
+                pass
 
     def info(self, message: str, duration: int = 3000):
         """Show an info toast."""

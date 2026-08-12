@@ -402,35 +402,45 @@ class ConnectionManager:
             except Exception as e:
                 logger.error(f"[ConnectionManager] Error in event listener: {e}")
 
-        # Synchronize ConnectionFSM deterministic states
+        # Synchronize ConnectionFSM deterministic states.
+        #
+        # Each transition_to() publishes TOPIC_CONNECTION_STATE_CHANGED exactly
+        # once, so we must NOT also broadcast it below — otherwise the UI (e.g.
+        # "Revving Up" for PREPARING) receives the same state multiple times per
+        # engine event. We only fall back to the EventBus publish for event types
+        # with no FSM transition (e.g. connectivity_degraded/restored) or whose
+        # FSM transition was blocked.
+        fsm_transitioned = False
         try:
             from src.core.fsm.connection_fsm import ConnectionState, connection_fsm
 
             if event_type == "connecting":
-                connection_fsm.transition_to(ConnectionState.STARTING, payload=data)
-                connection_fsm.transition_to(ConnectionState.PREPARING, payload=data)
+                # Transition straight to PREPARING (the "revving up" state) —
+                # the transient STARTING hop was only doubling the UI dispatch.
+                fsm_transitioned = connection_fsm.transition_to(ConnectionState.PREPARING, payload=data)
             elif event_type in ("connected", "reconnected"):
-                connection_fsm.transition_to(ConnectionState.CONNECTED, payload=data)
+                fsm_transitioned = connection_fsm.transition_to(ConnectionState.CONNECTED, payload=data)
             elif event_type == "disconnecting":
-                connection_fsm.transition_to(ConnectionState.STOPPING, payload=data)
+                fsm_transitioned = connection_fsm.transition_to(ConnectionState.STOPPING, payload=data)
             elif event_type in ("disconnected",):
-                connection_fsm.transition_to(ConnectionState.DISCONNECTED, payload=data)
+                fsm_transitioned = connection_fsm.transition_to(ConnectionState.DISCONNECTED, payload=data)
             elif event_type in ("connect_failed", "reconnect_failed"):
-                connection_fsm.transition_to(ConnectionState.ERROR, payload=data)
+                fsm_transitioned = connection_fsm.transition_to(ConnectionState.ERROR, payload=data)
         except Exception as e:
             logger.error(f"[ConnectionManager] Error updating FSM state for '{event_type}': {e}")
 
-        # Broadcast over the EventBus so UI components
-        try:
-            from src.core.event_bus import TOPIC_CONNECTION_STATE_CHANGED, event_bus
+        # Broadcast over the EventBus ONLY when the FSM did not already publish.
+        if not fsm_transitioned:
+            try:
+                from src.core.event_bus import TOPIC_CONNECTION_STATE_CHANGED, event_bus
 
-            event_bus.publish(
-                TOPIC_CONNECTION_STATE_CHANGED,
-                {
-                    "event": event_type,
-                    "data": data or {},
-                    "state": connection_fsm.state.value,
-                },
-            )
-        except Exception as e:
-            logger.error(f"[ConnectionManager] Error publishing event '{event_type}': {e}")
+                event_bus.publish(
+                    TOPIC_CONNECTION_STATE_CHANGED,
+                    {
+                        "event": event_type,
+                        "data": data or {},
+                        "state": connection_fsm.state.value,
+                    },
+                )
+            except Exception as e:
+                logger.error(f"[ConnectionManager] Error publishing event '{event_type}': {e}")

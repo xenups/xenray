@@ -72,3 +72,43 @@ def test_cards_always_show_hand_cursor():
         assert isinstance(card, ft.Container)
         assert card.on_click is not None
         assert card.on_hover is not None
+
+
+def test_network_stats_stop_flushes_cached_metrics():
+    """Stopping the monitor must flush the cached buffer so get_stats() returns
+    zeros after a disconnect (no stale last-recorded speeds)."""
+    from src.services.network_stats import NetworkStatsService
+
+    svc = NetworkStatsService()
+    svc._running = True
+    svc._cached_stats = {
+        "download_speed": "12 MB/s",
+        "upload_speed": "3 MB/s",
+        "total_bps": 100.0,
+    }
+
+    svc.stop()
+
+    stats = svc.get_stats()
+    assert stats["download_speed"] == "0 B/s"
+    assert stats["upload_speed"] == "0 B/s"
+    assert stats["total_bps"] == 0.0
+
+
+def test_dashboard_resets_traffic_metrics_on_disconnect():
+    """Reaching FSM DISCONNECTED must zero the Download/Upload badges in place."""
+    from unittest.mock import MagicMock
+
+    from src.ui.pages.dashboard_page import DashboardPage
+
+    page = DashboardPage(
+        on_toggle_click=lambda e: None,
+        on_change_server_click=lambda e: None,
+        on_open_statistics_click=lambda e: None,
+    )
+    fake_cards = MagicMock()
+    page._traffic_cards = fake_cards
+
+    page._apply_fsm_state_event({"new_state": "disconnected"})
+    fake_cards.update_speeds.assert_called_with("0 B/s", "0 B/s")
+    page.dispose()

@@ -77,8 +77,9 @@ class StartupToggleRow(ft.Container):
             self._switch.update()
             self._toast_callback(t("settings.startup_error"), "error")
 
+        # Targeted update: only this row re-renders (no full page repaint).
         try:
             if self.page:
-                self.page.update()
+                self.update()
         except (RuntimeError, AttributeError):
             pass

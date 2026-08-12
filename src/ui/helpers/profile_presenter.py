@@ -20,11 +20,23 @@ class ProfilePresenter:
 
     @staticmethod
     def resolve_server_ip(raw_addr: str) -> str:
-        """Resolve domain address to numerical IP if possible, or return raw address."""
+        """Resolve domain address to numerical IP from cache, otherwise return raw address.
+
+        Non-blocking: the real DNS lookup is deferred to a background thread via
+        :meth:`resolve_server_ip_blocking`, so this NEVER blocks the Flet event loop.
+        """
         if not raw_addr:
             return "--"
 
         if is_ip(raw_addr):
+            return raw_addr
+
+        return _DNS_CACHE.get(raw_addr, raw_addr)
+
+    @staticmethod
+    def resolve_server_ip_blocking(raw_addr: str) -> str:
+        """Blocking DNS resolution. MUST only be called from a background thread."""
+        if not raw_addr or is_ip(raw_addr):
             return raw_addr
 
         if raw_addr in _DNS_CACHE:

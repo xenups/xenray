@@ -29,6 +29,8 @@ class LatencyMonitorHandler:
         self._server_card = None
         self._server_list = None
         self._ui_helper = None
+        self._connection_button = None
+        self._active_ping_key: Optional[str] = None
 
         # State access required for logic
         self._is_running_getter: Optional[Callable[[], bool]] = None
@@ -45,6 +47,7 @@ class LatencyMonitorHandler:
         is_running_getter: Callable[[], bool],
         connecting_getter: Callable[[], bool],
         selected_profile_getter: Callable[[], Optional[dict]],
+        connection_button=None,
     ):
         """Bind UI components and state getters to the handler."""
         self._page = page
@@ -52,6 +55,7 @@ class LatencyMonitorHandler:
         self._server_card = server_card
         self._server_list = server_list
         self._ui_helper = ui_helper
+        self._connection_button = connection_button
         self._is_running_getter = is_running_getter
         self._connecting_getter = connecting_getter
         self._selected_profile_getter = selected_profile_getter
@@ -133,15 +137,40 @@ class LatencyMonitorHandler:
             return
 
         pid = str(profile.get("id"))
+        self._active_ping_key = f"interval:{pid}"
+
+        # Register the PINGING state in the connection FSM (from DISCONNECTED)
+        # so the lifecycle officially tracks the pre-connection latency check.
+        try:
+            from src.core.fsm.connection_fsm import ConnectionState, connection_fsm
+
+            if connection_fsm.state == ConnectionState.DISCONNECTED:
+                connection_fsm.transition_to(ConnectionState.PINGING, payload={"ping_start": True})
+        except Exception:
+            pass
+
+        # Start the neon sweep around the connect button immediately (on the UI
+        # thread); it is removed as soon as the result is displayed.
+        if self._connection_button and self._ui_helper:
+            self._ui_helper.call(self._connection_button.start_ping_animation)
 
         def _run():
             result = self.run_active_ping_sync(profile)
             if result:
                 self._on_ping_result(profile, *result)
+            elif self._connection_button and self._ui_helper:
+                # Probe produced no result (config build failure) — drop the sweep.
+                self._ui_helper.call(self._connection_button.stop_ping_animation)
 
         # Deduplicated by profile id: a pending/running ping for the same server
         # is never re-queued.
-        ping_manager.submit(PRIORITY_INTERVAL, f"interval:{pid}", _run)
+        ping_manager.submit(PRIORITY_INTERVAL, self._active_ping_key, _run)
+
+    def cancel_active_ping(self) -> Optional[str]:
+        """Cancel the queued/running active ping; returns its dedup key."""
+        key = self._active_ping_key
+        self._active_ping_key = None
+        return key
 
     def _on_ping_result(
         self,
@@ -153,6 +182,15 @@ class LatencyMonitorHandler:
         """Handle a completed ping for the active server (UI update + EventBus)."""
         is_running = self._is_running_getter() if self._is_running_getter else False
         connecting = self._connecting_getter() if self._connecting_getter else False
+
+        # Ping completed without a connect click → leave PINGING, back to IDLE.
+        try:
+            from src.core.fsm.connection_fsm import ConnectionState, connection_fsm
+
+            if connection_fsm.state == ConnectionState.PINGING:
+                connection_fsm.transition_to(ConnectionState.DISCONNECTED, payload={"ping_done": True})
+        except Exception:
+            pass
 
         # Ensure we still meet conditions when result returns
         if not is_running and not connecting:

@@ -10,7 +10,13 @@ from typing import Callable, Optional
 import requests
 from loguru import logger
 
-from src.core.constants import BIN_DIR, WINTUN_DLL, WINTUN_DOWNLOAD_URL, XRAY_EXECUTABLE, XRAY_VERSION
+from src.core.constants import (
+    BIN_DIR,
+    WINTUN_DLL,
+    WINTUN_DOWNLOAD_URL,
+    XRAY_EXECUTABLE,
+    XRAY_VERSION,
+)
 from src.utils.platform_utils import PlatformUtils
 
 # Constants
@@ -199,11 +205,40 @@ class XrayInstallerService:
         return None
 
     @staticmethod
+    def _kill_xray_processes() -> None:
+        """Forcefully terminate any running xray core process and wait for the
+        file handles to release (Windows: taskkill /F; Unix: pkill -9)."""
+        try:
+            if PlatformUtils.get_platform() == "windows":
+                subprocess.run(
+                    ["taskkill", "/F", "/IM", "xray.exe"],
+                    capture_output=True,
+                    timeout=5,
+                    creationflags=PlatformUtils.get_subprocess_flags(),
+                    startupinfo=PlatformUtils.get_startupinfo(),
+                )
+            else:
+                subprocess.run(
+                    ["pkill", "-9", "xray"],
+                    capture_output=True,
+                    timeout=5,
+                )
+            # Give Windows time to release the file handle on the old binary.
+            time.sleep(0.2)
+        except Exception as e:
+            logger.warning(f"[XrayInstaller] Failed to kill xray process: {e}")
+
+    @staticmethod
     def _extract_core(zip_path: str) -> bool:
         """
-        Extract Xray core from zip file.
-        Retries extraction if a file is locked (e.g. wintun.dll held by a
-        terminating process), with a short delay between attempts.
+        Extract Xray core from zip file with Windows file-lock safety.
+
+        Steps:
+          1. Forcefully kill any active xray process (releases locked handles).
+          2. Safely rename any existing files the archive would overwrite to
+             ``<name>.old`` (so extraction never throws PermissionError).
+          3. Extract the new files.
+          4. On success delete the ``.old`` backups; on failure roll them back.
 
         Returns:
             True if successful, False otherwise
@@ -213,28 +248,72 @@ class XrayInstallerService:
                 logger.error(f"Zip file not found: {zip_path}")
                 return False
 
-            max_retries = 5
-            retry_delay = 1.0  # seconds
+            # 1. Kill the active core so xray.exe handles are released.
+            XrayInstallerService._kill_xray_processes()
 
+            # 2. Identify archive entries and back up any that already exist.
+            try:
+                with zipfile.ZipFile(zip_path, "r") as zip_ref:
+                    entries = zip_ref.namelist()
+            except zipfile.BadZipFile as e:
+                logger.error(f"Corrupt zip file: {e}")
+                return False
+
+            backups: dict = {}
+            for name in entries:
+                if name.endswith("/"):
+                    continue
+                target = os.path.join(BIN_DIR, os.path.basename(name))
+                if os.path.exists(target):
+                    old_path = target + ".old"
+                    try:
+                        if os.path.exists(old_path):
+                            os.remove(old_path)
+                        os.rename(target, old_path)
+                        backups[target] = old_path
+                    except OSError:
+                        backups[target] = None  # couldn't rename; leave in place
+
+            # 3. Extract the new files.
+            max_retries = 3
+            retry_delay = 0.5
+            extracted = False
             for attempt in range(1, max_retries + 1):
                 try:
                     with zipfile.ZipFile(zip_path, "r") as zip_ref:
                         zip_ref.extractall(BIN_DIR)
-                    break  # success
+                    extracted = True
+                    break
                 except (OSError, IOError) as e:
                     logger.warning(f"Extraction attempt {attempt}/{max_retries} failed: {e}")
                     if attempt < max_retries:
                         time.sleep(retry_delay)
-                    else:
-                        raise
 
-            # Clean up temp file
+            # Clean up temp zip
             try:
                 os.remove(zip_path)
             except OSError as e:
                 logger.warning(f"Failed to remove temp file: {e}")
 
-            return True
+            if extracted:
+                # 4a. Success — drop the .old backups.
+                for target, old_path in backups.items():
+                    if old_path and os.path.exists(old_path):
+                        try:
+                            os.remove(old_path)
+                        except OSError:
+                            pass
+                return True
+
+            # 4b. Rollback: restore the previous binaries so the app is not broken.
+            logger.error("Xray extraction failed — rolling back previous binaries")
+            for target, old_path in backups.items():
+                if old_path and os.path.exists(old_path):
+                    try:
+                        os.replace(old_path, target)
+                    except OSError as e:
+                        logger.error(f"Rollback failed for {target}: {e}")
+            return False
         except (zipfile.BadZipFile, OSError, IOError) as e:
             logger.error(f"Failed to extract Xray core: {e}")
             return False
@@ -353,7 +432,9 @@ class XrayInstallerService:
             return None
 
     @staticmethod
-    def check_for_updates(include_prerelease: bool = True) -> tuple[bool, Optional[str], Optional[str]]:
+    def check_for_updates(
+        include_prerelease: bool = True,
+    ) -> tuple[bool, Optional[str], Optional[str]]:
         """
         Check for updates via GitHub API.
         Fetches the releases list (including pre-releases if requested) and extracts

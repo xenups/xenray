@@ -1,4 +1,5 @@
 """Drawer Manager - Manages drawer initialization and opening."""
+
 from __future__ import annotations
 
 import threading
@@ -147,7 +148,13 @@ class DrawerManager:
         await self._main._page.show_end_drawer()
 
     def _safe_update_server_list(self):
-        """Wait for sheet to be mounted before updating list."""
+        """Ensure the server list is populated when the sheet opens (no full rebuild).
+
+        The server list persists in the server sheet across opens. Reloading it
+        on EVERY drawer open would rebuild all ConfigCards (re-mounting them and
+        resetting the neon inspection animation + causing visible flicker). Load
+        only when the list has not been built yet.
+        """
 
         def _wait_and_update():
             max_wait = 2
@@ -155,7 +162,8 @@ class DrawerManager:
             while time.time() - start < max_wait:
                 if self._main._server_sheet and self._main._server_sheet.page:
                     try:
-                        self._main._server_list._load_profiles(update_ui=True)
+                        if self._main._server_list._current_list_view is None:
+                            self._main._server_list._load_profiles(update_ui=True)
                     except Exception:
                         pass
                     break

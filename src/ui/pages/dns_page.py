@@ -88,7 +88,11 @@ class DNSPage(ft.Container):
             content=ft.Row(
                 [
                     ft.Text(
-                        t("dns.proto"), size=11, weight=ft.FontWeight.BOLD, color=ft.Colors.ON_SURFACE_VARIANT, width=50
+                        t("dns.proto"),
+                        size=11,
+                        weight=ft.FontWeight.BOLD,
+                        color=ft.Colors.ON_SURFACE_VARIANT,
+                        width=50,
                     ),
                     ft.Text(
                         t("dns.address_header"),
@@ -130,7 +134,11 @@ class DNSPage(ft.Container):
                 ft.Container(
                     content=ft.Column(
                         [
-                            ft.Icon(ft.Icons.DNS_OUTLINED, size=48, color=ft.Colors.OUTLINE_VARIANT),
+                            ft.Icon(
+                                ft.Icons.DNS_OUTLINED,
+                                size=48,
+                                color=ft.Colors.OUTLINE_VARIANT,
+                            ),
                             ft.Text(t("dns.no_dns"), color=ft.Colors.ON_SURFACE_VARIANT),
                         ],
                         horizontal_alignment=ft.CrossAxisAlignment.CENTER,
@@ -151,8 +159,30 @@ class DNSPage(ft.Container):
 
     def _add_server(self, e) -> None:
         addr = self._address_input.value.strip()
-        if self._controller.add_server(addr, self._protocol_dd.value):
-            self._refresh_list()
+        if not self._controller.add_server(addr, self._protocol_dd.value):
+            self._address_input.value = ""
+            self._address_input.focus()
+            self._address_input.update()
+            return
+
+        # In-place append (no full list rebuild): remove the empty-state
+        # placeholder first, then add the single new row.
+        if self._list_view.controls and not isinstance(self._list_view.controls[0], DNSServerRow):
+            self._list_view.controls.clear()
+        new_idx = len(self._controller.dns_list) - 1
+        self._list_view.controls.append(
+            DNSServerRow(
+                idx=new_idx,
+                item=self._controller.dns_list[new_idx],
+                on_move_up=self._move_up,
+                on_delete=self._delete,
+            )
+        )
+        try:
+            if self._list_view.page:
+                self._list_view.update()
+        except Exception:
+            pass
 
         self._address_input.value = ""
         self._address_input.focus()

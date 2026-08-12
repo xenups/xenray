@@ -16,6 +16,8 @@ TOPIC_LAN_TOGGLED = "lan_toggled"
 TOPIC_LAN_SHARING_CHANGED = "lan_sharing_changed"
 TOPIC_ACTIVE_SERVER_PING_UPDATED = "active_server_ping_updated"
 TOPIC_SERVER_INSPECTED = "server_inspected"
+TOPIC_SERVER_INSPECTING = "server_inspecting"
+TOPIC_INSPECTION_BATCH_COMPLETED = "inspection_batch_completed"
 
 # FSM and Core Event Topics
 EVENT_CONNECT_REQUESTED = "connect_requested"

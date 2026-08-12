@@ -114,7 +114,7 @@ class NetworkStatsService:
             logger.debug("[NetworkStats] Started monitoring (Threading)")
 
     def stop(self):
-        """Stop monitoring network stats."""
+        """Stop monitoring network stats and flush any pending metric buffers."""
         with self._lock:
             if not self._running:
                 return
@@ -132,6 +132,14 @@ class NetworkStatsService:
             self._thread = None
             self._queue = None
             self._stop_event = None
+
+            # Flush the cached buffer so get_stats() returns zeros after a
+            # disconnect instead of stale last-recorded speeds.
+            self._cached_stats = {
+                "download_speed": "0 B/s",
+                "upload_speed": "0 B/s",
+                "total_bps": 0.0,
+            }
             logger.debug("[NetworkStats] Stopped monitoring")
 
     def get_stats(self) -> dict:

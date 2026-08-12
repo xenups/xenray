@@ -23,6 +23,7 @@ class ConnectionState(str, Enum):
     """Deterministic Connection Lifecycle States."""
 
     DISCONNECTED = "disconnected"
+    PINGING = "pinging"  # pre-connection latency check (neon sweep) in progress
     STARTING = "starting"
     PREPARING = "preparing"
     CONNECTED = "connected"
@@ -36,7 +37,16 @@ class ConnectionFSM:
     # Strict transition rules mapping current_state -> set of valid next states.
     ALLOWED_TRANSITIONS: dict[ConnectionState, set[ConnectionState]] = {
         ConnectionState.DISCONNECTED: {
+            ConnectionState.PINGING,
             ConnectionState.STARTING,
+            ConnectionState.PREPARING,  # engine "connecting" enters PREPARING directly
+            ConnectionState.STOPPING,  # engine emits disconnecting->disconnected even when idle
+            ConnectionState.ERROR,
+        },
+        ConnectionState.PINGING: {
+            ConnectionState.STARTING,  # user clicked Connect during the ping check
+            ConnectionState.DISCONNECTED,  # ping completed without a click (idle)
+            ConnectionState.STOPPING,  # defensive stop during the ping check
             ConnectionState.ERROR,
         },
         ConnectionState.STARTING: {

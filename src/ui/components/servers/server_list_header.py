@@ -1,4 +1,5 @@
 """Server list header component with i18n support."""
+
 from __future__ import annotations
 
 from typing import Callable, Optional
@@ -20,6 +21,7 @@ class ServerListHeader(ft.Container):
         on_back_click: Optional[Callable] = None,
         on_update_subscription: Optional[Callable] = None,
         on_delete_subscription: Optional[Callable] = None,
+        on_cancel_ping: Optional[Callable] = None,
     ):
         self._get_sort_mode = get_sort_mode
         self._set_sort_mode = set_sort_mode
@@ -28,12 +30,45 @@ class ServerListHeader(ft.Container):
         self._on_back_click = on_back_click
         self._on_update_subscription = on_update_subscription
         self._on_delete_subscription = on_delete_subscription
+        self._on_cancel_ping = on_cancel_ping
 
         self._current_subscription: Optional[dict] = None
+        self._ping_active = False
+        self._ping_all_btn: Optional[ft.IconButton] = None
         self._inner_row = ft.Row([], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
 
         super().__init__(content=self._inner_row, padding=ft.Padding.only(left=15, right=5))
         self.show_main_header()
+
+    def _create_ping_btn(self) -> ft.IconButton:
+        """Create the Ping All button; toggles to 'Stop Ping' while active."""
+        self._ping_all_btn = ft.IconButton(
+            ft.Icons.SPEED,
+            tooltip=t("server_list.test_latency"),
+            on_click=self._on_ping_click,
+        )
+        return self._ping_all_btn
+
+    def _on_ping_click(self, e=None):
+        if self._ping_active:
+            if self._on_cancel_ping:
+                self._on_cancel_ping()
+        else:
+            self._on_test_latency()
+
+    def set_ping_state(self, active: bool) -> None:
+        """Toggle the Ping All button between 'Ping All' and 'Stop Ping' (in-place)."""
+        self._ping_active = active
+        if self._ping_all_btn is None:
+            return
+        self._ping_all_btn.icon = ft.Icons.STOP_ROUNDED if active else ft.Icons.SPEED
+        self._ping_all_btn.tooltip = (
+            t("server_list.stop_ping", default="Stop Ping") if active else t("server_list.test_latency")
+        )
+        try:
+            self._ping_all_btn.update()
+        except Exception:
+            pass
 
     def _create_sort_menu(self) -> ft.PopupMenuButton:
         """Creates the sort popup menu."""
@@ -70,11 +105,7 @@ class ServerListHeader(ft.Container):
             ft.Text(t("server_list.title"), size=17, weight=ft.FontWeight.BOLD),
             ft.Row(
                 [
-                    ft.IconButton(
-                        ft.Icons.SPEED,
-                        tooltip=t("server_list.test_latency"),
-                        on_click=lambda e: self._on_test_latency(),
-                    ),
+                    self._create_ping_btn(),
                     self._create_sort_menu(),
                     ft.IconButton(
                         ft.Icons.ADD,
@@ -96,7 +127,7 @@ class ServerListHeader(ft.Container):
                 [
                     ft.IconButton(
                         ft.Icons.ARROW_BACK,
-                        on_click=lambda e: self._on_back_click() if self._on_back_click else None,
+                        on_click=lambda e: (self._on_back_click() if self._on_back_click else None),
                     ),
                     ft.Text(sub["name"], size=17, weight=ft.FontWeight.BOLD),
                 ],
@@ -104,11 +135,7 @@ class ServerListHeader(ft.Container):
             ),
             ft.Row(
                 [
-                    ft.IconButton(
-                        ft.Icons.SPEED,
-                        tooltip=t("server_list.test_latency"),
-                        on_click=lambda e: self._on_test_latency(),
-                    ),
+                    self._create_ping_btn(),
                     self._create_sort_menu(),
                     ft.PopupMenuButton(
                         icon=ft.Icons.MORE_VERT,
@@ -116,16 +143,16 @@ class ServerListHeader(ft.Container):
                             ft.PopupMenuItem(
                                 content=t("server_list.update_subscription"),
                                 icon=ft.Icons.REFRESH,
-                                on_click=lambda e: self._on_update_subscription(sub_id)
-                                if self._on_update_subscription
-                                else None,
+                                on_click=lambda e: (
+                                    self._on_update_subscription(sub_id) if self._on_update_subscription else None
+                                ),
                             ),
                             ft.PopupMenuItem(
                                 content=t("server_list.delete_subscription"),
                                 icon=ft.Icons.DELETE,
-                                on_click=lambda e: self._on_delete_subscription(sub_id)
-                                if self._on_delete_subscription
-                                else None,
+                                on_click=lambda e: (
+                                    self._on_delete_subscription(sub_id) if self._on_delete_subscription else None
+                                ),
                             ),
                         ],
                     ),

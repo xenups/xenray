@@ -100,7 +100,6 @@ class SubscriptionListItem(ft.Container):
                 self.page.run_task(self.page.clipboard.set, url)
                 if hasattr(self.page, "_toast_manager"):
                     self.page._toast_manager.success(t("server_list.subscription_link_copied"), 2000)
-                self.page.update()
         except Exception:
             pass
 

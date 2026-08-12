@@ -225,3 +225,45 @@ def test_check_for_updates_flow(mock_app_context, monkeypatch):
     assert avail is False
     assert toasts[-1][1] == "error"
     assert "بروزرسانی" in toasts[-1][0] or "failed" in toasts[-1][0].lower()
+
+
+def test_show_toast_dispatches_single_path_when_callback_wired(mock_app_context):
+    """With a toast callback wired (settings drawer), the toast MUST fire once —
+    the page fallback must NOT also fire (that would render it twice)."""
+    toasts = []
+    page = MagicMock()
+    page._toast_manager = MagicMock()
+
+    ctrl = SettingsController(app_context=mock_app_context, toast_callback=lambda m, t: toasts.append((m, t)))
+    ctrl._show_toast("Saved", "success", page=page)
+
+    assert toasts == [("Saved", "success")]
+    page._toast_manager.show.assert_not_called()
+    page._toast_manager.success.assert_not_called()
+
+
+def test_show_toast_uses_page_fallback_without_callback(mock_app_context):
+    """Without a callback (standalone controller), the page's toast manager is used."""
+    page = MagicMock()
+    page._toast_manager = MagicMock()
+
+    ctrl = SettingsController(app_context=mock_app_context, toast_callback=None)
+    ctrl._show_toast("Saved", "success", page=page)
+
+    page._toast_manager.success.assert_called_once_with("Saved", 3000)
+
+
+def test_show_update_dialog_uses_interactive_modal(mock_app_context):
+    """An available update must show the interactive UpdateDialog (not a plain toast)."""
+    from src.ui.components.dialogs.update_dialog import UpdateDialog
+
+    page = MagicMock()
+    ctrl = SettingsController(app_context=mock_app_context, toast_callback=None)
+
+    ctrl._show_update_dialog(page, "2.4.0", "2.5.0", "https://example.com/x.zip")
+
+    page.show_dialog.assert_called_once()
+    dlg = page.show_dialog.call_args[0][0]
+    assert isinstance(dlg, UpdateDialog)
+    assert dlg._version_text.value == "v2.4.0  ->  v2.5.0"
+    assert dlg._progress.value == 0.0

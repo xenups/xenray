@@ -1,3 +1,5 @@
+import math
+
 import flet as ft
 
 
@@ -120,6 +122,45 @@ class ConnectionButton(ft.Container):
             animate=ft.Animation(600, ft.AnimationCurve.EASE_IN_OUT),  # Smooth shadow/color changes
         )
 
+        # Rotating sweep disc (BEHIND the button) + an opaque mask that hides the
+        # gradient's centre, leaving only a thin neon rim around the button.
+        # BOTH are hidden by default and shown only while PINGING, so the button
+        # keeps its native colors/borders when idle / connected / connecting.
+        self._is_pinging = False
+        self._ping_animating = False
+        self._ping_anim_task = None
+        self._sweep_gradient = ft.SweepGradient(
+            center=ft.Alignment.CENTER,
+            colors=["#A3A8FE", "#00F2FE", "#00000000", "#00000000"],
+            stops=[0.0, 0.10, 0.22, 1.0],
+            rotation=0.0,
+        )
+        self._border_container = ft.Container(
+            width=170,
+            height=170,
+            border_radius=85,
+            gradient=None,
+            visible=False,
+            rotate=ft.Rotate(angle=0.0),
+            animate_rotation=ft.Animation(
+                duration=1500,
+                curve=ft.AnimationCurve.LINEAR,
+            ),
+        )
+
+        # Static mask — an OPAQUE dark circle sized EXACTLY to the button's edge
+        # (165px), so it never protrudes as a dark ring around the button. It
+        # sits behind the button and covers the gradient's centre, exposing only
+        # the disc's ~2.5px outer rim. Hidden by default (only shown while
+        # PINGING), so the button's native colors/borders stay pristine.
+        self._mask = ft.Container(
+            width=165,
+            height=165,
+            border_radius=82.5,
+            bgcolor="#0f172a",
+            visible=False,
+        )
+
         # Inner button (the actual clickable 165x165 glass button)
         self._button = ft.Container(
             content=self._content_column,
@@ -133,11 +174,14 @@ class ConnectionButton(ft.Container):
             padding=ft.Padding.symmetric(horizontal=10, vertical=6),
         )
 
-        # Stack: glow behind, button on top
+        # Stack: glow behind, sweep disc, opaque mask (hides the gradient
+        # centre), button on top — only the disc's thin outer rim shows.
         super().__init__(
             content=ft.Stack(
                 [
                     self._glow_layer,
+                    self._border_container,
+                    self._mask,
                     self._button,
                 ],
                 alignment=ft.Alignment.CENTER,
@@ -146,6 +190,23 @@ class ConnectionButton(ft.Container):
             height=195,
             alignment=ft.Alignment.CENTER,
         )
+
+    def did_mount(self):
+        """Flet lifecycle hook — arm the sweep disc baseline during mount.
+
+        Committing ``visible=True`` + ``rotate=0.0`` as part of the button's own
+        mount (before any ping) lets Flutter establish the rotation anchor on
+        Frame 0 right after the splash screen dismisses. Without this, the very
+        first ping's animate_rotation can be dropped because it's triggered
+        during the initial build pass. With the anchor armed at mount, the first
+        0 -> 2π nudge interpolates on a post-mount frame.
+        """
+        self._border_container.visible = True
+        self._border_container.rotate = ft.Rotate(angle=0.0)
+        try:
+            self._border_container.update()
+        except Exception:
+            pass
 
     def update_theme(self, is_dark: bool):
         """Update button appearance based on theme."""
@@ -191,6 +252,7 @@ class ConnectionButton(ft.Container):
         from src.ui.helpers.status_helper import get_short_status_label
 
         self._cancel_anim_task()
+        self.stop_ping_animation()
         self._state_generation += 1
         current_gen = self._state_generation
 
@@ -270,6 +332,7 @@ class ConnectionButton(ft.Container):
         from src.ui.helpers.status_helper import get_short_status_label
 
         self._cancel_anim_task()
+        self.stop_ping_animation()
         self._state_generation += 1
         self._is_connected = False
         self._is_connecting = False
@@ -309,6 +372,7 @@ class ConnectionButton(ft.Container):
         from src.ui.helpers.status_helper import get_short_status_label
 
         self._cancel_anim_task()
+        self.stop_ping_animation()
         self._state_generation += 1
         current_gen = self._state_generation
 
@@ -382,6 +446,7 @@ class ConnectionButton(ft.Container):
         from src.core.logger import logger
 
         self._cancel_anim_task()
+        self.stop_ping_animation()
         self._state_generation += 1
         current_gen = self._state_generation
 
@@ -459,10 +524,97 @@ class ConnectionButton(ft.Container):
         except Exception:
             pass
 
+    def start_ping_animation(self):
+        """Start the native neon sweep around the button while the initial ping runs.
+
+        The sweep disc mounts at its `rotate=0.0` anchor with ``animate_rotation``
+        already attached; the coroutine yields a short frame flush (so the anchor
+        renders first), then targets full turns — the native 0 -> 2π transition
+        interpolates at 60 FPS on the GPU. Only this disc is updated — the button
+        and the rest of the page are untouched.
+        """
+        if self._ping_animating:
+            return
+        self._ping_animating = True
+        self._is_pinging = True
+        # Reveal the sweep disc + mask (both hidden while idle) so only the thin
+        # neon rim shows around the button; the centre stays dark and static.
+        self._border_container.visible = True
+        self._mask.visible = True
+        self._border_container.gradient = self._sweep_gradient
+        try:
+            self._border_container.update()
+        except Exception:
+            pass
+        try:
+            self._mask.update()
+        except Exception:
+            pass
+        self._ping_anim_task = self._schedule_animation(self._ping_sweep)
+
+    async def _ping_sweep(self):
+        """Drive the native GPU rotation of the sweep disc while pinging."""
+        import asyncio
+
+        try:
+            # Frame flush: let the rotate=0.0 anchor render before nudging, so
+            # the first target lands on a distinct client frame and interpolates.
+            await asyncio.sleep(0.05)
+            if not self._ping_animating:
+                return
+            full_turns = 0
+            while self._ping_animating:
+                full_turns += 1
+                self._border_container.rotate = ft.Rotate(angle=2 * math.pi * full_turns)
+                try:
+                    self._border_container.update()
+                except Exception:
+                    pass
+                await asyncio.sleep(1.4)
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            pass
+        finally:
+            self._border_container.rotate = ft.Rotate(angle=0.0)
+
+    def stop_ping_animation(self):
+        """Remove the neon sweep AND the mask instantly (called when the ping
+        result is shown or the user clicks Connect). Restores the button's
+        native colors/borders — no dark ring remains.
+
+        The sweep disc stays ARMED (visible, gradient=None -> invisible) so its
+        rotate=0.0 anchor remains committed on the client; only the mask is
+        hidden. This keeps the first post-splash ping's 0 -> 2π transition
+        interpolating instead of being dropped on a fresh build."""
+        self._ping_animating = False
+        self._is_pinging = False
+        if self._ping_anim_task and hasattr(self._ping_anim_task, "cancel"):
+            try:
+                self._ping_anim_task.cancel()
+            except Exception:
+                pass
+        self._ping_anim_task = None
+        self._border_container.rotate = ft.Rotate(angle=0.0)
+        self._border_container.gradient = None
+        self._mask.visible = False
+        try:
+            self._border_container.update()
+        except Exception:
+            pass
+        try:
+            self._mask.update()
+        except Exception:
+            pass
+
     def set_pre_connection_ping(self, latency_text: str, is_success: bool) -> None:
-        """Show a pre-connection latency result on the button's status line."""
+        """Show a pre-connection latency result on the button's status line.
+
+        The neon sweep is removed the instant the result is displayed.
+        """
         from src.ui.helpers.status_helper import get_short_status_label
 
+        self.stop_ping_animation()
         self._status_text.value = get_short_status_label(latency_text)
         self._status_text.color = ft.Colors.GREEN_400 if is_success else ft.Colors.RED_400
         try:

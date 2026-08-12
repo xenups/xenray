@@ -6,8 +6,6 @@ from typing import TYPE_CHECKING, Optional
 
 import flet as ft
 
-from src.ui.components.servers.add_server_dialog import AddServerDialog
-
 if TYPE_CHECKING:
     from src.ui.main_window import MainWindow
 
@@ -90,14 +88,15 @@ class NavigationService:
             self._mw._server_list._load_profiles(search_query=query, update_ui=True)
 
     def open_add_server_dialog(self, e: Optional[ft.ControlEvent] = None) -> None:
-        """Open the add server/subscription dialog."""
-        dialog = AddServerDialog(
-            on_server_added=lambda name, config: self.add_server_profile(name, config),
-            on_subscription_added=lambda name, url: self.add_subscription(name, url),
-            on_close=lambda: self._mw._page.pop_dialog(),
-            on_create_chain=None,
-        )
-        self._mw._page.show_dialog(dialog)
+        """Open the Add Server modal as a custom in-page Stack overlay.
+
+        Delegates to the server list's own ``AddServerModalContainer`` (Layer 1
+        of the server list Stack). Opening/closing only toggles that container's
+        ``visible`` — ``page._dialogs`` and the background server list are never
+        touched, so there is zero flicker and card animations never reset.
+        """
+        if self._mw._server_list:
+            self._mw._server_list.open_add_dialog()
 
     def add_server_profile(self, name: str, config: dict) -> None:
         """Save a newly added server profile and refresh server list."""
@@ -105,9 +104,18 @@ class NavigationService:
 
         pid = self._mw._app_context.profiles.save(name, config)
         if pid:
+            profile = self._mw._app_context.profiles.get_by_id(pid) or {
+                "id": pid,
+                "name": name,
+                "config": config,
+            }
             # Auto-ping + location detection for the imported server (background).
             server_inspector.inspect({"id": pid, "name": name, "config": config})
-        if self._mw._server_list:
+            if self._mw._server_list and hasattr(self._mw._server_list, "append_server_item"):
+                self._mw._server_list.append_server_item(profile)
+            elif self._mw._server_list:
+                self._mw._server_list._load_profiles(update_ui=True)
+        elif self._mw._server_list:
             self._mw._server_list._load_profiles(update_ui=True)
 
     def add_subscription(self, name: str, url: str) -> None:

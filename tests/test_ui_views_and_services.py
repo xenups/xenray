@@ -9,7 +9,11 @@ import flet as ft
 from src.core.i18n import set_language, t
 from src.ui.components.common.nav_sidebar import NavSidebar
 from src.ui.components.common.toast import ToastManager
-from src.ui.pages.lan_sharing_page import LanSharingView, generate_qr_base64, get_real_physical_lan_ip
+from src.ui.pages.lan_sharing_page import (
+    LanSharingView,
+    generate_qr_base64,
+    get_real_physical_lan_ip,
+)
 from src.ui.pages.logs_page import LogsView
 
 
@@ -134,24 +138,30 @@ def test_nav_sidebar_lan_button_styling():
 
 
 def test_toast_manager_top_center_positioning():
-    """Test ToastManager top-center container position."""
+    """Test ToastManager top-center container position (persistent overlay layer)."""
 
     class MockPage:
         def __init__(self):
             self.overlay = []
 
-        def update(self):
+        def update(self, *controls):
             pass
 
-        def run_task(self, task):
+        def run_task(self, *args, **kwargs):
             pass
 
     page = MockPage()
     tm = ToastManager(page)
-    tm.show("Test message", "info", 3000)
 
+    # A persistent top-center layer is mounted on the overlay.
     assert len(page.overlay) == 1
-    container = page.overlay[0]
+    layer = page.overlay[0]
+    assert layer.alignment == ft.Alignment.TOP_CENTER
+
+    # The toast container is appended INTO the layer at top=20, top-center.
+    tm.show("Test message", "info", 3000)
+    assert len(layer.controls) == 1
+    container = layer.controls[0]
     assert container.top == 20
     assert container.alignment == ft.Alignment.TOP_CENTER
 
