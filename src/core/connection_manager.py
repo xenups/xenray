@@ -57,14 +57,11 @@ class ConnectionManager:
         self._session_id = 0  # Unique ID for each connection session
 
         # Initialize ConnectionMonitoringService (creates its own monitors internally).
-        # Pass the canonical xray_service so the monitoring service does NOT create a
-        # second orphaned XrayService instance (which would register a duplicate atexit).
         self._monitoring = ConnectionMonitoringService(
             app_context=app_context,
             on_signal=self._handle_signal,
             on_reconnect=self._reconnect_internal,
             on_reconnect_event=self._emit_event,
-            xray_service=xray_service,
         )
 
         # Create ConnectionOrchestrator with all dependencies. The TUN engine is
@@ -99,7 +96,7 @@ class ConnectionManager:
         # Connection Adoption: Check if services are already running (CLI persistence)
         self._adopt_existing_connection()
 
-    def _handle_signal(self, signal):
+    def _handle_signal(self, signal, payload: dict = None):
         """
         Handle monitor signals - SINGLE POINT OF SIGNAL->EVENT CONVERSION.
 
@@ -108,6 +105,8 @@ class ConnectionManager:
 
         Args:
             signal: MonitorSignal enum value
+            payload: Optional fact container from the emitting monitor
+                (e.g. ``{"source": "xray", "line": "..."}``).
         """
         # Get current connection state (thread-safe)
         with self._state_lock:
@@ -122,8 +121,9 @@ class ConnectionManager:
 
         # SIGNAL -> EVENT MAPPING (single source of truth)
         if signal == self._MonitorSignal.PASSIVE_FAILURE:
-            # Passive log detected failure - trigger reconnect
-            logger.warning("[ConnectionManager] Passive failure detected")
+            # Passive log detected failure (Xray-core or sing-box TUN) - trigger reconnect
+            source = (payload or {}).get("source", "core")
+            logger.warning(f"[ConnectionManager] Passive failure detected (source: {source})")
             self._monitoring.handle_failure(current_conn)
 
         elif signal == self._MonitorSignal.ACTIVE_LOST:

@@ -31,7 +31,7 @@ class TestPassiveLogMonitor(unittest.TestCase):
         with open(self.tmp_file, "w") as f:
             f.write("Start log\n")
 
-        self.monitor = PassiveLogMonitor(log_file_path=self.tmp_file)
+        self.monitor = PassiveLogMonitor(log_files=[self.tmp_file])
         self.monitor.CHECK_INTERVAL = 0.1
         self.monitor.DEBOUNCE_SECONDS = 0.5
 
@@ -39,6 +39,14 @@ class TestPassiveLogMonitor(unittest.TestCase):
         self.monitor.stop()
         if os.path.exists(self.tmp_file):
             os.remove(self.tmp_file)
+
+    def _wait_for_callback(self, callback, count=1, timeout=3.0):
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if callback.call_count >= count:
+                return True
+            time.sleep(0.05)
+        return False
 
     def test_detects_error_keyword(self):
         callback = MagicMock()
@@ -54,10 +62,7 @@ class TestPassiveLogMonitor(unittest.TestCase):
             f.write("More info\n")
 
         # Callback is now threaded, give it a moment
-        for _ in range(10):
-            if callback.call_count > 0:
-                break
-            time.sleep(0.1)
+        assert self._wait_for_callback(callback), "callback not called"
 
         callback.assert_called_once()
 
@@ -75,10 +80,7 @@ class TestPassiveLogMonitor(unittest.TestCase):
 
         time.sleep(0.3)
         # Wait for callback
-        for _ in range(5):
-            if callback.call_count >= 1:
-                break
-            time.sleep(0.1)
+        assert self._wait_for_callback(callback, 1), "callback 1 not called"
 
         callback.assert_called_once()
 
@@ -100,10 +102,7 @@ class TestPassiveLogMonitor(unittest.TestCase):
 
         time.sleep(0.3)
         # Wait for callback
-        for _ in range(5):
-            if callback.call_count >= 2:
-                break
-            time.sleep(0.1)
+        assert self._wait_for_callback(callback, 2), "callback 2 not called"
 
         self.assertEqual(callback.call_count, 2)
 
@@ -121,10 +120,7 @@ class TestPassiveLogMonitor(unittest.TestCase):
 
         time.sleep(0.5)
         # Wait for callback
-        for _ in range(5):
-            if callback.call_count >= 1:
-                break
-            time.sleep(0.1)
+        assert self._wait_for_callback(callback, 1), "callback not called after rotation"
 
         callback.assert_called_once()
 

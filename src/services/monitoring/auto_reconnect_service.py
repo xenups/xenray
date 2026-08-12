@@ -1,11 +1,10 @@
 """Auto-Reconnect Service - Handles passive failure recovery with session scoping."""
 
 import threading
+import time
 from typing import Callable, Optional
 
 from loguru import logger
-
-from src.core.connection_manager import ConnectionManager  # noqa: F401  (type-only convenience)
 
 
 class AutoReconnectService:
@@ -18,6 +17,17 @@ class AutoReconnectService:
     - Disconnect invalidates session, causing immediate cancellation
     - No stale events can be emitted after session invalidation
 
+    Reconnect semantics:
+    - A reconnect is a FRESH connection attempt that owns a NEW session
+      (``ConnectionManager._reconnect_internal`` bumps ``_session_id`` and
+      tears down the previous engine).
+    - The ``reconnecting`` event is emitted BEFORE the ``connect_fn`` call
+      (against the still-valid OLD session) so the UI reacts immediately.
+    - After a SUCCESSFUL reconnect the new session emits ``connected``; we do
+      NOT emit ``reconnected`` against the (now stale) old session.
+    - After a FAILED reconnect we emit ``reconnect_failed`` with a reason
+      against the ORIGINAL session (still valid while it exists).
+
     State Guarantees:
     - Disconnect is terminal: no automatic restart possible
     - Cancellation is checked at every checkpoint
@@ -25,13 +35,15 @@ class AutoReconnectService:
     """
 
     STABILIZATION_BUFFER = 2.0  # seconds to wait before reconnect
+    MAX_COOLDOWN_SECONDS = 300.0  # 5 minutes max between attempts
+    BASE_COOLDOWN_SECONDS = 5.0
 
     def __init__(
         self,
         network_validator,
         config_loader: Callable[[str], tuple],
         connection_tester,
-        connect_fn: Callable[[str, str], bool],
+        connect_fn: Callable[[str, str, Optional[dict]], bool],
         event_emitter: Callable[[str, dict], None],
         internet_check: Optional[Callable[[Optional[dict]], bool]] = None,
     ):
@@ -42,7 +54,8 @@ class AutoReconnectService:
             network_validator: Service to check internet connectivity
             config_loader: Function to load config from file path -> (config, error)
             connection_tester: ConnectionTester class/instance for health checks
-            connect_fn: Function to establish connection (file_path, mode) -> success
+            connect_fn: Function to establish connection
+                (file_path, mode, connection_info) -> success
             event_emitter: Function to emit events (event_type, data)
             internet_check: Optional mode-aware internet availability check that
                 receives the current connection dict. Falls back to
@@ -61,6 +74,10 @@ class AutoReconnectService:
         self._cancel_event = threading.Event()
         self._cancelled = False
 
+        # Reconnect backoff state
+        self._consecutive_failures = 0
+        self._last_attempt_time = 0.0
+
     def start_session(self, session_id: int):
         """
         Start a new connection session with the provided session ID.
@@ -72,6 +89,8 @@ class AutoReconnectService:
             self._session_id = session_id
             self._cancelled = False
             self._cancel_event.clear()
+            self._consecutive_failures = 0
+            self._last_attempt_time = 0.0
             logger.debug(f"[AutoReconnectService] Started session {self._session_id}")
 
     def cancel(self):
@@ -91,6 +110,33 @@ class AutoReconnectService:
         with self._lock:
             return self._cancelled
 
+    def _backoff_seconds(self) -> float:
+        """Exponential backoff, capped at MAX_COOLDOWN_SECONDS."""
+        return min(
+            self.BASE_COOLDOWN_SECONDS * (2 ** max(self._consecutive_failures - 1, 0)),
+            self.MAX_COOLDOWN_SECONDS,
+        )
+
+    def _respect_backoff(self, session_id: int) -> bool:
+        """If a reconnect attempt happened recently, wait out the backoff
+        (interruptible by cancel) before the next attempt.
+
+        Returns True if we may proceed, False if cancelled during the wait.
+        """
+        with self._lock:
+            elapsed = time.time() - self._last_attempt_time
+            wait = self._backoff_seconds() - elapsed
+            if self._last_attempt_time == 0.0 or wait <= 0:
+                return True
+
+        logger.info(f"[AutoReconnectService] Backing off {wait:.1f}s before next attempt")
+        if self._cancel_event.wait(timeout=wait):
+            logger.info("[AutoReconnectService] Cancelled during backoff wait")
+            return False
+
+        # Re-validate session after the wait
+        return self._validate_session(session_id, "post_backoff")
+
     def handle_failure(self, current_connection: Optional[dict], session_id: int) -> bool:
         """
         Handle a detected connection failure.
@@ -104,6 +150,10 @@ class AutoReconnectService:
         """
         # CHECKPOINT 1: Validate session before starting
         if not self._validate_session(session_id, "start"):
+            return False
+
+        # CHECKPOINT 1.5: Respect backoff (no reconnect storms)
+        if not self._respect_backoff(session_id):
             return False
 
         logger.warning("[AutoReconnectService] Handling passive failure")
@@ -137,14 +187,14 @@ class AutoReconnectService:
         if not self._validate_session(session_id, "post_stabilization"):
             return False
 
-        # CHECKPOINT 5: Check if Xray recovered
+        # CHECKPOINT 5: Check if the core recovered
         if current_connection:
             file_path = current_connection.get("file")
             if file_path and file_path != "Adopted Connection":
                 if not self._validate_session(session_id, "recovery_check"):
                     return False
-                if self._check_xray_recovered(file_path):
-                    logger.info("[AutoReconnectService] Xray recovered, connection is healthy - no reconnect needed")
+                if self._check_core_recovered(file_path):
+                    logger.info("[AutoReconnectService] Core recovered, connection is healthy - no reconnect needed")
                     # Connection is already working - no event needed
                     # UI stays on current "connected" state
                     return True
@@ -175,15 +225,15 @@ class AutoReconnectService:
                 return False
             return True
 
-    def _check_xray_recovered(self, file_path: str) -> bool:
-        """Check if Xray has self-recovered by testing connectivity."""
+    def _check_core_recovered(self, file_path: str) -> bool:
+        """Check if the core has self-recovered by testing connectivity."""
         try:
             config, _ = self._config_loader(file_path)
             if config:
-                logger.debug("[AutoReconnectService] Testing if Xray recovered...")
+                logger.debug("[AutoReconnectService] Testing if core recovered...")
                 success, latency, _ = self._connection_tester.test_connection_sync(config)
                 if success:
-                    logger.info(f"[AutoReconnectService] Xray recovered (latency: {latency})")
+                    logger.info(f"[AutoReconnectService] Core recovered (latency: {latency})")
                     return True
         except Exception as e:
             logger.warning(f"[AutoReconnectService] Could not verify recovery: {e}")
@@ -208,6 +258,12 @@ class AutoReconnectService:
             self._emit_safe("reconnect_failed", session_id, {"reason": "invalid_connection"})
             return False
 
+        # Record attempt time (for backoff) and emit "reconnecting" BEFORE the
+        # connect call — the OLD session is still valid here, so the UI reacts
+        # immediately. After connect() the session moves on.
+        with self._lock:
+            self._last_attempt_time = time.time()
+
         logger.info("[AutoReconnectService] Attempting reconnect...")
         if not self._emit_safe("reconnecting", session_id):
             return False
@@ -228,10 +284,14 @@ class AutoReconnectService:
         # report success/failure.
         if success:
             logger.info("[AutoReconnectService] Reconnect successful")
+            with self._lock:
+                self._consecutive_failures = 0
             # Don't emit "reconnected" - the new session owns the "connected"
             # event and emitting against the stale session_id would get dropped.
         else:
             logger.error("[AutoReconnectService] Reconnect failed")
+            with self._lock:
+                self._consecutive_failures += 1
             # A failed reconnect runs inside the SAME (still valid) session, so
             # the failure event is still emitted against it.
             self._emit_safe("reconnect_failed", session_id, {"reason": "connect_failed"})

@@ -21,7 +21,6 @@ from loguru import logger
 from src.core.app_context import AppContext
 from src.services.connection_tester import ConnectionTester
 from src.services.network_validator import NetworkValidator
-from src.services.xray_process_monitor import XrayProcessProvider
 
 from .active_connectivity_monitor import ActiveConnectivityMonitor
 from .auto_reconnect_service import AutoReconnectService
@@ -44,10 +43,9 @@ class ConnectionMonitoringService:
     def __init__(
         self,
         app_context: AppContext,
-        on_signal: Callable[[MonitorSignal], None],
-        on_reconnect: Callable[[str, str], bool],
+        on_signal: Callable[[MonitorSignal, Optional[dict]], None],
+        on_reconnect: Callable[[str, str, Optional[dict]], bool],
         on_reconnect_event: Callable[[str, dict], None],
-        xray_service=None,
     ):
         """
         Initialize the monitoring service with signal callback.
@@ -55,11 +53,8 @@ class ConnectionMonitoringService:
         Args:
             app_context: For checking auto-reconnect enabled setting
             on_signal: Single callback for ALL monitor signals (session-validated)
-            on_reconnect: Called to attempt reconnection (file_path, mode) -> success
+            on_reconnect: Called to attempt reconnection (file_path, mode, connection_info) -> success
             on_reconnect_event: Called by AutoReconnectService for reconnect-specific events
-            xray_service: The canonical XrayService instance (from ConnectionManager).
-                Providing this prevents a second orphaned XrayService from being created
-                inside the monitoring service and avoids a double-atexit race.
         """
         self._app_context = app_context
         self._on_signal = on_signal
@@ -72,9 +67,9 @@ class ConnectionMonitoringService:
         self._network_validator = NetworkValidator()
 
         # Create PassiveLogMonitor (log-based failure detection)
-        # Emits PASSIVE_FAILURE signal
+        # Emits PASSIVE_FAILURE signal (with source: xray|singbox)
         self._log_monitor = PassiveLogMonitor(
-            on_failure_callback=lambda: self._emit_signal(MonitorSignal.PASSIVE_FAILURE)
+            on_failure_callback=lambda payload: self._emit_signal(MonitorSignal.PASSIVE_FAILURE, payload)
         )
 
         # Create AutoReconnectService
@@ -88,36 +83,25 @@ class ConnectionMonitoringService:
             internet_check=self._mode_aware_internet_check,
         )
 
-        # Create ActiveConnectivityMonitor (process-based, VPN mode only)
+        # Create ActiveConnectivityMonitor (real probe-based, VPN mode)
         # Emits ACTIVE_LOST, ACTIVE_RESTORED, ACTIVE_DEGRADED signals
-        #
-        # Use the injected xray_service if provided — avoids creating a second
-        # orphaned XrayService instance that would register its own atexit handler.
-        _xray_svc = xray_service
-        if _xray_svc is None:
-            # Fallback: lazy import to avoid circular import at module level
-            from src.services.xray_service import XrayService as _XS
-
-            _xray_svc = _XS()
-        metrics_provider = XrayProcessProvider(
-            pid_getter=lambda: _xray_svc.pid,
-            socks_port_getter=app_context.settings.get_proxy_port,
-        )
         self._active_monitor = ActiveConnectivityMonitor(
-            metrics_provider=metrics_provider,
+            socks_port_getter=app_context.settings.get_proxy_port,
             on_connectivity_lost=lambda: self._emit_signal(MonitorSignal.ACTIVE_LOST),
             on_connectivity_restored=lambda: self._emit_signal(MonitorSignal.ACTIVE_RESTORED),
             on_connectivity_degraded=lambda: self._emit_signal(MonitorSignal.ACTIVE_DEGRADED),
-            xray_error_checker=self._log_monitor.has_recent_error,
-            proxy_port_getter=app_context.settings.get_proxy_port,
         )
 
-    def _emit_signal(self, signal: MonitorSignal):
+    def _emit_signal(self, signal: MonitorSignal, payload: dict = None):
         """
-        Validate session and forward signal to ConnectionManager.
+        Validate session and forward signal + payload to ConnectionManager.
 
         All signals are validated here to prevent late emissions after disconnect.
         ConnectionManager then decides what event (if any) to emit.
+
+        The payload (a plain fact container, e.g. ``{"source": "xray"}``) is
+        forwarded verbatim — monitors own the facts, ConnectionManager owns
+        the policy.
         """
         with self._lock:
             if not self._is_running:
@@ -126,7 +110,7 @@ class ConnectionMonitoringService:
             session_id = self._session_id
 
         logger.debug(f"[MonitoringService] Signal {signal.name} (session {session_id})")
-        self._on_signal(signal)
+        self._on_signal(signal, payload)
 
     def start(
         self,
@@ -158,13 +142,13 @@ class ConnectionMonitoringService:
             self._session_id = session_id
             self._is_running = True
 
-        # Start passive log monitor (all modes)
+        # Start passive log monitor (all modes) — tails BOTH core logs
         self._log_monitor.start()
 
         # Start auto-reconnect session
         self._auto_reconnect.start_session(session_id)
 
-        # Start active monitor (VPN mode only - uses Clash API metrics)
+        # Start active monitor (VPN mode only — real probe-based)
         if mode == "vpn":
             self._active_monitor.start(transport_type, session_id=session_id)
             logger.info(
