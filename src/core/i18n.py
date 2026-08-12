@@ -1,4 +1,5 @@
 """Internationalization (i18n) manager for multilingual support."""
+
 from __future__ import annotations
 
 import json
@@ -29,7 +30,12 @@ class I18n:
         return cls._instance
 
     def _ensure_initialized(self):
-        """Ensure translations are loaded before use."""
+        """Ensure translations are loaded before use.
+
+        Only the ACTIVE language is loaded eagerly so startup reaches the splash
+        screen fast; the remaining languages are loaded in the background by the
+        startup warmup pipeline (:meth:`load_all_languages`).
+        """
         if getattr(self, "_initialized", False):
             return
 
@@ -39,7 +45,7 @@ class I18n:
             # In CLI mode, we don't load anything to keep it clean and fast
             self._translations = {}
         else:
-            self._load_translations()
+            self._load_lang(self._current_lang)
 
         self._initialized = True
 
@@ -70,10 +76,20 @@ class I18n:
         for lang in self._available_languages.keys():
             self._load_lang(lang)
 
+    def load_all_languages(self) -> None:
+        """Load any missing translation files (called during the splash warmup)."""
+        for lang in self._available_languages.keys():
+            if lang not in self._translations:
+                self._load_lang(lang)
+
     def set_language(self, lang: str):
         """Set the current language."""
         if lang in self._available_languages:
             self._current_lang = lang
+            # Ensure the chosen language is loaded even if the background warmup
+            # hasn't finished yet (or the entry is empty/polluted).
+            if getattr(self, "_initialized", False) and not self._translations.get(lang):
+                self._load_lang(lang)
             logger.debug(f"Language set to: {lang}")
         else:
             logger.warning(f"Unknown language: {lang}")
@@ -171,3 +187,8 @@ def is_rtl() -> bool:
 def get_available_languages() -> dict:
     """Get available languages."""
     return _get_i18n().available_languages
+
+
+def load_all_languages() -> None:
+    """Load any remaining translation files (used by the startup warmup)."""
+    _get_i18n().load_all_languages()

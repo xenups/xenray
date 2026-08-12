@@ -10,6 +10,7 @@ from typing import Optional
 from loguru import logger
 
 from src.core.constants import DNS_IP_CLOUDFLARE, DNS_IP_GOOGLE, DNS_IP_OPENDNS
+from src.utils.platform_utils import PlatformUtils
 
 
 class NetworkValidator:
@@ -69,7 +70,9 @@ class NetworkValidator:
                     ["route", "print", "0.0.0.0"],
                     capture_output=True,
                     text=True,
-                    creationflags=subprocess.CREATE_NO_WINDOW,
+                    creationflags=PlatformUtils.get_subprocess_flags(),
+                    startupinfo=PlatformUtils.get_startupinfo(),
+                    timeout=5,
                 )
                 for line in result.stdout.splitlines():
                     if "0.0.0.0" in line and "0.0.0.0" in line.split()[0]:

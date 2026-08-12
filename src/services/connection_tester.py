@@ -17,7 +17,15 @@ from src.core.logger import logger
 
 # Timeout configuration
 TEST_TIMEOUT = 10  # seconds for the whole test
-CONNECT_TIMEOUT = 5  # seconds for HTTP request
+CONNECT_TIMEOUT = 3  # hard per-node timeout for the HTTP latency probe
+
+# v2rayNG-style latency probing: dedicated HTTP 204 No-Content endpoints with a
+# zero-byte body. Primary endpoint first, then a fallback. The probe measures the
+# handshake + first-byte (status header) RTT and never downloads a body.
+GENERATE_204_URLS = [
+    "http://www.gstatic.com/generate_204",
+    "http://cp.cloudflare.com/generate_204",
+]
 
 # SO_MARK is Linux-only; omitted on Windows where sing-box TUN
 # provides bypass via ip_cidr / process_name route rules instead.
@@ -26,6 +34,32 @@ _IS_WINDOWS = os.name == "nt"
 
 class ConnectionTester:
     """Tests real connection latency via Xray Core."""
+
+    @staticmethod
+    def _probe_204(proxies: dict, timeout: float = CONNECT_TIMEOUT) -> Tuple[bool, int]:
+        """Measure handshake + first-byte RTT to a 204 No-Content endpoint.
+
+        Uses ``stream=True`` and never reads the response body, so the latency
+        reflects how long the proxy takes to reach the endpoint's status header —
+        matching v2rayNG-style delay numbers instead of full-body downloads.
+        Each endpoint gets one attempt, then we fail over to the next URL.
+
+        Returns (ok, latency_ms).
+        """
+        for url in GENERATE_204_URLS:
+            start_time = time.time()
+            try:
+                with requests.get(url, proxies=proxies, timeout=timeout, stream=True) as resp:
+                    latency = int((time.time() - start_time) * 1000)
+                    if resp.status_code < 400:
+                        return True, latency
+            except (
+                requests.exceptions.Timeout,
+                requests.exceptions.RequestException,
+                OSError,
+            ):
+                continue
+        return False, 0
 
     @staticmethod
     def _find_free_port() -> int:
@@ -161,26 +195,14 @@ class ConnectionTester:
                 "https": f"http://127.0.0.1:{port}",
             }
 
-            target_url = "http://cp.cloudflare.com/"
-
-            # Retry logic for connection test
-            max_retries = 3
-
-            for attempt in range(max_retries):
-                try:
-                    start_time = time.time()
-                    response = requests.get(target_url, proxies=proxies, timeout=CONNECT_TIMEOUT)
-
+            # v2rayNG-style probe: 204 No-Content endpoint, headers only. A single
+            # retry rides out transient stalls; each request is bounded by the 3s
+            # CONNECT_TIMEOUT and the probe never downloads a response body.
+            for attempt in range(2):
+                ok, latency = ConnectionTester._probe_204(proxies, timeout=CONNECT_TIMEOUT)
+                if ok:
                     country_data = None
-                    latency = int((time.time() - start_time) * 1000)
-
-                    # ANY response through the proxy tunnel means the proxy is functional.
-                    # Even 5xx errors indicate the connection through the proxy works.
-                    # We distinguish connectivity from upstream health: if we got bytes
-                    # back, the chain (Xray → proxy server → internet) is intact.
-                    # Accept ANY response code — even 5xx proves the proxy tunnel is intact.
-                    # We got bytes back through the chain (Xray → proxy → internet).
-                    if fetch_country and response.status_code < 300:
+                    if fetch_country:
                         try:
                             geo_resp = requests.get("http://ip-api.com/json", proxies=proxies, timeout=3)
                             if geo_resp.status_code == 200:
@@ -199,27 +221,11 @@ class ConnectionTester:
                         t("connection.latency_ms", value=latency),
                         country_data,
                     )
+                if attempt == 0:
+                    time.sleep(0.3)
 
-                except requests.exceptions.Timeout:
-                    if attempt < max_retries - 1:
-                        logger.debug(f"Connection test attempt {attempt + 1}/{max_retries} timed out, retrying...")
-                        time.sleep(0.5)
-                        continue
-                    else:
-                        return False, t("connection.timeout"), None
-
-                except requests.exceptions.RequestException:
-                    if attempt < max_retries - 1:
-                        logger.debug(f"Connection test attempt {attempt + 1}/{max_retries} failed, retrying...")
-                        time.sleep(0.5)
-                        continue
-                    else:
-                        return False, t("connection.conn_error"), None
-
-        except requests.exceptions.Timeout:
-            return False, t("connection.timeout"), None
-        except requests.exceptions.RequestException:
             return False, t("connection.conn_error"), None
+
         except Exception:
             return False, t("connection.error"), None
         finally:

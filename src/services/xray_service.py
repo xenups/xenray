@@ -16,6 +16,7 @@ from src.core.constants import (
     XRAY_LOG_FILE,
     XRAY_PID_FILE,
 )
+from src.core.event_bus import EVENT_CORE_PROCESS_STOPPED, event_bus
 from src.core.logger import logger
 from src.utils.process_utils import ProcessUtils
 
@@ -96,6 +97,7 @@ class XrayService:
                 check=False,
                 creationflags=creation_flags,
                 capture_output=True,
+                timeout=10,
             )
 
     # ------------------------------------------------------------------
@@ -122,6 +124,7 @@ class XrayService:
             text=True,
             check=False,
             creationflags=creation_flags,
+            timeout=10,
         )
         if check_res.returncode != 0:
             logger.debug("[XrayService] xenray-tun adapter already gone — skipping DNS cleanup")
@@ -143,6 +146,7 @@ class XrayService:
                 text=True,
                 check=False,
                 creationflags=creation_flags,
+                timeout=10,
             )
             if res.returncode != 0:
                 logger.debug(
@@ -156,71 +160,26 @@ class XrayService:
 
     @staticmethod
     def _read_smhr_state() -> Optional[bool]:
-        """Read current SMHR enabled state from the Windows registry.
+        from src.utils.platform_utils import PlatformUtils
 
-        Returns True if SMHR is enabled (OS default), False if disabled, None on error.
-        """
-        try:
-            import winreg  # Windows-only
-
-            key_path = r"SYSTEM\CurrentControlSet\Services\Dnscache\Parameters"
-            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, key_path) as key:
-                try:
-                    value, _ = winreg.QueryValueEx(key, "DisableSmartNameResolution")
-                    return value == 0  # 0 = SMHR enabled, 1 = SMHR disabled
-                except FileNotFoundError:
-                    return True  # Key absent → SMHR is enabled (OS default)
-        except Exception:
-            return None
+        return PlatformUtils.read_smhr_state()
 
     @staticmethod
     def _set_smhr_state(enabled: bool):
-        """Enable or disable SMHR via the Windows registry."""
-        try:
-            import winreg  # Windows-only
+        from src.utils.platform_utils import PlatformUtils
 
-            key_path = r"SYSTEM\CurrentControlSet\Services\Dnscache\Parameters"
-            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, key_path, access=winreg.KEY_SET_VALUE) as key:
-                # DisableSmartNameResolution: 0 = SMHR on, 1 = SMHR off
-                winreg.SetValueEx(
-                    key,
-                    "DisableSmartNameResolution",
-                    0,
-                    winreg.REG_DWORD,
-                    0 if enabled else 1,
-                )
-                # Also disable the parallel A+AAAA sub-feature
-                winreg.SetValueEx(
-                    key,
-                    "DisableParallelAandAAAA",
-                    0,
-                    winreg.REG_DWORD,
-                    0 if enabled else 1,
-                )
-        except Exception as e:
-            logger.warning(f"[XrayService] Could not set SMHR registry value: {e}")
+        PlatformUtils.set_smhr_state(enabled)
 
     def _suppress_smhr(self):
-        """Disable SMHR for the VPN session, saving previous state for restore."""
         from src.utils.platform_utils import PlatformUtils
 
-        if PlatformUtils.get_platform() != "windows":
-            return
-        self._smhr_was_enabled = self._read_smhr_state()
-        if self._smhr_was_enabled is True:
-            logger.info("[XrayService] Disabling SMHR to prevent DNS leaks during VPN session")
-            self._set_smhr_state(enabled=False)
+        self._smhr_was_enabled = PlatformUtils.suppress_smhr()
 
     def _restore_smhr(self):
-        """Restore SMHR to its pre-VPN state."""
         from src.utils.platform_utils import PlatformUtils
 
-        if PlatformUtils.get_platform() != "windows":
-            return
-        if self._smhr_was_enabled is True:
-            logger.info("[XrayService] Restoring SMHR to enabled state")
-            self._set_smhr_state(enabled=True)
-            self._smhr_was_enabled = None
+        PlatformUtils.restore_smhr(self._smhr_was_enabled)
+        self._smhr_was_enabled = None
 
     # ------------------------------------------------------------------
     # Instance management
@@ -585,7 +544,14 @@ class XrayService:
 
         try:
             logger.info(f"[XrayService] Stopping process {pid_to_kill}")
-            ProcessUtils.kill_process(pid_to_kill)
+            ProcessUtils.kill_process(pid_to_kill, force=False)
+            deadline = time.monotonic() + 1.0
+            while ProcessUtils.is_running(pid_to_kill) and time.monotonic() < deadline:
+                time.sleep(0.05)
+            if ProcessUtils.is_running(pid_to_kill):
+                logger.warning(f"[XrayService] Graceful stop timed out for PID {pid_to_kill}, forcing kill")
+                ProcessUtils.kill_process(pid_to_kill, force=True)
+
             self._pid = None
             self._process = None
 
@@ -596,6 +562,7 @@ class XrayService:
                 except Exception as e:
                     logger.warning(f"[XrayService] Failed to remove PID file: {e}")
 
+            event_bus.publish(EVENT_CORE_PROCESS_STOPPED, {"engine": "xray", "pid": pid_to_kill})
             return True
         except Exception as e:
             logger.error(f"[XrayService] Failed to stop Xray: {e}")

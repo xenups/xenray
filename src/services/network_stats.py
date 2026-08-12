@@ -71,15 +71,10 @@ def _stats_worker(stats_queue: queue.Queue, stop_event: threading.Event):
 
 
 def _format_speed(bytes_per_sec: float) -> str:
-    """Format bytes per second to human readable string."""
-    if bytes_per_sec < 1024:
-        return f"{bytes_per_sec:.0f} B/s"
-    elif bytes_per_sec < 1024 * 1024:
-        return f"{bytes_per_sec / 1024:.1f} KB/s"
-    elif bytes_per_sec < 1024 * 1024 * 1024:
-        return f"{bytes_per_sec / (1024 * 1024):.1f} MB/s"
-    else:
-        return f"{bytes_per_sec / (1024 * 1024 * 1024):.2f} GB/s"
+    """Format bytes per second to human readable string (shared utility)."""
+    from src.utils.formatting import format_speed
+
+    return format_speed(bytes_per_sec)
 
 
 class NetworkStatsService:
@@ -119,7 +114,7 @@ class NetworkStatsService:
             logger.debug("[NetworkStats] Started monitoring (Threading)")
 
     def stop(self):
-        """Stop monitoring network stats."""
+        """Stop monitoring network stats and flush any pending metric buffers."""
         with self._lock:
             if not self._running:
                 return
@@ -137,6 +132,14 @@ class NetworkStatsService:
             self._thread = None
             self._queue = None
             self._stop_event = None
+
+            # Flush the cached buffer so get_stats() returns zeros after a
+            # disconnect instead of stale last-recorded speeds.
+            self._cached_stats = {
+                "download_speed": "0 B/s",
+                "upload_speed": "0 B/s",
+                "total_bps": 0.0,
+            }
             logger.debug("[NetworkStats] Stopped monitoring")
 
     def get_stats(self) -> dict:

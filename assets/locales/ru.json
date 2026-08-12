@@ -10,7 +10,8 @@
     "tap_to_connect": "Нажмите для подключения",
     "start": "Старт",
     "stop": "Стоп",
-    "starting": "Запуск"
+    "starting": "Запуск",
+    "disconnecting": "Отключение"
   },
   "server_list": {
     "title": "Серверы",
@@ -84,7 +85,22 @@
     "update_rules": "Обновить правила маршрутизации",
     "update_rules_desc": "Обновить базы geoip и geosite",
     "about": "О XenRay",
-    "version": "v1.0.0 by Xenups",
+    "version": "v{version}",
+    "check_core_update": "Проверить обновление ядра",
+    "checking_core_updates": "Проверка обновлений ядра...",
+    "xray_core_version": "Xray-Core {version}",
+    "checking_updates": "Проверка обновлений...",
+    "xray_core_update_title": "Обновление Xray-Core",
+    "xray_core_update_message": "Вы уверены, что хотите скачать и обновить Xray-Core?",
+    "xray_core_update_available": "Доступен Xray-Core v{version}!",
+    "xray_core_up_to_date": "Ядро Xray-Core обновлено",
+    "xray_core_check_failed": "Ошибка проверки обновления ядра Xray-Core",
+    "updating_xray_core": "Загрузка и замена Xray-Core...",
+    "xray_core_updated": "Ядро Xray-Core успешно обновлено",
+    "xray_core_update_failed": "Ошибка обновления Xray-Core",
+    "update_available": "Доступна новая версия {version}!",
+    "up_to_date": "Вы используете последнюю версию XenRay",
+    "update_check_failed": "Ошибка проверки обновлений",
     "language": "Язык",
     "language_description": "Выбор языка приложения",
     "reset_close_choice": "Сбросить настройки выхода",
@@ -113,16 +129,48 @@
     "allow_lan": "Разрешить общий доступ к прокси в ЛВС",
     "allow_lan_desc": "Разрешить другим устройствам локальной сети использовать прокси этой системы",
     "lan_enabled": "Общий доступ к прокси в ЛВС включен",
-    "lan_disabled": "Общий доступ к прокси в ЛВС отключен"
+    "lan_disabled": "Общий доступ к прокси в ЛВС отключен",
+    "port_invalid": "Порт должен быть от 1024 до 65535",
+    "language_desc": "Язык интерфейса",
+    "startup_saved": "Настройка автозагрузки сохранена",
+    "startup_on": "Вкл",
+    "startup_off": "Выкл",
+    "connectivity_title": "Настройки подключения",
+    "routing_title": "Маршрутизация и защита от утечек",
+    "preferences_title": "Предпочтения приложения",
+    "vpn_mode": "Режим TUN / VPN",
+    "vpn_mode_desc": "Полный туннель VPN",
+    "proxy_mode": "Режим системного прокси",
+    "proxy_mode_desc": "SOCKS + HTTP прокси",
+    "recommended": "Рекомендуется"
   },
   "lan": {
     "card_title": "Общий доступ к прокси в ЛВС — активен",
-    "local_ip": "Локальный IP:",
+    "local_ip": "Локальный IP",
     "guide_title": "Быстрая настройка",
     "telegram": "Telegram:",
     "wifi": "Wi-Fi прокси:",
     "type_http": "HTTP",
-    "unknown_ip": "Не определено"
+    "unknown_ip": "Не определено",
+    "copy_ip": "Копировать",
+    "socks5_port": "Порт SOCKS5",
+    "http_port": "Порт HTTP",
+    "copy_port": "Копировать порт",
+    "copy_tg": "Копировать ссылку Telegram",
+    "copied": "Скопировано!",
+    "page_title": "Общий доступ LAN",
+    "page_subtitle": "Поделитесь прокси с устройствами в локальной сети",
+    "master_toggle": "Общий доступ LAN",
+    "enabled": "Активно — Обмен",
+    "disabled_short": "Отключено",
+    "qr_title": "Сканируйте для подключения",
+    "connection_details": "Детали подключения",
+    "proxy_url": "Адрес прокси",
+    "disabled": "Общий доступ LAN\nОтключен",
+    "instructions_title": "Инструкция по подключению",
+    "instructions_warning": "Убедитесь, что параметр 'Allow LAN / Sharing' включен в настройках сети или брандмауэра.",
+    "step1": "Откройте настройки Wi-Fi на устройстве и установите прокси вручную.",
+    "step2": "Введите локальный IP выше и порт HTTP (или порт SOCKS5)."
   },
   "admin": {
     "title": "Требуются права администратора",
@@ -190,7 +238,8 @@
     "ping": "Пинг: {latency}",
     "update_complete": "Обновление {component} завершено!",
     "update_error": "Ошибка: {error}",
-    "admin_required": "Для режима VPN требуются права администратора"
+    "admin_required": "Для режима VPN требуются права администратора",
+    "checking": "Проверка"
   },
   "connection": {
     "loading_config": "Загрузка конфигурации...",
@@ -209,13 +258,14 @@
     "checking_network": "Проверка подключения к сети...",
     "no_internet": "Нет подключения к Интернету!",
     "connected_no_internet": "Подключено, но нет доступа к Интернету",
-    "verifying_latency": "Проверка задержки соединения...",
+    "verifying_latency": "Проверка пинга",
     "falling_back": "Возврат к исходной конфигурации...",
     "failure_detected": "Обнаружена проблема с соединением. Проверка...",
     "reconnecting": "Переподключение...",
     "reconnected": "Соединение восстановлено! ✅",
     "reconnect_failed": "Ошибка авто-реконнекта",
-    "adopted_connection": "Перехваченное соединение"
+    "adopted_connection": "Перехваченное соединение",
+    "core_crashed": "Соединение прервано из-за сбоя ядра"
   },
   "routing": {
     "title": "Правила маршрутизации",
@@ -254,7 +304,18 @@
   "logs": {
     "title": "Логи подключения",
     "pause": "Пауза обновления логов",
-    "resume": "Продолжить обновление логов"
+    "resume": "Продолжить обновление логов",
+    "memory": "Память",
+    "active_threads": "Активные потоки",
+    "health_status": "Состояние системы",
+    "nodes": "Узлы",
+    "optimal_performance": "Оптимальная производительность",
+    "issues": "Проблемы",
+    "system_healthy": "Система в норме",
+    "copy": "Копировать",
+    "download": "Загрузка",
+    "clear": "Очистить",
+    "terminal_title": "XENRAY_CLI :: ГЛАВНЫЙ ЛОГ"
   },
   "header": {
     "toggle_theme": "Сменить тему",
@@ -313,5 +374,73 @@
       "deleted": "Цепочка удалена",
       "invalid_chain": "Невозможно подключиться: в цепочке отсутствуют серверы"
     }
+  },
+  "dashboard": {
+    "network_traffic": "СЕТЕВОЙ ТРАФИК",
+    "live_statistics": "Статистика в реальном времени",
+    "current_node": "ТЕКУЩИЙ УЗЕЛ",
+    "change_server": "Сменить сервер",
+    "uptime": "Время работы: {time}",
+    "upload": "Выгрузка",
+    "download": "Загрузка",
+    "protocol": "Протокол",
+    "encryption": "Шифрование",
+    "local_ip": "Локальный IP",
+    "server_ip": "IP сервера",
+    "checking": "Проверка...",
+    "secure": "Безопасно",
+    "system_secure": "Система защищена",
+    "system_ready": "СИСТЕМА ГОТОВА",
+    "no_internet": "НЕТ ИНТЕРНЕТА",
+    "connected": "Подключено",
+    "disconnected": "Отключено",
+    "quick_disconnect": "Быстрое отключение",
+    "quick_connect": "Быстрое подключение",
+    "cpu": "ЦП: {percent}%",
+    "ram": "ОЗУ: {mb}MB",
+    "realtime_wave": "Потоковая визуализация трафика в реальном времени",
+    "view_statistics": "Страница статистики ������",
+    "country": "Страна"
+  },
+  "nav": {
+    "dashboard": "Главная",
+    "statistics": "Статистика",
+    "servers": "Серверы",
+    "logs": "Логи",
+    "settings": "Настройки",
+    "connect_now": "Подключить",
+    "disconnect": "Отключить"
+  },
+  "servers": {
+    "selected_node": "ВЫБРАННЫЙ УЗЕЛ",
+    "search_placeholder": "Поиск имени, региона или IP сервера...",
+    "add": "Добавить сервер",
+    "latency": "ЗАДЕРЖКА"
+  },
+  "stats": {
+    "session": "Session: ",
+    "total_data": "Total Data Transfer",
+    "peak_speed": "Peak Speed: ",
+    "realtime_wave": "Real-Time Traffic Wave Stream",
+    "download": "Download",
+    "upload": "Upload"
+  },
+  "window": {
+    "minimize": "Свернуть",
+    "close": "Закрыть"
+  },
+  "lan_sharing": {
+    "title": "Общий доступ LAN",
+    "subtitle": "Поделитесь прокси-подключением с устройствами в локальной сети",
+    "scan_to_connect": "Сканируйте для подключения",
+    "disabled_placeholder": "Общий доступ отключен",
+    "local_ip": "Локальный IP",
+    "http_port": "Порт HTTP",
+    "socks_port": "Порт SOCKS5",
+    "guide_title": "Руководство по подключению",
+    "guide_step_1": "1. Подключите целевое устройство (телефон, ТВ или ПК) к той же сети Wi-Fi.",
+    "guide_step_2": "2. Откройте настройки Wi-Fi на целевом устройстве и установите прокси вручную (Manual).",
+    "guide_step_3": "3. Введите локальный IP и порт HTTP/SOCKS5, указанные выше, и сохраните.",
+    "guide_step_4": "Примечание: Если подключение не удается, проверьте настройки брандмауэра."
   }
 }

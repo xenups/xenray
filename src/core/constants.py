@@ -11,12 +11,12 @@ from src.utils.platform_utils import PlatformUtils
 _project_root = Path(__file__).parent.parent.parent
 load_dotenv(_project_root / ".env")
 
-# Application version from environment
-APP_VERSION = os.getenv("APP_VERSION", "0.2.5-beta")
+# Application version from single source of truth
+from src.__version__ import APP_VERSION, __version__  # noqa: E402, F401
 
 # Window dimensions
-WINDOW_WIDTH = 420
-WINDOW_HEIGHT = 550
+WINDOW_WIDTH = 620
+WINDOW_HEIGHT = 480
 GITHUB_REPO = os.getenv("GITHUB_REPO", "xenups/xenray")
 UPDATE_DOWNLOAD_TIMEOUT = float(os.getenv("UPDATE_DOWNLOAD_TIMEOUT", "60"))
 UPDATE_MIN_FILE_SIZE = int(os.getenv("UPDATE_MIN_FILE_SIZE", "1048576"))
@@ -150,6 +150,16 @@ NCSI_BYPASS_DOMAINS: list = [
     "www.msftncsi.com",
     "ipv6.msftconnecttest.com",
     "ipv6.msftncsi.com",
+]
+
+# Processes that must always bypass the TUN adapter (e.g. internal OS services)
+BASE_BYPASS_PROCESSES = [
+    "xray",
+    "v2ray",
+    "sing-box",
+    "python",
+    "pythonw",
+    "curl",
 ]
 
 # DNS Providers (from environment)

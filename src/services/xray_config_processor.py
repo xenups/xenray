@@ -312,20 +312,22 @@ class XrayConfigProcessor:
                         CONFIG_METADATA_ONLY: False,
                     }
 
+        http_port = self._app_context.settings.get_http_port()
         http_exists = any(ib.get(CONFIG_PROTOCOL) == PROTOCOL_HTTP for ib in config[CONFIG_INBOUNDS])
         if not http_exists:
             config[CONFIG_INBOUNDS].append(
                 {
                     CONFIG_TAG: PROTOCOL_HTTP,
-                    CONFIG_PORT: user_port + 4,
+                    CONFIG_PORT: http_port,
                     "listen": listen,
                     CONFIG_PROTOCOL: PROTOCOL_HTTP,
                 }
             )
-            logger.info(f"[XrayConfigProcessor] Added HTTP inbound on port {user_port + 4} (listen {listen})")
+            logger.info(f"[XrayConfigProcessor] Added HTTP inbound on port {http_port} (listen {listen})")
         else:
             for inbound in config[CONFIG_INBOUNDS]:
                 if inbound.get(CONFIG_PROTOCOL) == PROTOCOL_HTTP:
+                    inbound[CONFIG_PORT] = http_port
                     inbound["listen"] = listen
 
     # DISABLED — pre-resolution was breaking ECH / Reality / SNI

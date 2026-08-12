@@ -36,7 +36,8 @@
     "share": "分享",
     "delete": "删除",
     "copy_link": "复制链接",
-    "subscription_updated": "已更新 {count} 个服务器"
+    "subscription_updated": "已更新 {count} 个服务器",
+    "servers": "服务器"
   },
   "add_dialog": {
     "title": "添加服务器或订阅",
@@ -84,7 +85,22 @@
     "update_rules": "更新路由规则",
     "update_rules_desc": "更新 geoip 和 geosite 数据库",
     "about": "关于XenRay",
-    "version": "v1.0.0 by Xenups",
+    "version": "v{version}",
+    "check_core_update": "检查核心更新",
+    "checking_core_updates": "正在检查核心更新...",
+    "xray_core_version": "Xray-Core {version}",
+    "checking_updates": "正在检查更新...",
+    "xray_core_update_title": "Xray-Core 更新",
+    "xray_core_update_message": "您确定要下载并更新 Xray-Core 吗？",
+    "xray_core_update_available": "Xray-Core v{version} 可用！",
+    "xray_core_up_to_date": "Xray-Core 已是最新版本",
+    "xray_core_check_failed": "检查 Xray-Core 更新失败",
+    "updating_xray_core": "正在下载并替换 Xray-Core...",
+    "xray_core_updated": "Xray-Core 更新成功",
+    "xray_core_update_failed": "Xray-Core 更新失败",
+    "update_available": "新版本 {version} 可用！",
+    "up_to_date": "XenRay 已是最新版本",
+    "update_check_failed": "检查更新失败",
     "language": "语言",
     "language_description": "选择应用语言",
     "reset_close_choice": "重置关闭偏好",
@@ -113,16 +129,48 @@
     "allow_lan": "允许局域网共享",
     "allow_lan_desc": "允许局域网内的其他设备使用本系统的代理",
     "lan_enabled": "局域网共享已启用",
-    "lan_disabled": "局域网共享已禁用"
+    "lan_disabled": "局域网共享已禁用",
+    "port_invalid": "端口必须在 1024 到 65535 之间",
+    "language_desc": "界面显示语言",
+    "startup_saved": "启动设置已保存",
+    "startup_on": "开启",
+    "startup_off": "关闭",
+    "connectivity_title": "连接设置",
+    "routing_title": "路由与防泄漏",
+    "preferences_title": "应用偏好",
+    "vpn_mode": "TUN / VPN 模式",
+    "vpn_mode_desc": "完整 VPN 隧道",
+    "proxy_mode": "系统代理模式",
+    "proxy_mode_desc": "SOCKS + HTTP 代理",
+    "recommended": "推荐"
   },
   "lan": {
     "card_title": "局域网代理共享 — 已激活",
-    "local_ip": "本地 IP:",
+    "local_ip": "本地IP",
     "guide_title": "快速设置指南",
     "telegram": "Telegram:",
     "wifi": "Wi-Fi 代理:",
     "type_http": "HTTP",
-    "unknown_ip": "未检测到"
+    "unknown_ip": "未检测到",
+    "copy_ip": "复制",
+    "socks5_port": "SOCKS5端口",
+    "http_port": "HTTP端口",
+    "copy_port": "复制端口",
+    "copy_tg": "复制 Telegram 链接",
+    "copied": "已复制!",
+    "page_title": "LAN代理共享",
+    "page_subtitle": "将代理连接共享给本地网络设备",
+    "master_toggle": "LAN代理共享",
+    "enabled": "已启用—共享中",
+    "disabled_short": "已禁用",
+    "qr_title": "扫码连接",
+    "connection_details": "连接详情",
+    "proxy_url": "代理地址",
+    "disabled": "局域网共享\n已禁用",
+    "instructions_title": "连接说明",
+    "instructions_warning": "请确保系统网络或防火墙设置中已启用'Allow LAN / Sharing'选项。",
+    "step1": "打开设备的Wi-Fi设置，将代理设置为手动。",
+    "step2": "输入上方的本地IP和HTTP端口（或SOCKS5端口）。"
   },
   "admin": {
     "title": "需要管理员权限",
@@ -190,7 +238,8 @@
     "ping": "延迟: {latency}",
     "update_complete": "{component} 更新完成！",
     "update_error": "错误: {error}",
-    "admin_required": "VPN模式需要管理员权限"
+    "admin_required": "VPN模式需要管理员权限",
+    "checking": "检查中"
   },
   "connection": {
     "loading_config": "正在加载配置...",
@@ -209,13 +258,14 @@
     "checking_network": "正在检查网络连接...",
     "no_internet": "无网络连接！",
     "connected_no_internet": "已连接但无网络访问",
-    "verifying_latency": "正在验证连接延迟...",
+    "verifying_latency": "测试延迟",
     "falling_back": "正在回退到原始配置...",
     "failure_detected": "检测到连接问题，正在检查...",
     "reconnecting": "正在重新连接...",
     "reconnected": "连接已恢复！✅",
     "reconnect_failed": "自动重连失败",
-    "adopted_connection": "已接管的连接"
+    "adopted_connection": "已接管的连接",
+    "core_crashed": "因核心崩溃连接已断开"
   },
   "routing": {
     "title": "路由规则",
@@ -254,7 +304,18 @@
   "logs": {
     "title": "连接日志",
     "pause": "暂停日志更新",
-    "resume": "恢复日志更新"
+    "resume": "恢复日志更新",
+    "memory": "内存",
+    "active_threads": "活跃线程",
+    "health_status": "健康状态",
+    "nodes": "节点",
+    "optimal_performance": "最佳性能",
+    "issues": "问题",
+    "system_healthy": "系统正常",
+    "copy": "复制",
+    "download": "下载",
+    "clear": "清除",
+    "terminal_title": "XENRAY_CLI :: 主日志"
   },
   "header": {
     "toggle_theme": "切换主题",
@@ -313,5 +374,73 @@
       "deleted": "链路已删除",
       "invalid_chain": "无法连接：链路存在缺少的服务器"
     }
+  },
+  "dashboard": {
+    "network_traffic": "网络流量",
+    "live_statistics": "实时统计",
+    "current_node": "当前节点",
+    "change_server": "更换服务器",
+    "uptime": "运行时间: {time}",
+    "upload": "上传",
+    "download": "下载",
+    "protocol": "协议",
+    "encryption": "加密",
+    "local_ip": "本地 IP",
+    "server_ip": "服务器 IP",
+    "checking": "检查中...",
+    "secure": "安全",
+    "system_secure": "系统安全",
+    "system_ready": "系统就绪",
+    "no_internet": "无互联网",
+    "connected": "已连接",
+    "disconnected": "已断开",
+    "quick_disconnect": "快速断开",
+    "quick_connect": "快速连接",
+    "cpu": "CPU: {percent}%",
+    "ram": "内存: {mb}MB",
+    "realtime_wave": "实时流量波形图及详细统计",
+    "view_statistics": "统计页面 ������",
+    "country": "国家"
+  },
+  "nav": {
+    "dashboard": "仪表盘",
+    "statistics": "统计",
+    "servers": "服务器",
+    "logs": "日志",
+    "settings": "设置",
+    "connect_now": "连接",
+    "disconnect": "断开"
+  },
+  "servers": {
+    "selected_node": "已选节点",
+    "search_placeholder": "搜索服务器名称、地区或 IP...",
+    "add": "添加服务器",
+    "latency": "延迟"
+  },
+  "stats": {
+    "session": "Session: ",
+    "total_data": "Total Data Transfer",
+    "peak_speed": "Peak Speed: ",
+    "realtime_wave": "Real-Time Traffic Wave Stream",
+    "download": "Download",
+    "upload": "Upload"
+  },
+  "window": {
+    "minimize": "最小化",
+    "close": "关闭"
+  },
+  "lan_sharing": {
+    "title": "LAN代理共享",
+    "subtitle": "将代理连接共享给本地网络设备",
+    "scan_to_connect": "扫码连接",
+    "disabled_placeholder": "局域网共享已禁用",
+    "local_ip": "本地IP",
+    "http_port": "HTTP端口",
+    "socks_port": "SOCKS5端口",
+    "guide_title": "连接指南",
+    "guide_step_1": "1. 将目标设备（手机、电视或电脑）连接到同一个 Wi-Fi 网络。",
+    "guide_step_2": "2. 打开目标设备的 Wi-Fi 设置并将代理设置为手动 (Manual)。",
+    "guide_step_3": "3. 输入上方显示的本地 IP 和 HTTP/SOCKS5 端口并保存。",
+    "guide_step_4": "提示：如果连接失败，请检查系统防火墙设置。"
   }
 }

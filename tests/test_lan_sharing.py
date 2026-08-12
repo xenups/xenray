@@ -158,7 +158,7 @@ class TestSingboxLanRoutes:
 
         return SingboxService()
 
-    @patch("src.services.singbox_service.subprocess.run")
+    @patch("src.services.route_manager_service.subprocess.run")
     @patch("src.utils.platform_utils.PlatformUtils.get_platform", return_value="windows")
     def test_add_lan_routes(self, mock_platform, mock_run):
         svc = self._service()
@@ -238,14 +238,14 @@ class TestLanSharingCardUI:
 
     @patch("src.utils.network_interface.NetworkInterfaceDetector.get_primary_lan_ip", return_value="192.168.70.125")
     def test_initial_state(self, mock_ip, app_context):
-        from src.ui.components.lan_sharing_card import LanSharingCard
+        from src.ui.components.lan.lan_sharing_card import LanSharingCard
 
         card = LanSharingCard(app_context)
         assert card.visible is False
 
     @patch("src.utils.network_interface.NetworkInterfaceDetector.get_primary_lan_ip", return_value="192.168.70.125")
     def test_set_visible_shows_badge(self, mock_ip, app_context):
-        from src.ui.components.lan_sharing_card import LanSharingCard
+        from src.ui.components.lan.lan_sharing_card import LanSharingCard
 
         card = LanSharingCard(app_context)
         card.set_visible(True)
@@ -254,7 +254,7 @@ class TestLanSharingCardUI:
 
     @patch("src.utils.network_interface.NetworkInterfaceDetector.get_primary_lan_ip", return_value="192.168.70.125")
     def test_open_dialog_opens_modal(self, mock_ip, app_context):
-        from src.ui.components.lan_sharing_card import LanSharingCard
+        from src.ui.components.lan.lan_sharing_card import LanSharingCard
 
         card = LanSharingCard(app_context)
         mock_page = MagicMock()
@@ -262,3 +262,56 @@ class TestLanSharingCardUI:
 
         card._open_dialog()
         mock_page.show_dialog.assert_called_once()
+
+
+class TestLanSharingUnifiedToggle:
+    """set_lan_sharing_enabled persists, applies firewall rules, and broadcasts."""
+
+    @pytest.fixture
+    def controller(self):
+        from src.ui.controllers.lan_sharing_controller import LanSharingController
+
+        ctx = MagicMock()
+        ctx.settings.get_proxy_port.return_value = 10805
+        ctx.settings.get_allow_lan.return_value = False
+        return LanSharingController(app_context=ctx), ctx
+
+    def test_enable_persists_firewall_and_publishes(self, controller, monkeypatch):
+        from src.core.event_bus import TOPIC_LAN_SHARING_CHANGED, event_bus
+
+        ctrl, ctx = controller
+        received = []
+
+        def listener(data):
+            received.append(data)
+
+        event_bus.subscribe(TOPIC_LAN_SHARING_CHANGED, listener)
+        try:
+            with patch("src.utils.firewall_manager.FirewallManager.add_lan_firewall_rule") as mock_add:
+                ctrl.set_lan_sharing_enabled(True)
+        finally:
+            event_bus.unsubscribe(TOPIC_LAN_SHARING_CHANGED, listener)
+
+        ctx.settings.set_allow_lan.assert_called_once_with(True)
+        mock_add.assert_called_once_with([10805, 10809])
+        assert received == [{"enabled": True}]
+
+    def test_disable_removes_firewall_and_publishes(self, controller):
+        from src.core.event_bus import TOPIC_LAN_SHARING_CHANGED, event_bus
+
+        ctrl, ctx = controller
+        received = []
+
+        def listener(data):
+            received.append(data)
+
+        event_bus.subscribe(TOPIC_LAN_SHARING_CHANGED, listener)
+        try:
+            with patch("src.utils.firewall_manager.FirewallManager.remove_lan_firewall_rule") as mock_remove:
+                ctrl.set_lan_sharing_enabled(False)
+        finally:
+            event_bus.unsubscribe(TOPIC_LAN_SHARING_CHANGED, listener)
+
+        ctx.settings.set_allow_lan.assert_called_once_with(False)
+        mock_remove.assert_called_once()
+        assert received == [{"enabled": False}]

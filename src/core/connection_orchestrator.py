@@ -314,7 +314,7 @@ class ConnectionOrchestrator:
     def _load_and_validate_config(self, file_path: str, step_callback) -> Optional[dict]:
         """Load and validate configuration file."""
         if step_callback:
-            step_callback(t("status.loading_config"))
+            step_callback(t("connection.loading_config"))
 
         logger.debug(f"Loading config from {file_path}")
         config, _ = self._app_context.load_config(file_path)
@@ -326,7 +326,7 @@ class ConnectionOrchestrator:
         if not isinstance(config, dict):
             logger.error(f"Invalid config format: expected dict, got {type(config).__name__}")
             if step_callback:
-                step_callback(t("status.invalid_config"))
+                step_callback(t("connection.invalid_config"))
             return None
 
         return config
@@ -428,11 +428,14 @@ class ConnectionOrchestrator:
         if step_callback:
             step_callback(t("connection.finalizing"))
 
+        import time as _time
+
         connection_info = {
             "mode": mode,
             "xray_pid": xray_pid,
             "singbox_pid": singbox_pid,
             "file": file_path,
+            "connected_at": _time.time(),
         }
 
         # NOTE: Monitoring is now started by ConnectionManager via ConnectionMonitoringService

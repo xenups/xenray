@@ -1,16 +1,25 @@
 """Routing rules management page with i18n support."""
+
+from __future__ import annotations
+
+from typing import Callable
+
 import flet as ft
 
 from src.core.app_context import AppContext
 from src.core.i18n import t
+from src.ui.components.common import PageHeader
+from src.ui.components.routing import RoutingToggleRow, RuleItemRow
+from src.ui.controllers.routing_controller import RoutingController
 
 
 class RoutingPage(ft.Container):
-    def __init__(self, app_context: AppContext, on_back):
+    """Routing rules management page with targeted tab switching and rule list updates."""
+
+    def __init__(self, app_context: AppContext, on_back: Callable):
         self._app_context = app_context
         self._on_back = on_back
-        self._rules = self._app_context.routing.load_rules()
-        self._toggles = self._app_context.routing.load_toggles()
+        self._controller = RoutingController(app_context=app_context)
         self._current_tab = "quick"
 
         super().__init__(
@@ -21,89 +30,51 @@ class RoutingPage(ft.Container):
         )
         self._setup_ui()
 
-    def _create_toggle_row(self, key: str, title: str, subtitle: str, icon) -> ft.Container:
-        """Create a toggle row for quick settings."""
-        switch = ft.Switch(
-            value=self._toggles.get(key, False),
-            on_change=lambda e, k=key: self._on_toggle_change(k, e.control.value),
-        )
-        return ft.Container(
-            content=ft.Row(
-                [
-                    ft.Icon(icon, size=20, color=ft.Colors.PRIMARY),
-                    ft.Column(
-                        [
-                            ft.Text(title, size=13, weight=ft.FontWeight.W_500),
-                            ft.Text(subtitle, size=11, color=ft.Colors.ON_SURFACE_VARIANT),
-                        ],
-                        spacing=2,
-                        expand=True,
-                    ),
-                    switch,
-                ],
-                spacing=12,
-            ),
-            padding=ft.Padding.symmetric(horizontal=15, vertical=12),
-            border=ft.Border.only(bottom=ft.border.BorderSide(1, ft.Colors.OUTLINE_VARIANT)),
+    def _on_toggle_change(self, key: str, value: bool) -> None:
+        """Handle toggle change via RoutingController."""
+        self._controller.update_toggle(key, value)
+
+    def _setup_ui(self) -> None:
+        header = PageHeader(
+            title=t("routing.title"),
+            subtitle=t("routing.subtitle"),
+            on_back=self._on_back,
         )
 
-    def _on_toggle_change(self, key: str, value: bool):
-        """Handle toggle change."""
-        self._toggles[key] = value
-        self._app_context.routing.save_toggle(key, value)
-
-    def _setup_ui(self):
-        # Header
-        header = ft.Container(
-            content=ft.Row(
-                [
-                    ft.IconButton(ft.Icons.ARROW_BACK, on_click=self._on_back),
-                    ft.Column(
-                        [
-                            ft.Text(t("routing.title"), size=20, weight=ft.FontWeight.BOLD),
-                            ft.Text(
-                                t("routing.subtitle"),
-                                size=12,
-                                color=ft.Colors.ON_SURFACE_VARIANT,
-                            ),
-                        ],
-                        spacing=2,
-                    ),
-                ],
-                spacing=10,
-            ),
-            padding=ft.Padding.symmetric(horizontal=10, vertical=10),
-            bgcolor=ft.Colors.with_opacity(0.2, "#1e293b"),
-            blur=ft.Blur(10, 10, ft.BlurTileMode.MIRROR),
-        )
-
-        # Quick Settings Content (shown when Quick tab is selected)
         self._quick_settings_view = ft.Container(
             content=ft.Column(
                 [
-                    self._create_toggle_row(
+                    RoutingToggleRow(
                         "block_udp_443",
                         t("routing.block_udp443"),
                         t("routing.block_udp443_desc"),
                         ft.Icons.BLOCK,
+                        self._controller.toggles.get("block_udp_443", False),
+                        self._on_toggle_change,
                     ),
-                    self._create_toggle_row(
+                    RoutingToggleRow(
                         "block_ads",
                         t("routing.block_ads"),
                         t("routing.block_ads_desc"),
                         ft.Icons.AD_UNITS_OUTLINED,
+                        self._controller.toggles.get("block_ads", False),
+                        self._on_toggle_change,
                     ),
-                    self._create_toggle_row(
+                    RoutingToggleRow(
                         "direct_private_ips",
                         t("routing.direct_private"),
                         t("routing.direct_private_desc"),
                         ft.Icons.LAN,
+                        self._controller.toggles.get("direct_private_ips", False),
+                        self._on_toggle_change,
                     ),
-                    self._create_toggle_row(
+                    RoutingToggleRow(
                         "direct_local_domains",
                         t("routing.direct_local"),
                         t("routing.direct_local_desc"),
                         ft.Icons.HOME_WORK,
+                        self._controller.toggles.get("direct_local_domains", False),
+                        self._on_toggle_change,
                     ),
                 ],
                 spacing=0,
@@ -112,7 +83,6 @@ class RoutingPage(ft.Container):
             expand=True,
         )
 
-        # Build per-tab content for rule management tabs
         tab_keys = ["direct", "proxy", "block"]
         self._rule_tabs = {}
         tab_contents: list[ft.Control] = [self._quick_settings_view]
@@ -127,7 +97,7 @@ class RoutingPage(ft.Container):
                 content_padding=10,
                 border_radius=8,
             )
-            input_field.on_submit = lambda e, k=tab_key, inp=input_field: self._add_rule(k, inp)
+            input_field.on_submit = lambda e, k=tab_key, inp=input_field: (self._add_rule(k, inp))
             add_btn = ft.ElevatedButton(
                 t("routing.add"),
                 icon=ft.Icons.ADD,
@@ -146,10 +116,7 @@ class RoutingPage(ft.Container):
                 padding=ft.Padding.symmetric(horizontal=20, vertical=0),
             )
 
-            self._rule_tabs[tab_key] = {
-                "input": input_field,
-                "list_view": list_view,
-            }
+            self._rule_tabs[tab_key] = {"input": input_field, "list_view": list_view}
 
             tab_contents.append(
                 ft.Column(
@@ -166,7 +133,6 @@ class RoutingPage(ft.Container):
                 )
             )
 
-        # Tabs
         self._tabs = ft.Tabs(
             length=4,
             selected_index=0,
@@ -188,99 +154,97 @@ class RoutingPage(ft.Container):
                         label_color=ft.Colors.PRIMARY,
                         unselected_label_color=ft.Colors.ON_SURFACE_VARIANT,
                     ),
-                    ft.TabBarView(
-                        expand=True,
-                        controls=tab_contents,
-                    ),
+                    ft.TabBarView(expand=True, controls=tab_contents),
                 ],
             ),
         )
 
-        # Main Layout
-        self.content = ft.Column(
-            [header, self._tabs],
-            spacing=0,
-        )
+        self.content = ft.Column([header, self._tabs], spacing=0)
 
-    def _on_tab_change(self, e):
+    def _on_tab_change(self, e) -> None:
         idx = self._tabs.selected_index
         tab_map = {0: "quick", 1: "direct", 2: "proxy", 3: "block"}
         self._current_tab = tab_map.get(idx, "quick")
         if idx > 0:
             self._refresh_list(self._current_tab, update=True)
 
-    def _refresh_list(self, tab_key, update=True):
+    def _build_empty_state(self, tab_key: str) -> ft.Container:
+        """Empty-state placeholder shown when a rule list has no entries."""
+        tab_name = t(f"routing.{tab_key}")
+        return ft.Container(
+            content=ft.Column(
+                [
+                    ft.Icon(ft.Icons.LIST_ALT, size=48, color=ft.Colors.OUTLINE_VARIANT),
+                    ft.Text(
+                        t("routing.no_rules", type=tab_name),
+                        color=ft.Colors.ON_SURFACE_VARIANT,
+                    ),
+                ],
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
+            alignment=ft.Alignment.CENTER,
+            padding=50,
+            opacity=0.5,
+        )
+
+    def _refresh_list(self, tab_key: str, update: bool = True) -> None:
         list_view = self._rule_tabs[tab_key]["list_view"]
         list_view.controls.clear()
-        items = self._rules.get(tab_key, [])
+        items = self._controller.rules.get(tab_key, [])
 
         if not items:
-            tab_name = t(f"routing.{tab_key}")
-            list_view.controls.append(
-                ft.Container(
-                    content=ft.Column(
-                        [
-                            ft.Icon(
-                                ft.Icons.LIST_ALT,
-                                size=48,
-                                color=ft.Colors.OUTLINE_VARIANT,
-                            ),
-                            ft.Text(
-                                t("routing.no_rules", type=tab_name),
-                                color=ft.Colors.ON_SURFACE_VARIANT,
-                            ),
-                        ],
-                        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                    ),
-                    alignment=ft.Alignment.CENTER,
-                    padding=50,
-                    opacity=0.5,
-                )
-            )
+            list_view.controls.append(self._build_empty_state(tab_key))
 
         for item in items:
-            list_view.controls.append(
-                ft.Container(
-                    content=ft.Row(
-                        [
-                            ft.Text(item, size=14, weight=ft.FontWeight.W_500, expand=True),
-                            ft.IconButton(
-                                ft.Icons.DELETE_OUTLINE,
-                                icon_size=20,
-                                icon_color=ft.Colors.RED_400,
-                                tooltip=t("routing.remove"),
-                                on_click=lambda e, i=item: self._delete_rule(i),
-                            ),
-                        ],
-                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                    ),
-                    padding=ft.Padding.symmetric(horizontal=10, vertical=5),
-                    border=ft.Border.only(bottom=ft.border.BorderSide(1, ft.Colors.OUTLINE_VARIANT)),
-                )
-            )
+            list_view.controls.append(RuleItemRow(item=item, on_delete=self._delete_rule))
 
         if update and self.page:
             list_view.update()
 
-    def _add_rule(self, tab_key, input_field):
+    def _add_rule(self, tab_key: str, input_field: ft.TextField) -> None:
         val = input_field.value.strip()
-        if not val:
+        if not self._controller.add_rule(tab_key, val):
+            input_field.value = ""
+            input_field.focus()
+            input_field.update()
             return
 
-        if val not in self._rules[tab_key]:
-            self._rules[tab_key].append(val)
-            self._save()
-            self._refresh_list(tab_key, update=True)
+        # In-place append (no full list rebuild): remove the empty-state
+        # placeholder first, then add the single new row.
+        list_view = self._rule_tabs[tab_key]["list_view"]
+        if list_view.controls and not isinstance(list_view.controls[0], RuleItemRow):
+            list_view.controls.clear()
+        list_view.controls.append(RuleItemRow(item=val, on_delete=self._delete_rule))
+        try:
+            if list_view.page:
+                list_view.update()
+        except Exception:
+            pass
 
         input_field.value = ""
         input_field.focus()
         input_field.update()
 
-    def _delete_rule(self, item):
-        if item in self._rules[self._current_tab]:
-            self._rules[self._current_tab].remove(item)
-            self._save()
-            self._refresh_list(self._current_tab, update=True)
+    def _delete_rule(self, item: str) -> None:
+        if not self._controller.delete_rule(self._current_tab, item):
+            return
 
-    def _save(self):
-        self._app_context.routing.save_rules(self._rules)
+        # In-place removal (no full list rebuild).
+        list_view = self._rule_tabs[self._current_tab]["list_view"]
+        for row in list_view.controls[:]:
+            if (
+                isinstance(row, RuleItemRow)
+                and row.content
+                and row.content.controls
+                and getattr(row.content.controls[0], "value", None) == item
+            ):
+                list_view.controls.remove(row)
+                break
+
+        if not list_view.controls:
+            list_view.controls.append(self._build_empty_state(self._current_tab))
+        try:
+            if list_view.page:
+                list_view.update()
+        except Exception:
+            pass

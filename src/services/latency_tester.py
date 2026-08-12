@@ -1,12 +1,22 @@
 """Latency testing service for batch server connectivity tests."""
+
 from __future__ import annotations
 
+import asyncio
+import re
 import threading
 import time
-from typing import Callable, List, Optional, Tuple
+import uuid
+from typing import Any, Callable, List, Optional, Tuple
+
+import flet as ft
 
 from src.core.logger import logger
 from src.services.connection_tester import ConnectionTester
+
+# Upper bound on concurrently running per-node tests. Keeps Xray instance
+# spawns reasonable while still testing all nodes in parallel (asyncio.gather).
+MAX_CONCURRENT_TESTS = 10
 
 
 class LatencyTester:
@@ -37,13 +47,13 @@ class LatencyTester:
         self._test_thread: Optional[threading.Thread] = None
 
         # Cache: {profile_id: (text, color, latency_val)}
-        self._results_cache = {}
+        self._results_cache: dict = {}
 
     @property
     def is_testing(self) -> bool:
         return self._is_testing
 
-    def get_cached_result(self, profile_id: str) -> Optional[Tuple[str, any, int]]:
+    def get_cached_result(self, profile_id: str) -> Optional[Tuple[str, Any, int]]:
         """Get cached result for a profile."""
         return self._results_cache.get(profile_id)
 
@@ -53,7 +63,10 @@ class LatencyTester:
 
     def test_profiles(self, profiles: List[dict], fetch_flags: bool = True):
         """
-        Test a list of profiles for latency.
+        Test a list of profiles for latency, concurrently via ``asyncio.gather``.
+
+        This is a manual user trigger (PRIORITY_MANUAL), so it is queued through
+        :class:`PingManager` and pre-empts any pending import / interval pings.
 
         Args:
             profiles: List of profile dicts with 'id' and 'config'
@@ -67,90 +80,111 @@ class LatencyTester:
         self._cancel_flag = False
 
         def _run_tests():
-            for profile in profiles:
-                if self._cancel_flag:
-                    break
-
-                # Notify start
-                if self._on_test_start:
-                    self._on_test_start(profile)
-
-                # Determine if we need to fetch flag
-                should_fetch = fetch_flags and not profile.get("country_code")
-
-                # Prepare config (handle chains)
-                config = profile.get("config")
-                is_chain = profile.get("_is_chain") or profile.get("items") is not None
-
-                # Chains don't have pre-built config - need to build it
-                if is_chain and (not config or not config.get("outbounds")) and self._app_context:
+            try:
+                asyncio.run(self._run_tests_async(profiles, fetch_flags))
+            except Exception as e:
+                logger.error(f"[LatencyTester] Batch latency test error: {e}")
+            finally:
+                self._is_testing = False
+                if self._on_all_complete:
                     try:
-                        from src.services.xray_config_processor import XrayConfigProcessor
+                        self._on_all_complete()
+                    except Exception:
+                        pass
 
-                        processor = XrayConfigProcessor(self._app_context)
-                        success, chain_config, error_msg = processor.build_chain_config(profile)
-                        if success:
-                            config = chain_config
-                        else:
-                            logger.warning(f"Chain config build failed: {error_msg}")
-                            if self._on_test_complete:
-                                self._on_test_complete(profile, False, error_msg, None)
-                            continue
-                    except Exception as e:
-                        logger.error(f"Failed to build chain config: {e}")
-                        if self._on_test_complete:
-                            self._on_test_complete(profile, False, str(e), None)
-                        continue
+        # Unique batch key so successive manual runs never collide on dedup.
+        from src.services.ping_service import PRIORITY_MANUAL, ping_manager
 
-                # Run test
-                success, result, country_data = ConnectionTester.test_connection_sync(
+        ping_manager.submit(PRIORITY_MANUAL, f"manual:{uuid.uuid4()}", _run_tests)
+
+    async def _run_tests_async(self, profiles: List[dict], fetch_flags: bool) -> None:
+        """Run per-profile tests concurrently with a bounded semaphore."""
+        semaphore = asyncio.Semaphore(MAX_CONCURRENT_TESTS)
+
+        async def _test_one(profile: dict) -> None:
+            if self._cancel_flag:
+                return
+
+            if self._on_test_start:
+                try:
+                    self._on_test_start(profile)
+                except Exception:
+                    pass
+
+            # Chains don't have pre-built config - need to build it (blocking).
+            config = profile.get("config")
+            is_chain = profile.get("_is_chain") or profile.get("items") is not None
+            if is_chain and (not config or not config.get("outbounds")) and self._app_context:
+                config = await asyncio.to_thread(self._build_chain_config, profile)
+                if config is None:
+                    return  # error already reported via on_test_complete
+
+            should_fetch = fetch_flags and not profile.get("country_code")
+
+            async with semaphore:
+                success, result, country_data = await asyncio.to_thread(
+                    ConnectionTester.test_connection_sync,
                     config if config else {},
-                    fetch_country=should_fetch,
+                    should_fetch,
                 )
 
-                # Parse latency value from result (works with any language)
-                import re
+            latency_val = self._parse_latency(success, result)
+            color = self._latency_color(success, latency_val)
 
-                latency_val = 999999
-                if success:
-                    # Extract numeric value from result string
-                    match = re.search(r"(\d+)", result)
-                    if match:
-                        try:
-                            latency_val = int(match.group(1))
-                        except ValueError:
-                            pass
+            pid = profile.get("id")
+            if pid:
+                self._results_cache[pid] = (result, color, latency_val)
 
-                # Determine color
-                import flet as ft
-
-                if not success:
-                    color = ft.Colors.RED_400
-                elif latency_val < 1000:
-                    color = ft.Colors.GREEN_400
-                elif latency_val < 2000:
-                    color = ft.Colors.ORANGE_400
-                else:
-                    color = ft.Colors.RED_400
-
-                # Cache result
-                pid = profile.get("id")
-                if pid:
-                    self._results_cache[pid] = (result, color, latency_val)
-
-                # Notify completion
-                if self._on_test_complete:
+            if self._on_test_complete:
+                try:
                     self._on_test_complete(profile, success, result, country_data)
+                except Exception:
+                    pass
 
-                # Small delay to prevent CPU spike
-                time.sleep(0.1)
+        await asyncio.gather(*(_test_one(p) for p in profiles))
 
-            self._is_testing = False
-            if self._on_all_complete:
-                self._on_all_complete()
+    def _build_chain_config(self, profile: dict) -> Optional[dict]:
+        """Build a chain config (blocking) or report failure."""
+        try:
+            from src.services.xray_config_processor import XrayConfigProcessor
 
-        self._test_thread = threading.Thread(target=_run_tests, daemon=True)
-        self._test_thread.start()
+            processor = XrayConfigProcessor(self._app_context)
+            success, chain_config, error_msg = processor.build_chain_config(profile)
+            if not success:
+                logger.warning(f"Chain config build failed: {error_msg}")
+                if self._on_test_complete:
+                    self._on_test_complete(profile, False, error_msg, None)
+                return None
+            return chain_config
+        except Exception as e:
+            logger.error(f"Failed to build chain config: {e}")
+            if self._on_test_complete:
+                self._on_test_complete(profile, False, str(e), None)
+            return None
+
+    @staticmethod
+    def _parse_latency(success: bool, result: str) -> int:
+        """Extract the numeric latency value from the localized result string."""
+        latency_val = 999999
+        if success:
+            match = re.search(r"(\d+)", result)
+            if match:
+                try:
+                    latency_val = int(match.group(1))
+                except ValueError:
+                    pass
+        return latency_val
+
+    @staticmethod
+    def _latency_color(success: bool, latency_val: int) -> str:
+        """Map a latency result to the UI color."""
+        if not success:
+            return ft.Colors.RED_400
+        if latency_val < 1000:
+            return ft.Colors.GREEN_400
+        if latency_val < 2000:
+            return ft.Colors.ORANGE_400
+        return ft.Colors.RED_400
 
     def clear_cache(self):
         """Clear the results cache."""

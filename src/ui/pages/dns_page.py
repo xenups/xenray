@@ -1,15 +1,25 @@
 """DNS management page with i18n support."""
+
+from __future__ import annotations
+
+from typing import Callable
+
 import flet as ft
 
 from src.core.app_context import AppContext
 from src.core.i18n import t
+from src.ui.components.common import PageHeader
+from src.ui.components.dns import DNSServerRow
+from src.ui.controllers.dns_controller import DNSController
 
 
 class DNSPage(ft.Container):
-    def __init__(self, app_context: AppContext, on_back):
+    """DNS management page displaying DNS server entries, priority controls, and addition form."""
+
+    def __init__(self, app_context: AppContext, on_back: Callable):
         self._app_context = app_context
         self._on_back = on_back
-        self._dns_list = self._app_context.dns.load()
+        self._controller = DNSController(app_context=app_context)
 
         super().__init__(
             expand=True,
@@ -19,32 +29,13 @@ class DNSPage(ft.Container):
         )
         self._setup_ui()
 
-    def _setup_ui(self):
-        # Header
-        header = ft.Container(
-            content=ft.Row(
-                [
-                    ft.IconButton(ft.Icons.ARROW_BACK, on_click=self._on_back),
-                    ft.Column(
-                        [
-                            ft.Text(t("dns.title"), size=20, weight=ft.FontWeight.BOLD),
-                            ft.Text(
-                                t("dns.subtitle"),
-                                size=12,
-                                color=ft.Colors.ON_SURFACE_VARIANT,
-                            ),
-                        ],
-                        spacing=2,
-                    ),
-                ],
-                spacing=10,
-            ),
-            padding=ft.Padding.symmetric(horizontal=10, vertical=10),
-            bgcolor=ft.Colors.with_opacity(0.2, "#1e293b"),
-            blur=ft.Blur(10, 10, ft.BlurTileMode.MIRROR),
+    def _setup_ui(self) -> None:
+        header = PageHeader(
+            title=t("dns.title"),
+            subtitle=t("dns.subtitle"),
+            on_back=self._on_back,
         )
 
-        # Input Area
         self._protocol_dd = ft.Dropdown(
             options=[
                 ft.dropdown.Option("udp", "UDP"),
@@ -93,7 +84,6 @@ class DNSPage(ft.Container):
             padding=ft.Padding.symmetric(horizontal=20, vertical=10),
         )
 
-        # List Header
         list_header = ft.Container(
             content=ft.Row(
                 [
@@ -127,25 +117,19 @@ class DNSPage(ft.Container):
             border=ft.Border.only(bottom=ft.border.BorderSide(1, ft.Colors.OUTLINE_VARIANT)),
         )
 
-        # List
         self._list_view = ft.ListView(expand=True, spacing=0, padding=0)
 
         self.content = ft.Column(
-            [
-                header,
-                input_container,
-                list_header,
-                self._list_view,
-            ],
+            [header, input_container, list_header, self._list_view],
             spacing=0,
         )
 
         self._refresh_list(update=False)
 
-    def _refresh_list(self, update=True):
+    def _refresh_list(self, update: bool = True) -> None:
         self._list_view.controls.clear()
 
-        if not self._dns_list:
+        if not self._controller.dns_list:
             self._list_view.controls.append(
                 ft.Container(
                     content=ft.Column(
@@ -165,96 +149,49 @@ class DNSPage(ft.Container):
                 )
             )
 
-        for idx, item in enumerate(self._dns_list):
-            proto = item.get("protocol", "udp").upper()
-            addr = item.get("address", "?")
-
-            row = ft.Container(
-                content=ft.Row(
-                    [
-                        ft.Container(
-                            content=ft.Text(
-                                proto,
-                                size=10,
-                                weight=ft.FontWeight.BOLD,
-                                color=ft.Colors.ON_SURFACE
-                                if proto in ["UDP", "TCP"]
-                                else ft.Colors.ON_PRIMARY_CONTAINER,
-                            ),
-                            bgcolor=ft.Colors.BLUE_200 if proto in ["UDP", "TCP"] else ft.Colors.GREEN_200,
-                            padding=ft.Padding.symmetric(horizontal=6, vertical=2),
-                            border_radius=4,
-                            width=50,
-                            alignment=ft.Alignment.CENTER,
-                        ),
-                        ft.Text(
-                            addr,
-                            size=13,
-                            weight=ft.FontWeight.W_500,
-                            expand=True,
-                            overflow=ft.TextOverflow.ELLIPSIS,
-                            color=ft.Colors.ON_SURFACE,
-                        ),
-                        ft.Row(
-                            [
-                                ft.IconButton(
-                                    ft.Icons.ARROW_UPWARD,
-                                    icon_size=18,
-                                    tooltip=t("dns.move_up"),
-                                    on_click=lambda e, i=idx: self._move_up(i),
-                                ),
-                                ft.IconButton(
-                                    ft.Icons.DELETE_OUTLINE,
-                                    icon_size=18,
-                                    icon_color=ft.Colors.RED_400,
-                                    tooltip=t("dns.remove"),
-                                    on_click=lambda e, i=idx: self._delete(i),
-                                ),
-                            ],
-                            spacing=0,
-                            alignment=ft.MainAxisAlignment.END,
-                            width=80,
-                        ),
-                    ]
-                ),
-                padding=ft.Padding.symmetric(horizontal=20, vertical=12),
-                border=ft.Border.only(bottom=ft.border.BorderSide(1, ft.Colors.OUTLINE_VARIANT)),
-                bgcolor=ft.Colors.with_opacity(0.15, "#1e293b"),
+        for idx, item in enumerate(self._controller.dns_list):
+            self._list_view.controls.append(
+                DNSServerRow(idx=idx, item=item, on_move_up=self._move_up, on_delete=self._delete)
             )
-            self._list_view.controls.append(row)
 
         if update and self.page:
             self._list_view.update()
 
-    def _add_server(self, e):
+    def _add_server(self, e) -> None:
         addr = self._address_input.value.strip()
-        if not addr:
+        if not self._controller.add_server(addr, self._protocol_dd.value):
+            self._address_input.value = ""
+            self._address_input.focus()
+            self._address_input.update()
             return
 
-        entry = {"address": addr, "protocol": self._protocol_dd.value, "domains": []}
-
-        self._dns_list.append(entry)
-        self._save()
-        self._refresh_list()
+        # In-place append (no full list rebuild): remove the empty-state
+        # placeholder first, then add the single new row.
+        if self._list_view.controls and not isinstance(self._list_view.controls[0], DNSServerRow):
+            self._list_view.controls.clear()
+        new_idx = len(self._controller.dns_list) - 1
+        self._list_view.controls.append(
+            DNSServerRow(
+                idx=new_idx,
+                item=self._controller.dns_list[new_idx],
+                on_move_up=self._move_up,
+                on_delete=self._delete,
+            )
+        )
+        try:
+            if self._list_view.page:
+                self._list_view.update()
+        except Exception:
+            pass
 
         self._address_input.value = ""
         self._address_input.focus()
         self._address_input.update()
 
-    def _delete(self, idx):
-        if 0 <= idx < len(self._dns_list):
-            self._dns_list.pop(idx)
-            self._save()
+    def _delete(self, idx: int) -> None:
+        if self._controller.delete_server(idx):
             self._refresh_list()
 
-    def _move_up(self, idx):
-        if idx > 0:
-            self._dns_list[idx], self._dns_list[idx - 1] = (
-                self._dns_list[idx - 1],
-                self._dns_list[idx],
-            )
-            self._save()
+    def _move_up(self, idx: int) -> None:
+        if self._controller.move_up(idx):
             self._refresh_list()
-
-    def _save(self):
-        self._app_context.dns.save(self._dns_list)

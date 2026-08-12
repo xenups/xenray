@@ -104,3 +104,32 @@ class TestI18n:
         assert "en" in langs
         assert "fa" in langs
         assert langs["fa"] == "فارسی"
+
+    def test_eager_init_loads_only_active_language(self):
+        """Startup must load just the active language so the splash appears fast."""
+        i18n = I18n()
+        loaded = []
+        with patch.object(I18n, "_load_lang", side_effect=lambda lang: loaded.append(lang)):
+            i18n._ensure_initialized()
+        assert loaded == ["en"]
+
+    def test_load_all_languages_fills_remaining(self):
+        """The warmup prefetch loads the remaining locale files."""
+        i18n = I18n()
+        i18n._translations = {"en": {}}
+        i18n._initialized = True
+        loaded = []
+        with patch.object(I18n, "_load_lang", side_effect=lambda lang: loaded.append(lang)):
+            i18n.load_all_languages()
+        assert set(loaded) == {"fa", "zh", "ru"}
+
+    def test_set_language_loads_selected_on_demand(self):
+        """Switching language loads that file even before warmup finishes."""
+        i18n = I18n()
+        i18n._translations = {"en": {}}
+        i18n._initialized = True
+        loaded = []
+        with patch.object(I18n, "_load_lang", side_effect=lambda lang: loaded.append(lang)):
+            i18n.set_language("fa")
+        assert "fa" in loaded
+        assert i18n.current_language == "fa"

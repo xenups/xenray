@@ -1,6 +1,7 @@
 """Connection Manager - Facade for connection management with session-scoped lifecycle."""
 
 import threading
+import time
 
 from loguru import logger
 
@@ -54,12 +55,15 @@ class ConnectionManager:
         self._state_lock = threading.Lock()
         self._session_id = 0  # Unique ID for each connection session
 
-        # Initialize ConnectionMonitoringService (creates its own monitors internally)
+        # Initialize ConnectionMonitoringService (creates its own monitors internally).
+        # Pass the canonical xray_service so the monitoring service does NOT create a
+        # second orphaned XrayService instance (which would register a duplicate atexit).
         self._monitoring = ConnectionMonitoringService(
             app_context=app_context,
             on_signal=self._handle_signal,
             on_reconnect=self._reconnect_internal,
             on_reconnect_event=self._emit_event,
+            xray_service=xray_service,
         )
 
         # Create ConnectionOrchestrator with all dependencies. The TUN engine is
@@ -72,6 +76,24 @@ class ConnectionManager:
             legacy_config_service=legacy_config_service,
             singbox_service=singbox_service,
         )
+
+        from src.services.monitoring.core_health_monitor import CoreHealthMonitor
+
+        self._health_monitor = CoreHealthMonitor(
+            xray_service=xray_service,
+            singbox_service=singbox_service,
+        )
+
+        # React to unexpected core-process crashes (published by CoreHealthMonitor)
+        # and to graceful core-process stop completions. Keeps the deterministic
+        # ConnectionFSM / session state in sync even when the crash bypasses the
+        # normal connect/disconnect flow.
+        from src.core.event_bus import EVENT_CORE_CRASHED, EVENT_CORE_PROCESS_STOPPED, event_bus
+
+        self._core_crash_event = EVENT_CORE_CRASHED
+        self._core_process_stopped_event = EVENT_CORE_PROCESS_STOPPED
+        event_bus.subscribe(EVENT_CORE_CRASHED, self._handle_core_crash)
+        event_bus.subscribe(EVENT_CORE_PROCESS_STOPPED, self._handle_core_process_stopped)
 
         # Connection Adoption: Check if services are already running (CLI persistence)
         self._adopt_existing_connection()
@@ -118,6 +140,82 @@ class ConnectionManager:
             # Active monitor detected recovery
             logger.info("[ConnectionManager] Active monitor: connectivity restored")
             self._emit_event("connectivity_restored")
+
+    def _handle_core_crash(self, payload=None) -> None:
+        """Hard-reset the connection session when a core process crashes.
+
+        Subscribed to ``EVENT_CORE_CRASHED`` (published by CoreHealthMonitor).
+        Guarantees a deterministic teardown on crash:
+        - Monitoring + auto-reconnect are cancelled (no zombie reconnect loop).
+        - The current session is invalidated so late signals/events are ignored.
+        - The FSM/UI is driven to DISCONNECTED via the normal ``disconnected`` event.
+        """
+        with self._state_lock:
+            if self._session_id <= 0 or not self._current_connection:
+                logger.debug(f"[ConnectionManager] Core crash event ignored (no active session): {payload}")
+                return
+            logger.warning("[ConnectionManager] Core crash detected — hard reset of connection session")
+            self._current_connection = None
+            self._session_id = 0
+
+        # Stop monitoring + auto-reconnect and the health monitor loop itself.
+        self._monitoring.stop()
+        self._health_monitor.stop_monitoring()
+
+        # Emit disconnected through the canonical path so the FSM transitions to
+        # DISCONNECTED and the UI (DashboardPage, tray, etc.) resets reactively.
+        self._emit_event("disconnected", {"reason": "core_crashed", "crash_payload": payload})
+
+    def _handle_core_process_stopped(self, payload=None) -> None:
+        """Transition FSM to DISCONNECTED once teardown has fully completed.
+
+        Subscribed to ``EVENT_CORE_PROCESS_STOPPED`` (published by
+        ``XrayService.stop`` / ``SingboxService.stop``). In dual-engine (TUN/VPN)
+        mode two stop events are published; the FSM must NOT flip to DISCONNECTED
+        on the first one while the remaining engine (and the red disconnecting
+        animation) is still running. The transition is therefore gated on BOTH
+        engines being stopped. Idempotent: only acts while the FSM is in
+        STOPPING, otherwise the normal ``disconnected`` event owns the transition.
+        """
+        try:
+            from src.core.fsm.connection_fsm import ConnectionState, connection_fsm
+
+            if connection_fsm.state == ConnectionState.STOPPING and self._engines_stopped():
+                connection_fsm.transition_to(ConnectionState.DISCONNECTED, payload=payload or {})
+        except Exception as e:
+            logger.error(f"[ConnectionManager] Error syncing FSM on core process stop: {e}")
+
+    @staticmethod
+    def _engine_is_running(service) -> bool:
+        """Safely check whether a core engine service is still running.
+
+        Handles ``is_running`` being a method, a property, or a plain bool, and
+        tolerates missing services (None) or attributes.
+        """
+        if service is None:
+            return False
+        attr = getattr(service, "is_running", None)
+        if attr is None:
+            return False
+        if callable(attr):
+            try:
+                return bool(attr())
+            except Exception:
+                return False
+        return bool(attr)
+
+    def _engines_stopped(self) -> bool:
+        """Check whether BOTH Xray-core and Sing-box engines are fully stopped.
+
+        When no orchestrator/services are bound (bare instances in tests), the
+        engines are treated as stopped.
+        """
+        orchestrator = getattr(self, "_orchestrator", None)
+        if orchestrator is None:
+            return True
+        xray = getattr(orchestrator, "_xray_service", None)
+        singbox = getattr(orchestrator, "_singbox_service", None)
+        return not self._engine_is_running(xray) and not self._engine_is_running(singbox)
 
     def _adopt_existing_connection(self):
         """Adopt an already running connection (from PID files)."""
@@ -199,9 +297,13 @@ class ConnectionManager:
                 config, _ = self._app_context.load_config(file_path)
                 transport_type = self._xray_processor.get_transport_type(config) if config else None
                 self._monitoring.start(current_session, mode=mode, transport_type=transport_type)
+                self._health_monitor.start_monitoring()
 
                 # Emit connected state
-                self._emit_event("connected")
+                self._emit_event(
+                    "connected",
+                    {"connected_at": connection_info.get("connected_at") or time.time()},
+                )
             else:
                 self._emit_event("connect_failed")
 
@@ -227,6 +329,7 @@ class ConnectionManager:
         # Stop monitoring via facade (handles all: cancel reconnect, stop monitors)
         # After this, no signals will be forwarded
         self._monitoring.stop()
+        self._health_monitor.stop_monitoring()
 
         with self._state_lock:
             if not self._current_connection:
@@ -247,6 +350,14 @@ class ConnectionManager:
 
     def cleanup(self):
         """Cleanup connection resources on exit."""
+        # Unsubscribe reactive handlers to avoid leaking bound-method references.
+        try:
+            from src.core.event_bus import event_bus
+
+            event_bus.unsubscribe(self._core_crash_event, self._handle_core_crash)
+            event_bus.unsubscribe(self._core_process_stopped_event, self._handle_core_process_stopped)
+        except Exception:
+            pass
         # disconnect() already calls teardown_connection() — do not call it again
         # (would double-stop services and log confusing duplicate 'Stopped' messages).
         self.disconnect()
@@ -286,3 +397,46 @@ class ConnectionManager:
                 self._reconnect_event_listener(event_type, data or {})
             except Exception as e:
                 logger.error(f"[ConnectionManager] Error in event listener: {e}")
+
+        # Synchronize ConnectionFSM deterministic states.
+        #
+        # Each transition_to() publishes TOPIC_CONNECTION_STATE_CHANGED exactly
+        # once, so we must NOT also broadcast it below — otherwise the UI (e.g.
+        # "Revving Up" for PREPARING) receives the same state multiple times per
+        # engine event. We only fall back to the EventBus publish for event types
+        # with no FSM transition (e.g. connectivity_degraded/restored) or whose
+        # FSM transition was blocked.
+        fsm_transitioned = False
+        try:
+            from src.core.fsm.connection_fsm import ConnectionState, connection_fsm
+
+            if event_type == "connecting":
+                # Transition straight to PREPARING (the "revving up" state) —
+                # the transient STARTING hop was only doubling the UI dispatch.
+                fsm_transitioned = connection_fsm.transition_to(ConnectionState.PREPARING, payload=data)
+            elif event_type in ("connected", "reconnected"):
+                fsm_transitioned = connection_fsm.transition_to(ConnectionState.CONNECTED, payload=data)
+            elif event_type == "disconnecting":
+                fsm_transitioned = connection_fsm.transition_to(ConnectionState.STOPPING, payload=data)
+            elif event_type in ("disconnected",):
+                fsm_transitioned = connection_fsm.transition_to(ConnectionState.DISCONNECTED, payload=data)
+            elif event_type in ("connect_failed", "reconnect_failed"):
+                fsm_transitioned = connection_fsm.transition_to(ConnectionState.ERROR, payload=data)
+        except Exception as e:
+            logger.error(f"[ConnectionManager] Error updating FSM state for '{event_type}': {e}")
+
+        # Broadcast over the EventBus ONLY when the FSM did not already publish.
+        if not fsm_transitioned:
+            try:
+                from src.core.event_bus import TOPIC_CONNECTION_STATE_CHANGED, event_bus
+
+                event_bus.publish(
+                    TOPIC_CONNECTION_STATE_CHANGED,
+                    {
+                        "event": event_type,
+                        "data": data or {},
+                        "state": connection_fsm.state.value,
+                    },
+                )
+            except Exception as e:
+                logger.error(f"[ConnectionManager] Error publishing event '{event_type}': {e}")
