@@ -123,7 +123,9 @@ class XrayCoreCard(ft.Container):
         """Refresh displayed Xray-Core version string."""
         current_ver = XrayInstallerService.get_local_version() or "ND"
         ver_display = f"v{current_ver}" if not current_ver.startswith("v") else current_ver
-        self._version_text.value = t("settings.xray_core_version", default=f"Xray-Core {ver_display}", version=ver_display)
+        self._version_text.value = t(
+            "settings.xray_core_version", default=f"Xray-Core {ver_display}", version=ver_display
+        )
         try:
             if self._version_text.page:
                 self._version_text.update()

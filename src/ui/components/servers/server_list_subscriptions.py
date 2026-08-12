@@ -52,9 +52,7 @@ class ServerListSubscriptionMixin:
 
         # Progressively inject the remaining subscription cards in micro-chunks.
         if remaining:
-            self._schedule_chunked_append(
-                sub_list_view, remaining, item_builder=self._create_subscription_item
-            )
+            self._schedule_chunked_append(sub_list_view, remaining, item_builder=self._create_subscription_item)
 
         # Restart testing if it was in progress (Prioritize new sort order)
         if self._latency_tester.is_testing:

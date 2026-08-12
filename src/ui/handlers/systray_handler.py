@@ -6,14 +6,14 @@ import os
 import threading
 from typing import TYPE_CHECKING, Optional
 
-import pystray
-from PIL import Image
-
 from src.core.constants import APPDIR
 from src.core.i18n import t
 from src.core.logger import logger
 
 if TYPE_CHECKING:
+    import pystray
+    from PIL import Image
+
     from src.ui.main_window import MainWindow
 
 
@@ -45,8 +45,12 @@ class SystrayHandler:
         if not self._icon:
             self._init_tray()
 
-    def _load_icon(self) -> Image.Image:
+    def _load_icon(self):
         """Load the application icon using Pillow."""
+        # Lazy import: PIL must not be imported at module load (keeps headless
+        # imports / test collection Xlib-free).
+        from PIL import Image
+
         icon_path = os.path.join(APPDIR, "assets", "icon.png")
         if not os.path.exists(icon_path):
             # Fallback to ico if png doesn't exist (though pystray handles PIL images best)
@@ -61,6 +65,10 @@ class SystrayHandler:
 
     def _init_tray(self):
         """Initialize and start the tray icon."""
+        # Lazy import: pystray pulls in Xlib on Linux — only touch it when the
+        # tray is actually initialized (never during headless imports/tests).
+        import pystray
+
         logger.debug("[TRAY] _init_tray() — creating tray icon")
         if self._icon:
             logger.debug("[TRAY] _init_tray() — icon already exists, skipping")
@@ -82,8 +90,10 @@ class SystrayHandler:
             self._tray_thread.start()
             logger.debug("[TRAY] _init_tray() — tray thread started")
 
-    def _create_menu(self) -> pystray.Menu:
+    def _create_menu(self):
         """Create the tray context menu."""
+        import pystray
+
         # Get labels based on current connection state
         if self._main._is_running:
             toggle_label = t("tray.disconnect")

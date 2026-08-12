@@ -86,7 +86,9 @@ class AppUpdateService:
         current_version = AppUpdateService.get_current_version()
 
         try:
-            logger.info(f"Checking for updates... Current version: {current_version} (include_prerelease={include_prerelease})")
+            logger.info(
+                f"Checking for updates... Current version: {current_version} (include_prerelease={include_prerelease})"
+            )
 
             # Query GitHub API
             if include_prerelease:

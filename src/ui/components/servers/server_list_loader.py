@@ -67,11 +67,7 @@ class ServerListLoaderMixin:
             # If in subscription view, refresh that instead
             if self._active_subscription:
                 fresh_sub = next(
-                    (
-                        s
-                        for s in self._subscriptions
-                        if s["id"] == self._active_subscription["id"]
-                    ),
+                    (s for s in self._subscriptions if s["id"] == self._active_subscription["id"]),
                     None,
                 )
                 if fresh_sub:
@@ -83,9 +79,7 @@ class ServerListLoaderMixin:
 
             if self._search_query:
                 self._profiles = [p for p in self._profiles if self._matches_query(p)]
-                self._subscriptions = [
-                    s for s in self._subscriptions if self._matches_query(s)
-                ]
+                self._subscriptions = [s for s in self._subscriptions if self._matches_query(s)]
 
             # Sort profiles
             self._profiles = self._apply_sort(self._profiles)
@@ -109,16 +103,12 @@ class ServerListLoaderMixin:
                     new_list_view.controls.append(chain_item)
                     self._item_map[chain.get("id")] = chain_item
                 except Exception as e:
-                    logger.error(
-                        f"Failed to create ChainListItem for {chain.get('name')}: {e}"
-                    )
+                    logger.error(f"Failed to create ChainListItem for {chain.get('name')}: {e}")
 
             # Add subscriptions
             for sub in self._subscriptions:
                 new_list_view.controls.append(
-                    SubscriptionListItem(
-                        sub, self._enter_subscription_view, self._delete_subscription
-                    )
+                    SubscriptionListItem(sub, self._enter_subscription_view, self._delete_subscription)
                 )
 
             # Add profiles — FIRST batch only so the UI displays instantly.
@@ -169,9 +159,7 @@ class ServerListLoaderMixin:
         else:
             _task()
 
-    def _schedule_chunked_append(
-        self, list_view, remaining_profiles, item_builder=None
-    ):
+    def _schedule_chunked_append(self, list_view, remaining_profiles, item_builder=None):
         """Progressively append the remaining profile cards on the page event loop.
 
         Each micro-chunk builds RENDER_CHUNK ConfigCards, appends them, updates
