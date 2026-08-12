@@ -2,6 +2,7 @@
 
 import threading
 import time
+from typing import Optional
 
 from loguru import logger
 
@@ -309,8 +310,16 @@ class ConnectionManager:
 
         return success
 
-    def _reconnect_internal(self, file_path: str, mode: str) -> bool:
-        """Internal reconnect method for AutoReconnectService (no step_callback)."""
+    def _reconnect_internal(self, file_path: str, mode: str, connection_info: Optional[dict] = None) -> bool:
+        """Internal reconnect method for AutoReconnectService (no step_callback).
+
+        A reconnect is a FRESH connection attempt that owns its own session:
+        - ``connect()`` bumps ``_session_id`` and teardowns the previous engine,
+          so the OLD session is invalidated by design (no stale events).
+        - The failure that triggered the reconnect belongs to the OLD session;
+          the reconnect itself is a brand-new session that emits "connected"
+          when it succeeds.
+        """
         return self.connect(file_path, mode, step_callback=None)
 
     def disconnect(self) -> bool:

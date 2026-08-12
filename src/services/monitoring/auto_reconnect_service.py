@@ -5,6 +5,8 @@ from typing import Callable, Optional
 
 from loguru import logger
 
+from src.core.connection_manager import ConnectionManager  # noqa: F401  (type-only convenience)
+
 
 class AutoReconnectService:
     """
@@ -214,19 +216,24 @@ class AutoReconnectService:
         if not self._validate_session(session_id, "connect_call"):
             return False
 
-        success = self._connect_fn(file_path, mode)
+        success = self._connect_fn(file_path, mode, current_connection)
 
-        # CHECKPOINT: Validate before emitting result
-        if not self._validate_session(session_id, "post_connect"):
-            return False
-
-        # Note: connect() creates a NEW session and emits "connected" event automatically
-        # The "reconnecting" → "connected" transition happens via that event
+        # NOTE: connect() creates a NEW session and emits "connected" event
+        # automatically. The "reconnecting" → "connected" transition happens via
+        # that event (ReconnectEventHandler listens for "connected").
+        #
+        # IMPORTANT (session semantics): after a successful reconnect the
+        # session_id has MOVED ON (connect() bumped it). Emitting "reconnected"
+        # against the OLD session_id here is impossible by design, so we only
+        # report success/failure.
         if success:
             logger.info("[AutoReconnectService] Reconnect successful")
-            # Don't emit "reconnected" - it would use stale session_id and get dropped
+            # Don't emit "reconnected" - the new session owns the "connected"
+            # event and emitting against the stale session_id would get dropped.
         else:
             logger.error("[AutoReconnectService] Reconnect failed")
+            # A failed reconnect runs inside the SAME (still valid) session, so
+            # the failure event is still emitted against it.
             self._emit_safe("reconnect_failed", session_id, {"reason": "connect_failed"})
 
         return success
