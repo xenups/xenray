@@ -12,7 +12,6 @@ from src.core.logger import logger
 
 if TYPE_CHECKING:
     import pystray
-    from PIL import Image
 
     from src.ui.main_window import MainWindow
 

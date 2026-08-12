@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import asyncio
 import math
-from unittest.mock import MagicMock
 
 import flet as ft
 import pytest
 
-from src.core.event_bus import TOPIC_SERVER_INSPECTED, TOPIC_SERVER_INSPECTING, event_bus
+from src.core.event_bus import (
+    TOPIC_SERVER_INSPECTED,
+    TOPIC_SERVER_INSPECTING,
+    event_bus,
+)
 from src.ui.components.config.config_card import ConfigCard, ConfigListItem
 from src.ui.components.servers.server_list_item import ServerListItem
 

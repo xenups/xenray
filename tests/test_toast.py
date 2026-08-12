@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import flet as ft
-import pytest
 
 from src.ui.components.common.toast import ToastManager
 

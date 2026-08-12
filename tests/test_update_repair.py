@@ -1,4 +1,5 @@
-"""Unit tests verifying repair of Client & Xray-Core Update Buttons, i18n keys, pre-releases, and version constant bindings."""
+"""Unit tests verifying repair of Client & Xray-Core Update Buttons, i18n keys,
+pre-releases, and version constant bindings."""
 
 from __future__ import annotations
 
@@ -9,8 +10,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from src.__version__ import APP_VERSION
-from src.core.i18n import I18n, set_language, t
-from src.services.app_update_service import AppUpdateService
+from src.core.i18n import I18n, set_language
 from src.services.xray_installer import XrayInstallerService
 from src.ui.components.common.toast import ToastManager
 from src.ui.components.settings.update_card import UpdateCard
@@ -183,7 +183,8 @@ def test_settings_controller_installs_target_version():
 
 
 def test_update_button_frozen_dimensions():
-    """Verify UpdateCard and XrayCoreCard buttons retain frozen compact dimensions (width=160, height=34) across checking state toggles."""
+    """Verify UpdateCard/XrayCoreCard buttons retain frozen compact dimensions
+    (width=160, height=34) across checking state toggles."""
     card = UpdateCard(on_check_update_click=lambda e: None)
     assert card._update_btn.width == 160
     assert card._update_btn.height == 34

@@ -70,7 +70,6 @@ async def test_schedule_animation_on_page_loop_uses_create_task():
 @pytest.mark.asyncio
 async def test_schedule_animation_on_foreign_loop_uses_run_task():
     """A running loop that is NOT the page loop -> still schedule onto the page loop."""
-    running = asyncio.get_running_loop()
     other = asyncio.new_event_loop()  # different loop object, not running
     page = _FakePage()
     page.session = _FakeSession(other)

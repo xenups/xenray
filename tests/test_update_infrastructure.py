@@ -5,8 +5,6 @@ from __future__ import annotations
 
 import zipfile
 
-import pytest
-
 import src.services.xray_installer as xi
 from src.ui.components.dialogs.update_dialog import UpdateDialog
 

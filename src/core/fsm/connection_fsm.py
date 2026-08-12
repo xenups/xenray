@@ -10,7 +10,11 @@ import threading
 from enum import Enum
 from typing import Any, Optional
 
-from src.core.event_bus import TOPIC_CONNECTION_STATE_CHANGED, TOPIC_FSM_STATE_CHANGED, EventBus
+from src.core.event_bus import (
+    TOPIC_CONNECTION_STATE_CHANGED,
+    TOPIC_FSM_STATE_CHANGED,
+    EventBus,
+)
 from src.core.event_bus import event_bus as default_event_bus
 from src.core.logger import logger
 
@@ -137,7 +141,8 @@ class ConnectionFSM:
             allowed = self.ALLOWED_TRANSITIONS.get(old_state, set())
             if not force and new_state not in allowed:
                 logger.warning(
-                    f"[ConnectionFSM] Invalid state transition from '{old_state.value}' to '{new_state.value}'. Transition blocked."
+                    f"[ConnectionFSM] Invalid state transition from "
+                    f"'{old_state.value}' to '{new_state.value}'. Transition blocked."
                 )
                 return False
 

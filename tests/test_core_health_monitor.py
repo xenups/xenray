@@ -1,6 +1,5 @@
 """Unit tests for CoreHealthMonitor (active health monitoring & crash teardown)."""
 
-import asyncio
 from unittest.mock import MagicMock, patch
 
 import pytest
