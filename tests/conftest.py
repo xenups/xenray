@@ -26,28 +26,42 @@ This conftest.py exists to:
 """
 
 import os
+import sys
 import tempfile
 
-import pytest
-from loguru import logger
-
 # ---------------------------------------------------------------------------
-# Isolate the runtime filesystem (PID files, logs, generated configs) from the
-# real application state so tests never touch ~/.config/xenray or
-# %TEMP%/xenray (where a live VPN session keeps its xray.pid / singbox.pid).
+# CRITICAL: isolate the runtime filesystem BEFORE any src import.
+#
+# ``src.core.constants`` computes TMPDIR / config paths AT IMPORT TIME. If it
+# was imported in this interpreter before conftest runs (pytest may import it
+# during plugin loading, or a previous test session cached it in sys.modules),
+# the constants module would point at the REAL %TEMP%/xenray and any
+# XrayService/SingboxService constructed by a test would read the REAL
+# xray.pid / singbox.pid — and its atexit handler would try to KILL the user's
+# live VPN engines. That is exactly the crash you were seeing.
+#
+# So we (1) set the env vars FIRST, and (2) drop any cached import of the
+# constants module so the next import recomputes paths from the isolated dirs.
 # ---------------------------------------------------------------------------
 _ISOLATED_TMP = tempfile.mkdtemp(prefix="xenray_test_tmp_")
 os.environ["TMPDIR"] = _ISOLATED_TMP
 os.environ["TEMP"] = _ISOLATED_TMP
 os.environ["TMP"] = _ISOLATED_TMP
-
-# The real application config dir must never be read/written by tests either.
 os.environ["XDG_CONFIG_HOME"] = tempfile.mkdtemp(prefix="xenray_test_cfg_")
 
-# NOTE: src.core.constants computes TMPDIR at import time (module level). Any
-# module imported AFTER this conftest runs (i.e. all test modules) will pick up
-# the isolated dir. Modules imported before conftest (only pytest internals)
-# don't touch these paths.
+# CRITICAL: tempfile.gettempdir() on Windows uses GetTempPathW(), which IGNORES
+# the TMP/TEMP env vars. src.core.constants calls tempfile.gettempdir() at
+# import time, so we must override the cached value directly — otherwise every
+# PID/log path would still point at the REAL %TEMP%/xenray and a test-constructed
+# XrayService/SingboxService would adopt + kill the user's LIVE VPN engines.
+tempfile.tempdir = _ISOLATED_TMP
+
+for _mod in list(sys.modules):
+    if _mod == "src.core.constants" or _mod.startswith("src.core.constants."):
+        del sys.modules[_mod]
+
+import pytest
+from loguru import logger
 
 
 @pytest.fixture(autouse=True, scope="session")

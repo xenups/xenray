@@ -87,18 +87,75 @@ class QRCard(ft.Container):
         )
 
     def _build_loading(self) -> ft.Column:
+        """Skeleton loading state while the QR code generates asynchronously.
+
+        A QR-like skeleton (grid of blocks) with a gentle pulsing opacity —
+        reads as "the QR is being generated" rather than a bare spinner.
+        The pulse is driven by Flet's native ``animate_opacity`` (GPU) so it
+        costs ~zero Python CPU.
+        """
+        # A stylised QR skeleton: 3 corner finder squares + a few data blocks,
+        # plus a small pulsing label underneath.
+        block = ft.Container(
+            width=12,
+            height=12,
+            border_radius=2,
+            bgcolor=ft.Colors.with_opacity(0.35, ft.Colors.WHITE),
+        )
+
+        def finder() -> ft.Container:
+            return ft.Container(
+                width=30,
+                height=30,
+                border_radius=3,
+                border=ft.Border.all(2, ft.Colors.with_opacity(0.45, ft.Colors.WHITE)),
+                padding=6,
+                content=ft.Container(
+                    bgcolor=ft.Colors.with_opacity(0.45, ft.Colors.WHITE),
+                    border_radius=2,
+                ),
+            )
+
+        # Build a 5x5 skeleton grid: 3 finders at corners + scattered blocks
+        grid_cells = []
+        for r in range(5):
+            row = []
+            for c in range(5):
+                is_finder = (r in (0, 4) and c in (0, 4)) or (r == 4 and c == 0) or (r == 0 and c == 4)
+                is_finder = (r, c) in {(0, 0), (0, 4), (4, 0)}
+                if is_finder:
+                    row.append(finder())
+                elif (r + c) % 2 == 0 and (r, c) not in {(0, 1), (1, 0), (4, 4)}:
+                    row.append(block)
+                else:
+                    row.append(ft.Container(width=12, height=12))
+            grid_cells.append(ft.Row(row, spacing=5, tight=True))
+
+        pulse_label = ft.Container(
+            content=ft.Text(
+                t("lan_sharing.generating_qr", default="Generating..."),
+                size=10,
+                color=ft.Colors.with_opacity(0.6, ft.Colors.WHITE),
+                text_align=ft.TextAlign.CENTER,
+                rtl=self._is_rtl,
+            ),
+            animate_opacity=900,
+            opacity=0.5,
+        )
+
         return ft.Column(
             [
-                ft.ProgressRing(
-                    width=28,
-                    height=28,
-                    stroke_width=3,
-                    color=ft.Colors.with_opacity(0.6, ft.Colors.WHITE),
+                ft.Container(
+                    content=ft.Column(grid_cells, spacing=5, tight=True),
+                    alignment=ft.Alignment.CENTER,
+                    animate_opacity=1100,
+                    opacity=0.85,
                 ),
+                pulse_label,
             ],
             alignment=ft.MainAxisAlignment.CENTER,
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            spacing=2,
+            spacing=8,
         )
 
     def _build_placeholder(self) -> ft.Column:

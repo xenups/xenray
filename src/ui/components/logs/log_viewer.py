@@ -47,6 +47,9 @@ class LogViewer:
         self._stop_flag: Optional[threading.Event] = None
         self._page: Optional[ft.Page] = None
         self.MAX_CHARS = 10000
+        # Polling interval (seconds) between reads — keeps CPU low; the user
+        # can adjust it (LogsDrawer exposes a control for this).
+        self.tail_interval = 1.0
 
     @property
     def control(self) -> ft.Container:
@@ -69,7 +72,12 @@ class LogViewer:
                 pass
 
     def start_tailing(self, *filepaths: str) -> None:
-        """Start tailing one or more log files."""
+        """Start tailing one or more log files.
+
+        The viewer starts OFF (no tailing) — callers must explicitly enable it
+        (e.g. the user picks a source in the logs drawer). This keeps CPU usage
+        at zero while the logs panel is unused.
+        """
         self.stop_tailing()
 
         stop_event = threading.Event()
@@ -79,10 +87,22 @@ class LogViewer:
         self._is_paused = False
         self._pause_blocker.set()
 
-        def tail_log():
-            file_handles = {}
-            last_inodes = {}
+        # Pre-open the files synchronously so the tail offset is captured NOW.
+        # A line written right after start_tailing() would otherwise be missed
+        # (the thread's first tick would seek to END past it).
+        file_handles = {}
+        last_inodes = {}
+        for filepath in filepaths:
+            try:
+                if os.path.exists(filepath):
+                    f = open(filepath, "r", encoding="utf-8", errors="replace")
+                    f.seek(0, os.SEEK_END)
+                    file_handles[filepath] = f
+                    last_inodes[filepath] = os.stat(filepath).st_ino
+            except Exception as e:
+                logger.error(f"Error opening log file {filepath}: {e}")
 
+        def tail_log():
             while not stop_event.is_set():
                 self._pause_blocker.wait()
 
@@ -117,7 +137,8 @@ class LogViewer:
                         if filepath in last_inodes:
                             del last_inodes[filepath]
 
-                time.sleep(0.5)
+                # Respect the user-configured polling interval (low CPU by default)
+                time.sleep(max(0.1, self.tail_interval))
 
             for f in file_handles.values():
                 f.close()

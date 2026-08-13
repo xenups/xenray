@@ -68,8 +68,24 @@ class ServerListSubscriptionMixin:
                 self._latency_tester.restart_testing(untested)
 
     def _exit_subscription_view(self):
-        """Exit subscription view and return to main list."""
+        """Exit subscription view and return to main list.
+
+        Fully resets the subscription-related state so a later
+        ``_load_profiles`` (e.g. from a background task) cannot re-enter the
+        stale subscription folder:
+        - cancels any in-flight latency tests (their results must not land on
+          the main list's fresh cards),
+        - clears the active subscription + header,
+        - reloads the main profile list.
+        """
         self._latency_tester.cancel()
+        # Defensive: drop any still-queued inspection work for this folder.
+        try:
+            from src.services.server_inspector import server_inspector
+
+            server_inspector.cancel_all_inspections()
+        except Exception:
+            pass
         self._active_subscription = None
         self._header.show_main_header()
         self._load_profiles(update_ui=True)

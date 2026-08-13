@@ -352,7 +352,14 @@
     "copy": "Copy",
     "download": "Download",
     "clear": "Clear",
-    "terminal_title": "XENRAY_CLI :: MAIN_LOGGER"
+    "terminal_title": "XENRAY_CLI :: MAIN_LOGGER",
+    "source": "Log Source",
+    "source_app": "App",
+    "source_xray": "Xray Core",
+    "source_singbox": "Sing-box TUN",
+    "enable": "Enable",
+    "disable": "Disable",
+    "interval": "Interval"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -444,6 +451,7 @@
     "subtitle": "Share your proxy connection across devices on your local network",
     "scan_to_connect": "Scan to Connect",
     "disabled_placeholder": "LAN Sharing Disabled",
+    "generating_qr": "Generating QR...",
     "local_ip": "Local IP",
     "http_port": "HTTP Port",
     "socks_port": "SOCKS5 Port",
