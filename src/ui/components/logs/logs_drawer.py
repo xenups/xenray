@@ -203,11 +203,12 @@ class LogsDrawer(ft.NavigationDrawer):
     def _toggle_tailing(self, e: ft.ControlEvent) -> None:
         """Enable/disable log tailing (OFF by default — zero CPU while off)."""
         self._tailing_enabled = not self._tailing_enabled
+        self._log_viewer.user_enabled = self._tailing_enabled
         if self._tailing_enabled:
             self._log_viewer.start_tailing(*LOG_SOURCES[self._active_source][1])
             self._toggle_tail_btn.content = ft.Row(
                 [
-                    ft.Icon(ft.Icons.STOP_CIRCLE_OUTLINE, size=16),
+                    ft.Icon(ft.Icons.STOP_CIRCLE_OUTLINED, size=16),
                     ft.Text(t("logs.disable", default="Disable"), size=12),
                 ],
                 spacing=4,

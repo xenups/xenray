@@ -321,8 +321,16 @@ class ConnectionHandler:
         return profile, mode_str
 
     def _start_log_tailing(self, mode_str: str):
-        """Start log viewer tailing."""
+        """Start log viewer tailing — ONLY if the user explicitly enabled it.
+
+        The logs panel starts OFF (zero CPU until the user hits Enable in the
+        logs drawer). Connection events must not silently turn tailing on;
+        they only refresh the tailer when the user already opted in.
+        """
         if not self._log_viewer:
+            return
+        if not getattr(self._log_viewer, "user_enabled", False):
+            logger.debug("[ConnectionHandler] Log tailing disabled by user — skipping auto-start")
             return
 
         try:

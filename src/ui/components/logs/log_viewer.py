@@ -50,6 +50,9 @@ class LogViewer:
         # Polling interval (seconds) between reads — keeps CPU low; the user
         # can adjust it (LogsDrawer exposes a control for this).
         self.tail_interval = 1.0
+        # User opted in to tailing? Starts False (logs OFF at app start).
+        # Connection events only auto-start the tailer when this is True.
+        self.user_enabled = False
 
     @property
     def control(self) -> ft.Container:
