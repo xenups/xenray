@@ -129,6 +129,7 @@ class ConnectionButton(ft.Container):
         self._is_pinging = False
         self._ping_animating = False
         self._ping_anim_task = None
+        self._pending_ping_start = False  # deferred sweep start (first ping after splash)
         self._sweep_gradient = ft.SweepGradient(
             center=ft.Alignment.CENTER,
             colors=["#A3A8FE", "#00F2FE", "#00000000", "#00000000"],
@@ -200,6 +201,11 @@ class ConnectionButton(ft.Container):
         first ping's animate_rotation can be dropped because it's triggered
         during the initial build pass. With the anchor armed at mount, the first
         0 -> 2π nudge interpolates on a post-mount frame.
+
+        Also kicks off a sweep that was requested while the button was not yet
+        attached (first ping right after splash): ``start_ping_animation``
+        deferred via ``_pending_ping_start``; now that we are in the tree, run
+        the real start path.
         """
         self._border_container.visible = True
         self._border_container.rotate = ft.Rotate(angle=0.0)
@@ -207,6 +213,11 @@ class ConnectionButton(ft.Container):
             self._border_container.update()
         except Exception:
             pass
+
+        if self._pending_ping_start:
+            self._pending_ping_start = False
+            self._ping_animating = False  # let start_ping_animation run its full path
+            self.start_ping_animation()
 
     def update_theme(self, is_dark: bool):
         """Update button appearance based on theme."""
@@ -524,6 +535,13 @@ class ConnectionButton(ft.Container):
         except Exception:
             pass
 
+    def _has_page_attached(self) -> bool:
+        """True when the control is attached to a page (thread-safe getter)."""
+        try:
+            return self.page is not None
+        except (RuntimeError, AttributeError):
+            return False
+
     def start_ping_animation(self):
         """Start the native neon sweep around the button while the initial ping runs.
 
@@ -532,11 +550,23 @@ class ConnectionButton(ft.Container):
         renders first), then targets full turns — the native 0 -> 2π transition
         interpolates at 60 FPS on the GPU. Only this disc is updated — the button
         and the rest of the page are untouched.
+
+        If the button is not yet attached to a page (the very first ping right
+        after the splash screen), the start is deferred: ``_pending_ping_start``
+        is set and :meth:`did_mount` kicks the sweep off once the control is in
+        the tree. Without this, the first ping's ``update()`` calls target a
+        control the client hasn't built yet and the animation is silently lost.
         """
         if self._ping_animating:
             return
         self._ping_animating = True
         self._is_pinging = True
+
+        if not self._has_page_attached():
+            # Defer until did_mount() — the control isn't attached yet.
+            self._pending_ping_start = True
+            return
+
         # Reveal the sweep disc + mask (both hidden while idle) so only the thin
         # neon rim shows around the button; the centre stays dark and static.
         self._border_container.visible = True
@@ -589,6 +619,7 @@ class ConnectionButton(ft.Container):
         interpolating instead of being dropped on a fresh build."""
         self._ping_animating = False
         self._is_pinging = False
+        self._pending_ping_start = False
         if self._ping_anim_task and hasattr(self._ping_anim_task, "cancel"):
             try:
                 self._ping_anim_task.cancel()
