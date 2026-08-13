@@ -174,7 +174,13 @@ class LanSharingPage(ft.Container):
             self._generate_qr_sync()
 
     async def _generate_qr_async(self) -> None:
-        """Generate the QR base64 in a worker thread so the UI never blocks."""
+        """Generate the QR base64 in a worker thread so the UI never blocks.
+
+        Yields first so the skeleton (show_loading) gets a full client frame
+        to render before the QR replaces it — otherwise the loading state can
+        be swallowed by the same frame that delivers the result.
+        """
+        await asyncio.sleep(0.05)
         qr_str = await asyncio.to_thread(self._controller.generate_qr, self.local_ip, self.http_port)
         self._apply_qr_result(qr_str)
 
