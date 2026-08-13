@@ -37,7 +37,8 @@ class CountryDropdownRow(ft.Container):
             original_on_change(val)
 
         self._dropdown.on_select = wrapped_on_change
-        self._dropdown.on_change = wrapped_on_change
+        # NOTE: Flet 0.86.1 Dropdown has NO on_change attribute — only on_select.
+        # Setting .on_change here would raise AttributeError at construction.
 
         super().__init__(
             content=ft.Row(
