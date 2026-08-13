@@ -1,13 +1,14 @@
 """App Update Card component for Settings Page.
 
-Features:
-- Displays the client version + a "Check for Updates" outlined button.
-- While checking, the button shows a small progress ring AND the whole card
-  gets a neon sweep-glow border (same visual language as the connection
-  button's pinging animation): a GPU-rotated SweepGradient disc behind an
-  opaque mask, exposing only a thin glowing rim.
-- The sweep is armed on mount (rotate=0.0 anchor committed) so the first
-  0 -> 2π transition interpolates instead of being dropped.
+While "Check for Updates" is running, the card shows the same neon sweep-glow
+border used by the server inspection animation (ConfigCard): a GPU-rotated
+SweepGradient disc sized to the card's diagonal, clipped to the card, exposing
+only a thin glowing rim around the edge. The button itself stays compact and
+clean — just an outlined pill with an icon and label; while checking it swaps
+the icon for a small progress ring.
+
+The disc is sized via on_size_change (diagonal) exactly like ConfigCard, so
+the sweep always traces every edge without clipping artifacts.
 """
 
 from __future__ import annotations
@@ -21,7 +22,7 @@ from src.core.constants import APP_VERSION
 from src.core.i18n import t
 from src.ui.theme import AppColors, create_glass_container
 
-# Neon sweep palette (matches the connection button's pinging animation)
+# Neon sweep palette (matches the inspection animation)
 SWEEP_COLORS = ["#A3A8FE", "#00F2FE", "#00000000", "#00000000"]
 SWEEP_STOPS = [0.0, 0.10, 0.22, 1.0]
 
@@ -55,7 +56,7 @@ class UpdateCard(ft.Container):
         )
 
         ACCENT = "#A3A8FE"
-        self._btn_icon = ft.Icon(ft.Icons.SYSTEM_UPDATE_ALT, size=16, color=ACCENT)
+        self._btn_icon = ft.Icon(ft.Icons.SYSTEM_UPDATE_ALT, size=15, color=ACCENT)
         self._btn_text = ft.Text(
             t("settings.check_updates", default="Check for Updates"),
             size=12,
@@ -63,8 +64,8 @@ class UpdateCard(ft.Container):
             weight=ft.FontWeight.W_600,
         )
         self._progress_ring = ft.ProgressRing(
-            width=16,
-            height=16,
+            width=14,
+            height=14,
             stroke_width=2,
             color=ACCENT,
             visible=False,
@@ -76,7 +77,7 @@ class UpdateCard(ft.Container):
                 self._progress_ring,
                 self._btn_text,
             ],
-            spacing=6,
+            spacing=5,
             alignment=ft.MainAxisAlignment.CENTER,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
             tight=True,
@@ -84,13 +85,12 @@ class UpdateCard(ft.Container):
 
         self._update_btn = ft.OutlinedButton(
             content=self._btn_container,
-            width=160,
-            height=34,
+            height=32,
             style=ft.ButtonStyle(
                 color=ACCENT,
                 side=ft.BorderSide(1, ACCENT),
                 shape=ft.RoundedRectangleBorder(radius=8),
-                padding=ft.Padding(12, 0, 12, 0),
+                padding=ft.Padding.symmetric(horizontal=12),
                 bgcolor={
                     ft.ControlState.DEFAULT: ft.Colors.TRANSPARENT,
                     ft.ControlState.HOVERED: ft.Colors.with_opacity(0.1, ACCENT),
@@ -103,17 +103,20 @@ class UpdateCard(ft.Container):
             content=ft.Row(
                 [info_col, self._update_btn],
                 alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
             ),
         )
 
         # ------------------------------------------------------------------
-        # Neon sweep-glow border (inspection-style animation while checking)
+        # Neon sweep-glow border — EXACT same pattern as ConfigCard inspection
         # ------------------------------------------------------------------
         # A large rotating disc carrying the SweepGradient, positioned so it
-        # never contributes to layout size, clipped to this card. An OPAQUE
-        # mask covers the gradient centre so only a thin glowing rim shows
-        # around the card's edge. GPU-rotated via animate_rotation; the disc
-        # stays mounted (visible) so Flutter keeps its rotation anchor.
+        # never contributes to layout size, clipped to this card. The disc is
+        # sized to the card's diagonal via on_size_change (so the rotating arc
+        # traces every edge). Appearance is controlled solely by `gradient`
+        # (None while idle); the disc stays mounted so Flutter keeps its
+        # rotation anchor.
+        self._disc_diameter = 600.0
         self._sweep_gradient = ft.SweepGradient(
             center=ft.Alignment.CENTER,
             colors=SWEEP_COLORS,
@@ -122,12 +125,12 @@ class UpdateCard(ft.Container):
         )
 
         self._sweep_disc = ft.Container(
-            width=700,
-            height=700,
-            border_radius=350,
+            width=self._disc_diameter,
+            height=self._disc_diameter,
+            border_radius=self._disc_diameter / 2,
+            left=(360 - self._disc_diameter) / 2,
+            top=(70 - self._disc_diameter) / 2,
             gradient=None,  # hidden until checking
-            left=(360 - 700) / 2,
-            top=(70 - 700) / 2,
             rotate=ft.Rotate(angle=0.0),
             animate_rotation=ft.Animation(
                 duration=1500,
@@ -135,31 +138,12 @@ class UpdateCard(ft.Container):
             ),
         )
 
-        # Opaque mask: exactly the card's inner area, covering the gradient's
-        # centre so only the ~2px outer rim glows.
-        self._sweep_mask = ft.Container(
-            bgcolor=glass.bgcolor,  # match card surface
-            border_radius=12,
-            visible=False,
-        )
-
         self._sweep_animating = False
         self._sweep_task: Optional[asyncio.Task] = None  # type: ignore[name-defined]
 
         super().__init__(
             content=ft.Stack(
-                [
-                    self._sweep_disc,
-                    self._sweep_mask,
-                    ft.Container(
-                        content=glass.content,
-                        bgcolor=glass.bgcolor,
-                        border=glass.border,
-                        border_radius=glass.border_radius,
-                        blur=glass.blur,
-                        padding=glass.padding,
-                    ),
-                ],
+                [self._sweep_disc, glass],
                 alignment=ft.Alignment.CENTER,
                 clip_behavior=ft.ClipBehavior.HARD_EDGE,
             ),
@@ -169,15 +153,30 @@ class UpdateCard(ft.Container):
             blur=glass.blur,
             padding=glass.padding,
             clip_behavior=ft.ClipBehavior.HARD_EDGE,
+            on_size_change=self._on_size_changed,
         )
 
-    def did_mount(self):
-        """Arm the sweep disc baseline during mount (same as ConnectionButton).
+    def _on_size_changed(self, e):
+        """Size the sweep disc to this card's diagonal (same as ConfigCard)."""
+        w = getattr(e, "width", None)
+        h = getattr(e, "height", None)
+        if not w or not h:
+            return
+        w, h = float(w), float(h)
+        diameter = math.hypot(w, h)
+        self._disc_diameter = diameter
+        self._sweep_disc.width = diameter
+        self._sweep_disc.height = diameter
+        self._sweep_disc.border_radius = diameter / 2
+        self._sweep_disc.left = (w - diameter) / 2
+        self._sweep_disc.top = (h - diameter) / 2
+        try:
+            self._sweep_disc.update()
+        except Exception:
+            pass
 
-        Committing ``rotate=0.0`` as part of the card's own mount lets Flutter
-        establish the rotation anchor on Frame 0, so the first check-update's
-        0 -> 2π nudge interpolates instead of being dropped.
-        """
+    def did_mount(self):
+        """Arm the sweep disc baseline during mount (same as ConfigCard)."""
         self._sweep_disc.visible = True
         self._sweep_disc.rotate = ft.Rotate(angle=0.0)
         try:
@@ -217,19 +216,14 @@ class UpdateCard(ft.Container):
             return
         self._sweep_animating = True
         self._sweep_disc.gradient = self._sweep_gradient
-        self._sweep_mask.visible = True
         try:
             self._sweep_disc.update()
-        except Exception:
-            pass
-        try:
-            self._sweep_mask.update()
         except Exception:
             pass
         self._sweep_task = self._schedule_animation(self._sweep_loop)
 
     def stop_glow_animation(self) -> None:
-        """Stop the sweep and hide the mask + gradient instantly."""
+        """Stop the sweep and hide the gradient instantly."""
         self._sweep_animating = False
         if self._sweep_task and hasattr(self._sweep_task, "cancel"):
             try:
@@ -239,13 +233,8 @@ class UpdateCard(ft.Container):
         self._sweep_task = None
         self._sweep_disc.rotate = ft.Rotate(angle=0.0)
         self._sweep_disc.gradient = None
-        self._sweep_mask.visible = False
         try:
             self._sweep_disc.update()
-        except Exception:
-            pass
-        try:
-            self._sweep_mask.update()
         except Exception:
             pass
 

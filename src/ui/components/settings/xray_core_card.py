@@ -43,7 +43,7 @@ class XrayCoreCard(ft.Container):
         )
 
         ACCENT = "#A3A8FE"
-        self._btn_icon = ft.Icon(ft.Icons.MEMORY, size=16, color=ACCENT)
+        self._btn_icon = ft.Icon(ft.Icons.MEMORY, size=15, color=ACCENT)
         self._btn_text = ft.Text(
             t("settings.check_core_update", default="Check Core Update"),
             size=12,
@@ -51,8 +51,8 @@ class XrayCoreCard(ft.Container):
             weight=ft.FontWeight.W_600,
         )
         self._progress_ring = ft.ProgressRing(
-            width=16,
-            height=16,
+            width=14,
+            height=14,
             stroke_width=2,
             color=ACCENT,
             visible=False,
@@ -64,7 +64,7 @@ class XrayCoreCard(ft.Container):
                 self._progress_ring,
                 self._btn_text,
             ],
-            spacing=6,
+            spacing=5,
             alignment=ft.MainAxisAlignment.CENTER,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
             tight=True,
@@ -72,13 +72,12 @@ class XrayCoreCard(ft.Container):
 
         self._update_btn = ft.OutlinedButton(
             content=self._btn_container,
-            width=160,
-            height=34,
+            height=32,
             style=ft.ButtonStyle(
                 color=ACCENT,
                 side=ft.BorderSide(1, ACCENT),
                 shape=ft.RoundedRectangleBorder(radius=8),
-                padding=ft.Padding(12, 0, 12, 0),
+                padding=ft.Padding.symmetric(horizontal=12),
                 bgcolor={
                     ft.ControlState.DEFAULT: ft.Colors.TRANSPARENT,
                     ft.ControlState.HOVERED: ft.Colors.with_opacity(0.1, ACCENT),

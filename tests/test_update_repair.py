@@ -183,31 +183,31 @@ def test_settings_controller_installs_target_version():
 
 
 def test_update_button_frozen_dimensions():
-    """Verify UpdateCard/XrayCoreCard buttons retain frozen compact dimensions
-    (width=160, height=34) across checking state toggles."""
+    """Verify UpdateCard/XrayCoreCard buttons retain compact dimensions
+    (auto width, height=32) across checking state toggles."""
     card = UpdateCard(on_check_update_click=lambda e: None)
-    assert card._update_btn.width == 160
-    assert card._update_btn.height == 34
+    assert card._update_btn.width is None  # auto width (compact, no frozen 160)
+    assert card._update_btn.height == 32
 
     card.set_checking(True)
-    assert card._update_btn.width == 160
-    assert card._update_btn.height == 34
+    assert card._update_btn.width is None
+    assert card._update_btn.height == 32
 
     card.set_checking(False)
-    assert card._update_btn.width == 160
-    assert card._update_btn.height == 34
+    assert card._update_btn.width is None
+    assert card._update_btn.height == 32
 
     core_card = XrayCoreCard(on_check_core_click=lambda e: None)
-    assert core_card._update_btn.width == 160
-    assert core_card._update_btn.height == 34
+    assert core_card._update_btn.width is None
+    assert core_card._update_btn.height == 32
 
     core_card.set_checking(True)
-    assert core_card._update_btn.width == 160
-    assert core_card._update_btn.height == 34
+    assert core_card._update_btn.width is None
+    assert core_card._update_btn.height == 32
 
     core_card.set_checking(False)
-    assert core_card._update_btn.width == 160
-    assert core_card._update_btn.height == 34
+    assert core_card._update_btn.width is None
+    assert core_card._update_btn.height == 32
 
 
 def test_toast_manager_no_full_page_update():
