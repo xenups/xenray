@@ -64,13 +64,20 @@ class LogsDrawer(ft.NavigationDrawer):
                 ft.dropdown.Option(key=key, text=t(label_key, default=key))
                 for key, (label_key, _) in LOG_SOURCES.items()
             ],
-            on_change=self._on_source_changed,
+            on_select=self._on_source_changed,
         )
 
         # --- Enable / disable tailing (OFF by default — zero CPU) ---
         self._toggle_tail_btn = ft.ElevatedButton(
-            text=t("logs.enable", default="Enable"),
-            icon=ft.Icons.PLAY_CIRCLE_OUTLINE,
+            content=ft.Row(
+                [
+                    ft.Icon(ft.Icons.PLAY_CIRCLE_OUTLINE, size=16),
+                    ft.Text(t("logs.enable", default="Enable"), size=12),
+                ],
+                spacing=4,
+                alignment=ft.MainAxisAlignment.CENTER,
+                tight=True,
+            ),
             height=34,
             on_click=self._toggle_tailing,
             style=ft.ButtonStyle(
@@ -86,7 +93,7 @@ class LogsDrawer(ft.NavigationDrawer):
             width=110,
             dense=True,
             options=[ft.dropdown.Option(key=str(iv), text=f"{iv:g}s") for iv in TAIL_INTERVALS],
-            on_change=self._on_interval_changed,
+            on_select=self._on_interval_changed,
         )
 
         self._controls_row = ft.Row(
@@ -198,12 +205,26 @@ class LogsDrawer(ft.NavigationDrawer):
         self._tailing_enabled = not self._tailing_enabled
         if self._tailing_enabled:
             self._log_viewer.start_tailing(*LOG_SOURCES[self._active_source][1])
-            self._toggle_tail_btn.text = t("logs.disable", default="Disable")
-            self._toggle_tail_btn.icon = ft.Icons.STOP_CIRCLE_OUTLINE
+            self._toggle_tail_btn.content = ft.Row(
+                [
+                    ft.Icon(ft.Icons.STOP_CIRCLE_OUTLINE, size=16),
+                    ft.Text(t("logs.disable", default="Disable"), size=12),
+                ],
+                spacing=4,
+                alignment=ft.MainAxisAlignment.CENTER,
+                tight=True,
+            )
         else:
             self._log_viewer.stop_tailing()
-            self._toggle_tail_btn.text = t("logs.enable", default="Enable")
-            self._toggle_tail_btn.icon = ft.Icons.PLAY_CIRCLE_OUTLINE
+            self._toggle_tail_btn.content = ft.Row(
+                [
+                    ft.Icon(ft.Icons.PLAY_CIRCLE_OUTLINE, size=16),
+                    ft.Text(t("logs.enable", default="Enable"), size=12),
+                ],
+                spacing=4,
+                alignment=ft.MainAxisAlignment.CENTER,
+                tight=True,
+            )
         try:
             if self._toggle_tail_btn.page:
                 self._toggle_tail_btn.update()
