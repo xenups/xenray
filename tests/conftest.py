@@ -30,6 +30,15 @@ import sys
 import tempfile
 
 # ---------------------------------------------------------------------------
+# CRITICAL: strip Hermes-agent paths from sys.path.
+# The Hermes runtime injects its own venv (C:\...\hermes\hermes-agent\venv)
+# into sys.path; that environment ships a BROKEN PIL (no _imaging binary), so
+# `import PIL` resolves there and qrcode.make_image() fails silently. Project
+# tests must always resolve imports from the PROJECT venv first.
+# ---------------------------------------------------------------------------
+sys.path = [p for p in sys.path if "hermes" not in p.lower()]
+
+# ---------------------------------------------------------------------------
 # CRITICAL: isolate the runtime filesystem BEFORE any src import.
 #
 # ``src.core.constants`` computes TMPDIR / config paths AT IMPORT TIME. If it
