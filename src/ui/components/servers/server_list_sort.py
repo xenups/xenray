@@ -49,12 +49,39 @@ class ServerListSortMixin:
 
         sorted_profiles = self._apply_sort(self._profiles)
         order = {str(p.get("id")): i for i, p in enumerate(sorted_profiles)}
+        # Map id -> resolved latency (from the in-memory model, which carries
+        # volatile ping results that are NOT on disk).
+        latency_by_id = {}
+        for p in self._profiles:
+            pid = str(p.get("id"))
+            val = p.get("last_latency_val")
+            if val is not None:
+                latency_by_id[pid] = val
 
         fixed = [c for c in list_view.controls if not isinstance(c, ServerListItem)]
         cards = [c for c in list_view.controls if isinstance(c, ServerListItem)]
         cards.sort(key=lambda c: order.get(str(c._profile.get("id")), 999999))
 
         list_view.controls[:] = fixed + cards
+
+        # Re-apply the ping badge on every moved card. Reordering the ListView
+        # controls can re-mount children on the client, which would rebuild the
+        # card from its construction-time cached_ping (usually None) and show
+        # "..." even though the in-memory model has the fresh latency.
+        for card in cards:
+            pid = str(card._profile.get("id"))
+            val = latency_by_id.get(pid)
+            if val is not None and hasattr(card, "update_ping"):
+                try:
+                    from src.core.i18n import t
+
+                    card.update_ping(
+                        t("connection.latency_ms", default=f"{val} ms", value=val),
+                        card._get_ping_color(val) if hasattr(card, "_get_ping_color") else None,
+                    )
+                except Exception:
+                    pass
+
         try:
             list_view.update()
         except Exception:

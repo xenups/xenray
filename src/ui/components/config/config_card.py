@@ -376,9 +376,24 @@ class ConfigCard(ft.Container):
             pass
 
     def did_mount(self):
-        """Flet lifecycle hook — start the pending animation once the card is attached."""
-        if self._is_inspecting and self._pending_start:
-            self._schedule_animation()
+        """Flet lifecycle hook — start the pending animation once the card is attached.
+
+        Two cases:
+        1. Normal: start_inspection_animation() was called while unmounted but
+           the inspection is STILL in flight (_is_inspecting=True). Schedule the
+           sweep directly.
+        2. Race (first ping after app start): the card was built on a background
+           thread (page not yet attached -> _pending_start=True) and the
+           inspection COMPLETED before the card mounted (_is_inspecting=False).
+           Re-enter start_inspection_animation(): the card is now attached, so
+           _safe_page() resolves and the sweep actually renders.
+        """
+        if self._pending_start:
+            self._pending_start = False
+            if self._is_inspecting:
+                self._schedule_animation()
+            else:
+                self.start_inspection_animation()
 
     async def _animate_sweep(self):
         """Drive the native hardware-accelerated rotation of the border disc.
