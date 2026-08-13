@@ -114,8 +114,27 @@ class NavSidebar(ft.Container):
             size=18,
             color=lan_style.icon_color,
         )
+        # Status light dot: fades in/out (GPU-native 700ms EASE_OUT) like a
+        # radio station lamp when LAN sharing is enabled/disabled.
+        self._lan_indicator = ft.Container(
+            width=6,
+            height=6,
+            border_radius=3,
+            bgcolor="#4ADE80",
+            opacity=1.0 if allow_lan else 0.15,
+            animate_opacity=ft.Animation(700, curve=ft.AnimationCurve.EASE_OUT),
+        )
         self._lan_btn = ft.Container(
-            content=self._lan_icon,
+            content=ft.Stack(
+                [
+                    self._lan_icon,
+                    self._lan_indicator,
+                ],
+                width=24,
+                height=24,
+                # Dot sits at the button's top-right corner (status lamp)
+                alignment=ft.Alignment(1, -1),
+            ),
             padding=ft.Padding.all(10),
             border_radius=12,
             bgcolor=lan_style.bgcolor,
@@ -211,11 +230,19 @@ class NavSidebar(ft.Container):
         self._lan_btn.bgcolor = style.bgcolor
         self._lan_btn.border = style.border
         self._lan_btn.shadow = style.shadow
+        # Status light: 1.0 (lit) when LAN sharing is on, 0.15 (dim) off.
+        self._lan_indicator.opacity = 1.0 if self._controller.allow_lan else 0.15
         try:
             if self._lan_btn.page:
                 self._lan_btn.update()
+            if self._lan_indicator.page:
+                self._lan_indicator.update()
         except Exception:
             pass
+
+    def update_lan_badge(self, allow_lan: bool):
+        """Alias for update_lan_button used by LanSharingPage toggle handler."""
+        self.update_lan_button(allow_lan)
 
     def update_connect_button_text(self, text: str, is_running: bool, server_name: str = ""):
         """Update quick action icon button tooltip and style matching connection status."""
