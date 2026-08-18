@@ -409,3 +409,21 @@ class TestPhysicalNicRejectsVirtual:
         monkeypatch.setattr(lm, "_skip_virtual_iface", lambda name: "tun" in name.lower())
 
         assert lm.get_physical_nic_ip() == "192.168.70.125"
+
+
+class TestRelayCancelOrder:
+    def test_relay_teardown_cancels_before_closing(self):
+        """On relay EOF, the peer is cancelled+drained BEFORE socks are closed —
+        avoiding Windows asyncio 'Cancelling an overlapped future failed'
+        (WinError 6) when closing a socket with overlapped IO in flight."""
+        import inspect
+
+        src = inspect.getsource(listener_mod.relay_main_loop)
+        # cancel/drain must precede any .close()
+        assert "peer_task.cancel()" in src
+        assert "gather(peer_task" in src
+        # ensure close comes after the drain block
+        close_idx = src.find(".close()")
+        cancel_idx = src.find("peer_task.cancel()")
+        assert cancel_idx != -1 and close_idx != -1
+        assert cancel_idx < close_idx, "must cancel before closing sockets"

@@ -6,6 +6,7 @@ from typing import Callable
 
 import flet as ft
 
+from src.core.event_bus import TOPIC_SNI_SPOOF_CHANGED, event_bus
 from src.core.i18n import t
 from src.ui.controllers.navigation_controller import NavigationController
 from src.ui.theme import AppColors
@@ -22,6 +23,7 @@ class NavSidebar(ft.Container):
         on_change_server_click: Callable | None = None,
         on_lan_click: Callable | None = None,
         allow_lan: bool = False,
+        sni_spoof_enabled: bool = False,
     ):
         self._on_tab_change = on_tab_change
         self._on_connect_click = on_connect_click
@@ -31,6 +33,7 @@ class NavSidebar(ft.Container):
         self._controller = NavigationController(
             initial_tab=active_tab,
             allow_lan=allow_lan,
+            sni_spoof_enabled=sni_spoof_enabled,
             on_tab_changed=None,
         )
 
@@ -189,6 +192,16 @@ class NavSidebar(ft.Container):
         self._controller.set_allow_lan(allow_lan)
         is_active = self._controller.active_tab == "lan"
         self._apply_lan_styles(is_active)
+
+    def update_sni_spoof_button(self, enabled: bool):
+        """Update SNI Spoof button icon to green (#4ADE80) when enabled, or default when disabled."""
+        self._controller.set_sni_spoof_enabled(enabled)
+        self._apply_active_styles()
+        try:
+            if self._buttons_container.page:
+                self._buttons_container.update()
+        except Exception:
+            pass
 
     def _update_indicator_position(self):
         """Calculate and set the indicator vertical Y-offset (top position) based on active tab."""

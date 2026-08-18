@@ -7,10 +7,24 @@ from typing import Optional
 import flet as ft
 
 from src.core.i18n import t
+from src.core.logger import logger
 
 
 class ServerListLatencyMixin:
     """Mixin providing ServerList methods — no state of its own."""
+
+    @staticmethod
+    def _parse_latency_value(result: str) -> Optional[int]:
+        """Extract the numeric latency (ms) from a localized result string."""
+        if not result:
+            return None
+        try:
+            import re
+
+            match = re.search(r"(\d+)", result)
+            return int(match.group(1)) if match else None
+        except Exception:
+            return None
 
     def _test_all_latencies(self):
         """Manually "Ping All": inspect every visible item through the SHARED,
@@ -76,14 +90,37 @@ class ServerListLatencyMixin:
                 cn = profile.get("country_name", cc)
                 self._ui(lambda: item.update_icon(cc, cn))
 
-        # Update in-memory latency only (volatile UI state — NOT persisted to
-        # disk, to avoid `profiles.json.tmp` collisions during large batches).
+        # Persist latency. atomioc_write_json in file_utils holds a module-level
+        # thread lock, so concurrent batch-inspection completions serialize
+        # safely — the old "don't persist ping to avoid .tmp collisions" caveat
+        # no longer applies. Saving makes the last ping survive page switches and
+        # restarts (read from repo on initial list load).
         if pid:
+            latency_val = None
+            cached = self._latency_tester.get_cached_result(pid)
+            if cached:
+                latency_val = cached[2]
+            elif success:
+                latency_val = self._parse_latency_value(result)
             latency_data = {
                 "last_latency": result if success else None,
-                "last_latency_val": self._latency_tester.get_cached_result(pid)[2] if success else None,
+                "last_latency_val": latency_val,
             }
             profile.update(latency_data)
+            try:
+                if self._active_subscription:
+                    self._app_context.subscriptions.update(self._active_subscription, latency_data)
+                else:
+                    self._app_context.profiles.update(pid, latency_data)
+            except Exception as e:
+                logger.debug(f"[ServerList] failed to persist ping for {pid}: {e}")
+
+            # Notify parent so a card created later shows the persisted ping.
+            if self._on_profile_updated and success:
+                try:
+                    self._ui(lambda: self._on_profile_updated(profile))
+                except Exception:
+                    pass
 
     def _on_all_latency_tests_complete(self):
         """Called when all latency tests are done."""

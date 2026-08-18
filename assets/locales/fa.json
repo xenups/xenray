@@ -458,5 +458,22 @@
     "guide_step_2": "۲. دستگاه مقصد (گوشی، TV یا PC) را به همین شبکه Wi-Fi متصل کنید.",
     "guide_step_3": "۳. پروکسی دستگاه مقصد را روی حالت Manual قرار دهید.",
     "guide_step_4": "۴. آیپی محلی و پورت بالا را وارد و ذخیره کنید."
+  },
+  "sni_spoof": {
+    "title": "جعل SNI (SNI Spoof)",
+    "subtitle": "دور زدن فیلترینگ و DPI با ارسال شناسه سرور جعلی TLS",
+    "target_section": "سرور مقصد و جعل SNI",
+    "fake_sni": "دامنه جعلی (Fake SNI)",
+    "connect_ip": "آی‌پی سرور مقصد",
+    "connect_port": "پورت مقصد",
+    "relay_section": "شنونده رله محلی (Local Relay)",
+    "listen_host": "آدرس شنود (Host)",
+    "listen_port": "پورت شنود",
+    "running": "در حال اجرا",
+    "stopped": "متوقف شده",
+    "connection_title": "تنظیمات اتصال",
+    "presets_label": "دامنه‌های پیشنهادی",
+    "info_title": "نحوه کارکرد جعل SNI",
+    "info_desc": "هدر Server Name Indication در پکت‌های TLS را با یک دامنه مجاز جایگزین می‌کند تا از فیلترینگ DPI عبور کرده و به سرور متصل شود."
   }
 }

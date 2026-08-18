@@ -71,3 +71,22 @@ def test_navigation_controller_nav_item_style_tokens():
     # Inactive item (servers)
     style_inactive = ctrl.get_nav_item_style("servers")
     assert style_inactive.border is None
+
+
+def test_navigation_controller_sni_spoof_style_tokens():
+    """Test SNI Spoof nav icon color is green (#4ADE80) when enabled, and default when disabled."""
+    ctrl = NavigationController(initial_tab="dashboard", sni_spoof_enabled=False)
+
+    # 1. Disabled and inactive: default muted color
+    style_off = ctrl.get_nav_item_style("sni_spoof")
+    assert style_off.icon_color != "#4ADE80"
+
+    # 2. Enabled: green icon color (#4ADE80)
+    ctrl.set_sni_spoof_enabled(True)
+    style_on = ctrl.get_nav_item_style("sni_spoof")
+    assert style_on.icon_color == "#4ADE80"
+
+    # 3. Disabled again: returns to default color
+    ctrl.set_sni_spoof_enabled(False)
+    style_off_again = ctrl.get_nav_item_style("sni_spoof")
+    assert style_off_again.icon_color != "#4ADE80"

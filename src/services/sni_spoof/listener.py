@@ -262,12 +262,20 @@ async def relay_main_loop(
             if sent_len != len(data):
                 raise ValueError("incomplete send")
     except Exception:
-        sock_1.close()
-        sock_2.close()
-        if peer_task:
+        # On Windows, closing a socket that has an overlapped recv/send still in
+        # flight makes asyncio's `_cancel_overlapped` raise "WinError 6 — handle
+        # invalid" when it later cancels the pending future (the "Cancelling an
+        # overlapped future failed" message in the log). To avoid that, cancel
+        # and drain the peer FIRST (so no overlapped IO remains), then close.
+        if peer_task and not peer_task.done():
             peer_task.cancel()
             try:
                 await asyncio.gather(peer_task, return_exceptions=True)
+            except Exception:
+                pass
+        for s in (sock_1, sock_2):
+            try:
+                s.close()
             except Exception:
                 pass
         return

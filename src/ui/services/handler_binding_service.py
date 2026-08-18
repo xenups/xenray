@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from src.core.event_bus import EVENT_CORE_CRASHED, TOPIC_CONNECTION_STATE_CHANGED, TOPIC_LAN_SHARING_CHANGED, event_bus
+from src.core.event_bus import (
+    EVENT_CORE_CRASHED,
+    TOPIC_CONNECTION_STATE_CHANGED,
+    TOPIC_LAN_SHARING_CHANGED,
+    TOPIC_SNI_SPOOF_CHANGED,
+    event_bus,
+)
 
 if TYPE_CHECKING:
     from src.ui.main_window import MainWindow
@@ -112,6 +118,14 @@ class HandlerBindingService:
         event_bus.subscribe(
             "lan_toggled",
             lambda d: (mw._nav_sidebar.update_lan_button(d.get("allow_lan", False)) if mw._nav_sidebar else None),
+        )
+        event_bus.subscribe(
+            TOPIC_SNI_SPOOF_CHANGED,
+            lambda d: (
+                mw._nav_sidebar.update_sni_spoof_button(d.get("enabled", False))
+                if mw._nav_sidebar and isinstance(d, dict) and "enabled" in d
+                else None
+            ),
         )
 
         mw._stats_forwarding.start()

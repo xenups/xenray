@@ -463,5 +463,22 @@
     "guide_step_2": "2. Connect target device (phone, TV, or PC) to the same Wi-Fi network.",
     "guide_step_3": "3. Set Proxy to Manual mode on the target device.",
     "guide_step_4": "4. Enter the Local IP and HTTP/SOCKS5 Port shown above and save."
+  },
+  "sni_spoof": {
+    "title": "SNI Spoofing",
+    "subtitle": "Hide real SNI from DPI inspection by sending a fake TLS Server Name",
+    "target_section": "Target & Spoofing",
+    "fake_sni": "Disguise SNI (Fake SNI)",
+    "connect_ip": "Connect IP",
+    "connect_port": "Connect Port",
+    "relay_section": "Local Relay Listener",
+    "listen_host": "Listen Host",
+    "listen_port": "Listen Port",
+    "running": "Running",
+    "stopped": "Stopped",
+    "connection_title": "Connection",
+    "presets_label": "Presets",
+    "info_title": "How SNI Spoof Works",
+    "info_desc": "Manipulates the TLS Server Name Indication header in outgoing packets to disguise traffic as an unblocked domain while routing to your server."
   }
 }

@@ -8,6 +8,7 @@ from src.ui.pages.logs_page import LogsPage, LogsView
 from src.ui.pages.routing_page import RoutingPage
 from src.ui.pages.servers_page import ServersPage, ServersView
 from src.ui.pages.settings_page import SettingsPage, SettingsView
+from src.ui.pages.sni_spoof_page import SniSpoofPage
 from src.ui.pages.statistics_page import StatisticsPage, StatisticsView
 
 __all__ = [
@@ -26,4 +27,5 @@ __all__ = [
     "RoutingPage",
     "DNSPage",
     "ChainBuilderPage",
+    "SniSpoofPage",
 ]
