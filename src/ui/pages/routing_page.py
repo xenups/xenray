@@ -201,11 +201,27 @@ class RoutingPage(ft.Container):
         if update and self.page:
             list_view.update()
 
+    def _focus_input(self, input_field: ft.TextField) -> None:
+        """Request focus on a text field (focus() is a coroutine in Flet 0.86.1)."""
+        try:
+            if input_field.page is not None:
+                input_field.page.run_task(input_field.focus)
+            else:
+                import asyncio
+
+                try:
+                    loop = asyncio.get_running_loop()
+                    loop.create_task(input_field.focus())
+                except RuntimeError:
+                    pass
+        except Exception:
+            pass
+
     def _add_rule(self, tab_key: str, input_field: ft.TextField) -> None:
         val = input_field.value.strip()
         if not self._controller.add_rule(tab_key, val):
             input_field.value = ""
-            input_field.focus()
+            self._focus_input(input_field)
             input_field.update()
             return
 
@@ -222,7 +238,7 @@ class RoutingPage(ft.Container):
             pass
 
         input_field.value = ""
-        input_field.focus()
+        self._focus_input(input_field)
         input_field.update()
 
     def _delete_rule(self, item: str) -> None:

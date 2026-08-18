@@ -18,7 +18,7 @@ def test_bus():
 
 @pytest.fixture
 def fsm(test_bus):
-    fsm_obj = ConnectionFSM(bus=test_bus)
+    fsm_obj = ConnectionFSM()
     fsm_obj.transition_to(ConnectionState.CONNECTED, force=True)
     return fsm_obj
 
@@ -129,7 +129,7 @@ def test_start_monitoring_uses_dedicated_daemon_thread(test_bus):
     Blocking process checks (psutil) inside the Flet UI event loop would starve
     it. start_monitoring must always isolate the loop onto a daemon thread.
     """
-    fsm_obj = ConnectionFSM(bus=test_bus)
+    fsm_obj = ConnectionFSM()
     monitor = CoreHealthMonitor(fsm=fsm_obj, bus=test_bus)
 
     monitor.start_monitoring()

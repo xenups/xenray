@@ -10,8 +10,6 @@ import threading
 from enum import Enum
 from typing import Any, Optional
 
-from src.core.event_bus import TOPIC_CONNECTION_STATE_CHANGED, TOPIC_FSM_STATE_CHANGED, EventBus
-from src.core.event_bus import event_bus as default_event_bus
 from src.core.logger import logger
 
 
@@ -31,6 +29,15 @@ class ConnectionFSM:
     """Thread-safe Finite State Machine for connection lifecycle management."""
 
     # Strict transition rules mapping current_state -> set of valid next states.
+    #
+    # Chain contracts used by ConnectionManager._emit_event (the event->transition
+    # mapper, the only caller of transition_to besides UI/monitor helpers):
+    #   - DISCONNECTED -> PINGING (latency check) -> STARTING -> PREPARING -> CONNECTED
+    #   - DISCONNECTED -> STARTING (or PREPARING directly via "connecting")
+    #   - PINGING -> STARTING -> PREPARING: "connecting" during a ping routes
+    #     through STARTING first (PINGING -> PREPARING is intentionally NOT
+    #     allowed; the ping must be exited explicitly).
+    #   - ERROR -> STARTING | DISCONNECTED: restart and defensive-reset exits.
     ALLOWED_TRANSITIONS: dict[ConnectionState, set[ConnectionState]] = {
         ConnectionState.DISCONNECTED: {
             ConnectionState.PINGING,
@@ -72,8 +79,7 @@ class ConnectionFSM:
         },
     }
 
-    def __init__(self, bus: Optional[EventBus] = None) -> None:
-        self._bus = bus or default_event_bus
+    def __init__(self) -> None:
         self._state = ConnectionState.DISCONNECTED
         self._lock = threading.Lock()
         self._state_generation = 0
@@ -149,18 +155,6 @@ class ConnectionFSM:
         logger.info(
             f"[FSM] Transitioning: {old_state.value} -> {new_state.value} (Gen: {current_gen} | Trigger: {payload})"
         )
-
-        # Publish reactive events over EventBus
-        event_payload = {
-            "old_state": old_state.value,
-            "new_state": new_state.value,
-            "state": new_state.value,
-            "generation": current_gen,
-            "payload": payload,
-        }
-
-        self._bus.publish(TOPIC_CONNECTION_STATE_CHANGED, event_payload)
-        self._bus.publish(TOPIC_FSM_STATE_CHANGED, event_payload)
         return True
 
     def reset(self, error: bool = False) -> None:

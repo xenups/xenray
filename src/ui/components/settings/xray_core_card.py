@@ -1,4 +1,15 @@
-"""Xray-Core Update Card component for Settings Page."""
+"""Xray-Core Update Card component for Settings Page.
+
+While "Check Core Update" is running, the card shows the same neon sweep-glow
+border used by the client update card (UpdateCard): a GPU-rotated
+SweepGradient disc clipped to the button, exposing only a thin glowing rim
+tracing the button's edge. No spinner — the neon rim IS the indicator.
+
+The sweep animation lives in ONE shared component
+(:class:`src.ui.components.common.neon_sweep_border.NeonSweepBorder`) used by
+ConfigCard (server inspection) and UpdateCard (check client updates) too —
+this card only wraps its button in it.
+"""
 
 from __future__ import annotations
 
@@ -8,7 +19,10 @@ import flet as ft
 
 from src.core.i18n import t
 from src.services.xray_installer import XrayInstallerService
+from src.ui.components.common.neon_sweep_border import NeonSweepBorder
 from src.ui.theme import AppColors, create_glass_container
+
+ACCENT = "#A3A8FE"
 
 
 class XrayCoreCard(ft.Container):
@@ -42,7 +56,6 @@ class XrayCoreCard(ft.Container):
             spacing=2,
         )
 
-        ACCENT = "#A3A8FE"
         self._btn_icon = ft.Icon(ft.Icons.MEMORY, size=15, color=ACCENT)
         self._btn_text = ft.Text(
             t("settings.check_core_update", default="Check Core Update"),
@@ -50,18 +63,10 @@ class XrayCoreCard(ft.Container):
             color=ACCENT,
             weight=ft.FontWeight.W_600,
         )
-        self._progress_ring = ft.ProgressRing(
-            width=14,
-            height=14,
-            stroke_width=2,
-            color=ACCENT,
-            visible=False,
-        )
 
         self._btn_container = ft.Row(
             [
                 self._btn_icon,
-                self._progress_ring,
                 self._btn_text,
             ],
             spacing=5,
@@ -73,6 +78,9 @@ class XrayCoreCard(ft.Container):
         self._update_btn = ft.OutlinedButton(
             content=self._btn_container,
             height=32,
+            # Explicit width (fits inside the 180 wrapper) so the label swap
+            # "Check Core Update" <-> "Updating..." NEVER resizes the button.
+            width=170,
             style=ft.ButtonStyle(
                 color=ACCENT,
                 side=ft.BorderSide(1, ACCENT),
@@ -86,9 +94,33 @@ class XrayCoreCard(ft.Container):
             on_click=self._handle_click,
         )
 
+        # ------------------------------------------------------------------
+        # Neon sweep-glow border — the SHARED reusable component
+        # ------------------------------------------------------------------
+        # A large rotating disc carrying the SweepGradient, positioned so it
+        # never contributes to layout size, clipped to the button. Only a thin
+        # neon rim traces the button's edge while checking. The OPAQUE inner
+        # layer (the wrapper's mask) hides the disc center: the button itself
+        # is see-through, so without it the whole spinning disc would bleed
+        # through its face.
+        self._neon = NeonSweepBorder(
+            child=self._update_btn,
+            width=180,
+            height=32,
+            border_radius=8,
+        )
+
+        # Legacy aliases (same objects as the component's internals) — the
+        # pre-refactor card owned these names.
+        self._sweep_gradient = self._neon._sweep_gradient
+        self._sweep_disc = self._neon._disc
+        self._disc_diameter = self._neon._disc_diameter
+        self._inner_button_container = self._neon._inner
+        self._btn_wrapper = self._neon
+
         glass = create_glass_container(
             content=ft.Row(
-                [info_col, self._update_btn],
+                [info_col, self._btn_wrapper],
                 alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
             ),
         )
@@ -102,21 +134,44 @@ class XrayCoreCard(ft.Container):
             padding=glass.padding,
         )
 
+        self._sweep_animating = False
+        self._sweep_task = None
+
     def set_checking(self, checking: bool) -> None:
-        """Toggle loading indicator on Check Core button."""
+        """Toggle the neon sweep-glow border on the Check Core button.
+
+        The icon stays ALWAYS visible (no visibility toggle) so the button
+        never resizes — only the label and the glow change.
+        """
         self._update_btn.disabled = checking
-        self._btn_icon.visible = not checking
-        self._progress_ring.visible = checking
         self._btn_text.value = (
-            t("settings.checking_core_updates", default="Checking core updates...")
+            t("settings.checking_core_updates", default="Updating...")
             if checking
             else t("settings.check_core_update", default="Check Core Update")
         )
+
+        if checking:
+            self.start_glow_animation()
+        else:
+            self.stop_glow_animation()
+
         try:
             if self._update_btn.page:
                 self._update_btn.update()
         except Exception:
             pass
+
+    def start_glow_animation(self) -> None:
+        """Start the neon sweep-glow border while checking for core updates."""
+        self._neon.start()
+        self._sweep_animating = self._neon.is_animating
+        self._sweep_task = self._neon._sweep_task
+
+    def stop_glow_animation(self) -> None:
+        """Stop the sweep and hide the gradient instantly."""
+        self._neon.stop()
+        self._sweep_animating = False
+        self._sweep_task = None
 
     def refresh_version(self) -> None:
         """Refresh displayed Xray-Core version string."""
@@ -137,12 +192,16 @@ class XrayCoreCard(ft.Container):
         if not getattr(self._update_btn, "disabled", False):
             self._btn_text.value = t("settings.check_core_update", default="Check Core Update")
         else:
-            self._btn_text.value = t("settings.checking_core_updates", default="Checking core updates...")
+            self._btn_text.value = t("settings.checking_core_updates", default="Updating...")
         try:
             if self.page:
                 self.update()
         except Exception:
             pass
+
+    def did_mount(self) -> None:
+        """Flet lifecycle hook — forward to the shared sweep component."""
+        self._neon.did_mount()
 
     def _handle_click(self, e):
         if self._on_check_core_click:

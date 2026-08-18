@@ -5,7 +5,7 @@
     "disconnecting": "Landing smoothly",
     "connected": "Connected",
     "disconnected": "Ready for Flight",
-    "verifying": "Pre-flight Check",
+    "verifying": "Pre-flight",
     "initializing": "Warming Up",
     "checking": "Checking Radar",
     "tap_to_connect": "Tap to Fly",
@@ -88,9 +88,9 @@
     "about": "About XenRay",
     "version": "v{version}",
     "check_core_update": "Check Core Update",
-    "checking_core_updates": "Checking core updates...",
+    "checking_core_updates": "Updating...",
     "xray_core_version": "Xray-Core {version}",
-    "checking_updates": "Checking for updates...",
+    "checking_updates": "Updating...",
     "xray_core_update_title": "Xray-Core Update",
     "xray_core_update_message": "Are you sure you want to download and update Xray-Core?",
     "xray_core_update_available": "Xray-Core v{version} available!",
@@ -357,8 +357,8 @@
     "source_app": "App",
     "source_xray": "Xray Core",
     "source_singbox": "Sing-box TUN",
-    "enable": "Enable",
-    "disable": "Disable",
+    "enable": "Start",
+    "disable": "Stop",
     "interval": "Interval"
   },
   "nav": {
@@ -366,7 +366,8 @@
     "statistics": "Statistics",
     "servers": "Servers",
     "logs": "Logs",
-    "settings": "Settings",
+        "sni_spoof": "SNI Spoof",
+        "settings": "Settings",
     "connect_now": "Connect Now",
     "disconnect": "Disconnect"
   },
@@ -440,7 +441,9 @@
     "peak_speed": "Peak Speed: ",
     "realtime_wave": "Real-Time Traffic Wave Stream",
     "download": "Download",
-    "upload": "Upload"
+    "upload": "Upload",
+    "empty": "Not connected — start a connection to see live statistics",
+    "waiting": "Waiting for data…"
   },
   "window": {
     "minimize": "Minimize",

@@ -109,6 +109,19 @@ class XrayConfigProcessor:
         self._ensure_inbounds(new_config)
 
         proxy_server_ips = self.get_proxy_server_ip(new_config)
+
+        # SNI Spoof (transparent relay, as proven by the reference script): rewrite
+        # the Xray proxy outbound's server address to 127.0.0.1:LISTEN_PORT so Xray's
+        # own connection to its server flows through the local relay, which forwards
+        # the raw bytes to the REAL CONNECT_IP:CONNECT_PORT with a fake ClientHello
+        # (wrong_seq) injected. The real target is persisted so the listener dials it.
+        # Runs AFTER get_proxy_server_ip so DNS/TUN handling still sees real IPs.
+        try:
+            if self._app_context.settings.get_sni_spoof_enabled():
+                listen_port = self._app_context.settings.get_sni_listen_port()
+                self._redirect_proxy_outbounds(new_config, listen_port)
+        except Exception:
+            pass
         routing_rules = None
         if mode == MODE_VPN and hasattr(self._app_context, "routing"):
             routing_rules = self._app_context.routing.load_rules()
@@ -121,7 +134,9 @@ class XrayConfigProcessor:
         )
 
         default_cipher = self._app_context.settings.get_cipher_suites()
-        self._config_patcher.safe_patch(new_config, default_cipher_suites=default_cipher)
+        self._config_patcher.safe_patch(
+            new_config, default_cipher_suites=default_cipher
+        )
 
         if mode == MODE_VPN:
             is_quic = self.is_quic_transport(new_config)
@@ -144,7 +159,9 @@ class XrayConfigProcessor:
 
         return new_config
 
-    def build_chain_config(self, chain_profile: dict) -> tuple[bool, Optional[dict], str]:
+    def build_chain_config(
+        self, chain_profile: dict
+    ) -> tuple[bool, Optional[dict], str]:
         """Build a complete Xray configuration for a chain of servers."""
         try:
             items = chain_profile.get("items", [])
@@ -170,7 +187,11 @@ class XrayConfigProcessor:
                 node_config = node.get("config", {})
                 outbounds = node_config.get(CONFIG_OUTBOUNDS, [])
                 proxy_out = next(
-                    (o for o in outbounds if o.get(CONFIG_PROTOCOL) in self.CHAINABLE_PROTOCOLS),
+                    (
+                        o
+                        for o in outbounds
+                        if o.get(CONFIG_PROTOCOL) in self.CHAINABLE_PROTOCOLS
+                    ),
                     None,
                 )
 
@@ -222,9 +243,49 @@ class XrayConfigProcessor:
                     CONFIG_DEST_OVERRIDE: list(SNIFF_DEST_OVERRIDE),
                     CONFIG_METADATA_ONLY: False,
                 }
-                logger.debug("[XrayConfigProcessor] Injected Sniffing settings into Xray SOCKS inbound.")
+                logger.debug(
+                    "[XrayConfigProcessor] Injected Sniffing settings into Xray SOCKS inbound."
+                )
 
         return user_port
+
+    def _redirect_proxy_outbounds(self, config: dict, listen_port: int) -> None:
+        """Point the FIRST proxy outbound's DIAL address at the local SNI relay.
+
+        Only the dial ``address``/``port`` are rewritten to 127.0.0.1:LISTEN_PORT so
+        Xray's connection flows through the relay. The user-configured CONNECT_IP on
+        disk is left untouched (the relay dials it and the WinDivert filter targets
+        it), and the real server's SNI/serverName in the outbound header stays as-is.
+        """
+        redirected = False
+        for outbound in config.get(CONFIG_OUTBOUNDS, []):
+            if outbound.get(CONFIG_PROTOCOL) not in (
+                PROTOCOL_VLESS,
+                PROTOCOL_VMESS,
+                PROTOCOL_TROJAN,
+                PROTOCOL_SHADOWSOCKS,
+            ):
+                continue
+            servers = outbound.get(CONFIG_SETTINGS, {})
+            entry = None
+            if "vnext" in servers:
+                entry = next(
+                    (s for s in servers["vnext"] if s.get(CONFIG_ADDRESS)), None
+                )
+            elif "servers" in servers:
+                entry = next(
+                    (s for s in servers["servers"] if s.get(CONFIG_ADDRESS)), None
+                )
+            if entry is None:
+                continue
+            entry[CONFIG_ADDRESS] = "127.0.0.1"
+            entry["port"] = listen_port
+            redirected = True
+            break
+        if redirected:
+            logger.info(
+                f"[XrayConfigProcessor] SNI spoof relay: outbound -> 127.0.0.1:{listen_port}"
+            )
 
     def get_proxy_server_ip(self, config: dict) -> list[str]:
         """Extract proxy server IPs/domains from config."""
@@ -279,12 +340,16 @@ class XrayConfigProcessor:
         stay bound to ``127.0.0.1``.
         """
         user_port = self._app_context.settings.get_proxy_port()
-        listen = "0.0.0.0" if self._app_context.settings.get_allow_lan() else "127.0.0.1"
+        listen = (
+            "0.0.0.0" if self._app_context.settings.get_allow_lan() else "127.0.0.1"
+        )
 
         if not config.get(CONFIG_INBOUNDS):
             config[CONFIG_INBOUNDS] = []
 
-        socks_exists = any(ib.get(CONFIG_PROTOCOL) == PROTOCOL_SOCKS for ib in config[CONFIG_INBOUNDS])
+        socks_exists = any(
+            ib.get(CONFIG_PROTOCOL) == PROTOCOL_SOCKS for ib in config[CONFIG_INBOUNDS]
+        )
         if not socks_exists:
             config[CONFIG_INBOUNDS].append(
                 {
@@ -300,7 +365,9 @@ class XrayConfigProcessor:
                     },
                 }
             )
-            logger.info(f"[XrayConfigProcessor] Added SOCKS inbound on port {user_port} (listen {listen})")
+            logger.info(
+                f"[XrayConfigProcessor] Added SOCKS inbound on port {user_port} (listen {listen})"
+            )
         else:
             for inbound in config[CONFIG_INBOUNDS]:
                 if inbound.get(CONFIG_PROTOCOL) == PROTOCOL_SOCKS:
@@ -313,7 +380,9 @@ class XrayConfigProcessor:
                     }
 
         http_port = self._app_context.settings.get_http_port()
-        http_exists = any(ib.get(CONFIG_PROTOCOL) == PROTOCOL_HTTP for ib in config[CONFIG_INBOUNDS])
+        http_exists = any(
+            ib.get(CONFIG_PROTOCOL) == PROTOCOL_HTTP for ib in config[CONFIG_INBOUNDS]
+        )
         if not http_exists:
             config[CONFIG_INBOUNDS].append(
                 {
@@ -323,7 +392,9 @@ class XrayConfigProcessor:
                     CONFIG_PROTOCOL: PROTOCOL_HTTP,
                 }
             )
-            logger.info(f"[XrayConfigProcessor] Added HTTP inbound on port {http_port} (listen {listen})")
+            logger.info(
+                f"[XrayConfigProcessor] Added HTTP inbound on port {http_port} (listen {listen})"
+            )
         else:
             for inbound in config[CONFIG_INBOUNDS]:
                 if inbound.get(CONFIG_PROTOCOL) == PROTOCOL_HTTP:

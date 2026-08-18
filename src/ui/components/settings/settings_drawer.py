@@ -42,6 +42,7 @@ class SettingsDrawer(ft.NavigationDrawer):
         get_current_mode,
         navigate_to,
         navigate_back,
+        fallback_toast=None,
     ):
         self._app_context = app_context
         self._on_installer_run = on_installer_run
@@ -49,6 +50,7 @@ class SettingsDrawer(ft.NavigationDrawer):
         self._get_current_mode = get_current_mode
         self._navigate_to = navigate_to
         self._navigate_back = navigate_back
+        self._fallback_toast = fallback_toast
 
         # Backend persistence layer — validation, state mutation, EventBus emissions.
         self._settings_controller = SettingsController(
@@ -274,12 +276,19 @@ class SettingsDrawer(ft.NavigationDrawer):
             return None
 
     def _show_toast(self, message: str, message_type: str = "info"):
-        """Show a toast notification."""
+        """Show a toast notification.
+
+        If the drawer is not yet mounted (no safe_page — e.g. the Settings TAB
+        triggers an update before the drawer was ever opened), fall back to the
+        always-alive MainWindow toast instead of silently dropping it.
+        """
         page = self.safe_page
         if page and hasattr(page, "_toast_manager"):
             page._toast_manager.show(message, message_type)
         elif page:
             logger.warning("Toast manager not available, message not shown")
+        elif self._fallback_toast:
+            self._fallback_toast(message, message_type)
 
     # ------------------------------------------------------------------
     # Callback wiring (presentation -> handler)

@@ -35,7 +35,9 @@ class StatsForwardingService:
 
         while True:
             try:
-                await asyncio.sleep(_interval)
+                # Immediate first poll: update BEFORE sleeping so the first
+                # telemetry lands the moment the task starts (during splash),
+                # not after the first 3s tick.
                 is_running = self._mw._is_running
 
                 if is_running and not _was_running:
@@ -107,15 +109,17 @@ class StatsForwardingService:
                 )
             except Exception:
                 pass
+            finally:
+                await asyncio.sleep(_interval)
 
     async def forward_system_stats(self) -> None:
         """Periodically forward system stats (memory, threads, health) to LogsView."""
         while True:
             try:
-                await asyncio.sleep(3.0)
+                # Immediate first poll: update BEFORE sleeping so memory/threads/
+                # health are pre-warmed during splash — the Logs page shows
+                # fresh data the moment it is opened, never a delayed display.
                 if self._mw._nav_locked:
-                    continue
-                if self._mw._active_tab != "logs":
                     continue
                 process = psutil.Process()
                 mem_info = process.memory_info()
@@ -130,6 +134,8 @@ class StatsForwardingService:
                     self._mw._stitch_logs_view.update_health(health_issues)
             except Exception:
                 pass
+            finally:
+                await asyncio.sleep(3.0)
 
     def wrap_status_display(self) -> None:
         """Wrap status_display set_step to forward step messages to active dashboard view."""

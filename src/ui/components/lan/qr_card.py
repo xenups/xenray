@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Optional
 
 import flet as ft
@@ -18,6 +19,8 @@ class QRCard(ft.Container):
 
     def __init__(self, is_rtl: bool = False):
         self._is_rtl = is_rtl
+        self._pulse_task: Optional[asyncio.Task] = None  # type: ignore[name-defined]
+        self._pulsing = False
 
         self._qr_box = ft.Container(
             width=170,
@@ -58,18 +61,29 @@ class QRCard(ft.Container):
 
     def set_qr_visible(self, visible: bool) -> None:
         """Show or hide the QR image box (loading placeholder while visible)."""
+        self._stop_pulse()
         self._qr_box.bgcolor = "#13141C"
         self._qr_box.content = self._build_loading() if visible else self._build_placeholder()
         self._refresh()
 
     def show_loading(self) -> None:
-        """Render the loading state while a QR code resolves asynchronously."""
+        """Render the loading state while a QR code resolves asynchronously.
+
+        Starts a gentle pulsing animation (opacity 0.4 <-> 1.0) on the
+        skeleton so the loading state is visibly alive, not a static frame.
+        """
         self._qr_box.bgcolor = "#13141C"
         self._qr_box.content = self._build_loading()
+        self._start_pulse()
         self._refresh()
 
     def update_qr(self, qr_str: Optional[str]) -> None:
-        """Render the QR image from a base64 PNG string, or the disabled placeholder."""
+        """Render the QR image from a base64 PNG string, or the disabled placeholder.
+
+        Stops the loading pulse and fades the QR in (450ms EASE_OUT) so the
+        swap from the skeleton is smooth instead of a jarring cut.
+        """
+        self._stop_pulse()
         if qr_str:
             self._qr_box.bgcolor = "white"
             self._qr_box.content = self._build_qr_image(qr_str)
@@ -84,6 +98,8 @@ class QRCard(ft.Container):
             width=170,
             height=170,
             fit=ft.BoxFit.CONTAIN,
+            animate_opacity=450,
+            opacity=1.0,
         )
 
     def _build_loading(self) -> ft.Column:
@@ -186,5 +202,82 @@ class QRCard(ft.Container):
         try:
             if self._qr_box.page:
                 self._qr_box.update()
+        except Exception:
+            pass
+
+    # ------------------------------------------------------------------
+    # Loading pulse animation (opacity 0.4 <-> 1.0 on the skeleton)
+    # ------------------------------------------------------------------
+
+    def _start_pulse(self) -> None:
+        """Start the gentle opacity pulse on the skeleton grid."""
+        if self._pulsing:
+            return
+        self._pulsing = True
+        skeleton = self._qr_box.content
+        # Seed the loop target from wherever the skeleton currently sits.
+        if skeleton is not None and hasattr(skeleton, "controls") and skeleton.controls:
+            top = skeleton.controls[0]
+            top.opacity = 0.4
+        try:
+            page = self.page
+        except RuntimeError:
+            page = None
+        if page is not None:
+            self._pulse_task = page.run_task(self._pulse_loop)
+        else:
+            # No live page (headless tests) — animate via the running loop if any.
+            try:
+                loop = asyncio.get_running_loop()
+                self._pulse_task = loop.create_task(self._pulse_loop())
+            except RuntimeError:
+                pass
+
+    def _stop_pulse(self) -> None:
+        """Cancel the pulse loop and restore full opacity."""
+        self._pulsing = False
+        if self._pulse_task is not None:
+            try:
+                self._pulse_task.cancel()
+            except Exception:
+                pass
+        self._pulse_task = None
+        skeleton = self._qr_box.content
+        if skeleton is not None and hasattr(skeleton, "controls") and skeleton.controls:
+            try:
+                skeleton.controls[0].opacity = 1.0
+            except Exception:
+                pass
+
+    async def _pulse_loop(self) -> None:
+        """Drive opacity 0.4 -> 1.0 -> 0.4 on the skeleton grid top container.
+
+        Each step is a tiny patch interpolated by Flutter's native
+        animate_opacity (900ms EASE_IN_OUT), so the pulse is GPU-smooth and
+        costs ~zero Python CPU.
+        """
+        try:
+            while self._pulsing:
+                skeleton = self._qr_box.content
+                if skeleton is not None and hasattr(skeleton, "controls") and skeleton.controls:
+                    top = skeleton.controls[0]
+                    # Fade down
+                    top.opacity = 0.4
+                    try:
+                        top.update()
+                    except Exception:
+                        pass
+                    await asyncio.sleep(0.9)
+                    if not self._pulsing:
+                        break
+                    # Fade up
+                    top.opacity = 1.0
+                    try:
+                        top.update()
+                    except Exception:
+                        pass
+                    await asyncio.sleep(0.9)
+        except asyncio.CancelledError:
+            pass
         except Exception:
             pass

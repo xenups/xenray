@@ -19,7 +19,7 @@ Resource budget (important):
 
 import socket
 import threading
-import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, Optional
 
 from loguru import logger
@@ -87,6 +87,12 @@ class ActiveConnectivityMonitor:
         self._handshake_complete = True  # Set to False during warmup phase
         self._session_id = 0  # Current session for event validation
 
+        # Single bounded executor for event callbacks (max 1 worker — no
+        # unbounded daemon thread spawning per emitted event).
+        self._callback_executor = ThreadPoolExecutor(
+            max_workers=1, thread_name_prefix="ActiveConnectivityMonitor-Callback"
+        )
+
     def start(self, transport_type: str = None, session_id: int = 0):
         """
         Start the monitoring thread.
@@ -106,6 +112,12 @@ class ActiveConnectivityMonitor:
             self._is_connected = True
             self._warning_emitted = False
             self._stop_event.clear()
+            # Recreate the callback executor if a previous stop() shut it down
+            # (supports start → stop → start on the same instance).
+            if self._callback_executor._shutdown:
+                self._callback_executor = ThreadPoolExecutor(
+                    max_workers=1, thread_name_prefix="ActiveConnectivityMonitor-Callback"
+                )
 
             # Apply warmup grace for slow-handshake transports (xhttp)
             self._needs_warmup = transport_type in self.SLOW_HANDSHAKE_TRANSPORTS if transport_type else False
@@ -134,6 +146,7 @@ class ActiveConnectivityMonitor:
                 self._thread.join(timeout=2.0)
 
             self._thread = None
+            self._callback_executor.shutdown(wait=False)
             logger.info("[ActiveConnectivityMonitor] Stopped")
 
     # ------------------------------------------------------------------
@@ -278,11 +291,9 @@ class ActiveConnectivityMonitor:
                 return
         if self._on_lost:
             try:
-                threading.Thread(
-                    target=self._on_lost, daemon=True, name="ActiveConnectivityMonitor-LostCallback"
-                ).start()
-            except Exception as e:
-                logger.error(f"[ActiveConnectivityMonitor] Error in lost callback: {e}")
+                self._callback_executor.submit(self._on_lost)
+            except RuntimeError:
+                logger.debug("[ActiveConnectivityMonitor] Dropped lost event (callback executor shut down)")
 
     def _emit_restored(self):
         """Emit connectivity restored event (only if still running)."""
@@ -292,11 +303,9 @@ class ActiveConnectivityMonitor:
                 return
         if self._on_restored:
             try:
-                threading.Thread(
-                    target=self._on_restored, daemon=True, name="ActiveConnectivityMonitor-RestoredCallback"
-                ).start()
-            except Exception as e:
-                logger.error(f"[ActiveConnectivityMonitor] Error in restored callback: {e}")
+                self._callback_executor.submit(self._on_restored)
+            except RuntimeError:
+                logger.debug("[ActiveConnectivityMonitor] Dropped restored event (callback executor shut down)")
 
     def _emit_degraded(self):
         """Emit connectivity degraded (soft warning) event (only if still running)."""
@@ -306,8 +315,6 @@ class ActiveConnectivityMonitor:
                 return
         if self._on_degraded:
             try:
-                threading.Thread(
-                    target=self._on_degraded, daemon=True, name="ActiveConnectivityMonitor-DegradedCallback"
-                ).start()
-            except Exception as e:
-                logger.error(f"[ActiveConnectivityMonitor] Error in degraded callback: {e}")
+                self._callback_executor.submit(self._on_degraded)
+            except RuntimeError:
+                logger.debug("[ActiveConnectivityMonitor] Dropped degraded event (callback executor shut down)")

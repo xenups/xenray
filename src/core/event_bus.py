@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import threading
+import time
+from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List
 
 from src.core.logger import logger
 
 # Canonical event topic names shared across producers and subscribers.
 TOPIC_CONNECTION_STATE_CHANGED = "connection_state_changed"
-TOPIC_FSM_STATE_CHANGED = "fsm_state_changed"
 TOPIC_TELEMETRY_UPDATED = "telemetry_updated"
 TOPIC_PROFILE_SELECTED = "profile_selected"
 TOPIC_LAN_TOGGLED = "lan_toggled"
@@ -18,16 +19,35 @@ TOPIC_ACTIVE_SERVER_PING_UPDATED = "active_server_ping_updated"
 TOPIC_SERVER_INSPECTED = "server_inspected"
 TOPIC_SERVER_INSPECTING = "server_inspecting"
 TOPIC_INSPECTION_BATCH_COMPLETED = "inspection_batch_completed"
+TOPIC_SNI_SPOOF_CHANGED = "sni_spoof_changed"
 
-# FSM and Core Event Topics
-EVENT_CONNECT_REQUESTED = "connect_requested"
-EVENT_DISCONNECT_REQUESTED = "disconnect_requested"
-EVENT_PREPARING_STARTED = "preparing_started"
-EVENT_CONNECTED = "connected"
-EVENT_STOPPING_STARTED = "stopping_started"
+# Core Event Topics (connection lifecycle facts)
 EVENT_CORE_PROCESS_STOPPED = "core_process_stopped"
 EVENT_CORE_CRASHED = "core_crashed"
-EVENT_ERROR = "error"
+
+
+@dataclass(frozen=True)
+class EngineEvent:
+    """Typed envelope for all connection-lifecycle events.
+
+    Uniform shape so subscribers (UI pages, handler bindings, monitors) read
+    one contract instead of ad-hoc dicts. ``ConnectionManager`` is the single
+    publisher of connection state; it emits ``EngineEvent`` instances.
+    """
+
+    event_name: str
+    source: str
+    payload: Any = None
+    ts: float = field(default_factory=time.time)
+
+    def to_dict(self) -> dict:
+        """Return a plain dict (backward-compatible for existing subscribers/tests)."""
+        return {
+            "event_name": self.event_name,
+            "source": self.source,
+            "payload": self.payload,
+            "ts": self.ts,
+        }
 
 
 class EventBus:

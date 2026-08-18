@@ -79,6 +79,14 @@ class SettingsHandler:
             return
 
         self._on_mode_changed(ConnectionMode.PROXY if is_proxy else ConnectionMode.VPN)
+        self._show_toast(
+            t(
+                "status.mode_selected",
+                mode="Proxy" if is_proxy else "VPN",
+                default=f"Mode: {'Proxy' if is_proxy else 'VPN'}",
+            ),
+            "success",
+        )
 
     def _show_admin_restart_dialog(self):
         """Show dialog to restart as admin for VPN mode."""

@@ -6,7 +6,6 @@ from typing import Optional
 
 from src.core.i18n import t
 from src.core.logger import logger
-from src.ui.pages.chain_builder_page import ChainBuilderPage
 
 
 class ServerListChainsMixin:
@@ -73,6 +72,13 @@ class ServerListChainsMixin:
 
     def show_chain_builder(self, existing_chain: Optional[dict] = None):
         """Show the chain builder page for creating/editing a chain."""
+        # Lazy import: ChainBuilderPage pulls in common/__init__ (Header,
+        # NavSidebar, ...). Importing it at module level created a circular
+        # import chain (server_list -> server_list_chains -> chain_builder_page
+        # -> common -> ...) that stalled first-render of unrelated pages like
+        # Statistics. Only load it when the user actually opens the builder.
+        from src.ui.pages.chain_builder_page import ChainBuilderPage
+
         if not self._navigate_to:
             logger.warning("No navigate_to callback available for chain builder")
             return

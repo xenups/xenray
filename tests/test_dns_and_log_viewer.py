@@ -90,3 +90,51 @@ def test_log_viewer_tail_interval_respected():
             assert reads, "tailer never read the appended line"
         finally:
             lv.stop_tailing()
+
+
+def test_log_viewer_dedupes_consecutive_identical_lines():
+    """Consecutive duplicate lines must be shown ONCE (spam suppression).
+
+    A repeated error line (e.g. the same dial timeout written every second)
+    must not flood the viewer; a different line resumes normal output.
+    """
+    lv = LogViewer("test")
+
+    lv._append_batch(["error: dial timeout\n", "error: dial timeout\n", "error: dial timeout\n"])
+    assert lv._log_text.value == "error: dial timeout"
+
+    # Same line again in a NEW batch — still suppressed (consecutive).
+    lv._append_batch(["error: dial timeout\n"])
+    assert lv._log_text.value == "error: dial timeout"
+
+    # A different line breaks the run and is appended.
+    lv._append_batch(["status: ok\n"])
+    assert lv._log_text.value == "status: ok\nerror: dial timeout"
+
+    # Repeating the same line AFTER a different line is NOT a consecutive
+    # duplicate — it must be shown again.
+    lv._append_batch(["error: dial timeout\n"])
+    assert lv._log_text.value == "error: dial timeout\nstatus: ok\nerror: dial timeout"
+
+
+def test_log_viewer_dedupe_resets_on_clear():
+    """clear_logs() must reset the dedupe tracker so a cleared viewer accepts
+    the same line again."""
+    lv = LogViewer("test")
+    lv._append_batch(["spam\n", "spam\n"])
+    assert lv._log_text.value == "spam"
+
+    lv.clear_logs()
+    assert lv._log_text.value == ""
+
+    lv._append_batch(["spam\n"])
+    assert lv._log_text.value == "spam"
+
+
+def test_log_viewer_dedupe_ignores_empty_batch():
+    """An empty batch must not disturb the dedupe state."""
+    lv = LogViewer("test")
+    lv._append_batch(["spam\n"])
+    lv._append_batch([])
+    lv._append_batch(["spam\n"])
+    assert lv._log_text.value == "spam"

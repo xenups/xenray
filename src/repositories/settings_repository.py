@@ -10,6 +10,13 @@ from src.repositories.file_utils import atomic_write
 DEFAULT_PROXY_PORT = 10805
 DEFAULT_HTTP_PORT = 10809
 
+# SNI Spoof defaults
+DEFAULT_SNI_FAKE_SNI = "chatgpt.com"
+DEFAULT_SNI_CONNECT_IP = "185.193.30.94"
+DEFAULT_SNI_CONNECT_PORT = 443
+DEFAULT_SNI_LISTEN_HOST = "127.0.0.1"
+DEFAULT_SNI_LISTEN_PORT = 40443
+
 
 class SettingsRepository:
     """Thin wrapper for settings persistence."""
@@ -196,3 +203,56 @@ class SettingsRepository:
 
     def set_allow_lan(self, enabled: bool) -> None:
         self._write("allow_lan.txt", "true" if enabled else "false")
+
+    # --- SNI Spoof Preference ---
+    def get_sni_spoof_enabled(self) -> bool:
+        val = self._read("sni_spoof_enabled.txt")
+        return val.lower() == "true"  # Default False
+
+    def set_sni_spoof_enabled(self, enabled: bool) -> None:
+        self._write("sni_spoof_enabled.txt", "true" if enabled else "false")
+
+    def get_sni_fake_sni(self) -> str:
+        return self._read("sni_fake_sni.txt", DEFAULT_SNI_FAKE_SNI)
+
+    def set_sni_fake_sni(self, value: str) -> None:
+        if value.strip():
+            self._write("sni_fake_sni.txt", value.strip())
+
+    def get_sni_connect_ip(self) -> str:
+        return self._read("sni_connect_ip.txt", DEFAULT_SNI_CONNECT_IP)
+
+    def set_sni_connect_ip(self, value: str) -> None:
+        if value.strip():
+            self._write("sni_connect_ip.txt", value.strip())
+
+    def get_sni_connect_port(self) -> int:
+        val = self._read("sni_connect_port.txt")
+        try:
+            port = int(val)
+            return port if 1024 <= port <= 65535 else DEFAULT_SNI_CONNECT_PORT
+        except ValueError:
+            return DEFAULT_SNI_CONNECT_PORT
+
+    def set_sni_connect_port(self, port: int) -> None:
+        if 1024 <= port <= 65535:
+            self._write("sni_connect_port.txt", str(port))
+
+    def get_sni_listen_host(self) -> str:
+        return self._read("sni_listen_host.txt", DEFAULT_SNI_LISTEN_HOST)
+
+    def set_sni_listen_host(self, value: str) -> None:
+        if value.strip():
+            self._write("sni_listen_host.txt", value.strip())
+
+    def get_sni_listen_port(self) -> int:
+        val = self._read("sni_listen_port.txt")
+        try:
+            port = int(val)
+            return port if 1024 <= port <= 65535 else DEFAULT_SNI_LISTEN_PORT
+        except ValueError:
+            return DEFAULT_SNI_LISTEN_PORT
+
+    def set_sni_listen_port(self, port: int) -> None:
+        if 1024 <= port <= 65535:
+            self._write("sni_listen_port.txt", str(port))

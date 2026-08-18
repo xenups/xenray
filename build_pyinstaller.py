@@ -57,6 +57,40 @@ def get_executable_name():
         return "XenRay"
 
 
+def get_windivert_args():
+    """--add-binary flags to bundle WinDivert.dll/.sys (SNI spoofing).
+
+    pydivert ships `WinDivert64.dll` + `WinDivert64.sys` inside its own package
+    directory, and at runtime resolves the DLL via ``os.path.dirname(__file__)``
+    (pydivert/windivert_dll/__init__.py). PyInstaller does NOT auto-collect
+    these package data files, so we bundle them explicitly into the onefile
+    extraction dir so pydivert's __file__-relative DLL_PATH resolves.
+
+    Windows-only (WinDivert is a Windows kernel driver). Guarded: if pydivert
+    is not installed, return [] so a non-Windows / non-spoof build still works.
+    """
+    if get_platform() != "windows":
+        return []
+    try:
+        import pydivert
+        import os as _os
+
+        pkg_dir = _os.path.dirname(pydivert.__file__)
+        dll_dir = _os.path.join(pkg_dir, "windivert_dll")
+        dll = _os.path.join(dll_dir, "WinDivert64.dll")
+        sysf = _os.path.join(dll_dir, "WinDivert64.sys")
+    except ImportError:
+        return []
+    args = []
+    for p in (dll, sysf):
+        if _os.path.exists(p):
+            # dest = pydivert/windivert_dll/ so __file__-relative resolution works
+            args.append(f"--add-binary={p};{_os.path.join('pydivert', 'windivert_dll')}")
+    if args:
+        print(f"[build] Bundling WinDivert for SNI spoofing: {args}")
+    return args
+
+
 def get_platform_specific_args():
     """Get platform-specific PyInstaller arguments."""
     current_platform = get_platform()
@@ -170,6 +204,9 @@ def main():
         # Use --add-data for assets (more efficient than post-build copy)
         f"--add-data={'assets;assets' if current_platform == 'windows' else 'assets:assets'}",
     ]
+
+    # Bundle WinDivert (.dll/.sys) for SNI spoofing (Windows, pydivert present)
+    cmd.extend(get_windivert_args())
 
     # Add icon
     cmd.extend(icon_option)

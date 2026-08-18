@@ -48,6 +48,11 @@ class NavSidebar(ft.Container):
             ),
             ("logs", t("nav.logs", default="Logs"), ft.Icons.TERMINAL_ROUNDED),
             (
+                "sni_spoof",
+                t("nav.sni_spoof", default="SNI Spoof"),
+                ft.Icons.SHIELD_ROUNDED,
+            ),
+            (
                 "settings",
                 t("nav.settings", default="Settings"),
                 ft.Icons.SETTINGS_ROUNDED,
@@ -97,6 +102,8 @@ class NavSidebar(ft.Container):
 
         self._quick_action_btn = ft.Container(
             content=self._quick_action_icon,
+            width=44,
+            height=44,
             padding=ft.Padding.all(10),
             border_radius=12,
             bgcolor=qc_style.bgcolor,
@@ -116,6 +123,8 @@ class NavSidebar(ft.Container):
         )
         self._lan_btn = ft.Container(
             content=self._lan_icon,
+            width=44,
+            height=44,
             padding=ft.Padding.all(10),
             border_radius=12,
             bgcolor=lan_style.bgcolor,

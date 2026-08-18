@@ -114,3 +114,26 @@ def test_restored_emitted_after_recovery():
             monitor.stop()
 
     assert len(restored) == 1, f"Expected exactly 1 RESTORED event, got {len(restored)}"
+
+
+def test_callback_executor_is_bounded():
+    """F10: event callbacks go through a single-worker executor, not one
+    fresh daemon thread per emitted event."""
+    monitor = ActiveConnectivityMonitor()
+    try:
+        assert monitor._callback_executor._max_workers == 1
+    finally:
+        monitor._callback_executor.shutdown(wait=False)
+
+
+def test_start_after_stop_recreates_executor():
+    """F10: start() after stop() must recreate the shut-down executor so the
+    monitor remains usable across sessions."""
+    monitor = ActiveConnectivityMonitor()
+    monitor.start(session_id=1)
+    monitor.stop()
+    monitor.start(session_id=2)  # restart must recreate the executor
+    try:
+        assert not monitor._callback_executor._shutdown, "executor must be recreated on restart"
+    finally:
+        monitor.stop()

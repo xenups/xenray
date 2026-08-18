@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import json
-import math
 from typing import Callable, Optional
 
 import flet as ft
 
 from src.core.i18n import t
 from src.core.logger import logger
+from src.ui.components.common.neon_sweep_border import NeonSweepBorder
 from src.ui.helpers.gradient_helper import GradientHelper
 from src.utils.link_parser import LinkParser
 
@@ -39,64 +39,37 @@ class ConfigCard(ft.Container):
         self._inspect_task: Optional[asyncio.Task] = None
         self._pending_start = False
 
-        # Neon Sweep Gradient for Inspection State — a narrow glowing arc that
-        # fades quickly to transparent so it reads as a thin border trace rather
-        # than a pie/cone fill across the card.
-        self._sweep_gradient = ft.SweepGradient(
-            center=ft.Alignment.CENTER,
-            colors=["#A3A8FE", "#00F2FE", "#00000000", "#00000000"],
-            stops=[0.0, 0.10, 0.22, 1.0],
-            rotation=0.0,
-        )
-
         # Build inner card control with a fully opaque solid background so the
         # sweep gradient only ever shows through the 1.5px border gap.
         self._inner_card = self._build_inner_card(cached_ping)
         self._inner_container = self._inner_card
 
-        # Rotating border disc — a large circular layer that carries the neon
-        # sweep. It is POSITIONED (left/top) so it never contributes to the
-        # Stack's size, and it is clipped to this card via clip_behavior. Only
-        # this layer rotates (GPU-accelerated by Flutter); the content card (a
-        # sibling) stays fixed.
-        #
-        # The diameter is PRE-CALCULATED at construction (generous fallback so
-        # the arc can trace every edge from frame 0 without waiting for the
-        # async on_size_change layout callback, which only refines it later).
-        #
-        # IMPORTANT: the disc stays permanently MOUNTED (never toggled via
-        # visible). Appearance is controlled solely by `gradient` (None while
-        # idle). It is constructed with the `rotate=0.0` rotation ANCHOR and the
-        # GPU `animate_rotation` already attached, so it enters the DOM at the
-        # origin state with the animation engine ready — Flutter can begin
-        # interpolating the first target change immediately instead of waiting a
-        # full frame-pass to set up the AnimatedRotation.
-        self._disc_diameter = 800.0
-        self._border_container = ft.Container(
-            width=self._disc_diameter,
-            height=self._disc_diameter,
-            border_radius=self._disc_diameter / 2,
-            left=(360 - self._disc_diameter) / 2,
-            top=(62 - self._disc_diameter) / 2,
-            gradient=None,
-            rotate=ft.Rotate(angle=0.0),
-            animate_rotation=ft.Animation(
-                duration=1500,
-                curve=ft.AnimationCurve.LINEAR,
-            ),
+        # Neon sweep-glow border — the SHARED reusable component (ConfigCard's
+        # exact pattern: 1.5px frame + rotating SweepGradient disc + opaque
+        # inner mask). The card is larger than the default button size, so pass
+        # the card dimensions; the disc starts at the generous construction
+        # fallback and is refined to the diagonal by _on_card_size_changed.
+        self._neon = NeonSweepBorder(
+            child=self._inner_card,
+            width=360,
+            height=62,
+            border_radius=12,
         )
 
-        # Outer Border Container (acts as 1.5px border frame around card)
-        self.padding = ft.Padding.all(1.5)
+        # Alias the component's disc as _border_container (historic name) so
+        # existing callers/tests keep working unchanged.
+        self._border_container = self._neon._disc
+        self._sweep_gradient = self._neon._sweep_gradient
+        self._disc_diameter = self._neon._disc_diameter
+
+        # Outer Border Container (acts as 1.5px border frame around card) —
+        # the card IS the border frame (same pattern as the original).
+        self.padding = self._neon.padding
         self.border_radius = ft.BorderRadius.all(12)
         self.margin = ft.Margin.symmetric(horizontal=10)
-        self.clip_behavior = ft.ClipBehavior.HARD_EDGE
+        self.clip_behavior = self._neon.clip_behavior
         self.on_click = lambda e: self._on_select(self._profile)
-        self.content = ft.Stack(
-            controls=[self._border_container, self._inner_card],
-            alignment=ft.Alignment.CENTER,
-            clip_behavior=ft.ClipBehavior.NONE,
-        )
+        self.content = self._neon.content
         self.on_size_change = self._on_card_size_changed
 
         self._update_border_style()
@@ -292,9 +265,9 @@ class ConfigCard(ft.Container):
         """Update rotating border disc or static border based on inspection and selection state."""
         if self._is_inspecting:
             self.border = None
-            self._border_container.gradient = self._sweep_gradient
+            self._neon._disc.gradient = self._sweep_gradient
         else:
-            self._border_container.gradient = None
+            self._neon._disc.gradient = None
             if self._is_selected:
                 self.border = ft.Border.all(width=2, color=ft.Colors.BLUE)
             else:
@@ -312,18 +285,8 @@ class ConfigCard(ft.Container):
         h = getattr(e, "height", None)
         if not w or not h:
             return
-        w, h = float(w), float(h)
-        diameter = math.hypot(w, h)
-        self._disc_diameter = diameter
-        self._border_container.width = diameter
-        self._border_container.height = diameter
-        self._border_container.border_radius = diameter / 2
-        self._border_container.left = (w - diameter) / 2
-        self._border_container.top = (h - diameter) / 2
-        try:
-            self._border_container.update()
-        except Exception:
-            pass
+        self._neon.resize_disc(w, h)
+        self._disc_diameter = self._neon._disc_diameter
 
     def start_inspection_animation(self):
         """Start the animated neon sweep gradient border trace loop.
@@ -340,40 +303,22 @@ class ConfigCard(ft.Container):
             return
         self._is_inspecting = True
         self._update_border_style()
+        self._neon._animating = True
+        self._neon._disc.gradient = self._sweep_gradient
         if self._safe_page() is not None:
             self._schedule_animation()
         else:
+            self._neon._pending_start = True
             self._pending_start = True
 
     def stop_inspection_animation(self):
         """Cancel the animation task and restore standard static border styling."""
         self._is_inspecting = False
         self._pending_start = False
-        if self._inspect_task and not self._inspect_task.done():
-            self._inspect_task.cancel()
+        self._neon.stop()
         self._inspect_task = None
-        self._border_container.rotate = ft.Rotate(angle=0.0)
         self._update_border_style()
         self._safe_update()
-
-    def _schedule_animation(self):
-        """Schedule the sweep animation coroutine on an available event loop."""
-        page = self._safe_page()
-        if page is not None:
-            if self._inspect_task is None or self._inspect_task.done():
-                self._pending_start = False
-                self._inspect_task = page.run_task(self._animate_sweep)
-            return
-
-        try:
-            loop = asyncio.get_running_loop()
-            if self._inspect_task is None or self._inspect_task.done():
-                self._pending_start = False
-                self._inspect_task = loop.create_task(self._animate_sweep())
-        except RuntimeError:
-            # No running event loop (card built on a background thread, not yet
-            # mounted). did_mount() schedules the loop once attached to a page.
-            pass
 
     def did_mount(self):
         """Flet lifecycle hook — start the pending animation once the card is attached.
@@ -391,48 +336,13 @@ class ConfigCard(ft.Container):
         if self._pending_start:
             self._pending_start = False
             if self._is_inspecting:
+                # Delegate the mount-race to the component via the card's
+                # scheduling shim (it holds the pending flag for the
+                # disc-level animation).
+                self._neon._pending_start = True
                 self._schedule_animation()
             else:
                 self.start_inspection_animation()
-
-    async def _animate_sweep(self):
-        """Drive the native hardware-accelerated rotation of the border disc.
-
-        The disc mounts at its `rotate=0.0` anchor with ``animate_rotation``
-        already attached. This coroutine yields for a short frame flush so that
-        anchor is actually rendered by Flutter, then targets the first full turn
-        (2π) in a SEPARATE frame — making the native 0 -> 2π transition
-        interpolate immediately instead of Flutter drawing the control directly
-        at the target angle on its first animated frame.
-
-        Afterwards the loop nudges the target forward by a full turn (2π) each
-        cycle — one tiny ``rotate`` patch per 1.5s, interpolated at 60 FPS on the
-        GPU.
-        """
-        try:
-            # Frame flush: let the 0.0 anchor render before applying the first
-            # target, so the target below lands on a distinct client frame.
-            await asyncio.sleep(0.05)
-            if not self._is_inspecting:
-                return
-            full_turns = 0
-            while self._is_inspecting:
-                full_turns += 1
-                self._border_container.rotate = ft.Rotate(angle=2 * math.pi * full_turns)
-                try:
-                    self._border_container.update()
-                except Exception:
-                    pass
-                await asyncio.sleep(1.4)
-        except asyncio.CancelledError:
-            pass
-        except Exception as e:
-            logger.debug(f"[ConfigCard] Animation exception: {e}")
-        finally:
-            self._border_container.rotate = ft.Rotate(angle=0.0)
-            if not self._is_inspecting:
-                self._update_border_style()
-            self._safe_update()
 
     def _safe_page(self) -> Optional[ft.Page]:
         """RuntimeError-safe page property getter."""
@@ -440,6 +350,19 @@ class ConfigCard(ft.Container):
             return self.page
         except (RuntimeError, AttributeError):
             return None
+
+    def _schedule_animation(self):
+        """Delegate the sweep scheduling to the shared NeonSweepBorder.
+
+        Kept as a thin shim (the pre-refactor card scheduled its own loop
+        here) so callers/tests that reach for this internal still work.
+        """
+        # Route the scheduling through the component (it owns the sweep task
+        # and the pending-start flag); the result is mirrored back here.
+        result = self._neon._schedule_animation()
+        self._inspect_task = self._neon._sweep_task
+        self._pending_start = self._neon._pending_start
+        return result
 
     def _safe_update(self):
         """Request a UI update without raising when the control is not attached."""

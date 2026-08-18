@@ -225,3 +225,21 @@ class TestStaticRouteFiltering:
         assert "192.168.1.5" not in bypass_targets
         # Only the proxy-server resolved IP gets the static route
         mock_route.assert_called_once_with("104.17.121.70", "192.168.1.1")
+
+
+class TestCountryRuleSetProxy:
+    """Country rule-sets must download via the tunneled proxy (not direct),
+    otherwise censored networks FATAL the TUN engine at startup."""
+
+    def test_country_ruleset_download_via_proxy(self, service):
+        cfg = service._generate_config(
+            socks_port=10805,
+            proxy_server_ip="",
+            routing_country="ir",
+            routing_rules={"direct": [], "proxy": [], "block": []},
+            mtu=1420,
+        )
+        rs = cfg["route"].get("rule_set", [])
+        assert rs, "expected country rule-sets"
+        for r in rs:
+            assert r["download_detour"] == "proxy", r

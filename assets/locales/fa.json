@@ -87,9 +87,9 @@
     "about": "درباره زن‌ری",
     "version": "v{version}",
     "check_core_update": "بررسی آپدیت هسته",
-    "checking_core_updates": "در حال بررسی آپدیت هسته...",
+    "checking_core_updates": "Updating...",
     "xray_core_version": "هسته Xray-Core {version}",
-    "checking_updates": "در حال بررسی بروزرسانی...",
+    "checking_updates": "Updating...",
     "xray_core_update_title": "آپدیت هسته Xray-Core",
     "xray_core_update_message": "آیا از دانلود و جایگزینی فایل اجرایی هسته مطمئن هستید؟",
     "xray_core_update_available": "نسخه جدید هسته Xray-Core v{version} موجود است!",
@@ -325,7 +325,10 @@
     "copy": "کپی",
     "download": "دانلود",
     "clear": "پاک کردن",
-    "terminal_title": "XENRAY_CLI :: لاگ اصلی"
+    "terminal_title": "XENRAY_CLI :: لاگ اصلی",
+    "enable": "شروع",
+    "disable": "توقف",
+    "interval": "بازه زمانی"
   },
   "header": {
     "toggle_theme": "تغییر تم",
@@ -417,7 +420,8 @@
     "statistics": "آمار",
     "servers": "سرورها",
     "logs": "لاگ‌ها",
-    "settings": "تنظیمات",
+        "sni_spoof": "شناسه SNI",
+        "settings": "تنظیمات",
     "connect_now": "اتصال",
     "disconnect": "قطع اتصال"
   },
@@ -433,7 +437,9 @@
     "peak_speed": "Peak Speed: ",
     "realtime_wave": "Real-Time Traffic Wave Stream",
     "download": "Download",
-    "upload": "Upload"
+    "upload": "Upload",
+    "empty": "متصل نیستید — برای دیدن آمار زنده یک اتصال را شروع کنید",
+    "waiting": "در انتظار دریافت داده…"
   },
   "window": {
     "minimize": "کوچک کردن",

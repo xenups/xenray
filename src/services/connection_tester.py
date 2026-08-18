@@ -17,7 +17,10 @@ from src.core.logger import logger
 
 # Timeout configuration
 TEST_TIMEOUT = 10  # seconds for the whole test
-CONNECT_TIMEOUT = 3  # hard per-node timeout for the HTTP latency probe
+# Hard per-node timeout for the HTTP latency probe. Raised to 5s because in TUN
+# mode the SNI wrong_seq injector's initial packets add latency right after start;
+# a too-short timeout turns a healthy-but-slow connection into a false teardown.
+CONNECT_TIMEOUT = 5  # hard per-node timeout for the HTTP latency probe
 
 # v2rayNG-style latency probing: dedicated HTTP 204 No-Content endpoints with a
 # zero-byte body. Primary endpoint first, then a fallback. The probe measures the
@@ -49,7 +52,9 @@ class ConnectionTester:
         for url in GENERATE_204_URLS:
             start_time = time.time()
             try:
-                with requests.get(url, proxies=proxies, timeout=timeout, stream=True) as resp:
+                with requests.get(
+                    url, proxies=proxies, timeout=timeout, stream=True
+                ) as resp:
                     latency = int((time.time() - start_time) * 1000)
                     if resp.status_code < 400:
                         return True, latency
@@ -144,10 +149,14 @@ class ConnectionTester:
             start_time = time.time()
             if NetworkUtils.check_proxy_connectivity(socks_port):
                 latency = int((time.time() - start_time) * 1000)
-                logger.info(f"[ConnectionTester] SOCKS proxy verified at 127.0.0.1:{socks_port} ({latency}ms)")
+                logger.info(
+                    f"[ConnectionTester] SOCKS proxy verified at 127.0.0.1:{socks_port} ({latency}ms)"
+                )
                 return (True, t("connection.latency_ms", value=latency), None)
 
-            logger.warning(f"[ConnectionTester] HTTP health check failed through SOCKS proxy {socks_port}")
+            logger.warning(
+                f"[ConnectionTester] HTTP health check failed through SOCKS proxy {socks_port}"
+            )
             return False, t("connection.conn_error"), None
 
         # ── Direct Xray instance mode (proxy mode / Linux) ──
@@ -199,12 +208,16 @@ class ConnectionTester:
             # retry rides out transient stalls; each request is bounded by the 3s
             # CONNECT_TIMEOUT and the probe never downloads a response body.
             for attempt in range(2):
-                ok, latency = ConnectionTester._probe_204(proxies, timeout=CONNECT_TIMEOUT)
+                ok, latency = ConnectionTester._probe_204(
+                    proxies, timeout=CONNECT_TIMEOUT
+                )
                 if ok:
                     country_data = None
                     if fetch_country:
                         try:
-                            geo_resp = requests.get("http://ip-api.com/json", proxies=proxies, timeout=3)
+                            geo_resp = requests.get(
+                                "http://ip-api.com/json", proxies=proxies, timeout=3
+                            )
                             if geo_resp.status_code == 200:
                                 gdata = geo_resp.json()
                                 if gdata.get("status") == "success":
@@ -248,7 +261,9 @@ class ConnectionTester:
         """Run test in a dedicated thread and invoke callback(success, result_str, country_data)."""
 
         def _wrapper():
-            success, result, country_data = ConnectionTester.test_connection_sync(profile_config, fetch_country)
+            success, result, country_data = ConnectionTester.test_connection_sync(
+                profile_config, fetch_country
+            )
             if callback:
                 callback(success, result, country_data)
 

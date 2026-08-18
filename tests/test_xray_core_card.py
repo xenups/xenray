@@ -72,13 +72,30 @@ def test_xray_core_card_initialization_and_checking_state():
 
     card.set_checking(True)
     assert card._update_btn.disabled is True
-    assert card._progress_ring.visible is True
-    assert card._btn_icon.visible is False
+    assert card._btn_icon.visible is True  # icon NOT toggled -> no resize
+    assert card._sweep_animating is True
+    assert card._sweep_disc.gradient is card._sweep_gradient
+    assert card._btn_text.value != "Check Core Update"
 
     card.set_checking(False)
     assert card._update_btn.disabled is False
-    assert card._progress_ring.visible is False
     assert card._btn_icon.visible is True
+    assert card._sweep_animating is False
+    assert card._sweep_disc.gradient is None
+
+
+def test_xray_core_card_no_spinner_ring():
+    """The card must NOT have a ProgressRing spinner (user rejected it)."""
+    card = XrayCoreCard(on_check_core_click=lambda e: None)
+    assert not hasattr(card, "_progress_ring")
+
+
+def test_xray_core_card_font_sizes():
+    """Font sizes must not shrink: title 14, version 12, button label 12."""
+    card = XrayCoreCard(on_check_core_click=lambda e: None)
+    assert card._title_text.size == 14
+    assert card._version_text.size == 12
+    assert card._btn_text.size == 12
 
 
 def test_check_xray_core_update_flow(mock_app_context, monkeypatch):

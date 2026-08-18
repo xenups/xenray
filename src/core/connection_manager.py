@@ -55,6 +55,7 @@ class ConnectionManager:
         self._reconnect_event_listener = None
         self._state_lock = threading.Lock()
         self._session_id = 0  # Unique ID for each connection session
+        self._pending_stop_engines: set = set()  # engines awaiting stop event (H2 gate)
 
         # Initialize ConnectionMonitoringService (creates its own monitors internally).
         self._monitoring = ConnectionMonitoringService(
@@ -174,14 +175,50 @@ class ConnectionManager:
         ``XrayService.stop`` / ``SingboxService.stop``). In dual-engine (TUN/VPN)
         mode two stop events are published; the FSM must NOT flip to DISCONNECTED
         on the first one while the remaining engine (and the red disconnecting
-        animation) is still running. The transition is therefore gated on BOTH
-        engines being stopped. Idempotent: only acts while the FSM is in
-        STOPPING, otherwise the normal ``disconnected`` event owns the transition.
+        animation) is still running.
+
+        IMPORTANT (H2 fix): we no longer trust ``_engine_is_running`` as the gate,
+        because each ``stop()`` zeroes its PID BEFORE publishing the event, so
+        ``is_running`` reads False before teardown actually completes. Instead we
+        count the stop events we have actually RECEIVED against the set of engines
+        that were running, and only transition once every expected engine has
+        reported stop — eliminating the premature DISCONNECTED flip.
         """
         try:
             from src.core.fsm.connection_fsm import ConnectionState, connection_fsm
 
-            if connection_fsm.state == ConnectionState.STOPPING and self._engines_stopped():
+            if connection_fsm.state != ConnectionState.STOPPING:
+                return
+
+            engine = (payload or {}).get("engine")
+            orchestrator = getattr(self, "_orchestrator", None)
+            if engine is None or orchestrator is None:
+                # No engine info available — fall back to the general gate.
+                if self._engines_stopped():
+                    connection_fsm.transition_to(ConnectionState.DISCONNECTED, payload=payload or {})
+                return
+
+            running_engines = self._running_orchestrator_engines()
+            # Snapshot once: only persist the expected set on the FIRST stop event
+            # (so a later recompute of `is_running` — which both stop()s zero
+            # before publishing — cannot re-inflate the expected set). The
+            # discard must target the SAME set object stored on self, so we build
+            # the expected set in place rather than via a fresh copy in
+            # _set_expected_stopped (a copy would lose the discard).
+            # init via getattr so __new__-only instances (tests) don't raise
+            if not getattr(self, "_pending_stop_engines", None):
+                self._pending_stop_engines = set(running_engines)
+            self._pending_stop_engines.discard(engine)
+
+            # Gate on the engines ACTUALLY no longer running (authoritative), not
+            # merely "reported" — this is what fixes the premature transition in
+            # dual-engine mode: while the sibling engine is still mid-teardown its
+            # is_running() is still True, so the gate holds. Once both are fully
+            # stopped (and we've confirmed the expected set drained OR the engine
+            # that never ran was reported), we flip to DISCONNECTED.
+            if self._engines_stopped() and (
+                self._all_expected_engines_stopped() or engine not in self._running_orchestrator_engines()
+            ):
                 connection_fsm.transition_to(ConnectionState.DISCONNECTED, payload=payload or {})
         except Exception as e:
             logger.error(f"[ConnectionManager] Error syncing FSM on core process stop: {e}")
@@ -217,6 +254,29 @@ class ConnectionManager:
         xray = getattr(orchestrator, "_xray_service", None)
         singbox = getattr(orchestrator, "_singbox_service", None)
         return not self._engine_is_running(xray) and not self._engine_is_running(singbox)
+
+    def _running_orchestrator_engines(self) -> set:
+        """Compute the set of engine names currently running via the orchestrator.
+
+        Returns a subset of {"xray", "singbox"}. When no orchestrator is bound
+        (bare instance / tests) returns "xray" as the expected single engine so
+        the stop-event gate can still proceed.
+        """
+        orchestrator = getattr(self, "_orchestrator", None)
+        if orchestrator is None:
+            return {"xray"}
+        engines = set()
+        xray = getattr(orchestrator, "_xray_service", None)
+        singbox = getattr(orchestrator, "_singbox_service", None)
+        if self._engine_is_running(xray):
+            engines.add("xray")
+        if self._engine_is_running(singbox):
+            engines.add("singbox")
+        return engines or {"xray"}  # fallback: at least Xray expected in proxy mode
+
+    def _all_expected_engines_stopped(self) -> bool:
+        """True once every engine we expect to stop has published its stop event."""
+        return not getattr(self, "_pending_stop_engines", set())
 
     def _adopt_existing_connection(self):
         """Adopt an already running connection (from PID files)."""
@@ -409,24 +469,43 @@ class ConnectionManager:
 
         # Synchronize ConnectionFSM deterministic states.
         #
-        # Each transition_to() publishes TOPIC_CONNECTION_STATE_CHANGED exactly
-        # once, so we must NOT also broadcast it below — otherwise the UI (e.g.
-        # "Revving Up" for PREPARING) receives the same state multiple times per
-        # engine event. We only fall back to the EventBus publish for event types
-        # with no FSM transition (e.g. connectivity_degraded/restored) or whose
-        # FSM transition was blocked.
+        # SINGLE-PUBLISHER CONTRACT: ConnectionManager is the ONLY component
+        # that broadcasts connection state over the EventBus. The FSM is pure
+        # (it validates transitions and returns; it never publishes). So every
+        # _emit_event call publishes TOPIC_CONNECTION_STATE_CHANGED EXACTLY
+        # ONCE — whether the event mapped to a successful FSM transition, was
+        # blocked, or is a UI-only event with no FSM mapping (e.g.
+        # "failure_detected", "reconnecting", "connectivity_*").
         fsm_transitioned = False
         try:
             from src.core.fsm.connection_fsm import ConnectionState, connection_fsm
 
             if event_type == "connecting":
-                # Transition straight to PREPARING (the "revving up" state) —
-                # the transient STARTING hop was only doubling the UI dispatch.
+                # "connecting" always leads to PREPARING, but the FSM only
+                # accepts PREPARING from STARTING (or DISCONNECTED). From the
+                # pre-connect states PINGING (user clicked Connect during the
+                # latency check) and ERROR (user retries after a failure) the
+                # strict chain is PINGING/ERROR -> STARTING -> PREPARING —
+                # route through STARTING first instead of leaving the FSM
+                # stuck in the current state.
+                current_state = connection_fsm.state
+                if current_state in {
+                    ConnectionState.PINGING,
+                    ConnectionState.ERROR,
+                }:
+                    connection_fsm.transition_to(ConnectionState.STARTING, payload=data)
                 fsm_transitioned = connection_fsm.transition_to(ConnectionState.PREPARING, payload=data)
             elif event_type in ("connected", "reconnected"):
                 fsm_transitioned = connection_fsm.transition_to(ConnectionState.CONNECTED, payload=data)
             elif event_type == "disconnecting":
-                fsm_transitioned = connection_fsm.transition_to(ConnectionState.STOPPING, payload=data)
+                # User-requested stop. From ERROR there is no teardown to run,
+                # so treat the request as a defensive reset to DISCONNECTED
+                # (the FSM's legal exit from ERROR) rather than blocking and
+                # leaving the FSM stuck in ERROR.
+                if connection_fsm.state == ConnectionState.ERROR:
+                    fsm_transitioned = connection_fsm.transition_to(ConnectionState.DISCONNECTED, payload=data)
+                else:
+                    fsm_transitioned = connection_fsm.transition_to(ConnectionState.STOPPING, payload=data)
             elif event_type in ("disconnected",):
                 fsm_transitioned = connection_fsm.transition_to(ConnectionState.DISCONNECTED, payload=data)
             elif event_type in ("connect_failed", "reconnect_failed"):
@@ -434,18 +513,24 @@ class ConnectionManager:
         except Exception as e:
             logger.error(f"[ConnectionManager] Error updating FSM state for '{event_type}': {e}")
 
-        # Broadcast over the EventBus ONLY when the FSM did not already publish.
-        if not fsm_transitioned:
-            try:
-                from src.core.event_bus import TOPIC_CONNECTION_STATE_CHANGED, event_bus
+        # Publish EXACTLY ONCE (single publisher — the FSM no longer publishes).
+        try:
+            from src.core.event_bus import TOPIC_CONNECTION_STATE_CHANGED, EngineEvent, event_bus
 
-                event_bus.publish(
-                    TOPIC_CONNECTION_STATE_CHANGED,
-                    {
+            state = connection_fsm.state.value
+            event_bus.publish(
+                TOPIC_CONNECTION_STATE_CHANGED,
+                EngineEvent(
+                    event_name=event_type,
+                    source="connection_manager",
+                    payload={
                         "event": event_type,
                         "data": data or {},
-                        "state": connection_fsm.state.value,
+                        "state": state,
+                        "old_state": state if fsm_transitioned else None,
+                        "new_state": state if fsm_transitioned else None,
                     },
-                )
-            except Exception as e:
-                logger.error(f"[ConnectionManager] Error publishing event '{event_type}': {e}")
+                ),
+            )
+        except Exception as e:
+            logger.error(f"[ConnectionManager] Error publishing event '{event_type}': {e}")

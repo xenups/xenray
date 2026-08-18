@@ -2,20 +2,12 @@
 
 import pytest
 
-from src.core.event_bus import TOPIC_CONNECTION_STATE_CHANGED, EventBus
 from src.core.fsm.connection_fsm import ConnectionFSM, ConnectionState
 
 
 @pytest.fixture
-def test_bus():
-    bus = EventBus()
-    yield bus
-    bus.clear()
-
-
-@pytest.fixture
-def fsm(test_bus):
-    return ConnectionFSM(bus=test_bus)
+def fsm():
+    return ConnectionFSM()
 
 
 def test_fsm_initial_state(fsm):
@@ -25,14 +17,7 @@ def test_fsm_initial_state(fsm):
     assert fsm.state_generation == 0
 
 
-def test_valid_state_transitions(fsm, test_bus):
-    events = []
-
-    def handler(payload):
-        events.append(payload)
-
-    test_bus.subscribe(TOPIC_CONNECTION_STATE_CHANGED, handler)
-
+def test_valid_state_transitions(fsm):
     # DISCONNECTED -> STARTING
     assert fsm.transition_to(ConnectionState.STARTING)
     assert fsm.state == ConnectionState.STARTING
@@ -56,8 +41,6 @@ def test_valid_state_transitions(fsm, test_bus):
     assert fsm.transition_to(ConnectionState.DISCONNECTED)
     assert fsm.state == ConnectionState.DISCONNECTED
     assert not fsm.is_connected
-
-    assert len(events) == 5
 
 
 def test_invalid_state_transition_blocked(fsm):
@@ -152,3 +135,52 @@ def test_cannot_jump_from_pinging_to_connected(fsm):
     assert fsm.transition_to(ConnectionState.PINGING)
     assert not fsm.transition_to(ConnectionState.CONNECTED)
     assert fsm.state == ConnectionState.PINGING
+
+
+def test_cannot_jump_from_pinging_to_preparing(fsm):
+    """PINGING -> PREPARING directly is INVALID and must be blocked.
+
+    The latency check must be exited explicitly (via STARTING for a connect
+    click, or DISCONNECTED when the ping completes). ConnectionManager routes
+    "connecting" through STARTING first, so this strictness never strands the
+    FSM — it protects the invariant that PINGING is always left deliberately.
+    """
+    assert fsm.transition_to(ConnectionState.PINGING)
+    assert not fsm.transition_to(ConnectionState.PREPARING)
+    assert fsm.state == ConnectionState.PINGING
+
+
+def test_error_recovers_to_starting_for_direct_restart(fsm):
+    """ERROR -> STARTING must work for an immediate retry (connect click)."""
+    assert fsm.transition_to(ConnectionState.STARTING)
+    assert fsm.transition_to(ConnectionState.ERROR)
+    assert fsm.transition_to(ConnectionState.STARTING)
+    assert fsm.state == ConnectionState.STARTING
+
+
+def test_error_cannot_jump_directly_to_preparing(fsm):
+    """ERROR -> PREPARING directly is INVALID — the strict chain is
+    ERROR -> STARTING -> PREPARING (ConnectionManager routes through it)."""
+    assert fsm.transition_to(ConnectionState.ERROR, force=True)
+    assert not fsm.transition_to(ConnectionState.PREPARING)
+    assert fsm.state == ConnectionState.ERROR
+
+
+def test_stopping_reaches_disconnected_from_every_entry(fsm):
+    """Every state that can enter STOPPING must resolve to DISCONNECTED.
+
+    STOPPING has no self-resolution; the exit is driven by
+    EVENT_CORE_PROCESS_STOPPED (dual-engine gate) or the "disconnected"
+    event — both must always be accepted.
+    """
+    for source in (
+        ConnectionState.DISCONNECTED,
+        ConnectionState.PINGING,
+        ConnectionState.STARTING,
+        ConnectionState.PREPARING,
+        ConnectionState.CONNECTED,
+    ):
+        assert fsm.transition_to(source, force=True), f"setup to {source.value}"
+        assert fsm.transition_to(ConnectionState.STOPPING), f"{source.value} -> STOPPING"
+        assert fsm.transition_to(ConnectionState.DISCONNECTED), "STOPPING -> DISCONNECTED"
+        assert fsm.state == ConnectionState.DISCONNECTED

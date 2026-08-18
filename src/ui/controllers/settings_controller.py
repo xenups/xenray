@@ -141,6 +141,7 @@ class SettingsController:
                 "settings.country_saved",
                 default=f"Direct Country updated: {code_display}",
                 country=code_display,
+                val=code_display,
             )
             self._show_toast(msg, "success")
             return True

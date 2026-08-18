@@ -89,7 +89,6 @@ def test_logs_view_metric_cards_flex_layout():
     view = LogsView(
         log_text_control=log_ctrl,
         on_copy_logs_click=lambda: None,
-        on_download_logs_click=lambda: None,
         on_clear_logs_click=lambda: None,
     )
 

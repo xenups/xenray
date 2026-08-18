@@ -17,11 +17,17 @@ class TerminalWindow(ft.Container):
         self,
         log_text_control: ft.Control,
         on_copy_click: Callable,
-        on_download_click: Callable,
         on_clear_click: Callable,
+        on_toggle_tailing: Callable | None = None,
+        on_download_click: Callable | None = None,  # accepted for backward-compat, button removed
     ):
         WHITE = ft.Colors.WHITE
         button_shape = ft.RoundedRectangleBorder(radius=8)
+        # Explicit width so label changes (e.g. i18n) never resize the buttons.
+        button_style = ft.ButtonStyle(
+            shape=button_shape,
+            padding=ft.Padding.symmetric(horizontal=12, vertical=6),
+        )
 
         copy_btn = ft.OutlinedButton(
             content=ft.Row(
@@ -31,26 +37,10 @@ class TerminalWindow(ft.Container):
                 ],
                 spacing=4,
             ),
-            style=ft.ButtonStyle(
-                shape=button_shape,
-                padding=ft.Padding.symmetric(horizontal=12, vertical=6),
-            ),
+            width=90,
+            height=32,
+            style=button_style,
             on_click=on_copy_click,
-        )
-
-        download_btn = ft.OutlinedButton(
-            content=ft.Row(
-                [
-                    ft.Icon(ft.Icons.DOWNLOAD, size=14, color=WHITE),
-                    ft.Text(t("logs.download", default="Download"), size=11, color=WHITE),
-                ],
-                spacing=4,
-            ),
-            style=ft.ButtonStyle(
-                shape=button_shape,
-                padding=ft.Padding.symmetric(horizontal=12, vertical=6),
-            ),
-            on_click=on_download_click,
         )
 
         clear_btn = ft.OutlinedButton(
@@ -61,6 +51,8 @@ class TerminalWindow(ft.Container):
                 ],
                 spacing=4,
             ),
+            width=90,
+            height=32,
             style=ft.ButtonStyle(
                 shape=button_shape,
                 padding=ft.Padding.symmetric(horizontal=12, vertical=6),
@@ -68,6 +60,46 @@ class TerminalWindow(ft.Container):
                 bgcolor=ft.Colors.with_opacity(0.08, "#f43f5e"),
             ),
             on_click=on_clear_click,
+        )
+
+        # --- START/STOP tailing button (high-contrast, unmissable) ---
+        # Green "Start" invites the click; red "Stop" while tailing. Lives on
+        # the Logs TAB (TerminalWindow) so the user sees it right where they
+        # look — not only in the side drawer.
+        self._tailing_enabled = False
+
+        def _toggle_handler(e):
+            if on_toggle_tailing:
+                on_toggle_tailing(e)
+                self._tailing_enabled = not self._tailing_enabled
+                self._swap_tail_button()
+
+        self._on_toggle_tailing = _toggle_handler
+
+        self._toggle_tail_btn = ft.FilledButton(
+            content=ft.Row(
+                [
+                    ft.Icon(ft.Icons.PLAY_CIRCLE_OUTLINE, size=16, color=ft.Colors.WHITE),
+                    ft.Text(
+                        t("logs.enable", default="Start"),
+                        size=13,
+                        weight=ft.FontWeight.BOLD,
+                        color=ft.Colors.WHITE,
+                    ),
+                ],
+                spacing=4,
+                alignment=ft.MainAxisAlignment.CENTER,
+                tight=True,
+            ),
+            height=32,
+            width=110,
+            on_click=self._on_toggle_tailing,
+            style=ft.ButtonStyle(
+                bgcolor="#4ADE80",
+                color=ft.Colors.WHITE,
+                shape=ft.RoundedRectangleBorder(radius=8),
+                padding=ft.Padding.symmetric(horizontal=12),
+            ),
         )
 
         glass = create_glass_container(
@@ -107,12 +139,13 @@ class TerminalWindow(ft.Container):
                                 ],
                                 spacing=8,
                             ),
-                            ft.Row(
-                                [copy_btn, download_btn, clear_btn],
-                                spacing=6,
-                            ),
                         ],
-                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        alignment=ft.MainAxisAlignment.START,
+                    ),
+                    ft.Row(
+                        [copy_btn, clear_btn, self._toggle_tail_btn],
+                        spacing=6,
+                        alignment=ft.MainAxisAlignment.END,
                     ),
                     ft.Divider(color=ft.Colors.with_opacity(0.1, ft.Colors.WHITE)),
                     ft.Container(content=log_text_control, expand=True),
@@ -133,3 +166,53 @@ class TerminalWindow(ft.Container):
             border_radius=glass.border_radius,
             blur=glass.blur,
         )
+
+    def _swap_tail_button(self) -> None:
+        """Swap the Start/Stop button between green-Start and red-Stop states."""
+        if self._tailing_enabled:
+            self._toggle_tail_btn.style = ft.ButtonStyle(
+                bgcolor="#f43f5e",
+                color=ft.Colors.WHITE,
+                shape=ft.RoundedRectangleBorder(radius=8),
+                padding=ft.Padding.symmetric(horizontal=12),
+            )
+            self._toggle_tail_btn.content = ft.Row(
+                [
+                    ft.Icon(ft.Icons.STOP_CIRCLE_OUTLINED, size=16, color=ft.Colors.WHITE),
+                    ft.Text(
+                        t("logs.disable", default="Stop"),
+                        size=13,
+                        weight=ft.FontWeight.BOLD,
+                        color=ft.Colors.WHITE,
+                    ),
+                ],
+                spacing=4,
+                alignment=ft.MainAxisAlignment.CENTER,
+                tight=True,
+            )
+        else:
+            self._toggle_tail_btn.style = ft.ButtonStyle(
+                bgcolor="#4ADE80",
+                color=ft.Colors.WHITE,
+                shape=ft.RoundedRectangleBorder(radius=8),
+                padding=ft.Padding.symmetric(horizontal=12),
+            )
+            self._toggle_tail_btn.content = ft.Row(
+                [
+                    ft.Icon(ft.Icons.PLAY_CIRCLE_OUTLINE, size=16, color=ft.Colors.WHITE),
+                    ft.Text(
+                        t("logs.enable", default="Start"),
+                        size=13,
+                        weight=ft.FontWeight.BOLD,
+                        color=ft.Colors.WHITE,
+                    ),
+                ],
+                spacing=4,
+                alignment=ft.MainAxisAlignment.CENTER,
+                tight=True,
+            )
+        try:
+            if self._toggle_tail_btn.page:
+                self._toggle_tail_btn.update()
+        except Exception:
+            pass

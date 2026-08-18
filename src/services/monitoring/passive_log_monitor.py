@@ -19,6 +19,7 @@ import os
 import re
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, List, Optional
 
 from loguru import logger
@@ -59,7 +60,12 @@ class PassiveLogMonitor:
         "network is unreachable",
         "generic::error",
         # --- sing-box TUN engine errors (warn level) ---
-        "fatal",
+        # NOTE: bare "fatal" is deliberately NOT a keyword — it matches config
+        # lines such as ``log.level: "fatal"`` and would cause spurious
+        # reconnect signals. Real sing-box fatal failures always carry a
+        # ``fatal:`` prefix (e.g. ``fatal: failed to create tun``) or appear
+        # alongside engine-failure context ("failed to start").
+        "fatal:",
         "panic",
         "failed to start",
         "error creating",
@@ -82,6 +88,37 @@ class PassiveLogMonitor:
         "dns fallback triggered",
         "dns server failed",
     ]
+
+    # Dial-type keywords whose matched line is checked against the
+    # private/LAN-address guard (_is_private_target) BEFORE an alert fires.
+    # A dial failure to an INTERNAL address (e.g. ``dial tcp 172.16.0.2:1688:
+    # i/o timeout``) means a local service is unreachable — NOT a VPN path
+    # failure — so it must never raise PASSIVE_FAILURE. The same keywords
+    # against a PUBLIC target remain genuine VPN-connectivity failures.
+    DIAL_TARGET_KEYWORDS = [
+        "dial tcp",
+        "dial udp",
+        "i/o timeout",
+        "connection refused",
+        "connection reset by peer",
+        "connection timed out",
+    ]
+
+    # RFC 1918 + loopback + link-local + CGNAT + reserved ranges. These are
+    # internal-dial markers; a failure against them is a LAN/service issue,
+    # not a VPN path failure. The lookaround boundaries require a WHOLE
+    # dotted token: a private-looking run inside a longer numeric sequence
+    # (e.g. the "192.168.1.5" inside "1.2.192.168.1.5") does not count.
+    PRIVATE_IPV4_RE = re.compile(
+        r"(?<![\d.])(?P<ip>"
+        r"10\.\d{1,3}\.\d{1,3}\.\d{1,3}"
+        r"|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}"
+        r"|192\.168\.\d{1,3}\.\d{1,3}"
+        r"|127\.\d{1,3}\.\d{1,3}\.\d{1,3}"
+        r"|169\.254\.\d{1,3}\.\d{1,3}"
+        r"|100\.(?:6[4-9]|[7-9]\d)\.\d{1,3}\.\d{1,3}"
+        r")(?![\d.])"
+    )
 
     # Configuration
     CHECK_INTERVAL = 1.0  # seconds between log checks
@@ -113,6 +150,12 @@ class PassiveLogMonitor:
 
         # Per-file tail state: {path: {"file": handle, "pos": int, "ctime": float|None, "inode": int|None}}
         self._tail_state: dict = {}
+
+        # Single bounded executor for failure callbacks (max 1 worker — one
+        # callback at a time; no unbounded daemon thread spawning per alert).
+        self._callback_executor: ThreadPoolExecutor = ThreadPoolExecutor(
+            max_workers=1, thread_name_prefix="PassiveLogMonitor-Callback"
+        )
 
         # State
         self._last_alert_times: dict = {}  # per-source debounce timestamps
@@ -152,6 +195,12 @@ class PassiveLogMonitor:
             self._consecutive_failures = 0
             self._stop_event.clear()
             self._tail_state.clear()
+            # Recreate the callback executor if a previous stop() shut it down
+            # (supports start → stop → start on the same instance).
+            if self._callback_executor._shutdown:
+                self._callback_executor = ThreadPoolExecutor(
+                    max_workers=1, thread_name_prefix="PassiveLogMonitor-Callback"
+                )
 
             # Pre-open the log files synchronously (before the thread starts)
             # so the tail offset is captured NOW. Any line written AFTER
@@ -180,6 +229,8 @@ class PassiveLogMonitor:
 
             self._thread = None
             self._tail_state.clear()
+            # Shut down the callback executor (wait briefly for in-flight callbacks).
+            self._callback_executor.shutdown(wait=False)
             logger.info("[PassiveLogMonitor] Stopped monitoring")
 
     # ------------------------------------------------------------------
@@ -408,9 +459,65 @@ class PassiveLogMonitor:
 
         for keyword in self.ERROR_KEYWORDS:
             if keyword in lower_line:
+                # C1: private/LAN-address guard — a dial/timeout failure against
+                # an INTERNAL address (10.x, 172.16-31.x, 192.168.x, 127.x,
+                # 169.254.x, 100.64/10 CGNAT) is a local-service outage, NOT a
+                # VPN path failure. Skip the alert so LAN-internal dials never
+                # raise PASSIVE_FAILURE. Guard only dial-type keywords: they
+                # carry an explicit target, while other keywords (fatal:,
+                # failed to start, ...) are engine failures with no target.
+                if keyword in self.DIAL_TARGET_KEYWORDS:
+                    # C1: private/LAN-address guard — a dial/timeout failure
+                    # against an INTERNAL address is a local-service outage,
+                    # NOT a VPN path failure.
+                    if self._is_private_target(line):
+                        logger.debug(
+                            f"[PassiveLogMonitor] Keyword '{keyword}' matched but target is "
+                            "private/LAN — skipping alert (internal dial, not a VPN path failure)"
+                        )
+                        break
+                    # C1b: direct-outbound guard — traffic that never entered
+                    # the VPN tunnel (using outbound/direct) failing is a
+                    # direct-path/censorship issue, NOT a tunnel outage.
+                    if self._is_direct_outbound(line):
+                        logger.debug(
+                            f"[PassiveLogMonitor] Keyword '{keyword}' matched but traffic is "
+                            "via outbound/direct — skipping alert (direct path, not VPN tunnel)"
+                        )
+                        break
                 logger.debug(f"[PassiveLogMonitor] Keyword '{keyword}' matched in {source} log")
                 self._trigger_alert(line.strip(), source)
                 break
+
+    @staticmethod
+    def _is_private_target(line: str) -> bool:
+        """Return True if ``line`` contains a private/LAN/reserved IPv4 target.
+
+        Guards dial-type keywords (``dial tcp``, ``i/o timeout``, ...) against
+        false PASSIVE_FAILURE pulses: a failure to an internal address means a
+        local service is unreachable, not that the VPN path is down.
+
+        Covers RFC 1918 (10/8, 172.16/12, 192.168/16), loopback (127/8),
+        link-local (169.254/16) and CGNAT (100.64/10). Matches whole IPv4
+        tokens only (preceded/followed by whitespace, ':' or '.'), so e.g.
+        ``1.2.3.4`` inside ``192.168.1.5`` cannot leak through.
+        """
+        return PassiveLogMonitor.PRIVATE_IPV4_RE.search(line) is not None
+
+    @staticmethod
+    def _is_direct_outbound(line: str) -> bool:
+        """Return True if ``line`` indicates traffic via the DIRECT outbound.
+
+        sing-box logs lines like::
+
+            connection: open connection to 149.154.167.220:443 using outbound/direct[direct]: ...
+
+        ``outbound/direct`` means the traffic went STRAIGHT to the internet —
+        it never entered the VPN tunnel. A timeout/refused there is a failure
+        of the direct path (censorship/network), NOT a VPN tunnel outage, so
+        it must not raise PASSIVE_FAILURE. Guard only dial-type keywords.
+        """
+        return "outbound/direct" in line.lower()
 
     def _log_dns_fallback(self, domain: str):
         """Log a warning when primary/server-side DNS resolution fails."""
@@ -449,25 +556,21 @@ class PassiveLogMonitor:
         self._last_error_time = now  # For cross-signal validation
         self._consecutive_failures += 1
 
-        # Calculate exponential backoff
-        backoff = min(
-            self.BASE_COOLDOWN_SECONDS * (2 ** (self._consecutive_failures - 1)),
-            self.MAX_COOLDOWN_SECONDS,
-        )
+        # NOTE (F6): no self-pause/backoff here. The per-source debounce above
+        # is the duplicate-signal guard; ALL reconnect backoff is owned by
+        # AutoReconnectService (5s→300s + cap). Self-pausing would blind this
+        # monitor to NEW failures during the backoff window — in proxy mode
+        # (no active probe) that could leave zero reconnect signals for minutes.
 
-        # Auto-pause (Cooldown)
-        logger.info(f"[PassiveLogMonitor] Backing off for {backoff}s (Attempt {self._consecutive_failures})")
-        self.pause(backoff)
-
-        # Run callback in separate thread to avoid blocking monitor loop
+        # Run callback via the shared bounded executor (single worker, so
+        # callbacks serialize instead of spawning unbounded daemon threads).
         if self._on_failure:
             payload = signal_payload(source, line=log_line)
-            threading.Thread(
-                target=self._run_callback_safe,
-                args=(payload,),
-                daemon=True,
-                name="PassiveLogMonitor-Callback",
-            ).start()
+            try:
+                self._callback_executor.submit(self._run_callback_safe, payload)
+            except RuntimeError:
+                # Executor shut down (stop() raced an in-flight alert) — drop.
+                logger.debug("[PassiveLogMonitor] Dropped alert (callback executor shut down)")
 
     def _run_callback_safe(self, payload: dict):
         """Run the failure callback safely in a separate thread."""

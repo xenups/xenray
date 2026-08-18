@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 import tempfile
 import time
-from unittest.mock import patch
 
 from src.services.monitoring.passive_log_monitor import PassiveLogMonitor
 
@@ -46,9 +45,9 @@ def test_tails_both_core_logs():
             assert received[0]["source"] == "xray"
 
             received.clear()
-            # Resume immediately: the first alert paused the monitor for the
-            # backoff window; without resume the second alert would be swallowed.
-            monitor.resume()
+            # NOTE (F6): the monitor no longer self-pauses after an alert, so
+            # no resume() is needed — the next failure is detected immediately
+            # (debounce-per-source only).
             # sing-box TUN error
             _write(singbox_log, "2026-01-01 10:00:01 [WARN] failed to create tun: permission denied\n")
             assert _wait_for(lambda: bool(received)), "sing-box log error not detected"
@@ -118,3 +117,89 @@ def test_debounce_prevents_flooding():
             assert len(received) == 1, f"Expected exactly 1 alert, got {len(received)}"
         finally:
             monitor.stop()
+
+
+def test_fatal_config_line_does_not_trigger_alert():
+    """F4: a config line containing 'fatal' must NOT fire the failure callback.
+
+    Regression for the false-positive: bare ``"fatal"`` used to match ANY line
+    containing the substring, e.g. ``log.level: "fatal"``, causing spurious
+    reconnect signals.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        log = os.path.join(tmp, "xenray_singbox.log")
+        _write(log, "startup ok\n")
+
+        received = []
+        monitor = PassiveLogMonitor(
+            on_failure_callback=lambda payload: received.append(payload),
+            log_files=[log],
+        )
+        monitor.start()
+        try:
+            _write(log, '{"level":"info","msg":"using log level fatal as configured"}\n')
+            _write(log, '2026-01-01 10:00:00 [INFO] config: log.level: "fatal"\n')
+            time.sleep(1.2)
+            assert received == [], f"Config line containing 'fatal' must NOT trigger, got {received}"
+        finally:
+            monitor.stop()
+
+
+def test_fatal_failure_line_triggers_alert():
+    """F4: a REAL sing-box fatal failure (``fatal:`` prefix) still fires."""
+    with tempfile.TemporaryDirectory() as tmp:
+        log = os.path.join(tmp, "xenray_singbox.log")
+        _write(log, "startup ok\n")
+
+        received = []
+        monitor = PassiveLogMonitor(
+            on_failure_callback=lambda payload: received.append(payload),
+            log_files=[log],
+        )
+        monitor.start()
+        try:
+            _write(log, "2026-01-01 10:00:01 [FATAL] fatal: failed to create tun: permission denied\n")
+            assert _wait_for(lambda: bool(received)), "fatal failure line not detected"
+            assert received[0]["source"] == "singbox"
+        finally:
+            monitor.stop()
+
+
+def test_alerts_not_paused_after_first_failure():
+    """F6: after the first alert the monitor stays live — new failures are
+    detected immediately instead of being swallowed by a self-pause backoff.
+
+    Regression for the finding that a 5–300s self-pause could blind the
+    passive monitor to NEW failures during the reconnect window (leaving zero
+    reconnect signals in proxy mode where no active probe runs).
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        log = os.path.join(tmp, "xenray_xray.log")
+        _write(log, "startup ok\n")
+
+        received = []
+        monitor = PassiveLogMonitor(
+            on_failure_callback=lambda payload: received.append(payload),
+            log_files=[log],
+        )
+        monitor.DEBOUNCE_SECONDS = 0.1  # short per-source debounce for the test
+        monitor.start()
+        try:
+            _write(log, "2026-01-01 10:00:00 [Warning] dial tcp 1.2.3.4:443: connection refused\n")
+            assert _wait_for(lambda: len(received) >= 1), "first alert not detected"
+            # No resume() — the monitor must keep scanning.
+            _write(log, "2026-01-01 10:00:01 [Warning] dial tcp 1.2.3.4:443: connection refused\n")
+            assert _wait_for(lambda: len(received) >= 2), "second alert not detected without resume"
+            assert len(received) >= 2
+        finally:
+            monitor.stop()
+
+
+def test_callback_executor_is_bounded():
+    """F10: failure callbacks go through a single-worker executor, not one
+    fresh daemon thread per alert."""
+    monitor = PassiveLogMonitor(log_files=[])
+    try:
+        assert monitor._callback_executor._max_workers == 1
+    finally:
+        monitor._callback_executor.shutdown(wait=False)

@@ -6,15 +6,29 @@ unchanged; only the internals are decomposed into single-responsibility steps.
 """
 
 import json
+import time
 from typing import Optional
 
 from loguru import logger
 
-from src.core.constants import CORE_SINGBOX, CORE_XRAY, MODE_PROXY, MODE_VPN, OUTPUT_CONFIG_PATH
+from src.core.constants import (
+    CORE_SINGBOX,
+    CORE_XRAY,
+    MODE_PROXY,
+    MODE_VPN,
+    OUTPUT_CONFIG_PATH,
+)
 from src.core.i18n import t
 from src.services.connection_tester import ConnectionTester
 from src.utils.network_utils import NetworkUtils
 from src.utils.process_utils import purge_all_logs_on_connect
+
+# Health-check resilience (TUN warm-up + retries): the TUN adapter and the SNI
+# wrong_seq injector need a moment to be ready; a single immediate probe can fail
+# spuriously right after start and wrongly tear down the whole connection.
+TUN_WARMUP_SECONDS = 0.8
+HEALTH_RETRIES = 3
+HEALTH_RETRY_DELAY_SECONDS = 0.5
 
 
 class ConnectionOrchestrator:
@@ -88,7 +102,9 @@ class ConnectionOrchestrator:
     # High-level flow orchestrator
     # ------------------------------------------------------------------
 
-    def establish_connection(self, file_path: str, mode: str, step_callback=None) -> tuple[bool, Optional[dict]]:
+    def establish_connection(
+        self, file_path: str, mode: str, step_callback=None
+    ) -> tuple[bool, Optional[dict]]:
         """
         Orchestrate full connection workflow with legacy migration and fallback.
 
@@ -119,7 +135,9 @@ class ConnectionOrchestrator:
             # 4. Determine engine: sing-box TUN runs Xray (proxy) + sing-box (TUN)
             use_singbox = self._uses_singbox_tun(mode)
             if use_singbox:
-                logger.info("[ConnectionOrchestrator] Sing-box TUN engine selected (dual-engine mode)")
+                logger.info(
+                    "[ConnectionOrchestrator] Sing-box TUN engine selected (dual-engine mode)"
+                )
 
             # 5. Attempt each candidate until one succeeds
             for label, config in configs_to_try:
@@ -160,7 +178,9 @@ class ConnectionOrchestrator:
         Returns ``(ATTEMPT_*, connection_info_or_None)``.
         """
         if label == "original":
-            logger.warning("[ConnectionOrchestrator] Falling back to original legacy configuration")
+            logger.warning(
+                "[ConnectionOrchestrator] Falling back to original legacy configuration"
+            )
             if step_callback:
                 step_callback(t("connection.falling_back"))
 
@@ -172,7 +192,9 @@ class ConnectionOrchestrator:
             # when the Xray engine is active; sing-box TUN only needs the
             # Xray proxy config).
             process_mode = MODE_PROXY if use_singbox else mode
-            processed_config, socks_port = self._prepare_configuration(config, process_mode, step_callback)
+            processed_config, socks_port = self._prepare_configuration(
+                config, process_mode, step_callback
+            )
             if not processed_config:
                 return self.ATTEMPT_SKIPPED, None
 
@@ -184,26 +206,38 @@ class ConnectionOrchestrator:
 
             # Start sing-box TUN engine when selected
             if use_singbox:
-                singbox_pid = self._start_singbox(processed_config, socks_port, step_callback)
+                singbox_pid = self._start_singbox(
+                    processed_config, socks_port, step_callback
+                )
                 if not singbox_pid:
                     self._xray_service.stop()
                     return self.ATTEMPT_ABORTED, None
 
-            # Verify connection health
-            if self._verify_connection_health(processed_config, step_callback, socks_port):
+            # Verify connection health (TUN needs a short warm-up so the adapter
+            # is up and the SNI injector is exchanging packets before probing).
+            is_tun = mode == MODE_VPN or use_singbox
+            if self._verify_connection_health(
+                processed_config, step_callback, socks_port, warm_up=is_tun
+            ):
                 # When LAN sharing is enabled, open the firewall for LAN devices.
                 self._ensure_lan_firewall_rule(socks_port)
-                connection_info = self._finalize_connection(file_path, mode, xray_pid, singbox_pid, step_callback)
+                connection_info = self._finalize_connection(
+                    file_path, mode, xray_pid, singbox_pid, step_callback
+                )
                 return self.ATTEMPT_SUCCESS, connection_info
 
-            logger.error(f"[ConnectionOrchestrator] {label.capitalize()} config failed health check")
+            logger.error(
+                f"[ConnectionOrchestrator] {label.capitalize()} config failed health check"
+            )
             self.teardown_connection({"xray_pid": xray_pid, "singbox_pid": singbox_pid})
             return self.ATTEMPT_FAILED, None
 
         except Exception:
             # Ensure no orphaned PIDs or active TUN adapters remain if an
             # intermediate pipeline step raised unexpectedly.
-            logger.warning(f"[ConnectionOrchestrator] Cleaning up resources after failed attempt ({label})")
+            logger.warning(
+                f"[ConnectionOrchestrator] Cleaning up resources after failed attempt ({label})"
+            )
             self._safe_teardown({"xray_pid": xray_pid, "singbox_pid": singbox_pid})
             raise
 
@@ -220,8 +254,12 @@ class ConnectionOrchestrator:
         is_legacy = self._legacy_config_service.is_legacy(original_config)
 
         if is_legacy:
-            logger.info("[ConnectionOrchestrator] Legacy config detected, preparing migration")
-            migrated_config = self._legacy_config_service.migrate_config(original_config)
+            logger.info(
+                "[ConnectionOrchestrator] Legacy config detected, preparing migration"
+            )
+            migrated_config = self._legacy_config_service.migrate_config(
+                original_config
+            )
             return [("migrated", migrated_config), ("original", original_config)]
 
         return [("standard", original_config)]
@@ -263,7 +301,9 @@ class ConnectionOrchestrator:
 
             FirewallManager.add_lan_firewall_rule([socks_port, socks_port + 4])
         except Exception as e:
-            logger.warning(f"[ConnectionOrchestrator] Failed to apply LAN firewall rule: {e}")
+            logger.warning(
+                f"[ConnectionOrchestrator] Failed to apply LAN firewall rule: {e}"
+            )
 
     @staticmethod
     def _remove_lan_firewall_rule() -> None:
@@ -273,14 +313,18 @@ class ConnectionOrchestrator:
 
             FirewallManager.remove_lan_firewall_rule()
         except Exception as e:
-            logger.warning(f"[ConnectionOrchestrator] Failed to remove LAN firewall rule: {e}")
+            logger.warning(
+                f"[ConnectionOrchestrator] Failed to remove LAN firewall rule: {e}"
+            )
 
     def _safe_teardown(self, connection_info: dict):
         """Teardown that never raises — used from exception cleanup paths."""
         try:
             self.teardown_connection(connection_info)
         except Exception as e:
-            logger.error(f"[ConnectionOrchestrator] Teardown after failed attempt raised: {e}")
+            logger.error(
+                f"[ConnectionOrchestrator] Teardown after failed attempt raised: {e}"
+            )
 
     # ------------------------------------------------------------------
     # Connection steps (single responsibility helpers)
@@ -291,10 +335,23 @@ class ConnectionOrchestrator:
         config: dict,
         step_callback,
         health_socks_port: int = 0,
+        warm_up: bool = False,
     ) -> bool:
-        """Verify the connection is actually working before declaring success."""
+        """Verify the connection before declaring success (resilient to startup).
+
+        In TUN mode a single immediate probe can fail spuriously while the adapter
+        comes up and the SNI wrong_seq injector starts exchanging packets — so we
+        warm up, then retry HEALTH_RETRIES times before declaring failure (a single
+        failed probe must never tear down a healthy connection).
+        """
         if step_callback:
             step_callback(t("connection.verifying_latency"))
+
+        if warm_up:
+            logger.info(
+                f"[ConnectionOrchestrator] TUN warm-up ({TUN_WARMUP_SECONDS}s)..."
+            )
+            time.sleep(TUN_WARMUP_SECONDS)
 
         socks_port = health_socks_port if health_socks_port > 0 else 0
         if socks_port:
@@ -302,16 +359,31 @@ class ConnectionOrchestrator:
                 f"[ConnectionOrchestrator] Routing health check through existing SOCKS proxy port {socks_port}"
             )
 
-        success, latency, _ = ConnectionTester.test_connection_sync(config, socks_port=socks_port)
+        last_latency = None
+        for attempt in range(1, HEALTH_RETRIES + 1):
+            success, latency, _ = ConnectionTester.test_connection_sync(
+                config, socks_port=socks_port
+            )
+            if success:
+                logger.info(
+                    f"[ConnectionOrchestrator] Connection verified (attempt {attempt}): {latency}"
+                )
+                return True
+            last_latency = latency
+            logger.warning(
+                f"[ConnectionOrchestrator] Verification attempt {attempt}/{HEALTH_RETRIES} failed: {latency}"
+            )
+            if attempt < HEALTH_RETRIES:
+                time.sleep(HEALTH_RETRY_DELAY_SECONDS)
 
-        if success:
-            logger.info(f"[ConnectionOrchestrator] Connection verified: {latency}")
-            return True
-
-        logger.warning(f"[ConnectionOrchestrator] Connection verification failed: {latency}")
+        logger.warning(
+            f"[ConnectionOrchestrator] Connection verification failed after {HEALTH_RETRIES} attempts: {last_latency}"
+        )
         return False
 
-    def _load_and_validate_config(self, file_path: str, step_callback) -> Optional[dict]:
+    def _load_and_validate_config(
+        self, file_path: str, step_callback
+    ) -> Optional[dict]:
         """Load and validate configuration file."""
         if step_callback:
             step_callback(t("connection.loading_config"))
@@ -324,7 +396,9 @@ class ConnectionOrchestrator:
             return None
 
         if not isinstance(config, dict):
-            logger.error(f"Invalid config format: expected dict, got {type(config).__name__}")
+            logger.error(
+                f"Invalid config format: expected dict, got {type(config).__name__}"
+            )
             if step_callback:
                 step_callback(t("connection.invalid_config"))
             return None
@@ -344,7 +418,9 @@ class ConnectionOrchestrator:
 
         return True
 
-    def _prepare_configuration(self, config: dict, mode: str, step_callback) -> tuple[Optional[dict], Optional[int]]:
+    def _prepare_configuration(
+        self, config: dict, mode: str, step_callback
+    ) -> tuple[Optional[dict], Optional[int]]:
         """
         Process and save configuration using XrayConfigProcessor.
 
@@ -384,7 +460,9 @@ class ConnectionOrchestrator:
         logger.debug(f"Xray started with PID {xray_pid}")
         return xray_pid
 
-    def _start_singbox(self, processed_config: dict, socks_port: int, step_callback) -> Optional[int]:
+    def _start_singbox(
+        self, processed_config: dict, socks_port: int, step_callback
+    ) -> Optional[int]:
         """Start the sing-box TUN engine, routing into Xray's SOCKS proxy."""
         if step_callback:
             step_callback(t("connection.initializing_vpn"))
@@ -393,7 +471,9 @@ class ConnectionOrchestrator:
         is_quic = self._xray_processor.is_quic_transport(processed_config)
         mtu_mode = "quic_safe" if is_quic else "auto"
         optimal_mtu = NetworkUtils.detect_optimal_mtu(mtu_mode=mtu_mode)
-        logger.info(f"[ConnectionOrchestrator] Using MTU for TUN interface: {optimal_mtu}")
+        logger.info(
+            f"[ConnectionOrchestrator] Using MTU for TUN interface: {optimal_mtu}"
+        )
 
         # Get routing configuration using XrayConfigProcessor
         routing_country = self._app_context.settings.get_routing_country()

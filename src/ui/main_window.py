@@ -308,7 +308,6 @@ class MainWindow:
         return self._ui_builder.create_dashboard_view()
 
     def _on_connect_clicked_impl(self, e=None) -> None:
-        from src.core.event_bus import EVENT_DISCONNECT_REQUESTED, event_bus
         from src.core.fsm.connection_fsm import ConnectionState, connection_fsm
 
         if not self._selected_profile:
@@ -333,7 +332,6 @@ class MainWindow:
                 ConnectionState.PREPARING,
             }
         ):
-            event_bus.publish(EVENT_DISCONNECT_REQUESTED)
             self._disconnect()
             return
 

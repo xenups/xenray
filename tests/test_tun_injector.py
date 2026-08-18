@@ -24,6 +24,11 @@ def mock_routing():
 def injector(mock_routing):
     ctx = Mock()
     ctx.routing = mock_routing
+    # Default: SNI spoof disabled (so existing routing-order tests keep
+    # ds-out-first). Tests that need it enabled override this.
+    ctx.settings = Mock()
+    ctx.settings.get_sni_spoof_enabled.return_value = False
+    ctx.settings.get_sni_connect_ip.return_value = "185.193.30.94"
     return TunInjector(ctx)
 
 
@@ -308,3 +313,46 @@ class TestBuildRoutingRules:
         assert tags[0] == "dns-out"  # DNS port 53 rule is first
         assert "direct" in tags
         assert tags[-1] == "proxy"  # user proxy rules at end
+
+
+def test_user_rules_inserted_before_hijack_dns():
+    """User routing rules must be inserted BEFORE the sniff/hijack-dns chain
+    (first-match-wins) so 'direct example.com' is not swallowed by hijack-dns."""
+    from src.core.config_builders.singbox_config_builder import SingboxConfigBuilder
+
+    builder = SingboxConfigBuilder.__new__(SingboxConfigBuilder)
+    cfg = {
+        "route": {
+            "rules": [
+                {"process_name": ["x"], "outbound": "direct"},
+                {"protocol": "dns", "action": "hijack-dns"},
+                {"ip_cidr": ["10.0.0.0/8"], "outbound": "direct"},
+            ],
+            "final": "proxy",
+        },
+        "dns": {"rules": []},
+    }
+    builder._apply_user_routing_rules(cfg, {"direct": ["example.com", "1.2.3.4"], "block": ["bad.com"]}, insert_at=1)
+
+    rules = cfg["route"]["rules"]
+    # Find the hijack-dns index
+    hijack_idx = next(i for i, r in enumerate(rules) if r.get("action") == "hijack-dns")
+    # User domain/IP rules must appear BEFORE hijack-dns
+    user_idxs = [
+        i for i, r in enumerate(rules) if "example.com" in str(r) or "1.2.3.4" in str(r) or "bad.com" in str(r)
+    ]
+    assert user_idxs, "user rules missing"
+    assert all(i < hijack_idx for i in user_idxs), f"user rules {user_idxs} must precede hijack-dns {hijack_idx}"
+    # DNS bootstrap rule for direct domain → local_dns (not foreign 8.8.8.8)
+    dns_rules = cfg["dns"]["rules"]
+    assert any("example.com" in str(r) and r.get("server") == "local_dns" for r in dns_rules)
+
+
+def test_sni_spoof_connect_ip_goes_direct(injector):
+    """When SNI spoof is enabled, CONNECT_IP routes through the direct outbound
+    (loop-breaker) as the FIRST rule."""
+    injector._app_context.settings.get_sni_spoof_enabled.return_value = True
+    injector._app_context.settings.get_sni_connect_ip.return_value = "185.193.30.94"
+    rules = injector._build_routing_rules("", {"direct": [], "proxy": [], "block": []}, ["5.5.5.5"])
+    assert rules[0]["outboundTag"] == "direct"
+    assert "185.193.30.94" in rules[0]["ip"]

@@ -161,6 +161,9 @@ class TestSingboxLanRoutes:
     @patch("src.services.route_manager_service.subprocess.run")
     @patch("src.utils.platform_utils.PlatformUtils.get_platform", return_value="windows")
     def test_add_lan_routes(self, mock_platform, mock_run):
+        # H3: successful deletions (rc==0) are removed; failed ones are kept
+        # for retry. Make every simulated delete succeed so all drain.
+        mock_run.return_value.returncode = 0
         svc = self._service()
         svc._add_lan_routes("192.168.1.1")
         assert len(svc._added_lan_routes) == len(LAN_PRIVATE_RANGES)

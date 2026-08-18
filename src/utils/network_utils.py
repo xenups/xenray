@@ -30,8 +30,8 @@ class NetworkUtils:
         """
         for attempt in range(retries):
             try:
-                socket.setdefaulttimeout(timeout)
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                    s.settimeout(timeout)
                     s.connect((host, port))
                 return True
             except Exception as e:
@@ -68,8 +68,12 @@ class NetworkUtils:
         """
         curl_path = shutil.which("curl")
         if not curl_path:
-            logger.warning("curl not found, skipping proxy connectivity check")
-            return True
+            # Fail-CLOSED: without curl the heavy probe cannot verify
+            # end-to-end routing through the proxy, so report the probe as
+            # FAILED rather than pretending connectivity is fine. A missing
+            # curl must never mask real connectivity loss.
+            logger.warning("curl not found — proxy connectivity check FAILED (fail-closed)")
+            return False
 
         default_targets = [
             "https://cp.cloudflare.com/generate_204",

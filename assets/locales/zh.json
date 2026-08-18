@@ -87,9 +87,9 @@
     "about": "关于XenRay",
     "version": "v{version}",
     "check_core_update": "检查核心更新",
-    "checking_core_updates": "正在检查核心更新...",
+    "checking_core_updates": "Updating...",
     "xray_core_version": "Xray-Core {version}",
-    "checking_updates": "正在检查更新...",
+    "checking_updates": "Updating...",
     "xray_core_update_title": "Xray-Core 更新",
     "xray_core_update_message": "您确定要下载并更新 Xray-Core 吗？",
     "xray_core_update_available": "Xray-Core v{version} 可用！",
@@ -315,7 +315,10 @@
     "copy": "复制",
     "download": "下载",
     "clear": "清除",
-    "terminal_title": "XENRAY_CLI :: 主日志"
+    "terminal_title": "XENRAY_CLI :: 主日志",
+    "enable": "开始",
+    "disable": "停止",
+    "interval": "间隔"
   },
   "header": {
     "toggle_theme": "切换主题",
@@ -407,7 +410,8 @@
     "statistics": "统计",
     "servers": "服务器",
     "logs": "日志",
-    "settings": "设置",
+        "sni_spoof": "SNI 伪装",
+        "settings": "设置",
     "connect_now": "连接",
     "disconnect": "断开"
   },
@@ -423,7 +427,9 @@
     "peak_speed": "Peak Speed: ",
     "realtime_wave": "Real-Time Traffic Wave Stream",
     "download": "Download",
-    "upload": "Upload"
+    "upload": "Upload",
+    "empty": "未连接 — 开始连接以查看实时统计",
+    "waiting": "正在等待数据…"
   },
   "window": {
     "minimize": "最小化",

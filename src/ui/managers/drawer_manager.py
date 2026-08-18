@@ -66,6 +66,7 @@ class DrawerManager:
             lambda: self._main._current_mode,
             navigate_to=self._main.navigate_to,
             navigate_back=self._main.navigate_back,
+            fallback_toast=self._main._show_toast,
         )
 
         # Logs drawer

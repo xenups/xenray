@@ -18,7 +18,9 @@ def _fake_resp(status_code: int = 204) -> MagicMock:
 
 
 def test_probe_204_uses_gstatic_and_streams_headers_only():
-    with patch("src.services.connection_tester.requests.get", return_value=_fake_resp(204)) as mock_get:
+    with patch(
+        "src.services.connection_tester.requests.get", return_value=_fake_resp(204)
+    ) as mock_get:
         ok, latency = ConnectionTester._probe_204({"http": "http://127.0.0.1:10808"})
 
     assert ok is True
@@ -26,7 +28,9 @@ def test_probe_204_uses_gstatic_and_streams_headers_only():
     assert mock_get.call_count == 1
     assert mock_get.call_args.args[0] == GENERATE_204_URLS[0]  # gstatic first
     assert mock_get.call_args.kwargs["stream"] is True  # never downloads a body
-    assert mock_get.call_args.kwargs["timeout"] == 3.0  # hard per-node timeout
+    assert (
+        mock_get.call_args.kwargs["timeout"] == 5.0
+    )  # hard per-node timeout (SNI-injector friendly)
 
 
 def test_probe_204_fails_over_to_cloudflare_on_timeout():
@@ -39,13 +43,16 @@ def test_probe_204_fails_over_to_cloudflare_on_timeout():
 
     assert ok is True
     assert mock_get.call_count == 2
-    assert mock_get.call_args_list[1].args[0] == GENERATE_204_URLS[1]  # cloudflare fallback
+    assert (
+        mock_get.call_args_list[1].args[0] == GENERATE_204_URLS[1]
+    )  # cloudflare fallback
 
 
 def test_probe_204_returns_failure_when_all_urls_fail():
     with patch(
         "src.services.connection_tester.requests.get",
-        side_effect=[__import__("requests").exceptions.Timeout()] * len(GENERATE_204_URLS),
+        side_effect=[__import__("requests").exceptions.Timeout()]
+        * len(GENERATE_204_URLS),
     ) as mock_get:
         ok, latency = ConnectionTester._probe_204({})
 

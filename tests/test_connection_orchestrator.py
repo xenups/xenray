@@ -28,7 +28,9 @@ class TestConnectionOrchestrator:
 
     @patch("src.services.connection_tester.ConnectionTester.test_connection_sync")
     @patch("builtins.open", new_callable=mock_open)
-    def test_establish_proxy_connection_success(self, mock_file, mock_conn_test, orchestrator):
+    def test_establish_proxy_connection_success(
+        self, mock_file, mock_conn_test, orchestrator
+    ):
         """Test successful proxy connection."""
         # Setup mocks
         orchestrator._app_context.load_config.return_value = (
@@ -52,7 +54,9 @@ class TestConnectionOrchestrator:
 
     @patch("src.services.connection_tester.ConnectionTester.test_connection_sync")
     @patch("builtins.open", new_callable=mock_open)
-    def test_establish_vpn_connection_success(self, mock_file, mock_conn_test, orchestrator):
+    def test_establish_vpn_connection_success(
+        self, mock_file, mock_conn_test, orchestrator
+    ):
         """Test successful VPN connection."""
         # Setup mocks
         orchestrator._app_context.load_config.return_value = (
@@ -65,7 +69,9 @@ class TestConnectionOrchestrator:
         orchestrator._xray_service.start.return_value = 1234
         mock_conn_test.return_value = (True, "50ms", None)  # Health check passes
 
-        with patch("src.utils.network_utils.NetworkUtils.detect_optimal_mtu", return_value=1420):
+        with patch(
+            "src.utils.network_utils.NetworkUtils.detect_optimal_mtu", return_value=1420
+        ):
             success, info = orchestrator.establish_connection("config.json", mode="vpn")
 
         assert success is True
@@ -134,7 +140,9 @@ class TestConnectionOrchestratorEngineSwitch:
     @patch("src.services.connection_tester.ConnectionTester.test_connection_sync")
     @patch("builtins.open", new_callable=mock_open)
     @patch("src.utils.network_utils.NetworkUtils.detect_optimal_mtu", return_value=1420)
-    def test_vpn_uses_singbox_engine(self, mock_mtu, mock_file, mock_conn_test, dual_engine_orchestrator):
+    def test_vpn_uses_singbox_engine(
+        self, mock_mtu, mock_file, mock_conn_test, dual_engine_orchestrator
+    ):
         """Selecting the sing-box TUN engine starts both Xray and sing-box."""
         orch, mocks = dual_engine_orchestrator
         mocks["app_context"].settings.get_tun_engine.return_value = "singbox"
@@ -148,12 +156,16 @@ class TestConnectionOrchestratorEngineSwitch:
         mocks["xray_svc"].start.assert_called_once()
         mocks["singbox_svc"].start.assert_called_once()
         # Xray config is processed as a proxy (no native TUN injection)
-        mocks["xray_proc"].process_config.assert_called_once_with({"outbounds": []}, mode="proxy")
+        mocks["xray_proc"].process_config.assert_called_once_with(
+            {"outbounds": []}, mode="proxy"
+        )
 
     @patch("src.services.connection_tester.ConnectionTester.test_connection_sync")
     @patch("builtins.open", new_callable=mock_open)
     @patch("src.utils.network_utils.NetworkUtils.detect_optimal_mtu", return_value=1420)
-    def test_vpn_uses_xray_engine_by_default(self, mock_mtu, mock_file, mock_conn_test, dual_engine_orchestrator):
+    def test_vpn_uses_xray_engine_by_default(
+        self, mock_mtu, mock_file, mock_conn_test, dual_engine_orchestrator
+    ):
         """Default Xray TUN engine does not start sing-box."""
         orch, mocks = dual_engine_orchestrator
         mocks["app_context"].settings.get_tun_engine.return_value = "xray"
@@ -169,7 +181,9 @@ class TestConnectionOrchestratorEngineSwitch:
     @patch("src.services.connection_tester.ConnectionTester.test_connection_sync")
     @patch("builtins.open", new_callable=mock_open)
     @patch("src.utils.network_utils.NetworkUtils.detect_optimal_mtu", return_value=1420)
-    def test_singbox_failure_stops_xray(self, mock_mtu, mock_file, mock_conn_test, dual_engine_orchestrator):
+    def test_singbox_failure_stops_xray(
+        self, mock_mtu, mock_file, mock_conn_test, dual_engine_orchestrator
+    ):
         """If sing-box fails to start, Xray is stopped and the attempt fails."""
         orch, mocks = dual_engine_orchestrator
         mocks["app_context"].settings.get_tun_engine.return_value = "singbox"
@@ -217,7 +231,9 @@ class TestConnectionOrchestratorRefactor:
     def test_resolve_candidate_configs_legacy(self, orchestrator):
         """Legacy configs yield migrated-then-original fallback candidates."""
         orchestrator._legacy_config_service.is_legacy.return_value = True
-        orchestrator._legacy_config_service.migrate_config.return_value = {"migrated": True}
+        orchestrator._legacy_config_service.migrate_config.return_value = {
+            "migrated": True
+        }
 
         candidates = orchestrator._resolve_candidate_configs({"legacy": True})
 
@@ -231,7 +247,9 @@ class TestConnectionOrchestratorRefactor:
     def test_legacy_migration_fallback(self, mock_file, mock_conn_test, orchestrator):
         """Migrated config failing health falls back to the original config."""
         orchestrator._legacy_config_service.is_legacy.return_value = True
-        orchestrator._legacy_config_service.migrate_config.return_value = {"migrated": True}
+        orchestrator._legacy_config_service.migrate_config.return_value = {
+            "migrated": True
+        }
         orchestrator._app_context.load_config.return_value = ({"legacy": True}, None)
         orchestrator._network_validator.check_internet_connection.return_value = True
         orchestrator._xray_processor.process_config.side_effect = [
@@ -240,7 +258,13 @@ class TestConnectionOrchestratorRefactor:
         ]
         orchestrator._xray_processor.get_socks_port.return_value = 1080
         orchestrator._xray_service.start.return_value = 1234
-        mock_conn_test.side_effect = [(False, "fail", None), (True, "50ms", None)]
+        # With the resilient health check, a candidate only fails after all
+        # HEALTH_RETRIES probes fail — then it falls back to the next candidate.
+        from src.core.connection_orchestrator import HEALTH_RETRIES
+
+        mock_conn_test.side_effect = [(False, "fail", None)] * HEALTH_RETRIES + [
+            (True, "50ms", None)
+        ]
 
         success, info = orchestrator.establish_connection("config.json", mode="proxy")
 
@@ -254,7 +278,9 @@ class TestConnectionOrchestratorRefactor:
     def test_all_attempts_fail(self, mock_file, mock_conn_test, orchestrator):
         """When every candidate fails health check, the flow returns failure."""
         orchestrator._legacy_config_service.is_legacy.return_value = True
-        orchestrator._legacy_config_service.migrate_config.return_value = {"migrated": True}
+        orchestrator._legacy_config_service.migrate_config.return_value = {
+            "migrated": True
+        }
         orchestrator._app_context.load_config.return_value = ({"legacy": True}, None)
         orchestrator._network_validator.check_internet_connection.return_value = True
         orchestrator._xray_processor.process_config.return_value = {"p": True}
@@ -314,7 +340,9 @@ class TestConnectionOrchestratorRefactor:
 
     @patch("src.services.connection_tester.ConnectionTester.test_connection_sync")
     @patch("builtins.open", new_callable=mock_open)
-    def test_attempt_health_failure_tears_down(self, mock_file, mock_conn_test, orchestrator):
+    def test_attempt_health_failure_tears_down(
+        self, mock_file, mock_conn_test, orchestrator
+    ):
         """Health-check failure tears down the attempt (no orphaned PIDs)."""
         orchestrator._xray_processor.process_config.return_value = {"p": True}
         orchestrator._xray_processor.get_socks_port.return_value = 1080
@@ -342,14 +370,18 @@ class TestConnectionOrchestratorRefactor:
             patch("builtins.open", mock_open()),
         ):
             with pytest.raises(RuntimeError):
-                orchestrator._attempt_single_connection("standard", {"x": 1}, "proxy", False, "config.json", None)
+                orchestrator._attempt_single_connection(
+                    "standard", {"x": 1}, "proxy", False, "config.json", None
+                )
 
         # Xray was started and must be stopped on the exception path.
         orchestrator._xray_service.stop.assert_called_once()
 
     @patch("src.services.connection_tester.ConnectionTester.test_connection_sync")
     @patch("builtins.open", new_callable=mock_open)
-    def test_establish_swallows_attempt_exception(self, mock_file, mock_conn_test, orchestrator):
+    def test_establish_swallows_attempt_exception(
+        self, mock_file, mock_conn_test, orchestrator
+    ):
         """establish_connection converts an attempt exception into (False, None)."""
         orchestrator._app_context.load_config.return_value = ({"outbounds": []}, None)
         orchestrator._network_validator.check_internet_connection.return_value = True
@@ -370,7 +402,9 @@ class TestOrchestratorFinalize:
     def orchestrator(self):
         from unittest.mock import MagicMock
 
-        return ConnectionOrchestrator(MagicMock(), MagicMock(), MagicMock(), MagicMock(), MagicMock())
+        return ConnectionOrchestrator(
+            MagicMock(), MagicMock(), MagicMock(), MagicMock(), MagicMock()
+        )
 
     def test_finalize_connection_builds_info_with_connected_at(self, orchestrator):
         info = orchestrator._finalize_connection(

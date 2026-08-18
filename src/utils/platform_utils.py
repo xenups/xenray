@@ -186,6 +186,70 @@ class PlatformUtils:
             return "tun0"
 
     @staticmethod
+    def get_system_dns_servers() -> list:
+        """Return the system's DNS servers (IPv4) — used for DIRECT-routed domains.
+
+        On Windows, reads the active adapter's DNS via ``Get-DnsClientServerAddress``
+        (or ``ipconfig`` fallback). These are LOCAL resolvers (router/gateway) —
+        the right choice for direct domains on networks where foreign DNS
+        (8.8.8.8 / 1.1.1.1) is blocked or tampered with (e.g. Iran).
+        """
+        import subprocess
+
+        plat = PlatformUtils.get_platform()
+        servers: list = []
+        try:
+            if plat == "windows":
+                try:
+                    out = subprocess.run(
+                        [
+                            "powershell",
+                            "-NoProfile",
+                            "-Command",
+                            "Get-DnsClientServerAddress -AddressFamily IPv4 | "
+                            "Where-Object {$_.ServerAddresses.Count -gt 0} | "
+                            "ForEach-Object {$_.ServerAddresses} | Select-Object -Unique",
+                        ],
+                        capture_output=True,
+                        text=True,
+                        timeout=5,
+                    )
+                    for line in (out.stdout or "").splitlines():
+                        line = line.strip()
+                        # Skip the TUN adapter's own DNS (10.0.0.x) if present —
+                        # that loops back into sing-box.
+                        if line and not line.startswith("10.0.0."):
+                            servers.append(line)
+                except Exception:
+                    pass
+                # Fallback: ipconfig
+                if not servers:
+                    out = subprocess.run(["ipconfig", "/all"], capture_output=True, text=True, timeout=5)
+                    lines = (out.stdout or "").splitlines()
+                    for i, line in enumerate(lines):
+                        if "DNS Servers" in line and i + 1 < len(lines):
+                            nxt = lines[i + 1].strip()
+                            if nxt and nxt[0].isdigit():
+                                servers.append(nxt.split()[0])
+            elif plat == "linux":
+                with open("/etc/resolv.conf") as f:
+                    for line in f:
+                        parts = line.split()
+                        if len(parts) >= 2 and parts[0] == "nameserver":
+                            servers.append(parts[1])
+            elif plat == "macos":
+                out = subprocess.run(["scutil", "--dns"], capture_output=True, text=True, timeout=5)
+                for line in (out.stdout or "").splitlines():
+                    line = line.strip()
+                    if "nameserver" in line and "[" not in line:
+                        parts = line.split()
+                        if len(parts) >= 2:
+                            servers.append(parts[-1])
+        except Exception:
+            pass
+        return servers
+
+    @staticmethod
     def supports_privileged_helper() -> bool:
         """
         Check if the platform supports privileged helper tools.

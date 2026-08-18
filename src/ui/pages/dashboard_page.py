@@ -10,6 +10,7 @@ from src.core.event_bus import (
     TOPIC_ACTIVE_SERVER_PING_UPDATED,
     TOPIC_CONNECTION_STATE_CHANGED,
     TOPIC_TELEMETRY_UPDATED,
+    EngineEvent,
     event_bus,
 )
 from src.core.i18n import t
@@ -199,13 +200,11 @@ class DashboardPage(ft.Container):
     def _on_connection_state_event(self, data) -> None:
         """Handle connection_state_changed EventBus events in real time.
 
-        The payload arrives in two shapes:
-        - ConnectionManager events: ``{"event": ..., "data": ...}``
-        - ConnectionFSM transitions: ``{"old_state": ..., "new_state": ..., "state": ...}``
-
-        Both are mapped to the same reactive UI state so a core crash (which
-        drives the FSM directly to ``ERROR`` without emitting a ConnectionManager
-        event) still resets the button to DISCONNECTED.
+        The payload arrives as an ``EngineEvent`` (typed envelope) from
+        ConnectionManager, or as a plain dict in legacy/test call paths. Both
+        are normalized to a dict and mapped to the same reactive UI state so a
+        core crash (which drives the FSM directly to ``ERROR`` without emitting
+        a ConnectionManager event) still resets the button to DISCONNECTED.
 
         EventBus handlers execute on whatever thread published the event (the
         background connect/disconnect workers or the health-monitor thread), so
@@ -213,6 +212,8 @@ class DashboardPage(ft.Container):
         (``loop.call_soon_threadsafe`` under the hood) instead of mutating Flet
         controls directly from a foreign thread.
         """
+        if isinstance(data, EngineEvent):
+            data = data.to_dict()
         if not isinstance(data, dict):
             return
         page = self._safe_page()

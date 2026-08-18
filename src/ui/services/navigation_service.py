@@ -38,7 +38,7 @@ class NavigationService:
         """Return to settings view or active tab from subpages."""
         target_tab = (
             self._mw._active_tab
-            if self._mw._active_tab in ("settings", "statistics", "servers", "logs")
+            if self._mw._active_tab in ("settings", "statistics", "servers", "logs", "sni_spoof")
             else "settings"
         )
         self.on_nav_tab_changed(target_tab, force=True)
@@ -53,9 +53,12 @@ class NavigationService:
             "statistics": self._mw._stitch_statistics_view,
             "servers": self._mw._stitch_servers_view,
             "logs": self._mw._stitch_logs_view,
+            "sni_spoof": getattr(self._mw, "_stitch_sni_spoof_view", None),
             "settings": self._mw._stitch_settings_view,
         }
         target = view_map.get(tab_id, self._mw._stitch_dashboard_view)
+        if target is None:
+            target = self._mw._stitch_dashboard_view
 
         self._mw._view_switcher.content = target
         if hasattr(self._mw, "_nav_sidebar") and self._mw._nav_sidebar:

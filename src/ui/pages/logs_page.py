@@ -20,8 +20,8 @@ class LogsPage(ft.Container):
         self,
         log_text_control: ft.Control,
         on_copy_logs_click: Callable,
-        on_download_logs_click: Callable,
         on_clear_logs_click: Callable,
+        on_toggle_tailing: Callable | None = None,
     ):
         super().__init__()
         self.expand = True
@@ -29,7 +29,6 @@ class LogsPage(ft.Container):
 
         self._log_text_control = log_text_control
         self._on_copy_logs_click = on_copy_logs_click
-        self._on_download_logs_click = on_download_logs_click
         self._on_clear_logs_click = on_clear_logs_click
 
         WHITE = ft.Colors.WHITE
@@ -93,8 +92,8 @@ class LogsPage(ft.Container):
         self._terminal_window = TerminalWindow(
             log_text_control=self._log_text_control,
             on_copy_click=self._on_copy_logs_click,
-            on_download_click=self._on_download_logs_click,
             on_clear_click=self._on_clear_logs_click,
+            on_toggle_tailing=on_toggle_tailing,
         )
 
         self.content = ft.Column(

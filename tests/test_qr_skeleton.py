@@ -101,3 +101,28 @@ def test_generate_qr_async_yields_before_worker():
         page._qr_card.update_qr.assert_called_once_with("ZmFrZQ==")
 
     asyncio.run(run())
+
+
+def test_show_loading_starts_pulse():
+    """show_loading must arm the pulsing flag and seed the skeleton opacity."""
+    from src.ui.components.lan.qr_card import QRCard
+
+    card = QRCard()
+    card.show_loading()
+    assert card._pulsing is True
+    # skeleton top container seeded to the dim start of the pulse
+    skeleton = card._qr_box.content
+    assert skeleton is not None and hasattr(skeleton, "controls")
+    assert skeleton.controls[0].opacity == 0.4
+
+
+def test_update_qr_stops_pulse():
+    """update_qr must stop the pulse and restore full opacity."""
+    from src.ui.components.lan.qr_card import QRCard
+
+    card = QRCard()
+    card.show_loading()
+    card.update_qr("ZmFrZQ==")
+    assert card._pulsing is False
+    assert card._pulse_task is None
+    assert card.is_qr_shown is True

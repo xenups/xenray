@@ -101,6 +101,7 @@ class TestXrayConfigProcessorStrict(unittest.TestCase):
         self.mock_config_manager.dns.load.return_value = []
         self.mock_config_manager.settings = Mock()
         self.mock_config_manager.settings.get_proxy_port.return_value = 10805
+        self.mock_config_manager.settings.get_sni_spoof_enabled.return_value = False
         self.processor = XrayConfigProcessor(self.mock_config_manager)
 
     def test_processor_preserves_domain_address(self):

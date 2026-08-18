@@ -87,9 +87,9 @@
     "about": "О XenRay",
     "version": "v{version}",
     "check_core_update": "Проверить обновление ядра",
-    "checking_core_updates": "Проверка обновлений ядра...",
+    "checking_core_updates": "Updating...",
     "xray_core_version": "Xray-Core {version}",
-    "checking_updates": "Проверка обновлений...",
+    "checking_updates": "Updating...",
     "xray_core_update_title": "Обновление Xray-Core",
     "xray_core_update_message": "Вы уверены, что хотите скачать и обновить Xray-Core?",
     "xray_core_update_available": "Доступен Xray-Core v{version}!",
@@ -315,7 +315,10 @@
     "copy": "Копировать",
     "download": "Загрузка",
     "clear": "Очистить",
-    "terminal_title": "XENRAY_CLI :: ГЛАВНЫЙ ЛОГ"
+    "terminal_title": "XENRAY_CLI :: ГЛАВНЫЙ ЛОГ",
+    "enable": "Запуск",
+    "disable": "Остановить",
+    "interval": "Интервал"
   },
   "header": {
     "toggle_theme": "Сменить тему",
@@ -407,7 +410,8 @@
     "statistics": "Статистика",
     "servers": "Серверы",
     "logs": "Логи",
-    "settings": "Настройки",
+        "sni_spoof": "SNI-спуфинг",
+        "settings": "Настройки",
     "connect_now": "Подключить",
     "disconnect": "Отключить"
   },
@@ -423,7 +427,9 @@
     "peak_speed": "Peak Speed: ",
     "realtime_wave": "Real-Time Traffic Wave Stream",
     "download": "Download",
-    "upload": "Upload"
+    "upload": "Upload",
+    "empty": "Не подключено — начните подключение, чтобы увидеть статистику в реальном времени",
+    "waiting": "Ожидание данных…"
   },
   "window": {
     "minimize": "Свернуть",

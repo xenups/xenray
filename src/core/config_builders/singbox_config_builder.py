@@ -21,6 +21,7 @@ from typing import Dict, List, Optional, Union
 from src.core.constants import (
     BASE_BYPASS_PROCESSES,
     DNS_IP_CLOUDFLARE,
+    DNS_IP_CLOUDFLARE_ALT,
     DNS_IP_GOOGLE,
     SINGBOX_RULE_SETS,
     TUN_GATEWAY_IPV4,
@@ -129,10 +130,29 @@ class SingboxConfigBuilder:
                 "servers": [
                     {
                         "tag": "bootstrap",
+                        # DoH through the SOCKS proxy (tunneled path), NOT a bare
+                        # direct UDP query to a foreign resolver: direct UDP to
+                        # 8.8.8.8/1.1.1.1 is blocked/tampered on censored networks
+                        # and caused the recurring `dns: exchange failed ... EOF` /
+                        # `i/o timeout`. Routing bootstrap via the same `proxy` leg
+                        # as remote_proxy also removes the direct<->proxy split that
+                        # makes the resolver look "confused" (loop-prone). The proxy
+                        # is a loopback SOCKS to an IP, so no chicken-egg resolution.
+                        "type": "https",
+                        "server": DNS_IP_CLOUDFLARE,
+                        "detour": "proxy",
+                    },
+                    {
+                        "tag": "local_dns",
+                        # Local/system DNS for DIRECT-routed domains (e.g. Iranian
+                        # sites like ikco.ir). A LOCAL resolver (the router/gateway)
+                        # is reachable without leaving the network — no foreign
+                        # blocking. Uses the system's actual DNS servers.
                         "type": "udp",
-                        # Google DNS as bootstrap — referenced by constant so tests can
-                        # assert the value without embedding a literal string.
-                        "server": DNS_IP_GOOGLE,
+                        "server": os.getenv(
+                            "DNS_LOCAL_SERVER",
+                            (PlatformUtils.get_system_dns_servers() or [DNS_IP_CLOUDFLARE_ALT])[0],
+                        ),
                         "detour": "direct",
                     },
                     {
@@ -140,8 +160,10 @@ class SingboxConfigBuilder:
                         # DoH through the SOCKS proxy avoids port-53 blocking and
                         # UDP ASSOCIATE limitations in Xray's SOCKS inbound.
                         # sing-box appends /dns-query automatically for type="https".
+                        # Uses Google DNS (independent of bootstrap's Cloudflare) so
+                        # the two tunneled resolvers don't share a single point.
                         "type": "https",
-                        "server": DNS_IP_CLOUDFLARE,
+                        "server": DNS_IP_GOOGLE,
                         "domain_resolver": "bootstrap",
                         "detour": "proxy",
                     },
@@ -183,12 +205,10 @@ class SingboxConfigBuilder:
                     "tag": "proxy",
                     "server": "127.0.0.1",
                     "server_port": socks_port,
-                    "domain_resolver": "remote_proxy",
                 },
                 {
                     "type": "direct",
                     "tag": "direct",
-                    "domain_resolver": "bootstrap",
                     **({"bind_interface": interface_name} if interface_name else {}),
                 },
                 {"type": "block", "tag": "block"},
@@ -231,6 +251,11 @@ class SingboxConfigBuilder:
                 ],
                 "final": "proxy",
                 "auto_detect_interface": True,
+                # sing-box 1.12+ requires default_domain_resolver (the legacy
+                # per-outbound `domain_resolver` field is deprecated and will be
+                # removed in 1.14). bootstrap resolves domains for outbounds
+                # that don't specify their own.
+                "default_domain_resolver": "bootstrap",
                 **({"default_interface": interface_name} if interface_name else {}),
             },
         }
@@ -254,8 +279,37 @@ class SingboxConfigBuilder:
             insert_index += 1
             dns_rules.append({"domain_suffix": domain, "server": "bootstrap"})
 
+        # --- SNI Spoof: CONNECT_IP loop-breaker ---
+        # When SNI spoofing is enabled, CONNECT_IP's traffic must go DIRECT
+        # out the physical NIC — never back down the TUN route — or the spoof
+        # helper's upstream socket would loop. This rule is inserted before
+        # the hijack-dns/default chain (first-match-wins).
+        try:
+            from src.core.constants import CONFIG_DIR
+            from src.repositories.settings_repository import SettingsRepository
+
+            _settings = SettingsRepository(CONFIG_DIR)
+            if _settings.get_sni_spoof_enabled():
+                connect_ip = _settings.get_sni_connect_ip()
+                if connect_ip:
+                    rule = {"outbound": "direct"}
+                    if self._is_ipv4(connect_ip):
+                        rule["ip_cidr"] = connect_ip
+                    else:
+                        rule["domain"] = [connect_ip]
+                    rules.insert(insert_index, rule)
+                    insert_index += 1
+                    logger.debug(f"[SingboxConfigBuilder] SNI spoof target direct rule: {connect_ip}")
+        except Exception:
+            pass
+
         # --- User routing rules (direct / proxy / block) ---
-        self._apply_user_routing_rules(cfg, routing_rules)
+        # IMPORTANT: sing-box uses FIRST-MATCH-WINS. The default rules below
+        # (sniff/hijack-dns, multicast block, private-IP direct) would swallow
+        # user rules appended at the END. So user rules are INSERTED right
+        # after the proxy-bypass rules and BEFORE the sniff/hijack/default
+        # chain — a user "direct example.com" must win over hijack-dns.
+        self._apply_user_routing_rules(cfg, routing_rules, insert_at=insert_index)
 
         # --- Country rule sets ---
         self._apply_country_rules(cfg, routing_country)
@@ -279,13 +333,30 @@ class SingboxConfigBuilder:
         except ValueError:
             return False
 
-    def _apply_user_routing_rules(self, cfg: dict, routing_rules: Optional[Dict]) -> None:
-        """Inject user-defined direct/proxy/block rules into cfg in-place."""
+    @staticmethod
+    def _is_ipv4(val: str) -> bool:
+        """True when val is a literal IPv4 (not a domain)."""
+        try:
+            ipaddress.ip_address(val)
+            return val.count(".") == 3
+        except ValueError:
+            return False
+
+    def _apply_user_routing_rules(self, cfg: dict, routing_rules: Optional[Dict], insert_at: int = -1) -> None:
+        """Inject user-defined direct/proxy/block rules into cfg in-place.
+
+        Rules are INSERTED at ``insert_at`` (before the sniff/hijack-dns and
+        default block/direct chain) so first-match-wins does not swallow them.
+        """
         if not routing_rules:
             return
 
         rules = cfg["route"]["rules"]
         dns_rules = cfg["dns"]["rules"]
+
+        # Collect all user rules first, then insert in order at insert_at.
+        new_rules: List[dict] = []
+        new_dns_rules: List[dict] = []
 
         for action in ("direct", "proxy", "block"):
             targets = routing_rules.get(action, [])
@@ -320,20 +391,36 @@ class SingboxConfigBuilder:
                     s_domain_suffixes.append(t)
 
             if s_ips:
-                rules.append({"ip_cidr": s_ips, "outbound": action})
+                new_rules.append({"ip_cidr": s_ips, "outbound": action})
 
             if s_domains:
-                rules.append({"domain": s_domains, "outbound": action})
+                new_rules.append({"domain": s_domains, "outbound": action})
                 if action == "direct":
-                    dns_rules.append({"domain": s_domains, "server": "bootstrap"})
+                    new_dns_rules.append({"domain": s_domains, "server": "local_dns"})
 
             if s_domain_suffixes:
-                rules.append({"domain_suffix": s_domain_suffixes, "outbound": action})
+                new_rules.append({"domain_suffix": s_domain_suffixes, "outbound": action})
                 if action == "direct":
-                    dns_rules.append({"domain_suffix": s_domain_suffixes, "server": "bootstrap"})
+                    new_dns_rules.append({"domain_suffix": s_domain_suffixes, "server": "local_dns"})
+
+        # Insert BEFORE the default chain (hijack-dns / block / private-direct).
+        if insert_at < 0:
+            insert_at = len(rules)
+        for i, r in enumerate(new_rules):
+            rules.insert(insert_at + i, r)
+        dns_rules.extend(new_dns_rules)
 
     def _apply_country_rules(self, cfg: dict, routing_country: str) -> None:
-        """Inject remote rule-set entries for country-based routing."""
+        """Inject country-based direct routing via rule-set.
+
+        sing-box 1.12+ removed inline ``geoip``/``geosite`` match (must use
+        rule-set .srs). We emit remote rule-sets whose ``download_detour`` is the
+        **tunneled proxy**, not ``direct`` — direct fetching from
+        githubusercontent.com is blocked on censored networks and a failed
+        download FATALs the TUN engine at startup (the reason VPN failed to
+        connect while proxy worked). Through the proxy the download succeeds,
+        then sing-box caches it so later startups resolve offline.
+        """
         if not routing_country or routing_country.lower() == "none":
             return
 
@@ -359,7 +446,9 @@ class SingboxConfigBuilder:
                     "type": "remote",
                     "format": "binary",
                     "url": url,
-                    "download_detour": "direct",
+                    # Download through the tunneled proxy so censored networks
+                    # can fetch the rules (direct githubusercontent is blocked).
+                    "download_detour": "proxy",
                     "update_interval": "24h",
                 }
             )

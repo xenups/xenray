@@ -24,6 +24,11 @@ python-dotenv = "^1.2.1"
 throttled-py = "^3.0.1"
 dependency-injector = "^4.42.0"
 qrcode = {version = ">=7.4", extras = ["pil"]}
+# SNI Spoofing: raw packet capture/injection via WinDivert (Windows-only).
+# WinDivert.dll + WinDivert64.sys ship with the pydivert wheel and require
+# admin at runtime. Guarded with `sys_platform == "win32"` so Linux/macOS
+# dev/test installs stay lean and import cleanly (see src/services/sni_spoof/).
+pydivert = {version = "^3.1.0", markers = "sys_platform == 'win32'"}
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.0"

@@ -40,6 +40,7 @@ class XrayService:
         self._is_tun_mode: bool = False
         self._smhr_was_enabled: Optional[bool] = None  # tracks SMHR state before VPN
         self._cleanup_lock = threading.Lock()
+        self._sni_spoof_service = None  # SniSpoofService, started alongside Xray when enabled
         self._check_and_restore_pid()
 
         # Guarantee teardown even on unclean exit (SIGKILL bypasses this, but
@@ -66,13 +67,64 @@ class XrayService:
         self._guaranteed_cleanup()
 
     def _guaranteed_cleanup(self):
-        """Idempotent teardown — safe to call multiple times (guarded by lock)."""
+        """Idempotent teardown — safe to call multiple times (guarded by lock).
+
+        Must mirror ``stop()`` (single source of truth for process + PID-file +
+        SNI-helper teardown). Without this the SIGTERM/atexit path leaves the
+        Xray process and PID file alive, which in turn keeps the SNI-spoof
+        parent watcher from ever firing -> orphaned listener until next connect.
+        """
         with self._cleanup_lock:
+            try:
+                self._stop_sni_spoof_helper()
+            except Exception as e:
+                logger.warning(f"[XrayService] SNI helper cleanup error in guaranteed teardown: {e}")
+            self._kill_process_and_cleanup()
             self._remove_nrpt_rules()
             self._restore_smhr()
             if self._is_tun_mode:
                 self._cleanup_tun_dns()
                 self._is_tun_mode = False
+
+    def _kill_process_and_cleanup(self) -> Optional[int]:
+        """Kill the Xray process (memory PID then PID file) and remove the PID file.
+
+        Shared by ``stop()`` and ``_guaranteed_cleanup()`` so both teardown
+        bodies stay in sync. Returns the killed PID or None.
+        """
+        pid_to_kill = self._pid
+        if not pid_to_kill and os.path.exists(XRAY_PID_FILE):
+            try:
+                with open(XRAY_PID_FILE, "r") as f:
+                    pid_to_kill = int(f.read().strip())
+            except Exception:
+                pass
+
+        if not pid_to_kill:
+            return None
+
+        try:
+            logger.info(f"[XrayService] Stopping process {pid_to_kill}")
+            ProcessUtils.kill_process(pid_to_kill, force=False)
+            deadline = time.monotonic() + 1.0
+            while ProcessUtils.is_running(pid_to_kill) and time.monotonic() < deadline:
+                time.sleep(0.05)
+            if ProcessUtils.is_running(pid_to_kill):
+                logger.warning(f"[XrayService] Graceful stop timed out for PID {pid_to_kill}, forcing kill")
+                ProcessUtils.kill_process(pid_to_kill, force=True)
+
+            self._pid = None
+            self._process = None
+
+            if os.path.exists(XRAY_PID_FILE):
+                try:
+                    os.remove(XRAY_PID_FILE)
+                except Exception as e:
+                    logger.warning(f"[XrayService] Failed to remove PID file: {e}")
+            return pid_to_kill
+        except Exception as e:
+            logger.error(f"[XrayService] Failed to stop Xray: {e}")
+            return None
 
     # ------------------------------------------------------------------
     # NRPT helpers
@@ -217,6 +269,37 @@ class XrayService:
         self._remove_nrpt_rules()
         self._cleanup_tun_dns()
         self._restore_smhr()
+
+    def _start_sni_spoof_helper(self):
+        """Start the SNI-spoof helper service when enabled (fail-soft).
+
+        Uses the shared SniSpoofService instance so a UI toggle and a connection
+        drive the SAME listener (the lifecycle bridge owns the toggle side).
+        """
+        try:
+            from src.repositories.settings_repository import SettingsRepository
+            from src.services.sni_spoof.sni_spoof_service import get_sni_spoof_service
+
+            repo = SettingsRepository()
+            if not repo.get_sni_spoof_enabled():
+                return
+            service = get_sni_spoof_service(settings_repo=repo)
+            self._sni_spoof_service = service
+            if not service.running:
+                service.start()
+        except Exception as e:
+            logger.warning(f"[XrayService] SNI spoof helper start failed (fail-soft): {e}")
+
+    def _stop_sni_spoof_helper(self):
+        """Stop the SNI-spoof helper service (called on Xray teardown)."""
+        try:
+            from src.services.sni_spoof.sni_spoof_service import get_sni_spoof_service
+
+            service = self._sni_spoof_service or get_sni_spoof_service()
+            self._sni_spoof_service = service
+            service.stop()
+        except Exception as e:
+            logger.warning(f"[XrayService] SNI spoof helper stop error: {e}")
 
     def _configure_windows_tun_dns(self, config_file_path: str):
         """Configure DNS and NRPT settings for the virtual TUN adapter on Windows.
@@ -502,6 +585,11 @@ class XrayService:
                 except Exception as e:
                     logger.error(f"[XrayService] Failed to write PID file: {e}")
 
+                # SNI Spoof: start the helper alongside Xray when enabled.
+                # Fail-soft: non-admin / missing pydivert -> SniSpoofService.start
+                # returns False + logs, never raises or blocks Xray startup.
+                self._start_sni_spoof_helper()
+
                 # Windows virtual adapter DNS override — run in a daemon thread so
                 # we never block the UI thread (CRIT-04 / MAJ-05 fix).
                 dns_thread = threading.Thread(
@@ -527,41 +615,17 @@ class XrayService:
         # Perform guaranteed teardown (NRPT, SMHR, TUN DNS cleanup)
         self._guaranteed_cleanup()
 
-        # Checks memory PID first
-        pid_to_kill = self._pid
+        # Stop the SNI-spoof helper alongside Xray
+        self._stop_sni_spoof_helper()
 
-        # If no memory PID, check file
-        if not pid_to_kill and os.path.exists(XRAY_PID_FILE):
-            try:
-                with open(XRAY_PID_FILE, "r") as f:
-                    pid_to_kill = int(f.read().strip())
-            except Exception:
-                pass
+        # Kill the process (memory PID then PID file) and remove the PID file
+        pid_to_kill = self._kill_process_and_cleanup()
 
-        if not pid_to_kill:
+        if pid_to_kill is None:
             logger.debug("[XrayService] No process to stop")
             return True
 
         try:
-            logger.info(f"[XrayService] Stopping process {pid_to_kill}")
-            ProcessUtils.kill_process(pid_to_kill, force=False)
-            deadline = time.monotonic() + 1.0
-            while ProcessUtils.is_running(pid_to_kill) and time.monotonic() < deadline:
-                time.sleep(0.05)
-            if ProcessUtils.is_running(pid_to_kill):
-                logger.warning(f"[XrayService] Graceful stop timed out for PID {pid_to_kill}, forcing kill")
-                ProcessUtils.kill_process(pid_to_kill, force=True)
-
-            self._pid = None
-            self._process = None
-
-            # Remove PID file
-            if os.path.exists(XRAY_PID_FILE):
-                try:
-                    os.remove(XRAY_PID_FILE)
-                except Exception as e:
-                    logger.warning(f"[XrayService] Failed to remove PID file: {e}")
-
             event_bus.publish(EVENT_CORE_PROCESS_STOPPED, {"engine": "xray", "pid": pid_to_kill})
             return True
         except Exception as e:

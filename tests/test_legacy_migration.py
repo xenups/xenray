@@ -21,7 +21,10 @@ class TestLegacyConfigService(unittest.TestCase):
             "outbounds": [
                 {
                     "protocol": "vless",
-                    "streamSettings": {"network": "splithttp", "splithttpSettings": {"host": "example.com"}},
+                    "streamSettings": {
+                        "network": "splithttp",
+                        "splithttpSettings": {"host": "example.com"},
+                    },
                 }
             ]
         }
@@ -36,13 +39,21 @@ class TestLegacyConfigService(unittest.TestCase):
         """Test that invalid network is fixed but security is preserved (non-destructive migration)."""
         config = {
             "outbounds": [
-                {"protocol": "vless", "streamSettings": {"network": "invalid_net", "security": "invalid_sec"}}
+                {
+                    "protocol": "vless",
+                    "streamSettings": {
+                        "network": "invalid_net",
+                        "security": "invalid_sec",
+                    },
+                }
             ]
         }
         migrated = self.service.migrate_config(config)
         stream = migrated["outbounds"][0]["streamSettings"]
         self.assertEqual(stream["network"], "tcp")  # Invalid network gets fixed
-        self.assertEqual(stream["security"], "invalid_sec")  # Security preserved to avoid breaking configs
+        self.assertEqual(
+            stream["security"], "invalid_sec"
+        )  # Security preserved to avoid breaking configs
 
     def test_fill_transport_defaults(self):
         config = {
@@ -62,7 +73,14 @@ class TestLegacyConfigService(unittest.TestCase):
         self.assertEqual(stream["tlsSettings"]["serverName"], "server.com")
 
     def test_non_legacy_ensures_tag(self):
-        config = {"outbounds": [{"protocol": "vless", "streamSettings": {"network": "ws", "security": "tls"}}]}
+        config = {
+            "outbounds": [
+                {
+                    "protocol": "vless",
+                    "streamSettings": {"network": "ws", "security": "tls"},
+                }
+            ]
+        }
         migrated = self.service.migrate_config(config)
         self.assertEqual(migrated["outbounds"][0]["tag"], "proxy")
         self.assertEqual(migrated["outbounds"][0]["streamSettings"]["network"], "ws")
@@ -101,10 +119,11 @@ class TestOrchestratorFallback(unittest.TestCase):
         self.mock_legacy_service.is_legacy.return_value = True
         self.mock_legacy_service.migrate_config.return_value = migrated_config
 
-        # First attempt (migrated) fails, second (original) succeeds
-        mock_test.side_effect = [
-            (False, "fail", None),  # Migrated config test
-            (True, "100ms", None),  # Original config test
+        # First candidate fails all health retries, then the original succeeds.
+        from src.core.connection_orchestrator import HEALTH_RETRIES
+
+        mock_test.side_effect = [(False, "fail", None)] * HEALTH_RETRIES + [
+            (True, "100ms", None)  # Original config test
         ]
 
         self.mock_xray_service.start.return_value = 1234  # PID

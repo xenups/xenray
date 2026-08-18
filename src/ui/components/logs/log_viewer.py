@@ -47,6 +47,9 @@ class LogViewer:
         self._stop_flag: Optional[threading.Event] = None
         self._page: Optional[ft.Page] = None
         self.MAX_CHARS = 10000
+        # Last line actually appended — used to collapse CONSECUTIVE
+        # duplicate lines (spam suppression) in _append_batch.
+        self._last_line: Optional[str] = None
         # Polling interval (seconds) between reads — keeps CPU low; the user
         # can adjust it (LogsDrawer exposes a control for this).
         self.tail_interval = 1.0
@@ -95,15 +98,36 @@ class LogViewer:
         # (the thread's first tick would seek to END past it).
         file_handles = {}
         last_inodes = {}
+        missing_files = []
         for filepath in filepaths:
             try:
                 if os.path.exists(filepath):
                     f = open(filepath, "r", encoding="utf-8", errors="replace")
+                    # Read EXISTING history first so the viewer is not blank
+                    # when tailing starts — then seek to END for new lines.
+                    try:
+                        history = f.read()
+                        if history.strip():
+                            self._append_batch([history + "\n"])
+                    except Exception:
+                        pass
                     f.seek(0, os.SEEK_END)
                     file_handles[filepath] = f
                     last_inodes[filepath] = os.stat(filepath).st_ino
+                else:
+                    missing_files.append(filepath)
             except Exception as e:
                 logger.error(f"Error opening log file {filepath}: {e}")
+
+        # If NO log file exists yet (e.g. engine not started), show a status
+        # line so the user knows tailing is ON and waiting for output — not a
+        # dead empty screen.
+        if not file_handles:
+            status = (
+                f"● Tailing started — waiting for log output...\n"
+                f"  (no log file found yet: {', '.join(os.path.basename(p) for p in filepaths)})\n"
+            )
+            self._append_batch([status])
 
         def tail_log():
             while not stop_event.is_set():
@@ -115,7 +139,13 @@ class LogViewer:
                             continue
 
                         stat = os.stat(filepath)
-                        if last_inodes.get(filepath) != stat.st_ino:
+                        if filepath not in file_handles:
+                            # File was created AFTER start_tailing — open it now.
+                            f = open(filepath, "r", encoding="utf-8", errors="replace")
+                            f.seek(0, os.SEEK_END)
+                            file_handles[filepath] = f
+                            last_inodes[filepath] = stat.st_ino
+                        elif last_inodes.get(filepath) != stat.st_ino:
                             if filepath in file_handles:
                                 file_handles[filepath].close()
                             file_handles[filepath] = open(filepath, "r", encoding="utf-8", errors="replace")
@@ -201,6 +231,7 @@ class LogViewer:
     def clear_logs(self):
         """Clear all log text."""
         self._log_text.value = ""
+        self._last_line = None
         try:
             if self._log_text.page:
                 self._log_text.update()
@@ -208,8 +239,26 @@ class LogViewer:
             pass
 
     def _append_batch(self, lines: list[str]):
-        """Append batch of lines to log viewer (Newest at top)."""
-        new_text = "".join(lines).rstrip()
+        """Append batch of lines to log viewer (Newest at top).
+
+        Lines identical to the previously appended line (CONSECUTIVE
+        duplicates — e.g. a repeating error spam) are skipped so the viewer
+        is not flooded; a later different line resumes normal output.
+        """
+        if not lines:
+            return
+
+        # Collapse consecutive identical lines (keep only the first of a run).
+        kept: list[str] = []
+        for line in lines:
+            if line == self._last_line:
+                continue
+            self._last_line = line
+            kept.append(line)
+        if not kept:
+            return
+
+        new_text = "".join(kept).rstrip()
         if not new_text:
             return
 

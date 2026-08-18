@@ -169,8 +169,12 @@ class TestPassiveLogMonitor(unittest.TestCase):
         assert len(records) == 1
 
     def test_exponential_backoff(self):
-        self.monitor.BASE_COOLDOWN_SECONDS = 0.1
-        self.monitor.pause = MagicMock(wraps=self.monitor.pause)
+        # Contract (F6): the monitor itself no longer self-pauses — all
+        # reconnect backoff is owned by AutoReconnectService. The per-source
+        # debounce (DEBOUNCE_SECONDS) is the duplicate-signal guard, and
+        # consecutive alerts still increment _consecutive_failures so the
+        # service can compute its own exponential backoff.
+        self.monitor.DEBOUNCE_SECONDS = 0.0  # disable debounce for this test
 
         self.monitor.start()
         time.sleep(0.1)
@@ -180,23 +184,51 @@ class TestPassiveLogMonitor(unittest.TestCase):
             f.write("generic::error 1\n")
         time.sleep(0.2)
 
-        self.monitor.pause.assert_called_with(0.1)
-        self.monitor.resume()  # Reset pause manually for speed
+        self.assertEqual(self.monitor._consecutive_failures, 1)
+        self.assertFalse(self.monitor._paused)
+        self.assertEqual(self.monitor._paused_until, 0.0)
 
         # 2nd failure
         with open(self.tmp_file, "a") as f:
             f.write("generic::error 2\n")
         time.sleep(0.2)
 
-        self.monitor.pause.assert_called_with(0.2)
-        self.monitor.resume()
+        self.assertEqual(self.monitor._consecutive_failures, 2)
+        self.assertFalse(self.monitor._paused)
+        self.assertEqual(self.monitor._paused_until, 0.0)
 
         # 3rd failure
         with open(self.tmp_file, "a") as f:
             f.write("generic::error 3\n")
         time.sleep(0.2)
 
-        self.monitor.pause.assert_called_with(0.4)
+        self.assertEqual(self.monitor._consecutive_failures, 3)
+        self.assertFalse(self.monitor._paused)
+        self.assertEqual(self.monitor._paused_until, 0.0)
+
+    def test_fatal_config_line_does_not_trigger(self):
+        """F4: a config line containing 'fatal' (e.g. log.level) must NOT fire the callback."""
+        callback = MagicMock()
+        self.monitor._on_failure = callback
+
+        self.monitor._process_line('log.level: "fatal"')
+        self.monitor._process_line("2026/01/01 10:00:00 [WARN] config: level fatal is invalid")
+        callback.assert_not_called()
+
+    def test_fatal_failure_line_triggers(self):
+        """F4: a real fatal failure line MUST fire the callback."""
+        callback = MagicMock()
+        self.monitor._on_failure = callback
+
+        self.monitor.start()
+        try:
+            self.monitor._process_line("2026/01/01 10:00:00 [FATAL] fatal: failed to create tun: permission denied")
+            assert self._wait_for_callback(callback), "callback not called"
+            payload = callback.call_args[0][0]
+            self.assertEqual(payload["source"], "xray")
+            self.assertIn("failed to create tun", payload["line"])
+        finally:
+            self.monitor.stop()
 
 
 if __name__ == "__main__":

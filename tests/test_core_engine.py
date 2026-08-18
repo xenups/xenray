@@ -125,6 +125,8 @@ class TestRouteManagerService:
     def test_cleanup_routes(self, route_mgr):
         route_mgr._added_routes = ["1.2.3.4"]
         with patch("subprocess.run") as mock_run:
+            # H3: a successful delete (rc==0) is removed from tracking.
+            mock_run.return_value.returncode = 0
             route_mgr.cleanup_routes()
             mock_run.assert_called_once()
             assert route_mgr._added_routes == []

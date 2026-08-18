@@ -19,6 +19,14 @@ class TestI18n:
         # Re-create the global instance that functions use
         src.core.i18n._i18n = I18n()
         yield
+        # Restore a pristine singleton after the test so tests that run later
+        # (e.g. logs drawer) still resolve REAL translations. Without this the
+        # polluted state (empty "en" translations + "fa" current lang) leaks
+        # into the rest of the suite and t() falls back to defaults.
+        I18n._instance = None
+        I18n._translations = {}
+        I18n._current_lang = "en"
+        src.core.i18n._i18n = I18n()
 
     def test_singleton(self):
         """Test that I18n is a singleton."""

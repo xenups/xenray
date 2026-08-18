@@ -188,6 +188,14 @@ class ReconnectEventHandler:
         """Handle reconnect_failed event."""
         reason = data.get("reason", "unknown")
 
+        # C3: the reconnect attempt is OVER — clear the in-flight flag so a
+        # later event (e.g. the stale "connected" of the failed attempt, or a
+        # NEW attempt's "reconnecting") is not misread as this attempt's
+        # completion. This is what keeps the UI/FSM consistent: after
+        # reconnect_failed the UI lands in the error/stopped state below, and
+        # only a genuinely NEW connect flow may move it back to connected.
+        self._is_reconnecting = False
+
         if self._toast:
             msg_key = "connection.no_internet" if reason == "no_internet" else "connection.reconnect_failed"
             self._ui_call(lambda: self._toast.error(t(msg_key), 3000))

@@ -163,13 +163,21 @@ class RouteManagerService:
             logger.error(f"[RouteManagerService] Failed to add route for {ip}: {exc}")
 
     def _cleanup_host_routes(self) -> None:
-        """Remove all /32 host routes added during this session."""
+        """Remove all /32 host routes added during this session.
+
+        Idempotent & crash-safe: never mutate the list while iterating; only
+        drop an entry when the delete actually succeeded (returncode == 0), so
+        a failed OS removal keeps its tracking and is retried on the next call
+        instead of being silently forgotten (the previous code removed the
+        entry in `finally` regardless of success -> route leak on failure).
+        """
         platform = PlatformUtils.get_platform()
-        for ip in self._added_routes[:]:
+        remaining = []
+        for ip in self._added_routes:
             try:
                 cmd = self._host_route_del_cmd(ip, platform)
                 logger.debug(f"[RouteManagerService] Removing static route: {ip}")
-                subprocess.run(
+                res = subprocess.run(
                     cmd,
                     check=False,
                     capture_output=True,
@@ -178,9 +186,16 @@ class RouteManagerService:
                 )
             except (OSError, subprocess.SubprocessError) as exc:
                 logger.warning(f"[RouteManagerService] Failed to remove route for {ip}: {exc}")
-            finally:
-                if ip in self._added_routes:
-                    self._added_routes.remove(ip)
+                remaining.append(ip)
+                continue
+            if res.returncode == 0:
+                logger.debug(f"[RouteManagerService] Removed static route: {ip}")
+            else:
+                logger.warning(
+                    f"[RouteManagerService] Route delete for {ip} returned {res.returncode} — keeping for retry"
+                )
+                remaining.append(ip)
+        self._added_routes = remaining
 
     # ------------------------------------------------------------------
     # LAN CIDR-route helpers
@@ -222,14 +237,21 @@ class RouteManagerService:
             logger.error(f"[RouteManagerService] Failed to add LAN route {network}: {exc}")
 
     def _cleanup_lan_routes(self) -> None:
-        """Remove all CIDR routes added during this session."""
+        """Remove all CIDR routes added during this session.
+
+        Idempotent & crash-safe: never mutate the list while iterating; only
+        drop an entry when the delete succeeded (returncode == 0). Failed
+        removals keep their tracking so the next call retries them (previously
+        the entry was removed in `finally` regardless of success -> leak).
+        """
         platform = PlatformUtils.get_platform()
-        for key in self._added_lan_routes[:]:
+        remaining = []
+        for key in self._added_lan_routes:
             try:
                 network = ipaddress.ip_network(key, strict=False)
                 cmd = self._cidr_route_del_cmd(network, platform)
                 logger.debug(f"[RouteManagerService] Removing LAN route: {key}")
-                subprocess.run(
+                res = subprocess.run(
                     cmd,
                     check=False,
                     capture_output=True,
@@ -238,9 +260,16 @@ class RouteManagerService:
                 )
             except (OSError, subprocess.SubprocessError) as exc:
                 logger.warning(f"[RouteManagerService] Failed to remove LAN route {key}: {exc}")
-            finally:
-                if key in self._added_lan_routes:
-                    self._added_lan_routes.remove(key)
+                remaining.append(key)
+                continue
+            if res.returncode == 0:
+                logger.debug(f"[RouteManagerService] Removed LAN route: {key}")
+            else:
+                logger.warning(
+                    f"[RouteManagerService] LAN route delete for {key} returned {res.returncode} — keeping for retry"
+                )
+                remaining.append(key)
+        self._added_lan_routes = remaining
 
     # ------------------------------------------------------------------
     # Platform-specific command builders (pure functions — no side effects)

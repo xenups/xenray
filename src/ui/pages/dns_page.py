@@ -157,11 +157,27 @@ class DNSPage(ft.Container):
         if update and self.page:
             self._list_view.update()
 
+    def _focus_input(self) -> None:
+        """Request focus on the address field (focus() is a coroutine in Flet 0.86.1)."""
+        try:
+            if self._address_input.page is not None:
+                self._address_input.page.run_task(self._address_input.focus)
+            else:
+                import asyncio
+
+                try:
+                    loop = asyncio.get_running_loop()
+                    loop.create_task(self._address_input.focus())
+                except RuntimeError:
+                    pass
+        except Exception:
+            pass
+
     def _add_server(self, e) -> None:
         addr = self._address_input.value.strip()
         if not self._controller.add_server(addr, self._protocol_dd.value):
             self._address_input.value = ""
-            self._address_input.focus()
+            self._focus_input()
             self._address_input.update()
             return
 
@@ -185,7 +201,7 @@ class DNSPage(ft.Container):
             pass
 
         self._address_input.value = ""
-        self._address_input.focus()
+        self._focus_input()
         self._address_input.update()
 
     def _delete(self, idx: int) -> None:

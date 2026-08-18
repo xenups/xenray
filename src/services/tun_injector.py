@@ -144,6 +144,19 @@ class TunInjector:
         toggles = self._app_context.routing.load_toggles()
         rules: list = []
 
+        # 0. SNI Spoof: CONNECT_IP -> direct (loop-breaker).
+        # When SNI spoofing is enabled, the spoof helper's upstream socket to
+        # CONNECT_IP must go DIRECT out the physical NIC — never re-enter the
+        # TUN route (default route) — or it loops. Placed FIRST so first-match
+        # wins over the TUN capture rules below.
+        try:
+            if self._app_context.settings.get_sni_spoof_enabled():
+                connect_ip = self._app_context.settings.get_sni_connect_ip()
+                if connect_ip:
+                    rules.append({"type": RULE_FIELD, "ip": [connect_ip], "outboundTag": TAG_DIRECT})
+        except Exception:
+            pass
+
         # 1. Port 53 -> dns-out. Scoped to the TUN inbound ONLY so Xray's own
         #    internal DNS client queries (to remote/direct DNS servers via their
         #    detours) are NOT re-captured — this prevents the recursion loop where
@@ -199,7 +212,12 @@ class TunInjector:
 
         user_block = routing_rules.get(TAG_BLOCK, [])
         if user_block:
-            rules.append({"type": RULE_FIELD, "domain": user_block, "outboundTag": TAG_BLOCK})
+            block_ips = [t for t in user_block if is_ip(t)]
+            block_domains = [t for t in user_block if not is_ip(t)]
+            if block_ips:
+                rules.append({"type": RULE_FIELD, "ip": block_ips, "outboundTag": TAG_BLOCK})
+            if block_domains:
+                rules.append({"type": RULE_FIELD, "domain": block_domains, "outboundTag": TAG_BLOCK})
 
         if toggles.get("block_udp_443", False):
             rules.append(
@@ -222,7 +240,12 @@ class TunInjector:
 
         user_direct = routing_rules.get(TAG_DIRECT, [])
         if user_direct:
-            rules.append({"type": RULE_FIELD, "domain": user_direct, "outboundTag": TAG_DIRECT})
+            direct_ips = [t for t in user_direct if is_ip(t)]
+            direct_domains = [t for t in user_direct if not is_ip(t)]
+            if direct_ips:
+                rules.append({"type": RULE_FIELD, "ip": direct_ips, "outboundTag": TAG_DIRECT})
+            if direct_domains:
+                rules.append({"type": RULE_FIELD, "domain": direct_domains, "outboundTag": TAG_DIRECT})
 
         if toggles.get("direct_private_ips", True):
             rules.append(
@@ -247,6 +270,11 @@ class TunInjector:
 
         user_proxy = routing_rules.get(TAG_PROXY, [])
         if user_proxy:
-            rules.append({"type": RULE_FIELD, "domain": user_proxy, "outboundTag": TAG_PROXY})
+            proxy_ips = [t for t in user_proxy if is_ip(t)]
+            proxy_domains = [t for t in user_proxy if not is_ip(t)]
+            if proxy_ips:
+                rules.append({"type": RULE_FIELD, "ip": proxy_ips, "outboundTag": TAG_PROXY})
+            if proxy_domains:
+                rules.append({"type": RULE_FIELD, "domain": proxy_domains, "outboundTag": TAG_PROXY})
 
         return rules
