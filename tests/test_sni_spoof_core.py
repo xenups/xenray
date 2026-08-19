@@ -386,16 +386,18 @@ class TestPhysicalNicRejectsVirtual:
         get_physical_nic_ip must reject it and pick the physical NIC."""
         import src.services.sni_spoof.listener as lm
 
-        # OS picks TUN; iface name maps to a virtual adapter -> must be rejected
+        # IP Helper yields nothing on this machine (non-Windows / API fail) —
+        # fall to the other detection paths.
+        monkeypatch.setattr(
+            "src.services.sni_spoof.nic_detect.get_physical_nic_candidates",
+            lambda: [],
+        )
+        # OS picks TUN; iface name is a non-physical link -> must be rejected
         monkeypatch.setattr(lm, "_os_default_egress_ip", lambda: "10.0.0.1")
         monkeypatch.setattr(lm, "_iface_name_for_ip", lambda ip: "SINGTUN")
-        monkeypatch.setattr(
-            lm,
-            "_skip_virtual_iface",
-            lambda name: ("tun" in name.lower() or "singtun" in name.lower()),
-        )
+        monkeypatch.setattr(lm, "_is_physical_link", lambda name: False)
         # fallback path returns the physical NIC
-        monkeypatch.setattr(lm, "_blacklist_scan_ip", lambda: "192.168.70.125")
+        monkeypatch.setattr(lm, "_scan_physical_nic_ip", lambda: "192.168.70.125")
         monkeypatch.setattr(lm, "get_default_interface_ipv4", lambda addr="8.8.8.8": "192.168.70.125")
 
         got = lm.get_physical_nic_ip()
@@ -404,9 +406,13 @@ class TestPhysicalNicRejectsVirtual:
     def test_physical_egress_kept(self, monkeypatch):
         import src.services.sni_spoof.listener as lm
 
+        monkeypatch.setattr(
+            "src.services.sni_spoof.nic_detect.get_physical_nic_candidates",
+            lambda: [],
+        )
         monkeypatch.setattr(lm, "_os_default_egress_ip", lambda: "192.168.70.125")
         monkeypatch.setattr(lm, "_iface_name_for_ip", lambda ip: "Ethernet 2")
-        monkeypatch.setattr(lm, "_skip_virtual_iface", lambda name: "tun" in name.lower())
+        monkeypatch.setattr(lm, "_is_physical_link", lambda name: True)
 
         assert lm.get_physical_nic_ip() == "192.168.70.125"
 

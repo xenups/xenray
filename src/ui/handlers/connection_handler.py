@@ -14,7 +14,7 @@ from src.core.constants import TMPDIR, XRAY_LOG_FILE
 from src.core.i18n import t
 from src.core.logger import logger
 from src.core.types import ConnectionMode
-from src.services.network_stats import NetworkStatsService
+from src.services.monitoring.network_stats import NetworkStatsService
 
 
 class ConnectionHandler:
@@ -348,7 +348,7 @@ class ConnectionHandler:
 
         if is_chain:
             # Generate chain config using XrayConfigProcessor
-            from src.services.xray_config_processor import XrayConfigProcessor
+            from src.services.core_engines.xray_config_processor import XrayConfigProcessor
 
             processor = XrayConfigProcessor(self._app_context)
             success, chain_config, error_or_tag = processor.build_chain_config(profile)

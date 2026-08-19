@@ -2,8 +2,8 @@ import unittest
 from unittest.mock import Mock, patch
 
 from src.core.connection_orchestrator import ConnectionOrchestrator
-from src.services.legacy_config_service import LegacyConfigService
-from src.services.xray_config_processor import XrayConfigProcessor
+from src.services.core_engines.legacy_config_service import LegacyConfigService
+from src.services.core_engines.xray_config_processor import XrayConfigProcessor
 
 
 class TestLegacyConfigService(unittest.TestCase):
@@ -51,9 +51,7 @@ class TestLegacyConfigService(unittest.TestCase):
         migrated = self.service.migrate_config(config)
         stream = migrated["outbounds"][0]["streamSettings"]
         self.assertEqual(stream["network"], "tcp")  # Invalid network gets fixed
-        self.assertEqual(
-            stream["security"], "invalid_sec"
-        )  # Security preserved to avoid breaking configs
+        self.assertEqual(stream["security"], "invalid_sec")  # Security preserved to avoid breaking configs
 
     def test_fill_transport_defaults(self):
         config = {
@@ -109,7 +107,7 @@ class TestOrchestratorFallback(unittest.TestCase):
 
     @patch("builtins.open", new_callable=unittest.mock.mock_open)
     @patch("json.dump")
-    @patch("src.services.connection_tester.ConnectionTester.test_connection_sync")
+    @patch("src.services.connection.connection_tester.ConnectionTester.test_connection_sync")
     def test_fallback_flow(self, mock_test, mock_json, mock_file):
         """Verify that orchestrator falls back to original if migrated fails."""
         legacy_config = {"outbounds": [{"protocol": "vless", "network": "splithttp"}]}

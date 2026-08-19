@@ -132,7 +132,3 @@ class SniSpoofPage(ft.Container):
             self._controller.set_listen_port(int(self._relay_section.listen_port_field.value or 0))
         except ValueError:
             pass
-
-
-# Backward-compatibility alias
-SniSpoofView = SniSpoofPage

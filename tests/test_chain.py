@@ -286,7 +286,7 @@ class TestChainConfigGeneration:
     @pytest.fixture
     def xray_processor(self, ctx):
         """Fixture to provide an XrayConfigProcessor."""
-        from src.services.xray_config_processor import XrayConfigProcessor
+        from src.services.core_engines.xray_config_processor import XrayConfigProcessor
 
         return XrayConfigProcessor(ctx)
 

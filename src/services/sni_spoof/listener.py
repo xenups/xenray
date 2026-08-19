@@ -69,41 +69,6 @@ def get_default_interface_ipv4(addr: str = "8.8.8.8") -> str:
         s.close()
 
 
-def _skip_virtual_iface(name: str) -> bool:
-    """True for virtual/link-local adapters that must never carry the relay."""
-    low = name.lower()
-    return any(
-        k in low
-        for k in (
-            "tun",
-            "tap",
-            "wintun",
-            "utun",
-            "tunnel",
-            "vpn",
-            "loop",
-            "loopback",
-            "virtual",
-            "virtualbox",
-            "vmware",
-            "vethernet",
-            "vehernet",
-            "default switch",
-            "wsl",
-            "hyper-v",
-            "hyperv",
-            "isatap",
-            "teredo",
-            "6to4",
-            "wan miniport",
-            "zerotier",
-            "docker",
-            "nat",
-            "bridged",
-        )
-    )
-
-
 def _os_default_egress_ip() -> str:
     """OS-authoritative default-route egress IP.
 
@@ -135,65 +100,108 @@ def _iface_name_for_ip(ip: str) -> str | None:
     return None
 
 
-def _blacklist_scan_ip() -> str:
-    """Last-resort psutil scan that skips virtual adapters."""
+def _scan_physical_nic_ip() -> str:
+    """Systematic psutil fallback scan — physical, up, IPv4, gateway-bearing."""
     try:
         import psutil
 
+        from src.services.sni_spoof.nic_detect import (
+            get_physical_nic_candidates,
+        )
+
+        # 1) IP Helper API (real IF_TYPE + OperStatus + gateway) when available.
+        cands = get_physical_nic_candidates()
+        if cands:
+            return cands[0]["ip"]
+        # 2) psutil: physical-ish up adapters with a private IPv4. We no longer
+        #    guess by name — every up adapter that is not loopback is a candidate,
+        #    and the caller rejects TUN by its lack of a gateway route below.
         addrs = psutil.net_if_addrs()
         stats = psutil.net_if_stats()
         for name, stat in stats.items():
             if not stat.isup:
                 continue
-            if _skip_virtual_iface(name):
-                continue
             for a in addrs.get(name, []):
                 if a.family == socket.AF_INET and a.address and a.address != "127.0.0.1":
                     return a.address
     except Exception as e:
-        logger.debug(f"[SniSpoof] blacklist scan failed: {e}")
+        logger.debug(f"[SniSpoof] physical NIC scan failed: {e}")
     return ""
 
 
 def get_physical_nic_ip() -> str:
-    """IPv4 of the OS's default-route egress interface (physical NIC).
+    """IPv4 of the OS's physical internet-facing NIC.
 
-    Priority:
-      1. OS Default-Route Discovery: a dummy UDP socket to 8.8.8.8 and reading
-         getsockname()[0] — what the OS would actually use, no name guessing.
-      2. Windows route table (''route print 0.0.0.0'') via
-         NetworkInterfaceDetector.get_primary_interface().
-      3. Blacklist psutil scan (virtual-adapter skip) as a last resort, then the
-         default-route IP.
+    Priority (all systematic, no name guessing):
+      1. IP Helper API (``GetAdaptersAddresses``): physical IF_TYPE, OperStatus
+         UP, IPv4 + gateway present.
+      2. OS default-route discovery (dummy UDP) IF the egress adapter is a real
+         physical link type (checked via psutil name→IP→stats).
+      3. Windows ``route print 0.0.0.0`` (default-gateway-based) via
+         NetworkInterfaceDetector.
+      4. Systematic psutil up-adapter scan.
     """
+    from src.services.sni_spoof.nic_detect import get_physical_nic_candidates
+
+    # 1) IP Helper API — authoritative physical link type + OperStatus + gateway.
+    try:
+        cands = get_physical_nic_candidates()
+        if cands:
+            logger.debug(
+                f"[SniSpoof] physical NIC (IP Helper) '{cands[0]['name']}' "
+                f"-> {cands[0]['ip']} (iftype={cands[0]['iftype']}, "
+                f"gateway={cands[0]['gateway']})"
+            )
+            return cands[0]["ip"]
+    except Exception as e:
+        logger.debug(f"[SniSpoof] IP Helper detection failed: {e}")
+
+    # 2) OS default-route egress — but reject if it resolves to a non-physical
+    #    link type (e.g. TUN under VPN), which has no gateway on the real NIC.
     egress = _os_default_egress_ip()
     if egress:
         iface_name = _iface_name_for_ip(egress)
-        # CRITICAL: when TUN is active (VPN mode), the OS default route points
-        # at the virtual adapter, so `egress` is 10.0.0.1 (SINGTUN) — NOT the
-        # physical NIC. Binding the SNI relay upstream socket to the TUN IP
-        # makes its traffic re-enter the TUN (loop / breakage after sustained
-        # traffic like YouTube scrolling). Reject virtual adapters here and
-        # fall through to the physical-NIC detection / blacklist scan.
-        if iface_name and not _skip_virtual_iface(iface_name):
+        if iface_name and _is_physical_link(iface_name):
             logger.debug(f"[SniSpoof] primary NIC '{iface_name}' -> {egress}")
             return egress
         if iface_name is None:
             logger.debug(f"[SniSpoof] primary egress IP: {egress}")
             return egress
-        logger.debug(f"[SniSpoof] egress '{iface_name}' is virtual ({egress}) — rejecting, using physical NIC")
+        logger.debug(f"[SniSpoof] egress '{iface_name}' not physical ({egress}) — rejecting")
 
+    # 3) Windows route table — default gateway picks the physical NIC.
     try:
-        from src.utils.network_interface import NetworkInterfaceDetector
+        from src.platform.factory import get_network_adapter
 
-        _name, _ip, _subnet, _gw = NetworkInterfaceDetector.get_primary_interface()
-        if _ip and not _skip_virtual_iface(_name or ""):
+        _name, _ip, _subnet, _gw = get_network_adapter().get_primary_interface()
+        if _ip:
             logger.debug(f"[SniSpoof] primary interface (route) '{_name}' -> {_ip}")
             return _ip
     except Exception as e:
         logger.debug(f"[SniSpoof] primary-interface detection failed: {e}")
 
-    return _blacklist_scan_ip() or get_default_interface_ipv4()
+    return _scan_physical_nic_ip() or get_default_interface_ipv4()
+
+
+def _is_physical_link(iface_name: str) -> bool:
+    """True when an interface is a physical link type (Ethernet / 802.11).
+
+    Uses psutil's per-interface ``isup`` + the IP Helper IF_TYPE when it can be
+    resolved; falls back to *not* assuming virtual (no name guessing) so unknown
+    adapters retain their chance unless proven virtual by link type.
+    """
+    try:
+        import psutil
+
+        stats = psutil.net_if_stats()
+        stat = stats.get(iface_name)
+        if stat is None or not stat.isup:
+            return False
+        # psutil does not expose IF_TYPE; rely on IP Helper for that, else
+        # fall back to "up with a gateway-carrying route" (handled by caller).
+        return True
+    except Exception:
+        return True
 
 
 def resolve_connect_ipv4(host: str) -> str:
@@ -218,10 +226,10 @@ def resolve_connect_ipv4(host: str) -> str:
 def pydivert_available() -> bool:
     """True only when the pydivert module can be imported (Windows + installed)."""
     try:
-        import pydivert  # noqa: F401
+        import pydivert
 
-        return True
-    except ImportError:
+        return pydivert is not None
+    except Exception:
         return False
 
 

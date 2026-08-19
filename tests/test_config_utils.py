@@ -1,6 +1,6 @@
 """Tests for shared config utility functions."""
 
-from src.services.config_utils import get_server_object, is_ip
+from src.services.core_engines.config_utils import get_server_object, is_ip
 
 
 class TestIsIp:

@@ -5,7 +5,7 @@ from __future__ import annotations
 import flet as ft
 
 from src.core.i18n import t
-from src.utils.network_interface import NetworkInterfaceDetector
+from src.platform.factory import get_network_adapter
 
 
 class LanSharingCard(ft.Container):
@@ -82,7 +82,7 @@ class LanSharingCard(ft.Container):
 
         port = self._app_context.settings.get_proxy_port()
         http_port = self._app_context.settings.get_http_port()
-        lan_ip = NetworkInterfaceDetector.get_primary_lan_ip() or t("lan.unknown_ip")
+        lan_ip = get_network_adapter().get_physical_lan_ip() or t("lan.unknown_ip")
         telegram_url = f"t.me/socks?server={lan_ip}&port={port}"
 
         def close_dialog(evt=None):
@@ -211,7 +211,7 @@ class LanSharingCard(ft.Container):
     def set_visible(self, show: bool) -> None:
         """Show or hide the top bar badge; refreshes LAN IP when shown."""
         if show:
-            lan_ip = NetworkInterfaceDetector.get_primary_lan_ip()
+            lan_ip = get_network_adapter().get_physical_lan_ip()
             if lan_ip:
                 self._label_text.value = f"LAN {lan_ip}"
             else:

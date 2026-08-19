@@ -54,7 +54,7 @@ class InstallerHandler:
         def install_task():
             try:
                 if component == "xray":
-                    from src.services.xray_installer import XrayInstallerService
+                    from src.services.installer.xray_installer import XrayInstallerService
 
                     XrayInstallerService.install(
                         progress_callback=update_status,

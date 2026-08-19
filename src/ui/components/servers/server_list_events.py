@@ -21,7 +21,7 @@ class ServerListEventsMixin:
     def _cancel_ping_all(self):
         """User clicked 'Stop Ping' — cancel all in-flight inspection tasks and
         stop the neon sweeps on active cards."""
-        from src.services.server_inspector import server_inspector
+        from src.services.connection.server_inspector import server_inspector
 
         server_inspector.cancel_all_inspections()
         # Revert the header button immediately (the batch-completed event is the
@@ -80,16 +80,21 @@ class ServerListEventsMixin:
         location = data.get("location") or {}
         ping_ms = data.get("ping")
 
-        # Persist ONLY stable metadata (country/city). Latency is volatile UI
-        # state — writing every resolved ping to disk during a big batch causes
-        # `profiles.json.tmp` PermissionError collisions on Windows, so it stays
-        # in-memory (applied to the live profile object + card badge) only.
+        # Persist ONLY stable metadata (country/city) PLUS the resolved ping.
+        # Latency was historically kept in-memory to avoid cross-thread writes
+        # during a big batch, but atomic_write_json already serialises writers
+        # via a module-level lock, so persisting ping is safe and makes the last
+        # ping survive page switches and restarts.
         persist_updates: dict = {}
         if location.get("country_code"):
             persist_updates["country_code"] = location["country_code"]
             persist_updates["country_name"] = location.get("country_name", location["country_code"])
             if location.get("city"):
                 persist_updates["city"] = location.get("city")
+        if ping_ms is not None and success:
+            persist_updates["last_latency_val"] = ping_ms
+            if result_str:
+                persist_updates["last_latency"] = result_str
         if persist_updates:
             self._persist_profile_updates(server_id, persist_updates)
 

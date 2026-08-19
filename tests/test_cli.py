@@ -46,7 +46,7 @@ class TestCLI:
     @patch("src.cli._prepare_config_file", return_value="temp.json")
     @patch("src.cli._cleanup_temp_file")
     @patch("src.cli._perform_connection")
-    @patch("src.services.connection_tester.ConnectionTester.test_connection_sync")
+    @patch("src.services.connection.connection_tester.ConnectionTester.test_connection_sync")
     def test_connect_success(self, mock_ping, mock_perf, mock_cleanup, mock_prep, mock_admin, mock_init):
         """Test successful connect command."""
         mock_app_context = MagicMock()
@@ -156,7 +156,7 @@ class TestCLI:
         assert "inconsistent state" in result.stdout
 
     @patch("src.cli._init_core")
-    @patch("src.services.connection_tester.ConnectionTester.test_connection_sync")
+    @patch("src.services.connection.connection_tester.ConnectionTester.test_connection_sync")
     def test_ping_single_success(self, mock_ping, mock_init):
         """Test single profile ping success."""
         mock_app_context = MagicMock()
@@ -178,7 +178,7 @@ class TestCLI:
         assert "Germany" in result.stdout
 
     @patch("src.cli._init_core")
-    @patch("src.services.connection_tester.ConnectionTester.test_connection_sync")
+    @patch("src.services.connection.connection_tester.ConnectionTester.test_connection_sync")
     def test_ping_single_failure(self, mock_ping, mock_init):
         """Test single profile ping failure."""
         mock_app_context = MagicMock()
@@ -208,7 +208,7 @@ class TestCLI:
         assert "not found" in result.stderr
 
     @patch("src.cli._init_core")
-    @patch("src.services.connection_tester.ConnectionTester.test_connection_sync")
+    @patch("src.services.connection.connection_tester.ConnectionTester.test_connection_sync")
     def test_ping_batch_all(self, mock_ping, mock_init):
         """Test batch ping of all profiles."""
         mock_app_context = MagicMock()

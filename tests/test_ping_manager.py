@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from threading import Event
 
-from src.services.ping_service import PRIORITY_IMPORT, PRIORITY_INTERVAL, PRIORITY_MANUAL, PingManager
+from src.services.connection.ping_service import PRIORITY_IMPORT, PRIORITY_INTERVAL, PRIORITY_MANUAL, PingManager
 
 
 def _wait_for(condition, timeout: float = 3.0):

@@ -12,10 +12,6 @@ import asyncio
 
 import pytest
 
-# Imported first to pre-warm the UI package graph (avoids the pre-existing
-# server_list <-> chain_builder_page circular import when a components module is
-# the first UI import in the process). Same pattern as test_ui_views_and_services.py.
-from src.ui.components.common.toast import ToastManager  # noqa: F401
 from src.ui.components.dashboard.connection_button import _schedule_animation_task
 
 

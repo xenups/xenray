@@ -35,8 +35,8 @@ class ServerListLatencyMixin:
         updated ONLY via its own TOPIC_SERVER_INSPECTED event — the parent
         ServerList container is never rebuilt.
         """
-        from src.services.ping_service import ping_manager
-        from src.services.server_inspector import server_inspector
+        from src.services.connection.ping_service import ping_manager
+        from src.services.connection.server_inspector import server_inspector
 
         if ping_manager.is_busy():
             if self._toast:

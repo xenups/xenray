@@ -51,8 +51,8 @@ class TestProcessUtils:
         mock_process.kill.assert_called_once()
 
     @patch("subprocess.Popen")
-    @patch("src.utils.platform_utils.PlatformUtils.get_subprocess_flags")
-    @patch("src.utils.platform_utils.PlatformUtils.get_startupinfo")
+    @patch("src.platform.windows.process.WindowsProcessAdapter.get_subprocess_flags", return_value=0)
+    @patch("src.platform.windows.process.WindowsProcessAdapter.get_startupinfo", return_value=None)
     def test_run_command(self, mock_startup, mock_flags, mock_popen):
         """Test running a command."""
         mock_popen.return_value = MagicMock()
@@ -69,8 +69,8 @@ class TestProcessUtils:
         )
 
     @patch("subprocess.Popen")
-    @patch("src.utils.platform_utils.PlatformUtils.get_subprocess_flags")
-    @patch("src.utils.platform_utils.PlatformUtils.get_startupinfo")
+    @patch("src.platform.windows.process.WindowsProcessAdapter.get_subprocess_flags", return_value=0)
+    @patch("src.platform.windows.process.WindowsProcessAdapter.get_startupinfo", return_value=None)
     def test_run_command_sync(self, mock_startup, mock_flags, mock_popen):
         """Test running a command synchronously."""
         mock_proc = MagicMock()

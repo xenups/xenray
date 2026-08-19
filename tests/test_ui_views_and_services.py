@@ -179,19 +179,18 @@ def test_i18n_status_phrases_fa_and_en():
 
 
 def test_lan_service_failure_fallbacks(monkeypatch):
-    """Test LanService handles network drops and socket errors gracefully."""
-    from src.services.lan_service import LanService
-
-    def mock_gethostname():
-        raise OSError("Network adapter unreadable")
+    """Test LanService handles network drops socket errors gracefully — and
+    returns None (never a fabricated IP) when no OS source is reachable."""
+    from src.services.system.lan_service import LanService
 
     def mock_socket(*args, **kwargs):
         raise OSError("No network sockets available")
 
-    monkeypatch.setattr("socket.gethostname", mock_gethostname)
+    # Force the IP Helper source empty too.
+    monkeypatch.setattr("src.platform.windows.network.get_physical_nic_candidates", lambda: [])
     monkeypatch.setattr("socket.socket", mock_socket)
     ip = LanService.get_real_physical_lan_ip()
-    assert ip == "192.168.1.1", f"Fallback IP was not 192.168.1.1, got {ip}"
+    assert ip is None, f"Expected None (deterministic failure), got {ip}"
 
     # Invalid QR input
     assert LanService.generate_qr_base64(None) is None

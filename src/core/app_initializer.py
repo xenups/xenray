@@ -1,16 +1,11 @@
-"""App Initializer - centralizes startup, window geometry, asset path resolution, and logging."""
-
-from __future__ import annotations
-
-import ctypes
 import os
 import sys
 
 import flet as ft
 
 from src.core.constants import EARLY_LOG_FILE, WINDOW_HEIGHT, WINDOW_WIDTH
-from src.core.logger import logger
 from src.core.settings import Settings
+from src.platform.factory import get_process_adapter
 from src.ui.theme import AppColors
 
 
@@ -19,13 +14,8 @@ class AppInitializer:
 
     @staticmethod
     def setup_windows_process_grouping() -> None:
-        """Register AppUserModelID for Windows process grouping (must run before Flet app start)."""
-        if sys.platform == "win32":
-            try:
-                myappid = "xenray.desktop.client.v1"
-                ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
-            except Exception as e:
-                logger.warning(f"[AppInitializer] Failed to set AppUserModelID: {e}")
+        """Register AppUserModelID and process flags for OS process grouping."""
+        get_process_adapter().initialize_environment()
 
     @staticmethod
     def get_absolute_icon_path() -> str:

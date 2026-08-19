@@ -23,7 +23,7 @@ from src.core.event_bus import (
 )
 from src.core.logger import logger
 from src.core.subscription_manager import SubscriptionManager
-from src.services.latency_tester import LatencyTester
+from src.services.connection.latency_tester import LatencyTester
 from src.ui.components.servers.add_server_dialog import AddServerModalContainer
 from src.ui.components.servers.server_list_actions import ServerListActionsMixin
 from src.ui.components.servers.server_list_chains import ServerListChainsMixin

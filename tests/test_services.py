@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, mock_open, patch
 import pytest
 
 from src.core.constants import DNS_IP_CLOUDFLARE, DNS_IP_GOOGLE
-from src.services.xray_service import XrayService
+from src.services.core_engines.xray_service import XrayService
 
 
 class TestXrayServiceInterface:
@@ -72,7 +72,7 @@ class TestXrayService:
 
         with patch("builtins.open", mock_open(read_data=fake_cfg)):
             with patch("time.sleep", return_value=None):
-                with patch("src.services.xray_service.subprocess.run", side_effect=fake_run):
+                with patch("src.platform.windows.tun_dns.subprocess.run", side_effect=fake_run):
                     pid = xray_service.start("config.json")
                     # TUN DNS is configured in a daemon thread; wait for it so the
                     # recorded netsh commands are complete before asserting.
@@ -126,3 +126,73 @@ class TestXrayService:
         assert any(c[1:4] == ["interface", "ipv6", "set"] and c[7] == ipv6 for c in netsh_cmds)
         # IPv4 DNS still pinned separately
         assert any(c[1:4] == ["interface", "ip", "set"] and c[7] == DNS_IP_CLOUDFLARE for c in netsh_cmds)
+
+
+class TestDomainServicesPackaging:
+    """Verify domain-driven package structure and re-exports."""
+
+    def test_connection_domain_exports(self):
+        from src.services.connection import (
+            ConnectionOrchestrator,
+            ConnectionTester,
+            RouteManagerService,
+        )
+
+        assert ConnectionOrchestrator is not None
+        assert ConnectionTester is not None
+        assert RouteManagerService is not None
+
+    def test_core_engines_domain_exports(self):
+        from src.services.core_engines import (
+            SingboxProcessManager,
+            SingboxService,
+            XrayConfigProcessor,
+            XrayProcessManager,
+            XrayService,
+        )
+
+        assert XrayService is not None
+        assert XrayProcessManager is not None
+        assert SingboxService is not None
+        assert SingboxProcessManager is not None
+        assert XrayConfigProcessor is not None
+
+    def test_installer_domain_exports(self):
+        from src.services.installer import (
+            AppUpdateService,
+            ArchiveExtractor,
+            FileDownloader,
+            RuleUpdateService,
+            XrayInstallerService,
+            XrayVersionChecker,
+        )
+
+        assert XrayInstallerService is not None
+        assert FileDownloader is not None
+        assert ArchiveExtractor is not None
+        assert XrayVersionChecker is not None
+        assert AppUpdateService is not None
+        assert RuleUpdateService is not None
+
+    def test_system_domain_exports(self):
+        from src.services.system import LanService, is_supported, is_task_registered
+
+        assert LanService is not None
+        assert callable(is_task_registered)
+        assert callable(is_supported)
+
+    def test_services_root_reexports(self):
+        import src.services as svc
+
+        assert hasattr(svc, "ConnectionOrchestrator")
+        assert hasattr(svc, "XrayService")
+        assert hasattr(svc, "SingboxService")
+        assert hasattr(svc, "XrayInstallerService")
+        assert hasattr(svc, "ConnectionMonitoringService")
+        assert hasattr(svc, "LanService")
+
+    def test_domain_module_imports(self):
+        from src.services import XrayService as FacadeXrayService
+        from src.services.core_engines.xray_service import XrayService as DomainXrayService
+
+        assert FacadeXrayService is DomainXrayService

@@ -11,8 +11,8 @@ import flet as ft
 from src.core.app_context import AppContext
 from src.core.event_bus import TOPIC_ACTIVE_SERVER_PING_UPDATED, event_bus
 from src.core.logger import logger
-from src.services.connection_tester import ConnectionTester
-from src.services.ping_service import PRIORITY_INTERVAL, ping_manager
+from src.services.connection.connection_tester import ConnectionTester
+from src.services.connection.ping_service import PRIORITY_INTERVAL, ping_manager
 
 
 class LatencyMonitorHandler:
@@ -89,7 +89,7 @@ class LatencyMonitorHandler:
 
         if is_chain and (not config or not config.get("outbounds")):
             try:
-                from src.services.xray_config_processor import XrayConfigProcessor
+                from src.services.core_engines.xray_config_processor import XrayConfigProcessor
 
                 processor = XrayConfigProcessor(self._app_context)
                 success, chain_config, error_msg = processor.build_chain_config(profile)

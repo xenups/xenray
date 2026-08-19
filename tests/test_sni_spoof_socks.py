@@ -40,6 +40,10 @@ class FakeRepo:
 def test_get_physical_nic_uses_os_default_egress(monkeypatch):
     # OS Default-Route Discovery wins: the dummy-UDP egress IP is the primary NIC,
     # and the interface name is derived from a psutil IP match.
+    monkeypatch.setattr(
+        "src.services.sni_spoof.nic_detect.get_physical_nic_candidates",
+        lambda: [],
+    )
     monkeypatch.setattr(listener_mod, "_os_default_egress_ip", lambda: "192.168.70.125")
 
     def _fake_addrs():
@@ -69,6 +73,10 @@ def test_get_physical_nic_uses_os_default_egress(monkeypatch):
 
 def test_get_physical_nic_falls_back_to_route_table(monkeypatch):
     # If OS egress fails, the route-table primary interface is used.
+    monkeypatch.setattr(
+        "src.services.sni_spoof.nic_detect.get_physical_nic_candidates",
+        lambda: [],
+    )
     monkeypatch.setattr(listener_mod, "_os_default_egress_ip", lambda: "")
     monkeypatch.setattr(
         "src.utils.network_interface.NetworkInterfaceDetector.get_primary_interface",
@@ -78,15 +86,18 @@ def test_get_physical_nic_falls_back_to_route_table(monkeypatch):
 
 
 def test_get_physical_nic_ip_last_resort_fallback(monkeypatch):
+    # Force every higher-priority path to yield nothing so we reach the tail.
+    monkeypatch.setattr(
+        "src.services.sni_spoof.nic_detect.get_physical_nic_candidates",
+        lambda: [],
+    )
     monkeypatch.setattr(listener_mod, "_os_default_egress_ip", lambda: "")
     monkeypatch.setattr(
-        "src.utils.network_interface.NetworkInterfaceDetector.get_primary_interface",
-        lambda: (None, None, None, None),
+        "src.platform.windows.network.WindowsNetworkAdapter.get_primary_interface",
+        lambda self: (None, None, None, None),
     )
-    monkeypatch.setattr(listener_mod, "_blacklist_scan_ip", lambda: "")
-    monkeypatch.setattr(
-        listener_mod, "get_default_interface_ipv4", lambda: "203.0.113.55"
-    )
+    monkeypatch.setattr(listener_mod, "_scan_physical_nic_ip", lambda: "")
+    monkeypatch.setattr(listener_mod, "get_default_interface_ipv4", lambda: "203.0.113.55")
     assert listener_mod.get_physical_nic_ip() == "203.0.113.55"
 
 
@@ -97,11 +108,36 @@ def test_os_default_egress_ip(monkeypatch):
     assert listener_mod._os_default_egress_ip() == "9.9.9.9"
 
 
-def test_skip_virtual_iface_rejects_vethernet():
-    assert listener_mod._skip_virtual_iface("vEthernet (Default Switch)")
-    assert listener_mod._skip_virtual_iface("WSL")
-    assert not listener_mod._skip_virtual_iface("Ethernet 2")
-    assert not listener_mod._skip_virtual_iface("Wi-Fi")
+def test_skip_virtual_iface_replaced_by_iftype():
+    """The string-matching name blacklist is gone — physical/virtual is decided
+    from the OS link type (IF_TYPE), never from adapter-name keywords."""
+    from src.services.sni_spoof.nic_detect import (
+        IF_TYPE_ETHERNET_CSMACD,
+        IF_TYPE_IEEE80211,
+        IF_TYPE_TUNNEL,
+        _is_physical_iftype,
+    )
+
+    # Physical link types (Ethernet / 802.11) are accepted regardless of name.
+    assert _is_physical_iftype(IF_TYPE_ETHERNET_CSMACD)
+    assert _is_physical_iftype(IF_TYPE_IEEE80211)
+    # Tunnel/VPN link types are NOT physical — this is what replaces the old
+    # name-blacklist, and it never depends on the adapter's name/language.
+    assert not _is_physical_iftype(IF_TYPE_TUNNEL)
+    assert not _is_physical_iftype(0)  # unknown
+
+
+def test_physical_nic_candidates_filter_by_type_gateway():
+    """get_physical_nic_candidates returns only physical+up+IPv4+gateway nics."""
+    from src.services.sni_spoof.nic_detect import get_physical_nic_candidates
+
+    cands = get_physical_nic_candidates()
+    # Either the API is unavailable (empty) or every candidate is physical/up —
+    # a candidate can never be a TUN/TAP (IF_TYPE_TUNNEL is filtered out).
+    for c in cands:
+        assert c["iftype"] in (6, 71)  # Ethernet/802.11 only
+        assert c["operstatus"] == 1  # Up
+        assert c["ip"]
 
 
 def test_resolve_connect_ipv4_keeps_numeric():

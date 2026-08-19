@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-import sys
 import types
-
-import pytest
 
 from src.ui.components.config.config_card import ConfigCard
 

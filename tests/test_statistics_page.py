@@ -4,16 +4,8 @@ real telemetry payload populates them with values."""
 
 from __future__ import annotations
 
-from unittest.mock import patch
-
 import flet as ft
 
-from src.core.event_bus import TOPIC_TELEMETRY_UPDATED, event_bus
-
-# Imported first to pre-warm the UI package graph (avoids the pre-existing
-# server_list <-> chain_builder_page circular import when a pages module is the
-# first UI import in the process). Same pattern as test_core_crash_ui_reset.py.
-from src.ui.components.common.toast import ToastManager  # noqa: F401
 from src.ui.pages.statistics_page import StatisticsPage
 
 

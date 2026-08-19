@@ -1,14 +1,12 @@
 """Tests for the LAN proxy sharing feature."""
 
-import socket
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from src.core.constants import LAN_FIREWALL_RULE_NAME, LAN_PRIVATE_RANGES
 from src.repositories.settings_repository import SettingsRepository
-from src.services.xray_config_processor import XrayConfigProcessor
-from src.utils.firewall_manager import FirewallManager
+from src.services.core_engines.xray_config_processor import XrayConfigProcessor
 from src.utils.network_interface import NetworkInterfaceDetector
 
 
@@ -74,79 +72,84 @@ class TestEnsureInboundsListen:
 
 
 class TestFirewallManager:
-    """Firewall rule add/check/remove (Windows, elevation-gated)."""
+    """Firewall rule add/check/remove via the OS firewall adapter."""
 
-    @patch("src.utils.firewall_manager.PlatformUtils.get_platform", return_value="windows")
+    def _adapter(self):
+        from src.platform.windows.firewall import WindowsFirewallAdapter
+
+        return WindowsFirewallAdapter(rule_name=LAN_FIREWALL_RULE_NAME)
+
+    @patch("src.platform.windows.firewall._is_windows", return_value=True)
     def test_add_rule(self, mock_platform):
+        adapter = self._adapter()
         with (
             patch(
-                "src.utils.firewall_manager.FirewallManager.check_lan_firewall_rule",
+                "src.platform.windows.firewall.WindowsFirewallAdapter.check_lan_firewall_rule",
                 return_value=False,
             ),
-            patch("src.utils.firewall_manager.FirewallManager._run", return_value=True) as mock_run,
+            patch("src.platform.windows.firewall.WindowsFirewallAdapter._run", return_value="") as mock_run,
         ):
-            ok = FirewallManager.add_lan_firewall_rule([10805, 10809])
+            ok = adapter.add_lan_firewall_rule([10805, 10809])
         assert ok is True
         cmd = mock_run.call_args[0][0]
         assert f"name={LAN_FIREWALL_RULE_NAME}" in cmd
         assert "localport=10805,10809" in cmd
 
-    @patch("src.utils.firewall_manager.PlatformUtils.get_platform", return_value="windows")
+    @patch("src.platform.windows.firewall._is_windows", return_value=True)
     def test_add_rule_skips_if_exists(self, mock_platform):
+        adapter = self._adapter()
         with (
             patch(
-                "src.utils.firewall_manager.FirewallManager.check_lan_firewall_rule",
+                "src.platform.windows.firewall.WindowsFirewallAdapter.check_lan_firewall_rule",
                 return_value=True,
             ),
-            patch("src.utils.firewall_manager.FirewallManager._run") as mock_run,
+            patch("src.platform.windows.firewall.WindowsFirewallAdapter._run") as mock_run,
         ):
-            ok = FirewallManager.add_lan_firewall_rule([10805])
+            ok = adapter.add_lan_firewall_rule([10805])
         assert ok is True
         mock_run.assert_not_called()
 
-    @patch("src.utils.firewall_manager.PlatformUtils.get_platform", return_value="windows")
+    @patch("src.platform.windows.firewall._is_windows", return_value=True)
     def test_remove_rule(self, mock_platform):
+        adapter = self._adapter()
         with (
             patch(
-                "src.utils.firewall_manager.FirewallManager.check_lan_firewall_rule",
+                "src.platform.windows.firewall.WindowsFirewallAdapter.check_lan_firewall_rule",
                 return_value=True,
             ),
-            patch("src.utils.firewall_manager.FirewallManager._run", return_value=True) as mock_run,
+            patch("src.platform.windows.firewall.WindowsFirewallAdapter._run", return_value="") as mock_run,
         ):
-            FirewallManager.remove_lan_firewall_rule()
+            adapter.remove_lan_firewall_rule()
         cmd = mock_run.call_args[0][0]
         assert f"name={LAN_FIREWALL_RULE_NAME}" in cmd
 
-    @patch("src.utils.firewall_manager.PlatformUtils.get_platform", return_value="linux")
+    @patch("src.platform.windows.firewall._is_windows", return_value=False)
     def test_non_windows_skips(self, mock_platform):
-        with patch("src.utils.firewall_manager.FirewallManager._run") as mock_run:
-            assert FirewallManager.add_lan_firewall_rule([10805]) is False
-            FirewallManager.remove_lan_firewall_rule()
+        adapter = self._adapter()
+        with patch("src.platform.windows.firewall.WindowsFirewallAdapter._run") as mock_run:
+            assert adapter.add_lan_firewall_rule([10805]) is False
+            adapter.remove_lan_firewall_rule()
         mock_run.assert_not_called()
 
 
 class TestGetPrimaryLanIp:
-    """LAN IP discovery ignores virtual/TUN adapters."""
+    """LAN IP discovery is systemic: only physical, up, gateway-bearing
+    adapters (from nic_detect / IP Helper) qualify."""
 
-    @patch("psutil.net_if_addrs")
-    def test_returns_first_private_ip(self, mock_if_addrs):
-        mock_if_addrs.return_value = {
-            "Wi-Fi": [
-                MagicMock(family=socket.AF_INET, address="192.168.1.15"),
-                MagicMock(family=socket.AF_INET6, address="fe80::1"),
-            ],
-            "Ethernet": [MagicMock(family=socket.AF_INET, address="10.57.20.22")],
-        }
+    @patch("src.platform.windows.network.get_physical_nic_candidates")
+    def test_returns_first_private_ip(self, mock_cands):
+        mock_cands.return_value = [
+            {"name": "Wi-Fi", "ip": "192.168.1.15", "iftype": 71, "operstatus": 1, "gateway": True},
+            {"name": "Ethernet", "ip": "10.57.20.22", "iftype": 6, "operstatus": 1, "gateway": True},
+        ]
         assert NetworkInterfaceDetector.get_primary_lan_ip() == "192.168.1.15"
 
-    @patch("psutil.net_if_addrs")
-    def test_ignores_tun_and_loopback(self, mock_if_addrs):
-        mock_if_addrs.return_value = {
-            "SINGTUN": [MagicMock(family=socket.AF_INET, address="10.0.0.1")],
-            "Loopback Pseudo-Interface": [MagicMock(family=socket.AF_INET, address="127.0.0.1")],
-            "xenray-tun": [MagicMock(family=socket.AF_INET, address="10.0.0.2")],
-            "Ethernet": [MagicMock(family=socket.AF_INET, address="192.168.70.125")],
-        }
+    @patch("src.platform.windows.network.get_physical_nic_candidates")
+    def test_ignores_loopback(self, mock_cands):
+        # Loopback is rejected by the private-IPv4 check; physical gateway NIC wins.
+        mock_cands.return_value = [
+            {"name": "Ethernet", "ip": "192.168.70.125", "iftype": 6, "operstatus": 1, "gateway": True},
+        ]
         assert NetworkInterfaceDetector.get_primary_lan_ip() == "192.168.70.125"
 
 
@@ -154,11 +157,11 @@ class TestSingboxLanRoutes:
     """Private LAN range routes added when LAN sharing is enabled."""
 
     def _service(self):
-        from src.services.singbox_service import SingboxService
+        from src.services.core_engines.singbox_service import SingboxService
 
         return SingboxService()
 
-    @patch("src.services.route_manager_service.subprocess.run")
+    @patch("subprocess.run")
     @patch("src.utils.platform_utils.PlatformUtils.get_platform", return_value="windows")
     def test_add_lan_routes(self, mock_platform, mock_run):
         # H3: successful deletions (rc==0) are removed; failed ones are kept
@@ -207,7 +210,7 @@ class TestOrchestratorLanWiring:
         orchestrator._singbox_service.start.assert_called_once()
         assert orchestrator._singbox_service.start.call_args.kwargs["allow_lan"] is True
 
-    @patch("src.services.connection_tester.ConnectionTester.test_connection_sync")
+    @patch("src.services.connection.connection_tester.ConnectionTester.test_connection_sync")
     @patch("builtins.open", new_callable=MagicMock)
     def test_success_ensures_firewall_rule(self, mock_open, mock_conn_test, orchestrator):
         orchestrator._app_context.settings.get_allow_lan.return_value = True

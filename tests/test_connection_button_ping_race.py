@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import types
-
 from src.ui.components.dashboard.connection_button import ConnectionButton
 
 

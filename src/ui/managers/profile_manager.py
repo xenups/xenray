@@ -4,7 +4,7 @@ from typing import Callable, Optional
 from loguru import logger
 
 from src.core.connection_manager import ConnectionManager
-from src.services.connection_tester import ConnectionTester
+from src.services.connection.connection_tester import ConnectionTester
 from src.ui.handlers.connection_handler import ConnectionHandler
 
 

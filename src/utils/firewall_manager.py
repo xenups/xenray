@@ -1,129 +1,53 @@
-"""Windows Firewall automation for LAN proxy sharing.
+"""FirewallManager - facade over the OS firewall abstraction.
 
-Binding proxy inbounds to ``0.0.0.0`` is blocked by Windows Defender Firewall
-for incoming traffic. This manager creates / checks / removes the dedicated
-inbound allow rule (``XenRay Inbound LAN Proxy``) so LAN devices can reach the
-SOCKS and HTTP proxy ports. Non-Windows platforms skip all automation.
+The actual firewall commands live in the platform adapters (e.g. WindowsFirewallAdapter).
+This class provides the stable public API used by the UI/controllers and delegates directly
+to the platform factory without manual platform checks or magic number port calculations.
 """
 
-import subprocess
-from typing import List
+from __future__ import annotations
 
-from loguru import logger
+from typing import List, Optional, Union
 
 from src.core.constants import LAN_FIREWALL_RULE_NAME
-from src.utils.platform_utils import PlatformUtils
-
-FIREWALL_COMMAND_TIMEOUT = 10  # seconds
+from src.platform.factory import get_firewall_adapter
 
 
 class FirewallManager:
-    """Manage the Windows Defender Firewall inbound rule for LAN sharing."""
+    """Manage the host firewall inbound rule for LAN sharing."""
 
     RULE_NAME = LAN_FIREWALL_RULE_NAME
 
     @staticmethod
-    def _run(cmd: List[str]) -> bool:
-        """Run a firewall command and report success."""
-        try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=FIREWALL_COMMAND_TIMEOUT,
-                check=False,
-                creationflags=PlatformUtils.get_subprocess_flags(),
-                startupinfo=PlatformUtils.get_startupinfo(),
-            )
-            return result.returncode == 0
-        except (OSError, subprocess.SubprocessError) as e:
-            logger.error(f"[FirewallManager] Command failed: {e}")
-            return False
-
-    @staticmethod
     def check_lan_firewall_rule() -> bool:
-        """Return True if the inbound rule already exists (Windows only)."""
-        if PlatformUtils.get_platform() != "windows":
-            return False
-        try:
-            result = subprocess.run(
-                [
-                    "netsh",
-                    "advfirewall",
-                    "firewall",
-                    "show",
-                    "rule",
-                    f"name={FirewallManager.RULE_NAME}",
-                ],
-                capture_output=True,
-                text=True,
-                timeout=FIREWALL_COMMAND_TIMEOUT,
-                check=False,
-                creationflags=PlatformUtils.get_subprocess_flags(),
-                startupinfo=PlatformUtils.get_startupinfo(),
-            )
-            if result.returncode != 0:
-                return False
-            return "No rules match the specified criteria" not in result.stdout
-        except (OSError, subprocess.SubprocessError) as e:
-            logger.error(f"[FirewallManager] Rule check failed: {e}")
-            return False
+        """Return True if the inbound rule already exists."""
+        return get_firewall_adapter().check_lan_firewall_rule()
 
     @staticmethod
     def add_lan_firewall_rule(ports: List[int]) -> bool:
-        """Create the inbound allow rule for the given ports (elevated).
+        """Create the inbound allow rule for the given ports (elevated)."""
+        return get_firewall_adapter().add_lan_firewall_rule(ports)
 
-        Returns:
-            True on success (or if the rule already exists), False on failure.
-        """
-        if PlatformUtils.get_platform() != "windows":
-            logger.info("[FirewallManager] LAN firewall rule skipped (non-Windows)")
-            return False
+    @staticmethod
+    def allow_lan_sharing_ports(socks_port: Union[int, List[int]], http_port: Optional[int] = None) -> bool:
+        """Create inbound firewall rules for explicit SOCKS and HTTP ports without magic offset calculations."""
+        ports: List[int] = []
+        if isinstance(socks_port, int) and socks_port > 0:
+            ports.append(socks_port)
+        elif isinstance(socks_port, list):
+            ports.extend(p for p in socks_port if isinstance(p, int) and p > 0)
 
-        if FirewallManager.check_lan_firewall_rule():
-            logger.info("[FirewallManager] LAN firewall rule already exists, skipping creation")
-            return True
+        if isinstance(http_port, int) and http_port > 0:
+            ports.append(http_port)
 
         if not ports:
-            logger.warning("[FirewallManager] No ports provided for LAN firewall rule")
             return False
-
-        port_list = ",".join(str(p) for p in sorted(set(ports)))
-        cmd = [
-            "netsh",
-            "advfirewall",
-            "firewall",
-            "add",
-            "rule",
-            f"name={FirewallManager.RULE_NAME}",
-            "dir=in",
-            "action=allow",
-            "protocol=TCP",
-            f"localport={port_list}",
-        ]
-        ok = FirewallManager._run(cmd)
-        if ok:
-            logger.info(f"[FirewallManager] LAN firewall rule created for ports {port_list}")
-        else:
-            logger.error("[FirewallManager] Failed to create LAN firewall rule (may require elevation)")
-        return ok
+        return get_firewall_adapter().add_lan_firewall_rule(ports)
 
     @staticmethod
     def remove_lan_firewall_rule() -> None:
         """Remove the inbound allow rule created by XenRay."""
-        if PlatformUtils.get_platform() != "windows":
-            return
-        if not FirewallManager.check_lan_firewall_rule():
-            return
-        cmd = [
-            "netsh",
-            "advfirewall",
-            "firewall",
-            "delete",
-            "rule",
-            f"name={FirewallManager.RULE_NAME}",
-        ]
-        if FirewallManager._run(cmd):
-            logger.info("[FirewallManager] LAN firewall rule removed")
-        else:
-            logger.warning("[FirewallManager] Failed to remove LAN firewall rule")
+        get_firewall_adapter().remove_lan_firewall_rule()
+
+
+__all__ = ["FirewallManager"]

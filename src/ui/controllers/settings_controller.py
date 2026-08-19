@@ -242,7 +242,7 @@ class SettingsController:
 
         def _do_check():
             try:
-                from src.services.app_update_service import AppUpdateService
+                from src.services.installer.app_update_service import AppUpdateService
 
                 update_avail, current_ver, latest_ver, download_url = AppUpdateService.check_for_updates()
 
@@ -323,7 +323,7 @@ class SettingsController:
 
             import threading
 
-            from src.services.app_update_service import AppUpdateService
+            from src.services.installer.app_update_service import AppUpdateService
 
             dlg.set_status(t("settings.downloading_update", default="Downloading update..."))
 
@@ -412,7 +412,7 @@ class SettingsController:
 
         def _do_check():
             try:
-                from src.services.xray_installer import XrayInstallerService
+                from src.services.installer.xray_installer import XrayInstallerService
 
                 try:
                     available, current_ver, latest_ver = XrayInstallerService.check_for_updates(include_prerelease=True)
@@ -487,7 +487,7 @@ class SettingsController:
 
             import threading
 
-            from src.services.xray_installer import XrayInstallerService
+            from src.services.installer.xray_installer import XrayInstallerService
 
             msg = t(
                 "settings.updating_xray_core",

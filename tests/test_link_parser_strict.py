@@ -2,7 +2,7 @@ import unittest
 from unittest.mock import Mock
 
 from src.core.app_context import AppContext
-from src.services.xray_config_processor import XrayConfigProcessor
+from src.services.core_engines.xray_config_processor import XrayConfigProcessor
 from src.utils.link_parser import LinkParser
 
 

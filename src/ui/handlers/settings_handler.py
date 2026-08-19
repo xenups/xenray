@@ -14,9 +14,9 @@ import flet as ft
 
 from src.core.i18n import t
 from src.core.types import ConnectionMode
-from src.services.app_update_service import AppUpdateService
-from src.services.rule_update_service import RuleUpdateService
-from src.services.xray_installer import XrayInstallerService
+from src.services.installer.app_update_service import AppUpdateService
+from src.services.installer.rule_update_service import RuleUpdateService
+from src.services.installer.xray_installer import XrayInstallerService
 from src.utils.process_utils import ProcessUtils
 
 

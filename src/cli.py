@@ -168,7 +168,7 @@ def connect(
 
             # Post-connection ping test
             typer.echo("\n⚡ Testing connection quality...")
-            from src.services.connection_tester import ConnectionTester
+            from src.services.connection.connection_tester import ConnectionTester
             from src.utils.country_flags import country_code_to_flag
 
             p_success, p_result, p_country = ConnectionTester.test_connection_sync(profile_config, fetch_country=True)
@@ -364,7 +364,7 @@ def ping(
             raise typer.Exit(1)
 
         typer.echo(f"⚡ Testing latency for: {selected_profile.get('name')}...")
-        from src.services.connection_tester import ConnectionTester
+        from src.services.connection.connection_tester import ConnectionTester
         from src.utils.country_flags import country_code_to_flag
 
         success, result_str, country_data = ConnectionTester.test_connection_sync(profile_config, fetch_country=True)
@@ -392,7 +392,7 @@ def ping(
 
     from concurrent.futures import ThreadPoolExecutor
 
-    from src.services.connection_tester import ConnectionTester
+    from src.services.connection.connection_tester import ConnectionTester
     from src.utils.country_flags import country_code_to_flag, get_country_flag
 
     def test_single(idx_profile):

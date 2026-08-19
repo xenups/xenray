@@ -107,7 +107,7 @@ def test_check_xray_core_update_flow(mock_app_context, monkeypatch):
 
     # 1. Test up-to-date response
     monkeypatch.setattr(
-        "src.services.xray_installer.XrayInstallerService.check_for_updates",
+        "src.services.installer.xray_installer.XrayInstallerService.check_for_updates",
         lambda: (False, "26.7.28", "26.7.28"),
     )
     avail, curr, latest = ctrl.check_xray_core_update(core_card_ref=card_mock, sync=True)
@@ -119,7 +119,7 @@ def test_check_xray_core_update_flow(mock_app_context, monkeypatch):
 
     # 2. Test update available response
     monkeypatch.setattr(
-        "src.services.xray_installer.XrayInstallerService.check_for_updates",
+        "src.services.installer.xray_installer.XrayInstallerService.check_for_updates",
         lambda: (True, "26.7.28", "26.8.0"),
     )
     avail, curr, latest = ctrl.check_xray_core_update(core_card_ref=card_mock, sync=True)

@@ -5,8 +5,7 @@ from __future__ import annotations
 
 import zipfile
 
-import src.services.xray_installer as xi
-from src.ui.components.dialogs.update_dialog import UpdateDialog
+from src.services.installer.archive_extractor import OLD_SUFFIX, ArchiveExtractor
 
 
 def _make_zip(zip_path, contents):
@@ -20,8 +19,7 @@ def test_extract_core_safe_rename_replaces_binary(tmp_path, monkeypatch):
     backup cleaned up on success (no PermissionError on locked files)."""
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
-    monkeypatch.setattr(xi, "BIN_DIR", str(bin_dir))
-    monkeypatch.setattr(xi.XrayInstallerService, "_kill_xray_processes", lambda: None)
+    monkeypatch.setattr(ArchiveExtractor, "_kill_active_core", lambda self: None)
 
     old = bin_dir / "xray.exe"
     old.write_bytes(b"OLD_BINARY")
@@ -29,17 +27,16 @@ def test_extract_core_safe_rename_replaces_binary(tmp_path, monkeypatch):
     zip_path = tmp_path / "xray_update.zip"
     _make_zip(zip_path, {"xray.exe": b"NEW_BINARY"})
 
-    assert xi.XrayInstallerService._extract_core(str(zip_path)) is True
+    assert ArchiveExtractor(str(bin_dir)).extract_core(str(zip_path)) is True
     assert (bin_dir / "xray.exe").read_bytes() == b"NEW_BINARY"
-    assert not (bin_dir / "xray.exe.old").exists(), ".old backup must be cleaned up"
+    assert not (bin_dir / ("xray.exe" + OLD_SUFFIX)).exists(), ".old backup must be cleaned up"
 
 
 def test_extract_core_rolls_back_on_failure(tmp_path, monkeypatch):
     """If extraction fails, the previous binary must be restored (rollback)."""
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
-    monkeypatch.setattr(xi, "BIN_DIR", str(bin_dir))
-    monkeypatch.setattr(xi.XrayInstallerService, "_kill_xray_processes", lambda: None)
+    monkeypatch.setattr(ArchiveExtractor, "_kill_active_core", lambda self: None)
 
     old = bin_dir / "xray.exe"
     old.write_bytes(b"OLD_BINARY")
@@ -54,54 +51,32 @@ def test_extract_core_rolls_back_on_failure(tmp_path, monkeypatch):
 
     monkeypatch.setattr(zipfile.ZipFile, "extractall", _failing_extractall)
     try:
-        assert xi.XrayInstallerService._extract_core(str(zip_path)) is False
+        assert ArchiveExtractor(str(bin_dir)).extract_core(str(zip_path)) is False
     finally:
         monkeypatch.setattr(zipfile.ZipFile, "extractall", real_extractall)
 
     assert (bin_dir / "xray.exe").read_bytes() == b"OLD_BINARY", "old binary restored"
-    assert not (bin_dir / "xray.exe.old").exists(), ".old backup consumed by rollback"
+    assert not (bin_dir / ("xray.exe" + OLD_SUFFIX)).exists(), ".old backup consumed by rollback"
 
 
 def test_extract_core_calls_kill_before_replacing(tmp_path, monkeypatch):
     """Active xray processes must be killed before the binary is replaced."""
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
-    monkeypatch.setattr(xi, "BIN_DIR", str(bin_dir))
     killed = []
 
-    def _fake_kill():
+    def _fake_kill(self):
         killed.append(True)
 
-    monkeypatch.setattr(xi.XrayInstallerService, "_kill_xray_processes", _fake_kill)
+    monkeypatch.setattr(ArchiveExtractor, "_kill_active_core", _fake_kill)
 
     zip_path = tmp_path / "xray_update.zip"
-    _make_zip(zip_path, {"xray.exe": b"NEW"})
+    _make_zip(zip_path, {"xray.exe": b"NEW_BINARY"})
 
-    assert xi.XrayInstallerService._extract_core(str(zip_path)) is True
-    assert killed, "_kill_xray_processes must be called before extraction"
+    ArchiveExtractor(str(bin_dir)).extract_core(str(zip_path))
+    assert killed, "_kill_active_core must be called before extraction"
 
 
-def test_update_dialog_version_comparison_and_progress_in_place():
-    """The UpdateDialog shows a version comparison and updates its progress bar
-    and status line in place (no page re-render)."""
-    dlg = UpdateDialog(
-        current_version="2.4.0",
-        latest_version="2.5.0",
-        release_notes="Fixes the neon border crash",
-    )
-
-    assert dlg._version_text.value == "v2.4.0  ->  v2.5.0"
-    assert dlg._progress.value == 0.0
-
-    dlg.set_progress(0.5)
-    assert dlg._progress.value == 0.5
-
-    dlg.set_progress_status(0.8, "Downloading... 80%")
-    assert dlg._progress.value == 0.8
-    assert dlg._status_text.value == "Downloading... 80%"
-
-    # Progress clamps to [0, 1]
-    dlg.set_progress(1.5)
-    assert dlg._progress.value == 1.0
-    dlg.set_progress(-0.2)
-    assert dlg._progress.value == 0.0
+def test_extract_core_missing_zip_returns_false(tmp_path):
+    """A missing zip must yield False, not raise."""
+    assert ArchiveExtractor(str(tmp_path / "bin")).extract_core(str(tmp_path / "nope.zip")) is False

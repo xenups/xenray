@@ -58,7 +58,7 @@ class SettingsFormHelper:
         )
 
     def build_startup_row(self) -> StartupToggleRow:
-        from src.services.task_scheduler import is_supported, is_task_registered, register_task, unregister_task
+        from src.services.system.task_scheduler import is_supported, is_task_registered, register_task, unregister_task
 
         return StartupToggleRow(
             app_context=self._mw._app_context,

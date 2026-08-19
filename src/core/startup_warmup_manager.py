@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Callable, Optional
 
 from src.core.logger import logger
 from src.core.system_info_cache import system_info_cache
-from src.services.ping_service import PRIORITY_MANUAL, ping_manager
+from src.services.connection.ping_service import PRIORITY_MANUAL, ping_manager
 
 if TYPE_CHECKING:
     from src.ui.main_window import MainWindow

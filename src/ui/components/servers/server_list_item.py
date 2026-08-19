@@ -7,5 +7,3 @@ from src.ui.components.config.config_card import ConfigCard
 
 class ServerListItem(ConfigCard):
     """Server list item component with animated neon sweep border trace during inspection."""
-
-    pass

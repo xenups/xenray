@@ -6,7 +6,7 @@ import time
 from typing import TYPE_CHECKING, Optional
 
 from src.core.event_bus import TOPIC_LAN_SHARING_CHANGED, event_bus
-from src.services.lan_service import LanService
+from src.services.system.lan_service import LanService
 
 if TYPE_CHECKING:
     from src.core.app_context import AppContext

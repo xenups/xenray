@@ -81,7 +81,7 @@ class ServerListSubscriptionMixin:
         self._latency_tester.cancel()
         # Defensive: drop any still-queued inspection work for this folder.
         try:
-            from src.services.server_inspector import server_inspector
+            from src.services.connection.server_inspector import server_inspector
 
             server_inspector.cancel_all_inspections()
         except Exception:

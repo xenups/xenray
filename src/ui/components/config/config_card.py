@@ -420,7 +420,7 @@ class ConfigCard(ft.Container):
         as auto-inspection: the inspecting event starts the native neon sweep,
         and the inspected event stops it and updates ONLY this card's badge.
         """
-        from src.services.server_inspector import server_inspector
+        from src.services.connection.server_inspector import server_inspector
 
         try:
             server_inspector.inspect(self._profile)

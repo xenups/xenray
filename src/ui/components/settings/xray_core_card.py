@@ -18,7 +18,7 @@ from typing import Callable
 import flet as ft
 
 from src.core.i18n import t
-from src.services.xray_installer import XrayInstallerService
+from src.services.installer.xray_installer import XrayInstallerService
 from src.ui.components.common.neon_sweep_border import NeonSweepBorder
 from src.ui.theme import AppColors, create_glass_container
 

@@ -186,7 +186,7 @@ def test_handle_server_added_appends_in_place(mock_app_context):
 
     # Mock the ping queue so inspect() publishes the inspecting event but no real
     # network ping is queued (the submission-time publish drives the neon sweep).
-    with patch("src.services.server_inspector.ping_manager.submit"):
+    with patch("src.services.connection.server_inspector.ping_manager.submit"):
         sl._handle_server_added("New Server", {"outbounds": []})
 
     # Same ListView instance is preserved (no AnimatedSwitcher content swap).
@@ -248,3 +248,42 @@ def test_incremental_delete_server(mock_app_context):
     assert item1 not in initial_list_view.controls
     assert "p1" not in sl._item_map
     assert sl._current_list_view is initial_list_view
+
+
+def test_inspect_result_persists_ping(mock_app_context):
+    """_on_server_inspected must persist the resolved ping (not just keep it
+    in-memory) so it survives a restart (read back from the repo on load)."""
+    from src.ui.components.servers.server_list import ServerList
+
+    # Give the mock repo an update() + get_by_id() so the persist path runs.
+    persisted = {}
+
+    def fake_get_by_id(pid):
+        return persisted.get(pid) or {"id": pid}
+
+    def fake_update(pid, updates):
+        persisted.setdefault(pid, {"id": pid}).update(updates)
+        return True
+
+    mock_app_context.profiles.get_by_id = fake_get_by_id
+    mock_app_context.profiles.update = fake_update
+
+    sl = ServerList(app_context=mock_app_context, on_server_selected=lambda p: None)
+
+    # A profile already in the list
+    prof = {"id": "srv-persist-1", "name": "Srv"}
+    sl._profiles = [prof]
+    sl._item_map = {}
+
+    sl._on_server_inspected(
+        {
+            "server_id": "srv-persist-1",
+            "success": True,
+            "ping": 123,
+            "result_str": "Latency: 123 ms",
+            "location": {},
+        }
+    )
+
+    assert persisted["srv-persist-1"]["last_latency_val"] == 123
+    assert persisted["srv-persist-1"]["last_latency"] == "Latency: 123 ms"

@@ -12,9 +12,8 @@ This separation ensures:
 """
 
 from enum import Enum, auto
-from typing import Optional
 
-from src.core.constants import CORE_SINGBOX, CORE_XRAY  # noqa: F401  (re-exported for callers)
+from src.core.constants import CORE_SINGBOX, CORE_XRAY
 
 
 class MonitorSignal(Enum):
@@ -50,3 +49,11 @@ def signal_payload(source: str, **extra) -> dict:
     payload = {"source": source}
     payload.update(extra)
     return payload
+
+
+__all__ = [
+    "MonitorSignal",
+    "signal_payload",
+    "CORE_SINGBOX",
+    "CORE_XRAY",
+]

@@ -250,7 +250,6 @@ class ChainListItem(ft.Container):
         # For simplicity, trigger a rebuild or just ignore icon update for now if hard to reach.
         # Let's just ignore icon update for chains dynamic ping for now to be safe,
         # or implement it if critical.
-        pass
 
     def _build_expanded_view(self) -> ft.Control:
         """Build the expanded chain order visualization."""

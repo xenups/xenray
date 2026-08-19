@@ -64,28 +64,21 @@ async def main(page: ft.Page):
     async def on_window_event(e):
         event_type_str = str(getattr(e, "type", "")).lower()
         event_data_str = str(e.data).lower() if e.data is not None else ""
-        logger.debug(f"[WINDOW_EVENT] data='{e.data}' type='{getattr(e, 'type', None)}'")
 
         is_close = "close" in event_type_str or "close" in event_data_str
         is_minimize = "minimize" in event_type_str or "minimize" in event_data_str
 
         if is_close:
             if window._app_context.settings.get_remember_close_choice():
-                logger.debug("[WINDOW_EVENT] Close + Always minimize — hiding to tray")
                 page.window.visible = False
                 page.update()
             else:
-                logger.debug("[WINDOW_EVENT] Close matched — showing dialog")
                 window.show_close_dialog()
                 page.update()
 
         elif is_minimize:
-            logger.debug("[WINDOW_EVENT] Minimize matched — hiding to tray")
             page.window.visible = False
             page.update()
-
-        else:
-            logger.debug("[WINDOW_EVENT] Ignored — no match")
 
     page.window.on_event = on_window_event
 
@@ -138,42 +131,14 @@ def run():
         cli_main()
         return
 
-    import ctypes
-    import os
-
-    import flet as ft
-
+    from src.platform.factory import get_process_adapter
     from src.utils.platform_utils import PlatformUtils
 
-    if PlatformUtils.get_platform() == "windows":
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-        mutex_name = "Global\\XenRay_Singleton_Mutex_v1"
-        ctypes.set_last_error(0)
-        global _singleton_mutex
-        _singleton_mutex = kernel32.CreateMutexW(None, False, mutex_name)
-        last_error = ctypes.get_last_error()
-        logger.debug(f"[Startup] Mutex creation result: handle={_singleton_mutex}, last_error={last_error}")
-        if last_error == 183:
-            logger.warning("Another instance is already running. Exiting.")
-            return
-        elif _singleton_mutex == 0:
-            logger.error(f"[Startup] Failed to create mutex, error code: {last_error}")
-    else:
-        import errno
-        import fcntl
+    if not get_process_adapter().acquire_singleton_mutex():
+        logger.warning("Another instance is already running. Exiting.")
+        return
 
-        pid_file = os.path.expanduser("~/.xenray.pid")
-        try:
-            global _pid_file_handle
-            _pid_file_handle = open(pid_file, "w")
-            fcntl.flock(_pid_file_handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-            _pid_file_handle.write(str(os.getpid()))
-        except (IOError, OSError) as e:
-            if e.errno == errno.EAGAIN:
-                logger.warning("Another instance is already running. Exiting.")
-                return
-            else:
-                raise
+    import flet as ft
 
     root_dir = PlatformUtils.get_app_dir()
     assets_path = os.path.join(root_dir, "assets")

@@ -5,7 +5,7 @@ from __future__ import annotations
 import threading
 from typing import TYPE_CHECKING
 
-from src.services.config_utils import is_ip
+from src.services.core_engines.config_utils import is_ip
 from src.ui.helpers.profile_presenter import ProfilePresenter
 
 if TYPE_CHECKING:

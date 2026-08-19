@@ -15,7 +15,7 @@ from loguru import logger
 from src.core.app_context import AppContext
 from src.core.i18n import t
 from src.core.types import ConnectionMode
-from src.services import task_scheduler
+from src.services.system import task_scheduler
 from src.ui.components.settings.auto_reconnect_toggle_row import AutoReconnectToggleRow
 from src.ui.components.settings.base_rows import SettingsListTile, SettingsSection
 from src.ui.components.settings.lan_share_toggle_row import LanShareToggleRow
@@ -310,3 +310,29 @@ class SettingsDrawer(ft.NavigationDrawer):
 
     def _on_language_change(self, e):
         self._handler.save_language(self._language_row, e)
+
+    def create_settings_page(self):
+        """Construct the Stitch-based SettingsPage reusing this drawer's domain rows and handlers."""
+        from src.ui.components.settings import ModeSwitchRow
+        from src.ui.pages.settings_page import SettingsPage
+
+        connectivity = self._connectivity_section
+        is_proxy = connectivity.mode_switch_row.value
+        return SettingsPage(
+            mode_switch_row=ModeSwitchRow(
+                is_proxy,
+                self._on_mode_change,
+            ),
+            tun_engine_row=connectivity.tun_dropdown_row,
+            port_row=connectivity.port_row,
+            country_row=connectivity.country_row,
+            language_row=self._language_row,
+            reconnect_row=self._auto_reconnect_row,
+            startup_row=self._startup_row,
+            on_check_update_click=self._handler.check_app_updates,
+            settings_controller=self._settings_controller,
+            on_open_routing_click=self._handler.open_routing_manager,
+            on_open_dns_click=self._handler.open_dns_manager,
+            lan_share_row=self._lan_share_row,
+            http_port_row=connectivity.http_port_row,
+        )

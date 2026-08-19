@@ -3,7 +3,7 @@ from dependency_injector import containers, providers
 
 from src.core.app_context import AppContext
 from src.core.connection_manager import ConnectionManager
-from src.services.network_stats import NetworkStatsService
+from src.services.monitoring.network_stats import NetworkStatsService
 
 
 class ApplicationContainer(containers.DeclarativeContainer):

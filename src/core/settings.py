@@ -104,7 +104,7 @@ class Settings:
         oversized logs or rotated backup files from previous sessions are purged.
         """
         from src.core.constants import SINGBOX_LOG_FILE, XRAY_LOG_FILE
-        from src.utils.process_utils import cleanup_tmp_log_dir, rotate_oversized_log_file
+        from src.utils.log_utils import cleanup_tmp_log_dir, rotate_oversized_log_file
 
         cleanup_tmp_log_dir()
         for log_file in [XRAY_LOG_FILE, SINGBOX_LOG_FILE]:

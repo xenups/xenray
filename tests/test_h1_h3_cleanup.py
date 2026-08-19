@@ -4,11 +4,11 @@ H3 (route_manager_service idempotent crash-safe cleanup)."""
 import inspect
 import os
 import tempfile
-import threading
 from unittest.mock import Mock, patch
 
-from src.services.route_manager_service import RouteManagerService
-from src.services.xray_service import XrayService
+from src.services.connection.route_manager_service import RouteManagerService
+from src.services.core_engines.xray_process_manager import XrayProcessManager
+from src.services.core_engines.xray_service import XrayService
 
 
 # ------------------------------------------------------------------------- #
@@ -16,37 +16,39 @@ from src.services.xray_service import XrayService
 # ------------------------------------------------------------------------- #
 class TestXrayGuaranteedCleanup:
     def test_kill_process_and_cleanup_removes_pid_and_process(self):
-        """H1 core: _kill_process_and_cleanup (shared by stop() + guaranteed)
-        kills the process and removes the PID file."""
-        svc = XrayService.__new__(XrayService)
-        svc._pid = 4242
-        svc._process = object()
-        svc._cleanup_lock = threading.Lock()
+        """H1 core: the process manager's kill_and_cleanup (shared by stop() and
+        guaranteed teardown) kills the process and removes the PID file."""
+        mgr = XrayProcessManager.__new__(XrayProcessManager)
+        mgr._pid = 4242
+        mgr._process = object()
 
         pidf = tempfile.mktemp(suffix=".pid")
         with open(pidf, "w") as f:
             f.write("4242")
 
-        with patch("src.services.xray_service.ProcessUtils") as m_pu, patch(
-            "src.services.xray_service.XRAY_PID_FILE", pidf
+        with patch("src.services.core_engines.xray_process_manager.ProcessUtils") as m_pu, patch(
+            "src.services.core_engines.xray_process_manager.XRAY_PID_FILE", pidf
         ):
             m_pu.is_running.return_value = False  # simulate already-stopped
-            killed = svc._kill_process_and_cleanup()
+            killed = mgr.kill_and_cleanup()
 
         assert killed == 4242
-        assert svc._pid is None
-        assert svc._process is None
+        assert mgr._pid is None
+        assert mgr._process is None
         # PID file removed + kill_process attempted
         assert m_pu.kill_process.call_count >= 1
         assert not os.path.exists(pidf)
         os.remove(pidf) if os.path.exists(pidf) else None
 
     def test_stop_and_guaranteed_share_kill_helper(self):
-        """Both stop() and _guaranteed_cleanup() route through
-        _kill_process_and_cleanup (single source of truth, no divergence)."""
-        src = inspect.getsource(XrayService)
-        # both reference the shared helper by name
-        assert src.count("_kill_process_and_cleanup") >= 2
+        """Both stop() and _guaranteed_cleanup() route through the process
+        manager's kill_and_cleanup (single source of truth, no divergence)."""
+        svc_src = inspect.getsource(XrayService)
+        mgr_src = inspect.getsource(XrayProcessManager)
+        # facade's stop() + _guaranteed_cleanup() both call kill_and_cleanup
+        assert svc_src.count("kill_and_cleanup") >= 2
+        # the actual implementation lives in the process manager
+        assert "def kill_and_cleanup" in mgr_src
 
 
 # ------------------------------------------------------------------------- #
@@ -68,29 +70,19 @@ class FakeRun:
 
 class TestRouteCleanupIdempotent:
     def test_failed_host_route_removal_is_retried(self):
-        svc = RouteManagerService.__new__(RouteManagerService)
+        mock_adapter = Mock()
+        mock_adapter.delete_host_route.side_effect = lambda ip: ip != "2.2.2.2"
+
+        svc = RouteManagerService(route_adapter=mock_adapter)
         svc._added_routes = ["1.1.1.1", "2.2.2.2", "3.3.3.3"]
-        fake = FakeRun(fail_ips={"2.2.2.2"})  # 2.2.2.2 deletion fails
 
-        with patch("src.services.route_manager_service.PlatformUtils") as m_pu, patch.object(
-            svc, "_host_route_del_cmd", side_effect=lambda ip, p: ["route", "delete", ip]
-        ), patch("src.services.route_manager_service.subprocess.run", side_effect=fake):
-            m_pu.get_platform.return_value = "windows"
-            m_pu.get_subprocess_flags.return_value = 0
-            m_pu.get_startupinfo.return_value = None
-            svc._cleanup_host_routes()
+        svc._cleanup_host_routes()
 
-        # order preserved: dropped only the succeeded ones (2.2.2.2 + 3.3.3.3 removed)
         # 1.1.1.1 succeeded -> gone; 2.2.2.2 failed -> kept; 3.3.3.3 succeeded -> gone
         assert svc._added_routes == ["2.2.2.2"]
+
         # only failed entry retried on next call
-        fake.fail_ips.clear()
-        with patch("src.services.route_manager_service.PlatformUtils") as m_pu, patch.object(
-            svc, "_host_route_del_cmd", side_effect=lambda ip, p: ["route", "delete", ip]
-        ), patch("src.services.route_manager_service.subprocess.run", side_effect=fake):
-            m_pu.get_platform.return_value = "windows"
-            m_pu.get_subprocess_flags.return_value = 0
-            m_pu.get_startupinfo.return_value = None
-            svc._cleanup_host_routes()
+        mock_adapter.delete_host_route.side_effect = lambda ip: True
+        svc._cleanup_host_routes()
 
         assert svc._added_routes == []  # fully drained on retry

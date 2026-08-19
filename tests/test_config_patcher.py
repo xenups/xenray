@@ -1,7 +1,7 @@
 """Tests for ConfigPatcher safe stream fallbacks."""
 import pytest
 
-from src.services.config_patcher import ConfigPatcher
+from src.services.core_engines.config_patcher import ConfigPatcher
 
 
 @pytest.fixture

@@ -64,6 +64,8 @@ class Toast(ft.Container):
             animate_offset=300,
             opacity=1,
             offset=ft.Offset(0, 0),
+            top=20,
+            alignment=ft.Alignment.TOP_CENTER,
         )
 
         self.duration = duration
@@ -77,16 +79,19 @@ class ToastManager:
     calls ``toast_layer.update()`` — it never diffs the whole ``page.overlay``
     (whose control-list snapshot can desync after drawer/sheet/dialog toggles,
     causing newly added toasts to be silently dropped by the patch engine).
+
+    Hit-Test Isolation:
+    The toast container is strictly bounded to the toast's own width (no full-width
+    invisible container, no `left=0, right=0` hit-test blocking). Only the toast
+    bubble itself intercepts clicks; all surrounding areas pass pointer events
+    straight to the underlying UI.
     """
 
     def __init__(self, page: ft.Page):
         self._page = page
-        # Persistent top-center overlay layer (full width, content height).
+        # Persistent top-center overlay layer (non-blocking hit test).
         self._toast_layer = ft.Stack(
             controls=[],
-            left=0,
-            right=0,
-            top=0,
             alignment=ft.Alignment.TOP_CENTER,
         )
         try:
@@ -104,18 +109,9 @@ class ToastManager:
         """Show a toast notification floating at the Top-Center of the screen."""
         toast = Toast(message, message_type, duration)
 
-        # Full-width top-anchored row; the toast content is centered inside it.
-        toast_container = ft.Container(
-            content=toast,
-            top=20,
-            left=0,
-            right=0,
-            alignment=ft.Alignment.TOP_CENTER,
-        )
-
         # Re-mount the layer if it was somehow not attached (e.g. a fresh page).
         try:
-            if toast_container.page is None:
+            if toast.page is None:
                 try:
                     attached = self._toast_layer in self._page.overlay
                 except Exception:
@@ -127,7 +123,7 @@ class ToastManager:
 
         # Replace any previous toast so only one floats at a time.
         self._toast_layer.controls.clear()
-        self._toast_layer.controls.append(toast_container)
+        self._toast_layer.controls.append(toast)
         self._toast_layer.visible = True
         try:
             self._toast_layer.update()
@@ -135,17 +131,17 @@ class ToastManager:
             pass
 
         # Auto-dismiss with smooth entrance/exit slide animation.
-        self._page.run_task(self._auto_dismiss, toast_container, duration)
+        self._page.run_task(self._auto_dismiss, toast, duration)
 
-    async def _auto_dismiss(self, toast_container: ft.Container, duration: int):
+    async def _auto_dismiss(self, toast: Toast, duration: int):
         try:
             await asyncio.sleep(duration / 1000)
 
             # Fade and slide up out
-            toast_container.opacity = 0
-            toast_container.offset = ft.Offset(0, -0.2)
+            toast.opacity = 0
+            toast.offset = ft.Offset(0, -0.2)
             try:
-                toast_container.update()
+                toast.update()
             except Exception:
                 pass
 
@@ -153,8 +149,8 @@ class ToastManager:
             await asyncio.sleep(0.3)
 
             # Remove from the toast layer and update ONLY it (never the whole overlay)
-            if toast_container in self._toast_layer.controls:
-                self._toast_layer.controls.remove(toast_container)
+            if toast in self._toast_layer.controls:
+                self._toast_layer.controls.remove(toast)
                 try:
                     self._toast_layer.update()
                 except Exception:
@@ -162,8 +158,8 @@ class ToastManager:
         except Exception:
             # Cleanup on error (page may have unmounted)
             try:
-                if toast_container in self._toast_layer.controls:
-                    self._toast_layer.controls.remove(toast_container)
+                if toast in self._toast_layer.controls:
+                    self._toast_layer.controls.remove(toast)
                     try:
                         self._toast_layer.update()
                     except Exception:

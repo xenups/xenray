@@ -1,5 +1,4 @@
 import os
-import tempfile
 from pathlib import Path
 
 # Load environment variables from .env file
@@ -12,7 +11,9 @@ _project_root = Path(__file__).parent.parent.parent
 load_dotenv(_project_root / ".env")
 
 # Application version from single source of truth
-from src.__version__ import APP_VERSION, __version__  # noqa: E402, F401
+from src.__version__ import APP_VERSION, __version__
+
+__all__ = ["APP_VERSION", "__version__"]
 
 # Window dimensions
 WINDOW_WIDTH = 620
@@ -40,15 +41,7 @@ PLACEHOLDER_XRAY_PID = int(os.getenv("PLACEHOLDER_XRAY_PID", "-999999"))
 PLACEHOLDER_SINGBOX_PID = int(os.getenv("PLACEHOLDER_SINGBOX_PID", "-999997"))
 
 # Temporary directory (cross-platform)
-if PlatformUtils.get_platform() == "windows":
-    # Windows: Use system temp directory
-    TMPDIR = os.path.join(tempfile.gettempdir(), "xenray")
-elif PlatformUtils.get_platform() == "macos":
-    # macOS: Use system temp or user cache directory
-    TMPDIR = os.path.join(os.path.expanduser("~/Library/Caches"), "xenray")
-else:
-    # Linux: Use /tmp or TMPDIR env var
-    TMPDIR = os.environ.get("TMPDIR", "/tmp/xenray")
+TMPDIR = PlatformUtils.get_temp_dir()
 
 # Log files
 EARLY_LOG_FILE = os.path.join(TMPDIR, "xenray_app.log")

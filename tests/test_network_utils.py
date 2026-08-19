@@ -72,3 +72,20 @@ class TestCheckInternetConnection:
             with patch("src.utils.network_utils.socket.setdefaulttimeout") as mock_default:
                 NetworkUtils.check_internet_connection(host="8.8.8.8", port=53, timeout=3, retries=2)
                 mock_default.assert_not_called()
+
+
+class TestDetectOptimalMtu:
+    def test_quic_safe_returns_1420(self):
+        assert NetworkUtils.detect_optimal_mtu(mtu_mode="quic_safe") == 1420
+
+    def test_auto_mtu_delegates_to_network_adapter(self):
+        mock_adapter = patch("src.utils.network_utils.get_network_adapter").start()
+        try:
+            # Allow MTU <= 1400 (payload <= 1372)
+            mock_adapter.return_value.ping_mtu.side_effect = lambda host, payload, timeout: payload <= (1400 - 28)
+
+            mtu = NetworkUtils.detect_optimal_mtu(min_mtu=1280, max_mtu=1480, mtu_mode="auto")
+            assert mtu == 1400
+            assert mock_adapter.return_value.ping_mtu.call_count > 0
+        finally:
+            patch.stopall()

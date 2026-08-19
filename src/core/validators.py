@@ -4,8 +4,6 @@
 class ValidationError(ValueError):
     """Raised when validation fails."""
 
-    pass
-
 
 def validate_chain_items(items: list[str], is_chain_fn, profile_resolver) -> None:
     """Validate chain configuration."""

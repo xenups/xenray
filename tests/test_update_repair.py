@@ -11,7 +11,7 @@ import pytest
 
 from src.__version__ import APP_VERSION
 from src.core.i18n import I18n, set_language
-from src.services.xray_installer import XrayInstallerService
+from src.services.installer.xray_installer import XrayInstallerService
 from src.ui.components.common.toast import ToastManager
 from src.ui.components.settings.update_card import UpdateCard
 from src.ui.components.settings.xray_core_card import XrayCoreCard
@@ -164,7 +164,7 @@ def test_settings_controller_installs_target_version():
     mock_page = MagicMock()
     ctrl = SettingsController(app_context=mock_app_context)
 
-    with patch("src.services.xray_installer.XrayInstallerService.install") as mock_install:
+    with patch("src.services.installer.xray_installer.XrayInstallerService.install") as mock_install:
         mock_install.return_value = True
 
         def capture_dialog(dlg):

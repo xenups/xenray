@@ -86,7 +86,6 @@ def test_generate_qr_async_yields_before_worker():
     """_generate_qr_async must yield (sleep) so the skeleton can render."""
     import asyncio
 
-    app_context = MagicMock()
     controller = MagicMock()
     controller.generate_qr.return_value = "ZmFrZQ=="
 

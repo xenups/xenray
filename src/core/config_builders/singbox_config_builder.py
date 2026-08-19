@@ -94,6 +94,9 @@ class SingboxConfigBuilder:
         interface_name: Optional[str] = None,
         routing_rules: Optional[Dict] = None,
         mtu: int = 1420,
+        local_dns_server: Optional[str] = None,
+        bypass_process_names: Optional[List[str]] = None,
+        sni_connect_ip: Optional[str] = None,
     ) -> dict:
         """Generate the full sing-box JSON configuration dict.
 
@@ -108,6 +111,9 @@ class SingboxConfigBuilder:
             routing_rules: User-supplied routing overrides:
                 ``{"direct": [...], "proxy": [...], "block": [...]}``.
             mtu: TUN adapter MTU (default 1420).
+            local_dns_server: Injected local DNS server IP for direct domains.
+            bypass_process_names: Injected list of process names to bypass.
+            sni_connect_ip: Injected SNI spoof target IP/domain to bypass.
 
         Returns:
             Complete sing-box configuration as a Python dict ready to be
@@ -117,12 +123,17 @@ class SingboxConfigBuilder:
         proxy_ips = self.filter_real_ips(proxy_list)
         proxy_domains = self.filter_domains(proxy_list)
 
-        # Build process bypass list — include the frozen binary if running packed.
-        current_exe = os.path.basename(sys.executable).lower()
-        is_windows = PlatformUtils.get_platform() == "windows"
-        process_names = [f"{proc}.exe" if is_windows else proc for proc in BASE_BYPASS_PROCESSES]
-        if current_exe not in process_names:
-            process_names.append(current_exe)
+        # Build process bypass list — injected or deterministic default
+        if bypass_process_names is not None:
+            process_names = list(bypass_process_names)
+        else:
+            current_exe = os.path.basename(sys.executable).lower()
+            is_win = sys.platform.startswith("win")
+            process_names = [f"{proc}.exe" if is_win else proc for proc in BASE_BYPASS_PROCESSES]
+            if current_exe not in process_names:
+                process_names.append(current_exe)
+
+        dns_local = local_dns_server or os.getenv("DNS_LOCAL_SERVER", DNS_IP_CLOUDFLARE_ALT)
 
         cfg: dict = {
             "log": {"level": "warn", "timestamp": True},
@@ -149,10 +160,7 @@ class SingboxConfigBuilder:
                         # is reachable without leaving the network — no foreign
                         # blocking. Uses the system's actual DNS servers.
                         "type": "udp",
-                        "server": os.getenv(
-                            "DNS_LOCAL_SERVER",
-                            (PlatformUtils.get_system_dns_servers() or [DNS_IP_CLOUDFLARE_ALT])[0],
-                        ),
+                        "server": dns_local,
                         "detour": "direct",
                     },
                     {
@@ -282,26 +290,29 @@ class SingboxConfigBuilder:
         # --- SNI Spoof: CONNECT_IP loop-breaker ---
         # When SNI spoofing is enabled, CONNECT_IP's traffic must go DIRECT
         # out the physical NIC — never back down the TUN route — or the spoof
-        # helper's upstream socket would loop. This rule is inserted before
-        # the hijack-dns/default chain (first-match-wins).
-        try:
-            from src.core.constants import CONFIG_DIR
-            from src.repositories.settings_repository import SettingsRepository
+        # helper's upstream socket would loop.
+        connect_ip = sni_connect_ip
+        if not connect_ip:
+            # Fallback only if not injected
+            try:
+                from src.core.constants import CONFIG_DIR
+                from src.repositories.settings_repository import SettingsRepository
 
-            _settings = SettingsRepository(CONFIG_DIR)
-            if _settings.get_sni_spoof_enabled():
-                connect_ip = _settings.get_sni_connect_ip()
-                if connect_ip:
-                    rule = {"outbound": "direct"}
-                    if self._is_ipv4(connect_ip):
-                        rule["ip_cidr"] = connect_ip
-                    else:
-                        rule["domain"] = [connect_ip]
-                    rules.insert(insert_index, rule)
-                    insert_index += 1
-                    logger.debug(f"[SingboxConfigBuilder] SNI spoof target direct rule: {connect_ip}")
-        except Exception:
-            pass
+                _settings = SettingsRepository(CONFIG_DIR)
+                if _settings.get_sni_spoof_enabled():
+                    connect_ip = _settings.get_sni_connect_ip()
+            except Exception:
+                connect_ip = None
+
+        if connect_ip:
+            rule = {"outbound": "direct"}
+            if self._is_ipv4(connect_ip):
+                rule["ip_cidr"] = connect_ip
+            else:
+                rule["domain"] = [connect_ip]
+            rules.insert(insert_index, rule)
+            insert_index += 1
+            logger.debug(f"[SingboxConfigBuilder] SNI spoof target direct rule: {connect_ip}")
 
         # --- User routing rules (direct / proxy / block) ---
         # IMPORTANT: sing-box uses FIRST-MATCH-WINS. The default rules below

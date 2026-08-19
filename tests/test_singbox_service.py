@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from src.core.constants import TUN_GATEWAY_IPV4
-from src.services.singbox_service import SingboxService
+from src.services.core_engines.singbox_service import SingboxService
 
 
 @pytest.fixture
@@ -169,7 +169,7 @@ class TestStaticRouteFiltering:
 
     def test_add_static_route_skips_private_ip(self, service):
         """Private/reserved IPs never produce a system static route."""
-        with patch("src.services.route_manager_service.subprocess.run") as mock_run:
+        with patch("subprocess.run") as mock_run:
             service._add_static_route("10.10.34.35", "192.168.1.1")
             service._add_static_route("192.168.5.5", "192.168.1.1")
             service._add_static_route("172.20.0.5", "192.168.1.1")
@@ -178,7 +178,7 @@ class TestStaticRouteFiltering:
 
     def test_add_static_route_allows_public_ip(self, service):
         """Public proxy-server IPs still get a static route (Wintun loop break)."""
-        with patch("src.services.route_manager_service.subprocess.run") as mock_run:
+        with patch("subprocess.run") as mock_run:
             service._add_static_route("104.16.72.94", "192.168.1.1")
         mock_run.assert_called_once()
         assert "104.16.72.94" in service._added_routes
@@ -192,16 +192,17 @@ class TestStaticRouteFiltering:
 
         with (
             patch(
-                "src.services.singbox_service.NetworkInterfaceDetector.get_primary_interface",
+                "src.platform.windows.network.WindowsNetworkAdapter.get_primary_interface",
                 return_value=("Wi-Fi", "192.168.1.10", "192.168.1.0/24", "192.168.1.1"),
             ),
-            patch("src.utils.platform_utils.PlatformUtils.suppress_smhr"),
+            patch("src.platform.windows.settings._suppress_smhr"),
             patch.object(service, "_wait_for_xray_ready", return_value=True),
             patch.object(service, "_write_config_and_start", return_value=True),
             patch(
-                "src.services.route_manager_service.RouteManagerService.resolve_ips", return_value=["104.17.121.70"]
+                "src.services.connection.route_manager_service.RouteManagerService.resolve_ips",
+                return_value=["104.17.121.70"],
             ) as mock_resolve,
-            patch("src.services.route_manager_service.RouteManagerService.add_static_route") as mock_route,
+            patch("src.services.connection.route_manager_service.RouteManagerService.add_static_route") as mock_route,
         ):
             service.start(
                 xray_socks_port=10805,

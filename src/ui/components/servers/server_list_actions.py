@@ -6,7 +6,7 @@ from typing import Optional
 
 from src.core.i18n import t
 from src.core.logger import logger
-from src.services.server_inspector import server_inspector
+from src.services.connection.server_inspector import server_inspector
 from src.ui.components.servers.server_list_item import ServerListItem
 
 

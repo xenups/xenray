@@ -53,7 +53,7 @@ class NavigationService:
             "statistics": self._mw._stitch_statistics_view,
             "servers": self._mw._stitch_servers_view,
             "logs": self._mw._stitch_logs_view,
-            "sni_spoof": getattr(self._mw, "_stitch_sni_spoof_view", None),
+            "sni_spoof": getattr(self._mw, "_stitch_sni_spoof_page", None),
             "settings": self._mw._stitch_settings_view,
         }
         target = view_map.get(tab_id, self._mw._stitch_dashboard_view)
@@ -103,7 +103,7 @@ class NavigationService:
 
     def add_server_profile(self, name: str, config: dict) -> None:
         """Save a newly added server profile and refresh server list."""
-        from src.services.server_inspector import server_inspector
+        from src.services.connection.server_inspector import server_inspector
 
         pid = self._mw._app_context.profiles.save(name, config)
         if pid:

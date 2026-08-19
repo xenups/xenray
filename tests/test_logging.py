@@ -11,7 +11,8 @@ from loguru._string_parsers import parse_size
 
 from src.core.constants import LOG_BACKUP_COUNT, LOG_MAX_BYTES
 from src.core.settings import Settings
-from src.utils.process_utils import ProcessUtils, rotate_oversized_log_file
+from src.utils.log_utils import rotate_oversized_log_file
+from src.utils.process_utils import ProcessUtils
 
 
 def test_log_ceiling_is_exactly_5mb():
@@ -70,8 +71,8 @@ class TestRunCommandRotation:
 
     @patch("src.utils.process_utils.rotate_oversized_log_file")
     @patch("subprocess.Popen")
-    @patch("src.utils.platform_utils.PlatformUtils.get_subprocess_flags")
-    @patch("src.utils.platform_utils.PlatformUtils.get_startupinfo")
+    @patch("src.platform.windows.process.WindowsProcessAdapter.get_subprocess_flags", return_value=0)
+    @patch("src.platform.windows.process.WindowsProcessAdapter.get_startupinfo", return_value=None)
     def test_rotates_stdout_and_stderr_logs(self, mock_startup, mock_flags, mock_popen, mock_rotate):
         mock_popen.return_value = MagicMock()
         proc = ProcessUtils.run_command(["test", "cmd"], stdout_file="out.log", stderr_file="err.log")
@@ -109,7 +110,7 @@ class TestSettingsLogging:
                 except Exception:
                     pass
 
-    @patch("src.utils.process_utils.rotate_oversized_log_file")
+    @patch("src.utils.log_utils.rotate_oversized_log_file")
     def test_create_log_files_rotates_subprocess_logs(self, mock_rotate):
         Settings.create_log_files()
         assert mock_rotate.call_count == 2

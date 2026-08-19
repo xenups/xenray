@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
-from src.services.rule_update_service import RuleUpdateService
+from src.services.installer.rule_update_service import RuleUpdateService
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -16,7 +16,7 @@ def mock_rules_dir(tmp_path):
     """Temporarily redirect RULES_DIR to a temp path."""
     rules_dir = tmp_path / "rules"
     rules_dir.mkdir()
-    with patch("src.services.rule_update_service.RULES_DIR", str(rules_dir)):
+    with patch("src.services.installer.rule_update_service.RULES_DIR", str(rules_dir)):
         yield str(rules_dir)
 
 
@@ -61,21 +61,21 @@ class TestVersionMarkers:
 
 
 class TestGetLatestVersion:
-    @patch("src.services.rule_update_service.requests.get")
+    @patch("src.services.installer.rule_update_service.requests.get")
     def test_returns_tag_name(self, mock_get):
         mock_get.return_value.json.return_value = {"tag_name": "v2025.01.15"}
         mock_get.return_value.raise_for_status = Mock()
         version = RuleUpdateService.get_latest_rule_version("geoip")
         assert version == "2025.01.15"
 
-    @patch("src.services.rule_update_service.requests.get")
+    @patch("src.services.installer.rule_update_service.requests.get")
     def test_strips_v_prefix(self, mock_get):
         mock_get.return_value.json.return_value = {"tag_name": "v2025.01.15"}
         mock_get.return_value.raise_for_status = Mock()
         version = RuleUpdateService.get_latest_rule_version("geoip")
         assert version == "2025.01.15"
 
-    @patch("src.services.rule_update_service.requests.get")
+    @patch("src.services.installer.rule_update_service.requests.get")
     def test_returns_none_on_failure(self, mock_get):
         mock_get.side_effect = Exception("API error")
         version = RuleUpdateService.get_latest_rule_version("geoip")
@@ -88,7 +88,7 @@ class TestGetLatestVersion:
 
 
 class TestDownloadRule:
-    @patch("src.services.rule_update_service.requests.get")
+    @patch("src.services.installer.rule_update_service.requests.get")
     def test_downloads_geoip(self, mock_get, mock_rules_dir):
         mock_response = MagicMock()
         mock_response.headers = {"content-length": "4096"}
@@ -102,7 +102,7 @@ class TestDownloadRule:
         assert result.endswith("geoip.dat")
         assert os.path.getsize(result) == 4096
 
-    @patch("src.services.rule_update_service.requests.get")
+    @patch("src.services.installer.rule_update_service.requests.get")
     def test_downloads_geosite(self, mock_get, mock_rules_dir):
         mock_response = MagicMock()
         mock_response.headers = {"content-length": "8192"}
@@ -116,14 +116,14 @@ class TestDownloadRule:
         assert result.endswith("geosite.dat")
         assert os.path.getsize(result) == 8192
 
-    @patch("src.services.rule_update_service.requests.get")
+    @patch("src.services.installer.rule_update_service.requests.get")
     def test_retries_and_fails(self, mock_get, mock_rules_dir):
         mock_get.side_effect = Exception("Network error")
         result = RuleUpdateService.download_rule("geoip")
         assert result is None
         assert mock_get.call_count == 3  # MAX_RETRIES
 
-    @patch("src.services.rule_update_service.requests.get")
+    @patch("src.services.installer.rule_update_service.requests.get")
     def test_rejects_small_file(self, mock_get, mock_rules_dir):
         mock_response = MagicMock()
         mock_response.headers = {"content-length": "100"}
@@ -134,7 +134,7 @@ class TestDownloadRule:
         result = RuleUpdateService.download_rule("geoip")
         assert result is None
 
-    @patch("src.services.rule_update_service.requests.get")
+    @patch("src.services.installer.rule_update_service.requests.get")
     def test_calls_progress(self, mock_get, mock_rules_dir):
         mock_response = MagicMock()
         mock_response.headers = {"content-length": "4096"}
@@ -153,21 +153,21 @@ class TestDownloadRule:
 
 
 class TestUpdateRules:
-    @patch("src.services.rule_update_service.RuleUpdateService.download_rule")
+    @patch("src.services.installer.rule_update_service.RuleUpdateService.download_rule")
     def test_both_files_downloaded(self, mock_download, mock_rules_dir):
         mock_download.return_value = "/fake/path/geoip.dat"
         result = RuleUpdateService.update_rules()
         assert result is True
         assert mock_download.call_count == 2
 
-    @patch("src.services.rule_update_service.RuleUpdateService.download_rule")
+    @patch("src.services.installer.rule_update_service.RuleUpdateService.download_rule")
     def test_returns_false_if_one_fails(self, mock_download, mock_rules_dir):
         mock_download.side_effect = ["/fake/path/geoip.dat", None]
         result = RuleUpdateService.update_rules()
         assert result is False
         assert mock_download.call_count == 2
 
-    @patch("src.services.rule_update_service.RuleUpdateService.download_rule")
+    @patch("src.services.installer.rule_update_service.RuleUpdateService.download_rule")
     def test_passes_progress_callback(self, mock_download, mock_rules_dir):
         callback = Mock()
         RuleUpdateService.update_rules(progress_callback=callback)
@@ -180,8 +180,8 @@ class TestUpdateRules:
 
 
 class TestCheckForUpdates:
-    @patch("src.services.rule_update_service.RuleUpdateService.get_latest_rule_version")
-    @patch("src.services.rule_update_service.RuleUpdateService.get_local_rule_version")
+    @patch("src.services.installer.rule_update_service.RuleUpdateService.get_latest_rule_version")
+    @patch("src.services.installer.rule_update_service.RuleUpdateService.get_local_rule_version")
     def test_update_available(self, mock_local, mock_latest, mock_rules_dir):
         mock_latest.return_value = "2025.02.01"
         mock_local.return_value = "2025.01.01"
@@ -190,8 +190,8 @@ class TestCheckForUpdates:
         assert local == "2025.01.01"
         assert latest == "2025.02.01"
 
-    @patch("src.services.rule_update_service.RuleUpdateService.get_latest_rule_version")
-    @patch("src.services.rule_update_service.RuleUpdateService.get_local_rule_version")
+    @patch("src.services.installer.rule_update_service.RuleUpdateService.get_latest_rule_version")
+    @patch("src.services.installer.rule_update_service.RuleUpdateService.get_local_rule_version")
     def test_up_to_date(self, mock_local, mock_latest, mock_rules_dir):
         mock_latest.return_value = "2025.02.01"
         mock_local.return_value = "2025.02.01"
@@ -200,14 +200,14 @@ class TestCheckForUpdates:
         assert local == "2025.02.01"
         assert latest == "2025.02.01"
 
-    @patch("src.services.rule_update_service.RuleUpdateService.get_latest_rule_version")
+    @patch("src.services.installer.rule_update_service.RuleUpdateService.get_latest_rule_version")
     def test_no_local_version(self, mock_latest, mock_rules_dir):
         mock_latest.return_value = "2025.02.01"
         available, local, latest = RuleUpdateService.check_for_updates()
         assert available is True  # local is None, so update is available
         assert local is None
 
-    @patch("src.services.rule_update_service.RuleUpdateService.get_latest_rule_version")
+    @patch("src.services.installer.rule_update_service.RuleUpdateService.get_latest_rule_version")
     def test_no_latest(self, mock_latest, mock_rules_dir):
         mock_latest.return_value = None
         available, local, latest = RuleUpdateService.check_for_updates()

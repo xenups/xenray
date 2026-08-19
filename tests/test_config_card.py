@@ -209,7 +209,7 @@ def test_ping_badge_click_triggers_shared_inspection_pipeline(sample_profile):
     assert hasattr(card, "ping_badge") and card.ping_badge is not None
     assert card.ping_badge.content is card.latency_text
 
-    with patch("src.services.server_inspector.server_inspector.inspect") as mock_inspect:
+    with patch("src.services.connection.server_inspector.server_inspector.inspect") as mock_inspect:
         card._on_ping_click()
     mock_inspect.assert_called_once_with(card._profile)
     card.will_unmount()

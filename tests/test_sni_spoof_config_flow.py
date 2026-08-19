@@ -72,9 +72,7 @@ def test_start_applies_persisted_config_to_listener(monkeypatch):
         def get_sni_connect_port(self):
             return 8443
 
-    monkeypatch.setattr(
-        "src.repositories.settings_repository.SettingsRepository", lambda *a, **k: _DiskRepo()
-    )
+    monkeypatch.setattr("src.repositories.settings_repository.SettingsRepository", lambda *a, **k: _DiskRepo())
     snapshot = _snapshot_listener_globals()
     service = SniSpoofService(settings_repo=FakeRepo())
     try:
@@ -203,9 +201,7 @@ def test_lifecycle_bridge_wires_subscriptions():
     bridge_mod.install_sni_spoof_lifecycle_bridge()
     fake = _FakeService()
     with patch.object(bridge_mod, "get_sni_spoof_service", return_value=fake):
-        event_bus.publish(
-            TOPIC_SNI_SPOOF_CHANGED, {"enabled": False, "enabled_changed": True}
-        )
+        event_bus.publish(TOPIC_SNI_SPOOF_CHANGED, {"enabled": False, "enabled_changed": True})
         event_bus.publish(TOPIC_CONNECTION_STATE_CHANGED, {"state": "disconnected"})
     fake.stop.assert_any_call()
 
@@ -216,9 +212,9 @@ def test_lifecycle_bridge_wires_subscriptions():
 
 
 def test_view_status_chip_updates_on_service_event():
-    from src.ui.views.sni_spoof_view import SniSpoofView
+    from src.ui.pages.sni_spoof_page import SniSpoofPage
 
-    view = SniSpoofView(controller=Mock())
+    view = SniSpoofPage(controller=Mock())
     try:
         chip_text = view._status_chip.content.controls[1]
         view._on_status_event({"status": "running"})

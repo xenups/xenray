@@ -19,8 +19,8 @@ from typing import Callable, Optional
 from loguru import logger
 
 from src.core.app_context import AppContext
-from src.services.connection_tester import ConnectionTester
-from src.services.network_validator import NetworkValidator
+from src.services.connection.connection_tester import ConnectionTester
+from src.services.connection.network_validator import NetworkValidator
 
 from .active_connectivity_monitor import ActiveConnectivityMonitor
 from .auto_reconnect_service import AutoReconnectService

@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 
 from src.core.event_bus import TOPIC_SERVER_INSPECTED, TOPIC_SERVER_INSPECTING, event_bus
 from src.core.subscription_manager import SubscriptionManager
-from src.services.server_inspector import ServerInspector
+from src.services.connection.server_inspector import ServerInspector
 from src.ui.services.navigation_service import NavigationService
 
 
@@ -27,7 +27,7 @@ def test_inspect_measures_ping_and_publishes_event():
     event_bus.subscribe(TOPIC_SERVER_INSPECTED, lambda d: received.append(d))
     try:
         with patch(
-            "src.services.server_inspector.ConnectionTester.test_connection_sync",
+            "src.services.connection.server_inspector.ConnectionTester.test_connection_sync",
             return_value=(
                 True,
                 "Latency: 142ms",
@@ -69,7 +69,7 @@ def test_inspect_batch_processes_all_profiles_concurrently():
             for i in range(5)
         ]
         with patch(
-            "src.services.server_inspector.ConnectionTester.test_connection_sync",
+            "src.services.connection.server_inspector.ConnectionTester.test_connection_sync",
             return_value=(
                 True,
                 "100ms",
@@ -97,7 +97,7 @@ def test_add_server_profile_triggers_inspection():
         inspected.append(profile)
 
     with patch(
-        "src.services.server_inspector.server_inspector.inspect",
+        "src.services.connection.server_inspector.server_inspector.inspect",
         side_effect=fake_inspect,
     ) as mock_inspect:
         NavigationService(mw).add_server_profile("My Server", {"outbounds": []})
@@ -113,7 +113,7 @@ def test_inspect_publishes_inspecting_event_immediately():
     received = []
     event_bus.subscribe(TOPIC_SERVER_INSPECTING, lambda d: received.append(d))
     try:
-        with patch("src.services.server_inspector.ping_manager.submit"):
+        with patch("src.services.connection.server_inspector.ping_manager.submit"):
             inspector = ServerInspector()
             inspector.inspect(
                 {
@@ -135,7 +135,7 @@ def test_inspect_batch_publishes_no_inspecting_events_at_submission():
     event_bus.subscribe(TOPIC_SERVER_INSPECTING, lambda d: received.append(d))
     try:
         profiles = [{"id": f"p{i}", "name": f"S{i}", "config": {"outbounds": []}} for i in range(3)]
-        with patch("src.services.server_inspector.ping_manager.submit"):
+        with patch("src.services.connection.server_inspector.ping_manager.submit"):
             inspector = ServerInspector()
             inspector.inspect_batch(profiles)
         # Nothing published at submission — queued cards stay idle.
@@ -161,7 +161,7 @@ def test_inspect_batch_emits_inspecting_inside_worker_scope():
             for i in range(4)
         ]
         with patch(
-            "src.services.server_inspector.ConnectionTester.test_connection_sync",
+            "src.services.connection.server_inspector.ConnectionTester.test_connection_sync",
             return_value=(
                 True,
                 "100ms",
@@ -205,7 +205,7 @@ def test_update_subscription_inspects_batch_after_parse():
     with (
         patch.object(manager, "fetch_subscription", side_effect=fake_fetch),
         patch(
-            "src.services.server_inspector.server_inspector.inspect_batch",
+            "src.services.connection.server_inspector.server_inspector.inspect_batch",
             side_effect=fake_inspect_batch,
         ),
     ):
@@ -219,7 +219,7 @@ def test_update_subscription_inspects_batch_after_parse():
 
 def test_update_subscription_skips_inspection_for_large_batch():
     """Batches larger than AUTO_INSPECT_LIMIT must NOT auto-inspect."""
-    from src.services.server_inspector import AUTO_INSPECT_LIMIT
+    from src.services.connection.server_inspector import AUTO_INSPECT_LIMIT
 
     ctx = MagicMock()
     ctx.subscriptions.load_all.return_value = [{"id": "sub-1", "name": "Sub", "url": "http://x", "profiles": []}]
@@ -245,7 +245,7 @@ def test_update_subscription_skips_inspection_for_large_batch():
     with (
         patch.object(manager, "fetch_subscription", side_effect=fake_fetch),
         patch(
-            "src.services.server_inspector.server_inspector.inspect_batch",
+            "src.services.connection.server_inspector.server_inspector.inspect_batch",
             side_effect=fake_inspect_batch,
         ),
     ):
@@ -260,7 +260,7 @@ def test_update_subscription_skips_inspection_for_large_batch():
 
 def test_inspect_batch_concurrency_limit_is_three():
     """The batch pipeline must never spawn more than 3 concurrent checks."""
-    from src.services.server_inspector import ServerInspector
+    from src.services.connection.server_inspector import ServerInspector
 
     assert ServerInspector.CONCURRENCY_LIMIT == 3
 
@@ -268,7 +268,7 @@ def test_inspect_batch_concurrency_limit_is_three():
 def test_cancel_all_inspections_cancels_tasks():
     """cancel_all_inspections cancels every tracked task and signals completion."""
     from src.core.event_bus import TOPIC_INSPECTION_BATCH_COMPLETED
-    from src.services.server_inspector import ServerInspector
+    from src.services.connection.server_inspector import ServerInspector
 
     received = []
     event_bus.subscribe(TOPIC_INSPECTION_BATCH_COMPLETED, lambda d: received.append(d))
@@ -293,7 +293,7 @@ def test_cancel_all_inspections_cancels_tasks():
 
 def test_inspect_sync_skips_when_canceled():
     """Once canceled, _inspect_sync must not publish inspecting events."""
-    from src.services.server_inspector import ServerInspector
+    from src.services.connection.server_inspector import ServerInspector
 
     received = []
     event_bus.subscribe(TOPIC_SERVER_INSPECTING, lambda d: received.append(d))

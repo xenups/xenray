@@ -7,7 +7,7 @@ import subprocess
 
 from src.core.constants import DNS_IP_GOOGLE
 from src.core.logger import logger
-from src.utils.platform_utils import PlatformUtils
+from src.platform.factory import get_network_adapter, get_process_adapter
 
 
 class NetworkUtils:
@@ -106,13 +106,13 @@ class NetworkUtils:
             ]
 
             try:
-                startupinfo = PlatformUtils.get_startupinfo()
+                startupinfo = get_process_adapter().get_startupinfo()
 
                 result = subprocess.run(
                     cmd,
                     capture_output=True,
                     text=True,
-                    creationflags=PlatformUtils.get_subprocess_flags(),
+                    creationflags=get_process_adapter().get_subprocess_flags(),
                     startupinfo=startupinfo,
                     check=False,
                 )
@@ -156,9 +156,6 @@ class NetworkUtils:
         Returns:
             Optimal MTU value (defaults to 1420 if detection fails)
         """
-        import platform
-
-        # Default safe MTU if detection fails
         default_mtu = 1420
 
         # QUIC-safe mode: skip detection and return fixed MTU
@@ -169,63 +166,15 @@ class NetworkUtils:
         # Auto mode: perform ICMP-based detection
         logger.info(f"MTU mode: auto - detecting optimal MTU (range: {min_mtu}-{max_mtu})...")
 
-        # Platform-specific ping commands
-        system = platform.system().lower()
+        network_adapter = get_network_adapter()
 
         def test_mtu(mtu_size: int) -> bool:
             """Test if a specific MTU size works."""
-            try:
-                # Calculate payload size (MTU - IP header - ICMP header)
-                # IP header: 20 bytes, ICMP header: 8 bytes
-                payload_size = mtu_size - 28
-
-                if payload_size <= 0:
-                    return False
-
-                # Build ping command based on platform
-                if system == "windows":
-                    # Windows: ping -n 1 -w timeout -f -l size host
-                    cmd = [
-                        "ping",
-                        "-n",
-                        "1",  # Send 1 packet
-                        "-w",
-                        str(timeout * 1000),  # Timeout in milliseconds
-                        "-f",  # Don't fragment
-                        "-l",
-                        str(payload_size),  # Packet size
-                        host,
-                    ]
-                else:
-                    # Linux/Mac: ping -c 1 -W timeout -M do -s size host
-                    cmd = [
-                        "ping",
-                        "-c",
-                        "1",  # Send 1 packet
-                        "-W",
-                        str(timeout),  # Timeout in seconds
-                        "-M",
-                        "do",  # Don't fragment
-                        "-s",
-                        str(payload_size),  # Packet size
-                        host,
-                    ]
-
-                result = subprocess.run(
-                    cmd,
-                    capture_output=True,
-                    text=True,
-                    timeout=timeout + 1,
-                    creationflags=PlatformUtils.get_subprocess_flags(),
-                    startupinfo=PlatformUtils.get_startupinfo(),
-                )
-
-                # Success if return code is 0 (ping succeeded)
-                return result.returncode == 0
-
-            except Exception as e:
-                logger.debug(f"MTU test for {mtu_size} failed: {e}")
+            # Calculate payload size (MTU - IP header (20) - ICMP header (8))
+            payload_size = mtu_size - 28
+            if payload_size <= 0:
                 return False
+            return network_adapter.ping_mtu(host, payload_size, timeout)
 
         try:
             # Binary search for optimal MTU

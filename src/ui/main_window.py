@@ -11,7 +11,7 @@ from src.core.connection_manager import ConnectionManager
 from src.core.constants import FONT_URLS
 from src.core.i18n import t
 from src.core.types import ConnectionMode
-from src.services.network_stats import NetworkStatsService
+from src.services.monitoring.network_stats import NetworkStatsService
 from src.ui.builders.ui_builder import UIBuilder
 from src.ui.components.common.admin_restart_dialog import AdminRestartDialog
 from src.ui.components.common.toast import ToastManager
@@ -352,7 +352,7 @@ class MainWindow:
             if self._latency_monitor_handler:
                 key = self._latency_monitor_handler.cancel_active_ping()
                 if key:
-                    from src.services.ping_service import ping_manager
+                    from src.services.connection.ping_service import ping_manager
 
                     ping_manager.cancel(key)
         except Exception:
@@ -426,8 +426,22 @@ class MainWindow:
         if self._log_viewer:
             self._log_viewer.clear_logs()
 
-    def _toggle_theme(self, e=None) -> None:
-        self._theme_handler.toggle_theme(e)
+    def _toggle_log_tailing(self) -> None:
+        """Toggle log tailing on/off via the shared LogViewer."""
+        try:
+            lv = self._log_viewer
+            if lv is None:
+                return
+            if getattr(lv, "user_enabled", False):
+                lv.stop_tailing()
+                lv.user_enabled = False
+            else:
+                from src.ui.components.logs.logs_drawer import LOG_SOURCES
+
+                lv.user_enabled = True
+                lv.start_tailing(*LOG_SOURCES["app"][1])
+        except Exception:
+            pass
 
     def _show_toast(self, message: str, message_type: str = "info") -> None:
         if self._toast:

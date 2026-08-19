@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ipaddress
 import platform
 import socket
 import threading
@@ -11,6 +12,14 @@ from typing import Dict, List, Optional
 import psutil
 
 from src.core.logger import logger
+
+
+def _is_loopback(addr: str) -> bool:
+    """True if *addr* is an IPv4 loopback address (systemic, not prefix-match)."""
+    try:
+        return ipaddress.ip_address(addr).is_loopback
+    except ValueError:
+        return False
 
 
 @dataclass
@@ -73,8 +82,9 @@ class SystemInfoCache:
                 for iface, addrs in psutil.net_if_addrs().items():
                     interfaces.append(iface)
                     for addr in addrs:
-                        if addr.family == socket.AF_INET and not addr.address.startswith("127."):
-                            ip_addresses.append(f"{iface}: {addr.address}")
+                        addr_str = addr.address
+                        if addr.family == socket.AF_INET and not _is_loopback(addr_str):
+                            ip_addresses.append(f"{iface}: {addr_str}")
             except Exception as e:
                 logger.debug(f"[SystemInfoCache] Could not enumerate network adapters: {e}")
 

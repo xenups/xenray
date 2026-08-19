@@ -6,7 +6,6 @@ from typing import Callable
 
 import flet as ft
 
-from src.core.event_bus import TOPIC_SNI_SPOOF_CHANGED, event_bus
 from src.core.i18n import t
 from src.ui.controllers.navigation_controller import NavigationController
 from src.ui.theme import AppColors
@@ -49,12 +48,12 @@ class NavSidebar(ft.Container):
                 t("nav.statistics", default="Statistics"),
                 ft.Icons.BAR_CHART_ROUNDED,
             ),
-            ("logs", t("nav.logs", default="Logs"), ft.Icons.TERMINAL_ROUNDED),
             (
                 "sni_spoof",
                 t("nav.sni_spoof", default="SNI Spoof"),
                 ft.Icons.SHIELD_ROUNDED,
             ),
+            ("logs", t("nav.logs", default="Logs"), ft.Icons.TERMINAL_ROUNDED),
             (
                 "settings",
                 t("nav.settings", default="Settings"),

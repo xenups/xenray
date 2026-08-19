@@ -10,8 +10,8 @@ from src.core.app_context import AppContext
 from src.core.connection_orchestrator import ConnectionOrchestrator
 from src.core.constants import MODE_PROXY, MODE_VPN, OUTPUT_CONFIG_PATH, PROTOCOL_TUN
 from src.core.i18n import t
-from src.services.singbox_service import SingboxService
-from src.services.xray_service import XrayService
+from src.services.core_engines.singbox_service import SingboxService
+from src.services.core_engines.xray_service import XrayService
 
 
 class ConnectionManager:
@@ -36,9 +36,9 @@ class ConnectionManager:
         """Initialize ConnectionManager with injected dependencies (DIP)."""
 
         # Initialize services (Dependency Injection)
-        from src.services.legacy_config_service import LegacyConfigService
+        from src.services.core_engines.legacy_config_service import LegacyConfigService
+        from src.services.core_engines.xray_config_processor import XrayConfigProcessor
         from src.services.monitoring import ConnectionMonitoringService, MonitorSignal
-        from src.services.xray_config_processor import XrayConfigProcessor
 
         # Store MonitorSignal for use in signal handler
         self._MonitorSignal = MonitorSignal

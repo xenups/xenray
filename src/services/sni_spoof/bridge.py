@@ -16,11 +16,7 @@ import threading
 
 import loguru
 
-from src.core.event_bus import (
-    TOPIC_CONNECTION_STATE_CHANGED,
-    TOPIC_SNI_SPOOF_CHANGED,
-    event_bus,
-)
+from src.core.event_bus import TOPIC_CONNECTION_STATE_CHANGED, TOPIC_SNI_SPOOF_CHANGED, event_bus
 from src.services.sni_spoof.sni_spoof_service import get_sni_spoof_service
 
 logger = loguru.logger
@@ -74,9 +70,7 @@ def _on_sni_spoof_changed(data) -> None:
         with _connection_lock:
             active = _connection_active
         if not active:
-            logger.info(
-                "[SniSpoof] enabled with no active connection — will start on connect"
-            )
+            logger.info("[SniSpoof] enabled with no active connection — will start on connect")
             return
         if not service.running:
             service.start()

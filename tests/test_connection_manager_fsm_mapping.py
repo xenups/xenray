@@ -11,7 +11,6 @@ import threading
 import pytest
 
 from src.core.connection_manager import ConnectionManager
-from src.core.event_bus import EventBus
 from src.core.fsm.connection_fsm import ConnectionFSM, ConnectionState
 
 

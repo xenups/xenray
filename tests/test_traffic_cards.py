@@ -77,7 +77,7 @@ def test_cards_always_show_hand_cursor():
 def test_network_stats_stop_flushes_cached_metrics():
     """Stopping the monitor must flush the cached buffer so get_stats() returns
     zeros after a disconnect (no stale last-recorded speeds)."""
-    from src.services.network_stats import NetworkStatsService
+    from src.services.monitoring.network_stats import NetworkStatsService
 
     svc = NetworkStatsService()
     svc._running = True

@@ -11,10 +11,8 @@ import pytest
 
 from src.core.config_builders.singbox_config_builder import SingboxConfigBuilder
 from src.core.constants import TUN_GATEWAY_IPV4
-from src.services.route_manager_service import RouteManagerService
-from src.services.singbox_service import SingboxService
-from src.services.xray_service import XrayService
-from src.utils.platform_utils import PlatformUtils
+from src.services.connection.route_manager_service import RouteManagerService
+from src.services.core_engines.xray_service import XrayService
 
 
 class TestSingboxConfigBuilder:
@@ -133,27 +131,32 @@ class TestRouteManagerService:
 
 
 class TestPlatformUtilsSmhr:
-    """Tests for PlatformUtils SMHR registry helpers."""
+    """Tests for the SMHR registry helpers (now in the settings adapter)."""
 
     def test_smhr_helpers_exist_and_callable(self):
-        assert callable(PlatformUtils.read_smhr_state)
-        assert callable(PlatformUtils.set_smhr_state)
-        assert callable(PlatformUtils.suppress_smhr)
-        assert callable(PlatformUtils.restore_smhr)
+        from src.platform.windows import settings as win_settings
+
+        assert callable(win_settings._read_smhr_state)
+        assert callable(win_settings._set_smhr_state)
+        assert callable(win_settings._suppress_smhr)
+        assert callable(win_settings._restore_smhr)
 
     def test_suppress_and_restore_smhr_non_windows(self):
-        with patch("src.utils.platform_utils.PlatformUtils.get_platform", return_value="linux"):
-            state = PlatformUtils.suppress_smhr()
+        from src.platform.factory import get_system_settings_adapter
+
+        with patch("src.platform.factory._is_windows", return_value=False):
+            adapter = get_system_settings_adapter()
+            state = adapter.suppress_smhr()
             assert state is None
-            PlatformUtils.restore_smhr(state)  # Should not raise
+            adapter.restore_smhr(state)  # Should not raise
 
 
 class TestServicesSmhrDelegation:
-    """Verify XrayService and SingboxService delegate SMHR to PlatformUtils."""
+    """Verify XrayService and SingboxService delegate SMHR to the settings adapter."""
 
     def test_xray_service_smhr_delegation(self):
-        with patch("src.utils.platform_utils.PlatformUtils.suppress_smhr", return_value=True) as mock_suppress:
-            with patch("src.utils.platform_utils.PlatformUtils.restore_smhr") as mock_restore:
+        with patch("src.platform.windows.settings._suppress_smhr", return_value=True) as mock_suppress:
+            with patch("src.platform.windows.settings._restore_smhr") as mock_restore:
                 xray = XrayService()
                 xray._suppress_smhr()
                 mock_suppress.assert_called_once()
@@ -162,15 +165,21 @@ class TestServicesSmhrDelegation:
                 mock_restore.assert_called_once_with(True)
 
     def test_singbox_service_smhr_delegation(self):
-        with patch("src.utils.platform_utils.PlatformUtils.suppress_smhr", return_value=True) as mock_suppress:
-            with patch("src.utils.platform_utils.PlatformUtils.restore_smhr") as mock_restore:
-                with patch(
-                    "src.utils.process_utils.ProcessUtils.is_running",
-                    return_value=False,
-                ):
-                    singbox = SingboxService()
-                    singbox._smhr_was_enabled = PlatformUtils.suppress_smhr()
-                    mock_suppress.assert_called_once()
+        with (
+            patch(
+                "src.platform.windows.settings.WindowsSystemSettingsAdapter.suppress_smhr",
+                return_value=True,
+            ) as mock_suppress,
+            patch("src.platform.windows.settings.WindowsSystemSettingsAdapter.restore_smhr") as mock_restore,
+            patch("src.utils.process_utils.ProcessUtils.is_running", return_value=False),
+        ):
+            # Simulate the suppress path exercised during start(): via the
+            # settings adapter, not any OS string.
+            from src.platform.factory import get_system_settings_adapter
 
-                    PlatformUtils.restore_smhr(singbox._smhr_was_enabled)
-                    mock_restore.assert_called_once_with(True)
+            adapter = get_system_settings_adapter()
+            state = adapter.suppress_smhr()
+            assert state is True
+            mock_suppress.assert_called_once()
+            adapter.restore_smhr(state)
+            mock_restore.assert_called_once_with(True)

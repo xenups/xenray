@@ -24,7 +24,9 @@ import loguru
 from src.core.constants import XRAY_PID_FILE
 from src.core.event_bus import TOPIC_SNI_SPOOF_CHANGED, EventBus
 from src.services.sni_spoof.config import build_config
+from src.services.sni_spoof.factory import SpoofEngineFactory
 from src.services.sni_spoof.listener import configure, run_listener
+from src.services.sni_spoof.models import SpoofEngineConfig, SpoofMethod
 from src.utils.process_utils import ProcessUtils
 
 logger = loguru.logger
@@ -41,8 +43,11 @@ def _prerequisites_ok() -> tuple:
     an elevated shell. Non-Windows always fails here.
     """
     try:
-        import pydivert  # noqa: F401
-    except ImportError:
+        import pydivert
+
+        if pydivert is None:
+            return False, "pydivert not installed"
+    except Exception:
         return False, "pydivert not installed"
     if not ProcessUtils.is_admin():
         return False, "administrator privileges required (WinDivert kernel driver)"
@@ -62,6 +67,26 @@ class SniSpoofService:
         self._loop = None
         self._loop_thread = None
         self._loop_ready = threading.Event()
+        self._engine = None  # BaseSpoofEngine built from typed config
+
+    def _build_engine_from_config(self, config: dict):
+        """Build a typed SpoofEngineConfig + engine via the factory.
+
+        Pure data mapping — no behaviour change; the listener still receives the
+        same raw config via ``configure()``.
+        """
+        method = SpoofMethod(config.get("BYPASS_METHOD", "wrong_seq"))
+        engine_config = SpoofEngineConfig(
+            fake_sni=config.get("FAKE_SNI", "chatgpt.com"),
+            connect_ip=config.get("CONNECT_IP", "185.193.30.94"),
+            connect_port=config.get("CONNECT_PORT", 443),
+            listen_host=config.get("LISTEN_HOST", "127.0.0.1"),
+            listen_port=config.get("LISTEN_PORT", 40443),
+            method=method,
+            data_mode=config.get("DATA_MODE", "tls"),
+        )
+        self._engine = SpoofEngineFactory.create(engine_config)
+        return self._engine
 
     @property
     def running(self) -> bool:
@@ -81,15 +106,18 @@ class SniSpoofService:
 
         config = build_config(self._settings_repo)
         logger.info(f"[SniSpoof] starting listener with {config}")
+        # Build the typed engine (factory) — pure mapping, no behaviour change.
+        try:
+            self._build_engine_from_config(config)
+        except Exception as e:
+            logger.warning(f"[SniSpoof] engine build failed (non-fatal): {e}")
         # Persisted config must reach the actual listener before the task runs.
         configure(config)
 
         self._start_listener_loop()
 
         self._watcher_stop.clear()
-        self._watcher = threading.Thread(
-            target=self._watch_parent, daemon=True, name="sni-spoof-parent-watch"
-        )
+        self._watcher = threading.Thread(target=self._watch_parent, daemon=True, name="sni-spoof-parent-watch")
         self._watcher.start()
         self.status = STATUS_RUNNING
         self._publish(self.status)
@@ -116,9 +144,7 @@ class SniSpoofService:
         caller thread has (or runs) a loop. Bounded wait until the task exists.
         """
         self._loop_ready.clear()
-        self._loop_thread = threading.Thread(
-            target=self._run_loop, daemon=True, name="sni-spoof-listener-loop"
-        )
+        self._loop_thread = threading.Thread(target=self._run_loop, daemon=True, name="sni-spoof-listener-loop")
         self._loop_thread.start()
         self._loop_ready.wait(5.0)
 
@@ -142,9 +168,7 @@ class SniSpoofService:
                 for t in pending:
                     t.cancel()
                 if pending:
-                    loop.run_until_complete(
-                        asyncio.gather(*pending, return_exceptions=True)
-                    )
+                    loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
             except Exception:
                 logger.debug("[SniSpoof] loop drain finished with exception")
             loop.close()
@@ -161,6 +185,11 @@ class SniSpoofService:
         # Publish stopped state before draining the loop so the loop thread's
         # cleanup finally-block can never overwrite it back to FAILED.
         self.status = STATUS_STOPPED
+        try:
+            if self._engine is not None:
+                self._engine.stop()
+        except Exception:
+            pass
         self._shutdown_listener_loop()
         # Give the loop thread a moment to run its finally (closes the listen
         # socket + clears _task/_loop), so a reconnect right after this stop can

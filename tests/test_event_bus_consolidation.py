@@ -12,11 +12,8 @@ import importlib
 import pytest
 
 from src.core.event_bus import (
-    EVENT_CORE_CRASHED,
-    EVENT_CORE_PROCESS_STOPPED,
     TOPIC_CONNECTION_STATE_CHANGED,
     EngineEvent,
-    EventBus,
 )
 from src.core.fsm.connection_fsm import ConnectionFSM, ConnectionState
 

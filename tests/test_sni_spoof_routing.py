@@ -5,7 +5,7 @@ from unittest.mock import Mock
 import pytest
 
 from src.core.config_builders.singbox_config_builder import SingboxConfigBuilder
-from src.services.xray_config_processor import XrayConfigProcessor
+from src.services.core_engines.xray_config_processor import XrayConfigProcessor
 
 
 @pytest.fixture
@@ -102,9 +102,7 @@ class TestXraySniRouting:
 
     def test_disabled_no_sni_outbound(self):
         proc = self._processor(False)
-        cfg = proc.process_config(
-            {"inbounds": [], "outbounds": [], "routing": {"rules": []}}, mode="proxy"
-        )
+        cfg = proc.process_config({"inbounds": [], "outbounds": [], "routing": {"rules": []}}, mode="proxy")
         tags = [o.get("tag") for o in cfg["outbounds"]]
         assert "sni-spoof" not in tags
 
@@ -115,9 +113,7 @@ class TestXraySniRouting:
             "outbounds": [
                 {
                     "protocol": "vless",
-                    "settings": {
-                        "vnext": [{"address": "oracle.example.com", "port": 443}]
-                    },
+                    "settings": {"vnext": [{"address": "oracle.example.com", "port": 443}]},
                     "streamSettings": {
                         "network": "tcp",
                         "tlsSettings": {"serverName": "oracle.example.com"},
@@ -135,13 +131,9 @@ class TestXraySniRouting:
         proc._app_context.settings.set_sni_connect_ip.assert_not_called()
         proc._app_context.settings.set_sni_connect_port.assert_not_called()
         # ...and the real server's SNI/serverName stays in the outbound header.
-        assert (
-            out["streamSettings"]["tlsSettings"]["serverName"] == "oracle.example.com"
-        )
+        assert out["streamSettings"]["tlsSettings"]["serverName"] == "oracle.example.com"
 
     def test_enabled_without_proxy_outbound_adds_nothing(self):
         proc = self._processor(True)
-        cfg = proc.process_config(
-            {"inbounds": [], "outbounds": [], "routing": {"rules": []}}, mode="proxy"
-        )
+        cfg = proc.process_config({"inbounds": [], "outbounds": [], "routing": {"rules": []}}, mode="proxy")
         assert cfg["outbounds"] == []

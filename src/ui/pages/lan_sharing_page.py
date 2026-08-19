@@ -9,7 +9,7 @@ import flet as ft
 
 from src.core.event_bus import TOPIC_LAN_SHARING_CHANGED, event_bus
 from src.core.i18n import get_language, t
-from src.services.lan_service import LanService
+from src.services.system.lan_service import LanService
 from src.ui.components.dashboard.connection_guide_card import ConnectionGuideCard
 from src.ui.components.lan import MicroChip, QRCard
 from src.ui.controllers.lan_sharing_controller import LanSharingController

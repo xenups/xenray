@@ -7,7 +7,7 @@ import socket
 from typing import Dict, Optional
 
 from src.core.i18n import t
-from src.services.config_utils import get_server_object, is_ip
+from src.services.core_engines.config_utils import get_server_object, is_ip
 
 _DNS_CACHE: Dict[str, str] = {}
 
@@ -100,10 +100,16 @@ class ProfilePresenter:
 
             info["server_ip"] = cls.resolve_server_ip(raw_addr)
 
-        last_val = profile.get("last_latency_val")
+        last_val = (
+            profile.get("last_latency_val")
+            if profile.get("last_latency_val") is not None
+            else profile.get("ping")
+            if profile.get("ping") is not None
+            else profile.get("latency")
+        )
         last_str = profile.get("last_latency")
-        if last_val is not None:
-            info["latency"] = t("connection.latency_ms", value=last_val)
+        if last_val is not None and isinstance(last_val, (int, float)):
+            info["latency"] = t("connection.latency_ms", value=int(last_val))
         elif last_str:
             match = re.search(r"(\d+)", str(last_str))
             if match:

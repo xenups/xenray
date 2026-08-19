@@ -7,7 +7,7 @@ from typing import Callable, Optional
 import flet as ft
 
 from src.core.logger import logger
-from src.services.network_stats import NetworkStatsService
+from src.services.monitoring.network_stats import NetworkStatsService
 
 
 class NetworkStatsHandler:

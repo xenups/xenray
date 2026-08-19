@@ -196,7 +196,7 @@ def test_check_for_updates_flow(mock_app_context, monkeypatch):
 
     # 1. Test up to date response
     monkeypatch.setattr(
-        "src.services.app_update_service.AppUpdateService.check_for_updates",
+        "src.services.installer.app_update_service.AppUpdateService.check_for_updates",
         lambda: (False, "0.3.0-beta", "0.3.0-beta", None),
     )
     avail, curr, latest, url = ctrl.check_for_updates(update_card_ref=card_mock, sync=True)
@@ -208,7 +208,7 @@ def test_check_for_updates_flow(mock_app_context, monkeypatch):
 
     # 2. Test update available response
     monkeypatch.setattr(
-        "src.services.app_update_service.AppUpdateService.check_for_updates",
+        "src.services.installer.app_update_service.AppUpdateService.check_for_updates",
         lambda: (True, "0.3.0-beta", "0.4.0-beta", "https://example.com/download.zip"),
     )
     avail, curr, latest, url = ctrl.check_for_updates(update_card_ref=card_mock, sync=True)
@@ -218,7 +218,7 @@ def test_check_for_updates_flow(mock_app_context, monkeypatch):
 
     # 3. Test update check failure / network error
     monkeypatch.setattr(
-        "src.services.app_update_service.AppUpdateService.check_for_updates",
+        "src.services.installer.app_update_service.AppUpdateService.check_for_updates",
         lambda: (False, "0.3.0-beta", None, None),
     )
     avail, curr, latest, url = ctrl.check_for_updates(update_card_ref=card_mock, sync=True)

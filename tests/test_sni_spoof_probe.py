@@ -2,7 +2,7 @@
 
 from unittest.mock import patch
 
-from src.services.connection_tester import ConnectionTester
+from src.services.connection.connection_tester import ConnectionTester
 
 
 class TestSniSpoofEndpoint:
@@ -65,10 +65,10 @@ class TestSniSpoofProbe:
         fake_sock = _Sock()
 
         with patch(
-            "src.services.connection_tester.socket.create_connection",
+            "src.services.connection.connection_tester.socket.create_connection",
             return_value=fake_sock,
         ) as m_conn, patch(
-            "src.services.connection_tester.time.monotonic",
+            "src.services.connection.connection_tester.time.monotonic",
             side_effect=[100.0, 100.05],  # start, end -> 50ms
         ):
             ok, latency = ConnectionTester._sni_spoof_probe({"host": "127.0.0.1", "port": 40443})
@@ -79,7 +79,7 @@ class TestSniSpoofProbe:
 
     def test_probe_connect_failure_returns_not_ok(self, monkeypatch):
         with patch(
-            "src.services.connection_tester.socket.create_connection",
+            "src.services.connection.connection_tester.socket.create_connection",
             side_effect=ConnectionRefusedError("refused"),
         ):
             ok, latency = ConnectionTester._sni_spoof_probe({"host": "127.0.0.1", "port": 40443})
@@ -151,3 +151,47 @@ class TestSniSpoofDirectModeRouting:
         ok, result, country = ConnectionTester.test_connection_sync({}, fetch_country=False, socks_port=0)
         assert ok is False
         assert "invalid" in result.lower() or "config" in result.lower()
+
+
+class TestSniSpoofRelayFallback:
+    def test_relay_down_falls_back_to_socks(self, monkeypatch):
+        """When SNI is enabled but the relay is NOT listening (listener not up
+        yet / mid-reconnect), the probe must NOT report Connection Error — it
+        falls through to the standard SOCKS path, which may still succeed."""
+        monkeypatch.setattr(
+            ConnectionTester,
+            "_sni_spoof_endpoint",
+            lambda: {"host": "127.0.0.1", "port": 40443},
+        )
+        # Relay connect fails (refused) → fall through below
+        monkeypatch.setattr(ConnectionTester, "_sni_spoof_probe", lambda sni: (False, 999999))
+
+        from src.utils import network_utils
+
+        monkeypatch.setattr(
+            network_utils.NetworkUtils,
+            "check_proxy_connectivity",
+            staticmethod(lambda port: True),
+        )
+        ok, result, country = ConnectionTester.test_connection_sync({}, fetch_country=False, socks_port=10805)
+        # Even though relay was down, the SOCKS fallback succeeded → no error.
+        assert ok is True
+
+    def test_relay_down_and_socks_down_reports_error(self, monkeypatch):
+        """Relay down AND SOCKS down → real Connection Error (both paths dead)."""
+        monkeypatch.setattr(
+            ConnectionTester,
+            "_sni_spoof_endpoint",
+            lambda: {"host": "127.0.0.1", "port": 40443},
+        )
+        monkeypatch.setattr(ConnectionTester, "_sni_spoof_probe", lambda sni: (False, 999999))
+
+        from src.utils import network_utils
+
+        monkeypatch.setattr(
+            network_utils.NetworkUtils,
+            "check_proxy_connectivity",
+            staticmethod(lambda port: False),
+        )
+        ok, result, country = ConnectionTester.test_connection_sync({}, fetch_country=False, socks_port=10805)
+        assert ok is False

@@ -5,7 +5,7 @@ from unittest.mock import Mock
 import pytest
 
 from src.core.constants import DNS_IP_CLOUDFLARE
-from src.services.dns_configurator import DnsConfigurator
+from src.services.connection.dns_configurator import DnsConfigurator
 
 # ---------------------------------------------------------------------------
 # Fixtures

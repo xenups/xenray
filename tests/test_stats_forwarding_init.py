@@ -25,10 +25,6 @@ import asyncio
 import contextlib
 from unittest.mock import Mock, patch
 
-# Imported first to pre-warm the UI package graph (avoids the pre-existing
-# server_list <-> chain_builder_page circular import when a pages module is the
-# first UI import in the process). Same pattern as test_core_crash_ui_reset.py.
-from src.ui.components.common.toast import ToastManager  # noqa: F401
 from src.ui.services.stats_forwarding_service import StatsForwardingService
 
 

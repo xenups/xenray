@@ -5,7 +5,7 @@ from unittest.mock import Mock
 import pytest
 
 from src.core.constants import TUN_GATEWAY_IPV4, TUN_ROUTE_IPV4
-from src.services.tun_injector import TunInjector
+from src.services.connection.tun_injector import TunInjector
 
 
 @pytest.fixture

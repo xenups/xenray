@@ -89,15 +89,15 @@ def _neutralise_destructive_service_cleanup():
     # wrappers over PlatformUtils that some tests verify by delegation. They
     # only run inside _guaranteed_cleanup (no-oped) or explicit calls.
     xray_noops = [
-        "src.services.xray_service.XrayService._guaranteed_cleanup",
-        "src.services.xray_service.XrayService._remove_nrpt_rules",
-        "src.services.xray_service.XrayService._cleanup_tun_dns",
-        "src.services.xray_service.XrayService._cleanup_previous_instance",
+        "src.services.core_engines.xray_service.XrayService._guaranteed_cleanup",
+        "src.services.core_engines.xray_service.XrayService._remove_nrpt_rules",
+        "src.services.core_engines.xray_service.XrayService._cleanup_tun_dns",
+        "src.services.core_engines.xray_service.XrayService._cleanup_previous_instance",
     ]
     # SingboxService destructive methods -> no-ops
     singbox_noops = [
-        "src.services.singbox_service.SingboxService._guaranteed_cleanup",
-        "src.services.singbox_service.SingboxService._signal_handler",
+        "src.services.core_engines.singbox_service.SingboxService._guaranteed_cleanup",
+        "src.services.core_engines.singbox_service.SingboxService._signal_handler",
     ]
 
     patchers = [patch(target, lambda *a, **k: None) for target in xray_noops + singbox_noops]

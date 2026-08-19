@@ -5,6 +5,17 @@ from loguru import logger
 
 from src.core.constants import LOG_BACKUP_COUNT, TMPDIR
 
+
+def _log_filter(record: dict) -> bool:
+    """Filter out UI module debug logs from console and application logs."""
+    name = record.get("name") or ""
+    level = record.get("level")
+    level_no = getattr(level, "no", 0)
+    if name.startswith("src.ui") and level_no < 30:
+        return False
+    return True
+
+
 # Configure logger
 logger.remove()  # Remove default handler
 
@@ -16,7 +27,7 @@ if sys.stderr:
         "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - "
         "<level>{message}</level>"
     )
-    logger.add(sys.stderr, format=log_format, level="DEBUG")
+    logger.add(sys.stderr, format=log_format, level="DEBUG", filter=_log_filter)
 
 # Add file handler
 log_file = os.path.join(TMPDIR, "xenray.log")
@@ -31,6 +42,7 @@ logger.add(
     encoding="utf-8",
     format=("{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | " "{name}:{function}:{line} - {message}"),
     level="DEBUG",
+    filter=_log_filter,
 )
 
 
