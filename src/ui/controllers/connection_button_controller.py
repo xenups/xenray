@@ -92,12 +92,17 @@ class ConnectionButtonController:
         if self._is_connected or self._is_connecting:
             return
 
-        if is_dark:
-            self._widget._button.bgcolor = ft.Colors.with_opacity(0.15, "#1e293b")
-            self._widget._button.border = ft.Border.all(1.5, ft.Colors.with_opacity(0.2, ft.Colors.WHITE))
-        else:
-            self._widget._button.bgcolor = ft.Colors.with_opacity(0.15, ft.Colors.WHITE)
-            self._widget._button.border = ft.Border.all(1.5, ft.Colors.with_opacity(0.3, ft.Colors.BLACK12))
+        self._widget._button.opacity = 1.0
+        self._widget._button.bgcolor = "#EDE9FE"
+        self._widget._button.gradient = ft.LinearGradient(
+            begin=ft.Alignment.TOP_LEFT,
+            end=ft.Alignment.BOTTOM_RIGHT,
+            colors=["#F5F3FF", "#EDE9FE", "#DDD6FE"],
+        )
+        self._widget._button.border = ft.Border.all(2.0, ft.Colors.WHITE)
+        self._widget._icon.color = "#1E1B4B"
+        self._widget._status_text.color = "#1E1B4B"
+        self._widget._uptime_text.color = "#8B8BA7"
 
         try:
             self._widget._button.update()
@@ -128,7 +133,7 @@ class ConnectionButtonController:
     # State Transitions
     # -----------------------------------------------------------------------
     def set_connected(self, status_label: Optional[str] = None) -> None:
-        """Set button to connected state with purple glass glow and breath animation."""
+        """Set button to connected state with solid rich lilac core and breath animation."""
         self._cancel_anim_task()
         self.stop_ping_animation()
         self._state_generation += 1
@@ -140,12 +145,19 @@ class ConnectionButtonController:
 
         label = get_short_status_label(status_label or t("app.connected"))
 
-        # Purple Glass Style
-        self._widget._button.bgcolor = ft.Colors.with_opacity(0.25, COLOR_CONNECTED_BG)
-        self._widget._button.border = ft.Border.all(2.5, ft.Colors.with_opacity(0.5, COLOR_CONNECTED_BORDER))
-        self._widget._icon.color = ft.Colors.WHITE
+        # 100% Solid Opaque Lilac Core (never blends with background glow)
+        self._widget._button.opacity = 1.0
+        self._widget._button.bgcolor = "#EDE9FE"
+        self._widget._button.gradient = ft.LinearGradient(
+            begin=ft.Alignment.TOP_LEFT,
+            end=ft.Alignment.BOTTOM_RIGHT,
+            colors=["#F5F3FF", "#EDE9FE", "#DDD6FE"],
+        )
+        self._widget._button.border = ft.Border.all(2.0, ft.Colors.WHITE)
+        self._widget._icon.color = "#1E1B4B"
         self._widget._status_text.value = label
-        self._widget._status_text.color = COLOR_CONNECTED_TEXT
+        self._widget._status_text.color = "#1E1B4B"
+        self._widget._uptime_text.color = "#8B8BA7"
         try:
             self._widget._button.update()
         except Exception:
@@ -177,12 +189,20 @@ class ConnectionButtonController:
 
         label = get_short_status_label(status_label or t("app.disconnected"))
 
-        self._widget._button.bgcolor = ft.Colors.with_opacity(0.15, "#1e293b")
-        self._widget._button.border = ft.Border.all(1.5, ft.Colors.with_opacity(0.2, ft.Colors.WHITE))
-        self._widget._icon.color = ft.Colors.WHITE
+        # 100% Solid Opaque Lilac Core
+        self._widget._button.opacity = 1.0
+        self._widget._button.bgcolor = "#EDE9FE"
+        self._widget._button.gradient = ft.LinearGradient(
+            begin=ft.Alignment.TOP_LEFT,
+            end=ft.Alignment.BOTTOM_RIGHT,
+            colors=["#F5F3FF", "#EDE9FE", "#DDD6FE"],
+        )
+        self._widget._button.border = ft.Border.all(2.0, ft.Colors.WHITE)
+        self._widget._icon.color = "#1E1B4B"
         self._widget._status_text.value = label
-        self._widget._status_text.color = ft.Colors.WHITE_70
+        self._widget._status_text.color = "#1E1B4B"
         self._widget._uptime_text.value = "00:00:00"
+        self._widget._uptime_text.color = "#8B8BA7"
         try:
             self._widget._button.update()
         except Exception:
@@ -191,7 +211,7 @@ class ConnectionButtonController:
         self._widget._glow_layer.set_disconnected_glow()
 
     def set_connecting(self, status_label: Optional[str] = None) -> None:
-        """Set connecting state with amber glass pulse."""
+        """Set connecting state with solid core and indigo-violet glow pulse."""
         self._cancel_anim_task()
         self.stop_ping_animation()
         self._state_generation += 1
@@ -203,12 +223,19 @@ class ConnectionButtonController:
 
         label = get_short_status_label(status_label or t("app.connecting"))
 
-        self._widget._button.bgcolor = ft.Colors.with_opacity(0.25, COLOR_CONNECTING_BG)
-        self._widget._button.border = ft.Border.all(2.5, ft.Colors.with_opacity(0.5, COLOR_CONNECTING_BORDER))
-        self._widget._icon.color = ft.Colors.WHITE
+        self._widget._button.opacity = 1.0
+        self._widget._button.bgcolor = "#EDE9FE"
+        self._widget._button.gradient = ft.LinearGradient(
+            begin=ft.Alignment.TOP_LEFT,
+            end=ft.Alignment.BOTTOM_RIGHT,
+            colors=["#F5F3FF", "#EDE9FE", "#DDD6FE"],
+        )
+        self._widget._button.border = ft.Border.all(2.0, ft.Colors.WHITE)
+        self._widget._icon.color = "#1E1B4B"
         self._widget._status_text.value = label
-        self._widget._status_text.color = ft.Colors.WHITE
+        self._widget._status_text.color = "#1E1B4B"
         self._widget._uptime_text.value = "00:00:00"
+        self._widget._uptime_text.color = "#8B8BA7"
         try:
             self._widget._button.update()
         except Exception:
@@ -228,7 +255,7 @@ class ConnectionButtonController:
             self._anim_task = self._schedule_animation(_connecting_pulse)
 
     def set_disconnecting(self, status_label: str = "Disconnecting...") -> None:
-        """Set disconnecting state with red glass pulse."""
+        """Set disconnecting state with solid core and pulse."""
         self._cancel_anim_task()
         self.stop_ping_animation()
         self._state_generation += 1
@@ -238,11 +265,18 @@ class ConnectionButtonController:
         self._is_connecting = False
         self._state = "disconnecting"
 
-        self._widget._button.bgcolor = ft.Colors.with_opacity(0.25, COLOR_DISCONNECTING_BG)
-        self._widget._button.border = ft.Border.all(2.5, ft.Colors.with_opacity(0.5, COLOR_DISCONNECTING_BORDER))
-        self._widget._icon.color = ft.Colors.WHITE
+        self._widget._button.opacity = 1.0
+        self._widget._button.bgcolor = "#EDE9FE"
+        self._widget._button.gradient = ft.LinearGradient(
+            begin=ft.Alignment.TOP_LEFT,
+            end=ft.Alignment.BOTTOM_RIGHT,
+            colors=["#F5F3FF", "#EDE9FE", "#DDD6FE"],
+        )
+        self._widget._button.border = ft.Border.all(2.0, ft.Colors.WHITE)
+        self._widget._icon.color = "#1E1B4B"
         self._widget._status_text.value = status_label
-        self._widget._status_text.color = ft.Colors.WHITE
+        self._widget._status_text.color = "#1E1B4B"
+        self._widget._uptime_text.color = "#8B8BA7"
         try:
             self._widget._button.update()
         except Exception:
@@ -267,7 +301,7 @@ class ConnectionButtonController:
             return
 
         self._widget._status_text.value = get_short_status_label(step_msg)
-        self._widget._status_text.color = ft.Colors.AMBER_400
+        self._widget._status_text.color = "#1E1B4B"
         try:
             self._widget._status_text.update()
         except Exception:

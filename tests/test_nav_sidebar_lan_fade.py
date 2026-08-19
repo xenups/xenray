@@ -23,8 +23,8 @@ def test_nav_sidebar_lan_button_matches_original():
     assert sidebar._lan_btn.content is sidebar._lan_icon
     assert sidebar._lan_btn.padding == ft.Padding.all(10)
     assert sidebar._lan_btn.border_radius == 12
-    assert sidebar._lan_btn.width == 44  # same size as the top nav buttons
-    assert sidebar._lan_btn.height == 44
+    assert sidebar._lan_btn.width == 42  # same size as the top nav buttons (42x42)
+    assert sidebar._lan_btn.height == 42
     assert sidebar._lan_btn.animate is None  # no fade animation (reverted)
     assert not hasattr(sidebar, "_lan_indicator")  # no indicator dot
 

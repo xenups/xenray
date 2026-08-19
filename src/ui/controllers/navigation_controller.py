@@ -82,46 +82,34 @@ class NavigationController:
         self._sni_spoof_enabled = bool(enabled)
 
     def get_lan_button_style(self, tab_id: Optional[str] = None) -> LanButtonStyle:
-        """Compute dynamic LAN button style token based on active route and LAN switch state."""
+        """Compute dynamic LAN/TUN button style token based on active route and LAN switch state."""
         active_tab = tab_id if tab_id is not None else self._active_tab
         is_active = active_tab == "lan"
 
         if self._allow_lan:
             icon_color = "#4ADE80"
-        elif is_active:
-            icon_color = "#8B5CF6"
-        else:
-            icon_color = "#c084fc"
-
-        if self._allow_lan:
-            bgcolor = ft.Colors.with_opacity(0.15, "#10B981")
-        elif is_active:
-            bgcolor = ft.Colors.with_opacity(0.18, "#8B5CF6")
-        else:
-            bgcolor = ft.Colors.with_opacity(0.1, "#a855f7")
-
-        if is_active:
-            border = ft.Border.all(1.5, "#8B5CF6")
-        elif self._allow_lan:
-            border = ft.Border.all(1.0, "#4ADE80")
-        else:
-            border = ft.Border.all(1.0, ft.Colors.with_opacity(0.3, "#a855f7"))
-
-        if is_active:
+            bgcolor = ft.Colors.with_opacity(0.08, "#10B981")
+            border = ft.Border.all(1.0, ft.Colors.with_opacity(0.25, "#10B981"))
             shadow = ft.BoxShadow(
                 spread_radius=0,
-                blur_radius=12,
-                color=ft.Colors.with_opacity(0.35, "#8B5CF6"),
+                blur_radius=8,
+                color=ft.Colors.with_opacity(0.20, "#10B981"),
                 offset=ft.Offset(0, 0),
             )
-        elif self._allow_lan:
+        elif is_active:
+            icon_color = "#FFFFFF"
+            bgcolor = ft.Colors.with_opacity(0.18, "#A855F7")
+            border = ft.Border.all(1.0, ft.Colors.with_opacity(0.35, "#A855F7"))
             shadow = ft.BoxShadow(
                 spread_radius=0,
-                blur_radius=6,
-                color=ft.Colors.with_opacity(0.25, "#10b981"),
+                blur_radius=10,
+                color=ft.Colors.with_opacity(0.25, "#A855F7"),
                 offset=ft.Offset(0, 0),
             )
         else:
+            icon_color = "rgba(255, 255, 255, 0.45)"
+            bgcolor = ft.Colors.with_opacity(0.03, ft.Colors.WHITE)
+            border = ft.Border.all(1.0, ft.Colors.with_opacity(0.06, ft.Colors.WHITE))
             shadow = None
 
         return LanButtonStyle(
@@ -132,7 +120,7 @@ class NavigationController:
         )
 
     def get_quick_connect_style(self, is_running: bool) -> QuickConnectStyle:
-        """Compute dynamic Quick Connect button style token based on connection status."""
+        """Compute dynamic Quick Connect/Disconnect button style token based on connection status."""
         tooltip = (
             t("dashboard.quick_disconnect", default="Quick Disconnect")
             if is_running
@@ -141,31 +129,28 @@ class NavigationController:
         if is_running:
             return QuickConnectStyle(
                 tooltip=tooltip,
-                icon_color="#f43f5e",
-                bgcolor=ft.Colors.with_opacity(0.08, "#f43f5e"),
-                border=ft.Border.all(1.0, ft.Colors.with_opacity(0.25, "#f43f5e")),
+                icon_color="#F87171",
+                bgcolor=ft.Colors.with_opacity(0.08, "#EF4444"),
+                border=ft.Border.all(1.0, ft.Colors.with_opacity(0.25, "#EF4444")),
             )
         return QuickConnectStyle(
             tooltip=tooltip,
-            icon_color="#c084fc",
-            bgcolor=ft.Colors.with_opacity(0.1, "#a855f7"),
-            border=ft.Border.all(1.0, ft.Colors.with_opacity(0.3, "#a855f7")),
+            icon_color="rgba(255, 255, 255, 0.45)",
+            bgcolor=ft.Colors.with_opacity(0.03, ft.Colors.WHITE),
+            border=ft.Border.all(1.0, ft.Colors.with_opacity(0.06, ft.Colors.WHITE)),
         )
 
     def get_nav_item_style(self, item_tab_id: str) -> NavItemStyle:
         """Compute dynamic Nav Item style token based on active route."""
         is_active = item_tab_id == self._active_tab
-        if item_tab_id == "sni_spoof" and self._sni_spoof_enabled:
-            icon_color = "#4ADE80"
-        else:
-            icon_color = "#c084fc" if is_active else AppColors.ON_SURFACE_VARIANT
-        bgcolor = ft.Colors.with_opacity(0.2, "#6d28d9") if is_active else ft.Colors.TRANSPARENT
-        border = ft.Border.all(1.2, ft.Colors.with_opacity(0.5, "#a855f7")) if is_active else None
+        icon_color = "#FFFFFF" if is_active else "rgba(255, 255, 255, 0.45)"
+        bgcolor = ft.Colors.with_opacity(0.18, "#A855F7") if is_active else ft.Colors.TRANSPARENT
+        border = ft.Border.all(1.0, ft.Colors.with_opacity(0.35, "#A855F7")) if is_active else None
         shadow = (
             ft.BoxShadow(
                 spread_radius=0,
-                blur_radius=12,
-                color=ft.Colors.with_opacity(0.3, "#7c3aed"),
+                blur_radius=10,
+                color=ft.Colors.with_opacity(0.25, "#A855F7"),
                 offset=ft.Offset(0, 0),
             )
             if is_active

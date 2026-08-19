@@ -23,15 +23,14 @@ class MetricCard(ft.Container):
     ):
         header_row = ft.Row(
             [
-                ft.Icon(icon, size=16, color=icon_color),
                 ft.Text(
                     title,
                     size=11,
-                    weight=ft.FontWeight.W_600,
-                    color=AppColors.ON_SURFACE_VARIANT,
+                    weight=ft.FontWeight.W_400,
+                    color="#94A3B8",
                 ),
             ],
-            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            alignment=ft.MainAxisAlignment.START,
         )
 
         content_column = ft.Column(
@@ -44,18 +43,12 @@ class MetricCard(ft.Container):
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
         )
 
-        glass = create_glass_container(
-            content=content_column,
-            padding=padding,
-            border_radius=12,
-        )
-
         super().__init__(
-            content=glass.content,
-            bgcolor=glass.bgcolor,
-            border=glass.border,
-            border_radius=glass.border_radius,
-            padding=glass.padding,
+            content=content_column,
+            bgcolor=ft.Colors.with_opacity(0.03, ft.Colors.WHITE),
+            border=ft.Border.all(1, ft.Colors.with_opacity(0.06, ft.Colors.WHITE)),
+            border_radius=12,
+            padding=padding,
             expand=expand,
             height=height,
         )

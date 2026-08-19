@@ -1,9 +1,7 @@
-"""Font-size regression tests for TerminalWindow (Logs page).
+"""Regression tests for TerminalWindow (Logs page).
 
-The user flagged that button labels and the top title must NOT shrink.
-Design spec: Copy/Clear labels size=11, title size=11. The Download button
-was REMOVED (user request) and every action button shares one size class:
-height=32, radius=8, explicit width so labels never resize them.
+Design spec: Minimal title 'Live Logs' (size=13, color=#94A3B8) and 3 sleek icon action buttons
+(Stream toggle, Copy, Clear) in top-right corner.
 """
 
 from __future__ import annotations
@@ -13,19 +11,19 @@ import flet as ft
 from src.ui.components.logs.terminal_window import TerminalWindow
 
 
-def _collect_texts(control):
-    """Recursively collect all ft.Text controls in a control tree."""
+def _collect_controls(control, type_cls):
+    """Recursively collect controls of a given type in a control tree."""
     found = []
-    if isinstance(control, ft.Text):
+    if isinstance(control, type_cls):
         found.append(control)
     for attr in ("content", "controls"):
         child = getattr(control, attr, None)
         if isinstance(child, ft.Control):
-            found.extend(_collect_texts(child))
+            found.extend(_collect_controls(child, type_cls))
         elif isinstance(child, list):
             for c in child:
                 if isinstance(c, ft.Control):
-                    found.extend(_collect_texts(c))
+                    found.extend(_collect_controls(c, type_cls))
     return found
 
 
@@ -39,66 +37,33 @@ def _make_window():
     return win, log_text
 
 
-def test_action_button_labels_not_shrunk():
-    """Copy/Clear labels must be size=11 — NOT shrunk."""
+def test_terminal_title_minimal():
+    """The title must be minimal (size=13, color=#94A3B8)."""
     win, _ = _make_window()
-    texts = _collect_texts(win)
-    labels = {t.value: t for t in texts if t.value in ("Copy", "Clear")}
-    assert set(labels) == {"Copy", "Clear"}, f"missing labels: {labels}"
-    for label in labels.values():
-        assert label.size == 11, f"'{label.value}' shrunk to size {label.size}"
+    texts = _collect_controls(win, ft.Text)
+    title = [t for t in texts if t.value in ("Live Logs", "Console Output")]
+    assert title, "minimal terminal title not found"
+    assert title[0].size == 13
+    assert title[0].color == "#94A3B8"
 
 
-def test_terminal_title_not_shrunk():
-    """The 'XenRay CLI :: Main Logger' title must be size=11 — NOT shrunk."""
+def test_icon_action_bar_three_buttons():
+    """Toolbar contains exactly 3 icon buttons: stream toggle, copy, clear."""
     win, _ = _make_window()
-    texts = _collect_texts(win)
-    titles = [t for t in texts if t.value.startswith("XENRAY_CLI")]
-    assert titles, "terminal title text not found"
-    assert titles[0].size == 11
+    icon_btns = _collect_controls(win, ft.IconButton)
+    assert len(icon_btns) == 3
+    assert win._toggle_tail_btn in icon_btns
+    assert win._copy_btn in icon_btns
+    assert win._clear_btn in icon_btns
 
 
-def test_no_download_button():
-    """The Download button was removed from the Logs tab toolbar."""
+def test_toggle_tail_icon_swap():
+    """Toggling stream updates the icon between play and pause."""
     win, _ = _make_window()
-    texts = _collect_texts(win)
-    labels = {t.value for t in texts if t.value in ("Download", "download", "دانلود", "Загрузка", "下载")}
-    assert not labels, f"Download label still present: {labels}"
-    # The toolbar Row must contain exactly Copy, Clear and the Start/Stop button.
-    toolbar_rows = [
-        c
-        for c in win.content.controls
-        if isinstance(c, ft.Row) and any(isinstance(b, ft.OutlinedButton) for b in c.controls)
-    ]
-    assert toolbar_rows, "toolbar Row not found"
-    buttons = [b for row in toolbar_rows for b in row.controls]
-    assert len(buttons) == 3, f"expected Copy/Clear/Start-Stop (3 buttons), got {len(buttons)}"
-    assert all(isinstance(b, (ft.OutlinedButton, ft.FilledButton)) for b in buttons)
-
-
-def test_action_buttons_uniform_size():
-    """Copy/Clear/Start-Stop must share one size class: height=32, radius=8."""
-    win, _ = _make_window()
-    toolbar_rows = [
-        c
-        for c in win.content.controls
-        if isinstance(c, ft.Row) and any(isinstance(b, ft.OutlinedButton) for b in c.controls)
-    ]
-    buttons = [b for row in toolbar_rows for b in row.controls]
-
-    for btn in buttons:
-        assert btn.height == 32, f"{btn} height {btn.height} != 32"
-        assert btn.width is not None, f"{btn} has no explicit width (resize risk)"
-        shape = btn.style.shape
-        assert shape is not None and shape.radius == 8, f"{btn} radius != 8"
-        assert getattr(btn.style, "text_style", None) is None, f"{btn} has text_style override"
-
-
-def test_toggle_tail_button_visuals():
-    """Start/Stop keeps its high-contrast filled identity (green Start / red Stop)."""
-    win, _ = _make_window()
-    btn = win._toggle_tail_btn
-    assert isinstance(btn, ft.FilledButton)
-    assert btn.style.bgcolor == "#4ADE80"
-    assert btn.style.color == ft.Colors.WHITE
-    assert btn.style.shape.radius == 8
+    assert win._toggle_tail_btn.icon == ft.Icons.PLAY_ARROW_ROUNDED
+    win._on_toggle_handler(None)
+    assert win._tailing_enabled is True
+    assert win._toggle_tail_btn.icon == ft.Icons.PAUSE_ROUNDED
+    win._on_toggle_handler(None)
+    assert win._tailing_enabled is False
+    assert win._toggle_tail_btn.icon == ft.Icons.PLAY_ARROW_ROUNDED

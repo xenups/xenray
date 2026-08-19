@@ -289,7 +289,8 @@ class MainWindow:
     def _setup_page(self) -> None:
         self._page.padding = 0
         self._page.theme_mode = ft.ThemeMode.DARK
-        self._page.theme = ft.Theme(font_family="Roboto")
+        self._page.theme = ft.Theme(font_family="Segoe UI Light")
+        self._page.dark_theme = ft.Theme(font_family="Segoe UI Light")
         self._page.fonts = FONT_URLS
 
         saved_mode = self._app_context.settings.get_connection_mode()

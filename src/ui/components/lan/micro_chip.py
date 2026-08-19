@@ -10,7 +10,7 @@ from src.core.i18n import t
 
 
 class MicroChip(ft.Container):
-    """Reusable micro chip container for displaying IP/Port details with copy button."""
+    """Reusable micro chip container for displaying IP/Port details with tap-to-copy glass styling."""
 
     def __init__(
         self,
@@ -21,47 +21,48 @@ class MicroChip(ft.Container):
         on_copy: Optional[Callable[[str], None]] = None,
         is_rtl: bool = False,
     ):
+        self._on_copy = on_copy
         self._val_ctrl = val_text_ctrl or ft.Text(
             value,
-            size=11,
-            weight=ft.FontWeight.BOLD,
+            size=12,
+            weight=ft.FontWeight.W_400,
             color="white",
-            selectable=True,
+            selectable=False,
             overflow=ft.TextOverflow.ELLIPSIS,
         )
-        val_ctrl = self._val_ctrl
 
-        copy_btn = ft.IconButton(
-            icon=ft.Icons.COPY,
-            icon_size=14,
-            icon_color="#8B5CF6",
-            on_click=lambda e, v=value: on_copy(v) if on_copy else None,
-            style=ft.ButtonStyle(padding=ft.Padding.all(2)),
+        copy_icon = ft.Icon(
+            ft.Icons.COPY_ROUNDED,
+            size=12,
+            color="#94A3B8",
         )
 
         super().__init__(
             expand=1,
-            bgcolor="#13141C",
-            padding=ft.Padding.symmetric(horizontal=8, vertical=4),
-            border_radius=8,
-            border=ft.Border.all(1, ft.Colors.with_opacity(0.08, ft.Colors.WHITE)),
+            bgcolor=ft.Colors.with_opacity(0.03, ft.Colors.WHITE),
+            padding=ft.Padding.symmetric(horizontal=10, vertical=6),
+            border_radius=10,
+            border=ft.Border.all(1, ft.Colors.with_opacity(0.06, ft.Colors.WHITE)),
+            on_click=lambda e: self._on_copy(self._val_ctrl.value) if self._on_copy else None,
+            ink=True,
+            tooltip=t("lan.tap_to_copy", default="Tap to Copy"),
             content=ft.Row(
                 [
-                    copy_btn,
                     ft.Column(
                         [
                             ft.Text(
                                 t(label_key, default=default_label),
                                 size=10,
-                                color="#8E8C99",
-                                weight=ft.FontWeight.W_500,
+                                color="#94A3B8",
+                                weight=ft.FontWeight.W_300,
                                 rtl=is_rtl,
                             ),
-                            val_ctrl,
+                            self._val_ctrl,
                         ],
                         spacing=1,
                         expand=True,
                     ),
+                    copy_icon,
                 ],
                 alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,

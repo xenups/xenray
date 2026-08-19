@@ -68,9 +68,7 @@ class ConnectionTester:
         for url in GENERATE_204_URLS:
             start_time = time.time()
             try:
-                with requests.get(
-                    url, proxies=proxies, timeout=timeout, stream=True
-                ) as resp:
+                with requests.get(url, proxies=proxies, timeout=timeout, stream=True) as resp:
                     latency = int((time.time() - start_time) * 1000)
                     if resp.status_code < 400:
                         return True, latency
@@ -186,9 +184,7 @@ class ConnectionTester:
         """
         sock = None
         try:
-            sock = socket.create_connection(
-                (sni["host"], sni["port"]), timeout=CONNECT_TIMEOUT
-            )
+            sock = socket.create_connection((sni["host"], sni["port"]), timeout=CONNECT_TIMEOUT)
             sock.settimeout(CONNECT_TIMEOUT)
             start_time = time.monotonic()
             sock.sendall(SNI_PROBE_PAYLOAD)
@@ -269,14 +265,10 @@ class ConnectionTester:
             start_time = time.time()
             if NetworkUtils.check_proxy_connectivity(socks_port):
                 latency = int((time.time() - start_time) * 1000)
-                logger.info(
-                    f"[ConnectionTester] SOCKS proxy verified at 127.0.0.1:{socks_port} ({latency}ms)"
-                )
+                logger.info(f"[ConnectionTester] SOCKS proxy verified at 127.0.0.1:{socks_port} ({latency}ms)")
                 return (True, t("connection.latency_ms", value=latency), None)
 
-            logger.warning(
-                f"[ConnectionTester] HTTP health check failed through SOCKS proxy {socks_port}"
-            )
+            logger.warning(f"[ConnectionTester] HTTP health check failed through SOCKS proxy {socks_port}")
             return False, t("connection.conn_error"), None
 
         # ── Direct Xray instance mode (proxy mode / Linux) ──
@@ -328,9 +320,7 @@ class ConnectionTester:
             # retry rides out transient stalls; each request is bounded by the 3s
             # CONNECT_TIMEOUT and the probe never downloads a response body.
             for attempt in range(2):
-                ok, latency = ConnectionTester._probe_204(
-                    proxies, timeout=CONNECT_TIMEOUT
-                )
+                ok, latency = ConnectionTester._probe_204(proxies, timeout=CONNECT_TIMEOUT)
                 if ok:
                     country_data = None
                     if fetch_country:
@@ -383,9 +373,7 @@ class ConnectionTester:
         """Run test in a dedicated thread and invoke callback(success, result_str, country_data)."""
 
         def _wrapper():
-            success, result, country_data = ConnectionTester.test_connection_sync(
-                profile_config, fetch_country
-            )
+            success, result, country_data = ConnectionTester.test_connection_sync(profile_config, fetch_country)
             if callback:
                 callback(success, result, country_data)
 

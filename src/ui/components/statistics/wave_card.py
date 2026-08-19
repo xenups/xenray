@@ -15,67 +15,63 @@ class WaveCard(ft.Container):
     """Component wrapping WaveVisualizer with real-time legend header."""
 
     def __init__(self, wave_chart: WaveVisualizer):
-        MUTED_WHITE = AppColors.ON_SURFACE_VARIANT
-        CYAN = ft.Colors.CYAN_400
-
         self.wave_chart = wave_chart
-
         wave_header = ft.Row(
             [
                 ft.Row(
                     [
-                        ft.Icon(ft.Icons.GRAPHIC_EQ_ROUNDED, size=16, color=CYAN),
+                        ft.Container(
+                            width=6,
+                            height=6,
+                            border_radius=3,
+                            bgcolor="#38BDF8",
+                        ),
                         ft.Text(
                             t(
                                 "stats.realtime_wave",
                                 default="Real-Time Traffic Wave Stream",
                             ),
-                            size=12,
-                            weight=ft.FontWeight.W_600,
-                            color=MUTED_WHITE,
+                            size=11,
+                            weight=ft.FontWeight.W_300,
+                            color=ft.Colors.with_opacity(0.60, ft.Colors.WHITE),
                         ),
                     ],
                     spacing=6,
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 ),
                 ft.Row(
                     [
-                        ft.Container(width=8, height=8, border_radius=4, bgcolor="#a855f7"),
+                        ft.Container(width=6, height=6, border_radius=3, bgcolor="#a855f7"),
                         ft.Text(
                             t("stats.download", default="Download"),
-                            size=11,
-                            color=MUTED_WHITE,
-                            weight=ft.FontWeight.W_500,
+                            size=10,
+                            color=ft.Colors.with_opacity(0.50, ft.Colors.WHITE),
+                            weight=ft.FontWeight.W_300,
                         ),
-                        ft.Container(width=8),
-                        ft.Container(width=8, height=8, border_radius=4, bgcolor="#38bdf8"),
+                        ft.Container(width=6),
+                        ft.Container(width=6, height=6, border_radius=3, bgcolor="#38bdf8"),
                         ft.Text(
                             t("stats.upload", default="Upload"),
-                            size=11,
-                            color=MUTED_WHITE,
-                            weight=ft.FontWeight.W_500,
+                            size=10,
+                            color=ft.Colors.with_opacity(0.50, ft.Colors.WHITE),
+                            weight=ft.FontWeight.W_300,
                         ),
                     ],
                     spacing=4,
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 ),
             ],
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
         )
 
-        glass = create_glass_container(
-            content=ft.Column([wave_header, self.wave_chart], spacing=8),
-            expand=True,
-            padding=16,
-        )
-
         super().__init__(
-            content=glass.content,
-            bgcolor=glass.bgcolor,
-            border=glass.border,
-            border_radius=glass.border_radius,
-            blur=glass.blur,
-            padding=glass.padding,
-            expand=glass.expand,
+            content=ft.Column([wave_header, self.wave_chart], spacing=10),
+            bgcolor=ft.Colors.with_opacity(0.03, ft.Colors.WHITE),
+            border=ft.Border.all(1, ft.Colors.with_opacity(0.06, ft.Colors.WHITE)),
+            border_radius=14,
+            padding=16,
+            expand=True,
         )
 
     def update_telemetry(self, dl_heights: List[float], ul_heights: List[float]) -> None:

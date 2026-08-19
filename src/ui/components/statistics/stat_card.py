@@ -6,11 +6,9 @@ from typing import Optional
 
 import flet as ft
 
-from src.ui.theme import AppColors, create_glass_container
-
 
 class StatCard(ft.Container):
-    """Reusable stat card container displaying title, primary metric, and secondary sub-metric."""
+    """Reusable stat card column displaying title, primary metric, and secondary sub-metric."""
 
     def __init__(
         self,
@@ -23,60 +21,56 @@ class StatCard(ft.Container):
     ):
         self._val_control = val_control
         self._sub_val_control = sub_val_control
+
+        val_control.size = 18
+        val_control.weight = ft.FontWeight.W_300
+        val_control.color = ft.Colors.WHITE
+
         card_content = ft.Column(
             [
                 ft.Row(
                     [
                         ft.Container(
-                            content=ft.Icon(icon, size=15, color=icon_color),
-                            width=26,
-                            height=26,
-                            border_radius=13,
-                            bgcolor=ft.Colors.with_opacity(0.16, icon_color),
-                            alignment=ft.Alignment.CENTER,
+                            width=6,
+                            height=6,
+                            border_radius=3,
+                            bgcolor=icon_color,
                         ),
                         ft.Text(
                             title,
                             size=11,
-                            weight=ft.FontWeight.W_600,
-                            color=AppColors.ON_SURFACE_VARIANT,
+                            weight=ft.FontWeight.W_300,
+                            color=ft.Colors.with_opacity(0.65, ft.Colors.WHITE),
                             expand=True,
                         ),
                     ],
-                    spacing=8,
-                    alignment=ft.MainAxisAlignment.START,
+                    spacing=6,
                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 ),
                 val_control,
                 ft.Row(
                     [
-                        ft.Text(sub_title, size=11, color=AppColors.ON_SURFACE_VARIANT),
+                        ft.Text(
+                            sub_title,
+                            size=10,
+                            weight=ft.FontWeight.W_200,
+                            color=ft.Colors.with_opacity(0.40, ft.Colors.WHITE),
+                        ),
                         sub_val_control,
                     ],
-                    spacing=2,
+                    spacing=3,
                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 ),
             ],
-            spacing=6,
-            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-        )
-
-        glass_card = create_glass_container(
-            content=card_content,
-            expand=True,
-            padding=14,
-            height=110,
+            spacing=4,
+            alignment=ft.MainAxisAlignment.CENTER,
         )
 
         super().__init__(
-            content=glass_card.content,
-            expand=glass_card.expand,
-            padding=glass_card.padding,
-            height=glass_card.height,
-            bgcolor=glass_card.bgcolor,
-            border=glass_card.border,
-            border_radius=glass_card.border_radius,
-            blur=glass_card.blur,
+            content=card_content,
+            expand=True,
+            padding=ft.Padding.symmetric(horizontal=8, vertical=4),
+            bgcolor=ft.Colors.TRANSPARENT,
         )
 
     def update_telemetry(self, value: str, sub_value: Optional[str] = None) -> None:

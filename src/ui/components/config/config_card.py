@@ -109,9 +109,9 @@ class ConfigCard(ft.Container):
                 protocol = outbound.get("protocol").upper()
                 break
 
-        # Ping state
-        last_ping = "..."
-        last_ping_color = ft.Colors.GREY_500
+        # Ping state — uninspected profiles default to a subtle "-" indicator without blocking selection
+        last_ping = "-"
+        last_ping_color = "#94A3B8"
         if cached_ping:
             cached_text, last_ping_color, cached_val = cached_ping
             if cached_val is not None and cached_val < 999999:
@@ -133,12 +133,19 @@ class ConfigCard(ft.Container):
                 last_ping = raw_ping
             latency_val = self._profile.get("last_latency_val", 999999)
             last_ping_color = self._get_ping_color(latency_val)
+        elif self._profile.get("ping") is not None:
+            latency_val = self._profile.get("ping")
+            if isinstance(latency_val, (int, float)) and latency_val < 999999:
+                last_ping = t("connection.latency_ms", value=int(latency_val))
+                last_ping_color = self._get_ping_color(latency_val)
+            else:
+                last_ping = str(latency_val)
 
         self.latency_text = ft.Text(
             last_ping,
             size=11,
-            color=last_ping_color if last_ping != "..." else ft.Colors.GREY_500,
-            weight=ft.FontWeight.BOLD if last_ping != "..." else ft.FontWeight.NORMAL,
+            color=last_ping_color if last_ping not in ("-", "—", "...", "N/A") else "#94A3B8",
+            weight=ft.FontWeight.W_400,
         )
 
         # Ping badge — clicking it re-inspects THIS card through the shared
@@ -201,15 +208,17 @@ class ConfigCard(ft.Container):
             [
                 ft.Text(
                     name,
-                    weight=ft.FontWeight.BOLD,
-                    size=14,
+                    weight=ft.FontWeight.W_300,
+                    size=15,
+                    color=ft.Colors.WHITE,
                     no_wrap=True,
                     overflow=ft.TextOverflow.ELLIPSIS,
                 ),
                 ft.Text(
                     f"{protocol} | {address}:{port}",
                     size=11,
-                    color=ft.Colors.GREY_500,
+                    weight=ft.FontWeight.W_300,
+                    color="#94A3B8",
                     no_wrap=True,
                     overflow=ft.TextOverflow.ELLIPSIS,
                 ),
@@ -259,6 +268,8 @@ class ConfigCard(ft.Container):
             bgcolor="#161922",
             border_radius=ft.BorderRadius.all(10.5),
             clip_behavior=ft.ClipBehavior.HARD_EDGE,
+            on_click=lambda e: self._on_select(self._profile) if self._on_select else None,
+            ink=True,
         )
 
     def _update_border_style(self):
@@ -269,9 +280,9 @@ class ConfigCard(ft.Container):
         else:
             self._neon._disc.gradient = None
             if self._is_selected:
-                self.border = ft.Border.all(width=2, color=ft.Colors.BLUE)
+                self.border = ft.Border.all(width=1, color=ft.Colors.with_opacity(0.40, "#A855F7"))
             else:
-                self.border = ft.Border.all(width=1, color=ft.Colors.OUTLINE)
+                self.border = ft.Border.all(width=1, color=ft.Colors.with_opacity(0.06, ft.Colors.WHITE))
 
     def _on_card_size_changed(self, e):
         """Size the rotating border disc to this card's diagonal.
@@ -431,7 +442,7 @@ class ConfigCard(ft.Container):
         """Update ping with pre-calculated color."""
         self.latency_text.value = latency_str
         self.latency_text.color = color
-        self.latency_text.weight = ft.FontWeight.BOLD
+        self.latency_text.weight = ft.FontWeight.W_400
         try:
             if self.latency_text.page:
                 self.latency_text.update()

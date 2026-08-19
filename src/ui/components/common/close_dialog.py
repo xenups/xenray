@@ -1,4 +1,4 @@
-"""Close Confirmation Dialog Component."""
+"""Close Confirmation Dialog Component — Apple-style glassmorphism exit/minimize dialog."""
 
 import flet as ft
 from loguru import logger
@@ -7,7 +7,7 @@ from src.core.i18n import t
 
 
 class CloseDialog(ft.AlertDialog):
-    """Redesigned premium dialog asking user to minimize or exit."""
+    """Redesigned minimal glass dialog asking user to minimize or exit."""
 
     def __init__(self, on_exit: callable, on_minimize: callable, app_context):
         self._on_exit_callback = on_exit
@@ -16,87 +16,107 @@ class CloseDialog(ft.AlertDialog):
 
         # Define checkbox early so the handlers can reference it
         self.remember_checkbox = ft.Checkbox(
-            label=t("close_dialog.remember"),
+            label=t("close_dialog.remember", default="Always minimize to tray"),
             value=False,
-            label_style=ft.TextStyle(size=13, color=ft.Colors.with_opacity(0.7, ft.Colors.ON_SURFACE)),
-            # White inside when empty, blue accent checkmark
-            fill_color={
-                ft.ControlState.SELECTED: ft.Colors.BLUE_ACCENT,
-                ft.ControlState.DEFAULT: ft.Colors.WHITE,
-            },
+            label_style=ft.TextStyle(
+                size=12,
+                color="#94A3B8",
+                weight=ft.FontWeight.W_300,
+            ),
+            active_color="#A855F7",
             check_color=ft.Colors.WHITE,
         )
 
         super().__init__(
             modal=True,
             content=self._build_content(),
-            shape=ft.RoundedRectangleBorder(radius=15),
-            bgcolor=ft.Colors.with_opacity(0.95, ft.Colors.SURFACE),
+            shape=ft.RoundedRectangleBorder(radius=18),
+            bgcolor=ft.Colors.with_opacity(0.95, "#141023"),
         )
 
     def _build_content(self):
         try:
-            title_text = t("close_dialog.title")
-            message_text = t("close_dialog.message")
-            exit_label = t("close_dialog.exit")
-            minimize_label = t("close_dialog.minimize")
+            title_text = t("close_dialog.title", default="Exit Application")
+            message_text = t(
+                "close_dialog.message",
+                default="Would you like to minimize XenRay to tray or exit completely?",
+            )
+            exit_label = t("close_dialog.exit", default="Exit")
+            minimize_label = t("close_dialog.minimize", default="Minimize to Tray")
         except Exception:
-            title_text, message_text = "Exit", "Exit or Minimize?"
-            exit_label, minimize_label = "Exit", "Minimize"
+            title_text = "Exit Application"
+            message_text = "Would you like to minimize XenRay to tray or exit completely?"
+            exit_label = "Exit"
+            minimize_label = "Minimize to Tray"
+
+        header = ft.Text(
+            title_text,
+            size=16,
+            weight=ft.FontWeight.W_300,
+            color=ft.Colors.WHITE,
+            style=ft.TextStyle(letter_spacing=0.6),
+        )
+
+        message = ft.Text(
+            message_text,
+            size=13,
+            weight=ft.FontWeight.W_300,
+            color="#94A3B8",
+        )
+
+        exit_btn = ft.OutlinedButton(
+            content=ft.Text(
+                exit_label,
+                size=12,
+                color="#FCA5A5",
+                weight=ft.FontWeight.W_400,
+            ),
+            style=ft.ButtonStyle(
+                bgcolor=ft.Colors.with_opacity(0.15, "#EF4444"),
+                side=ft.BorderSide(1.0, ft.Colors.with_opacity(0.40, "#EF4444")),
+                shape=ft.RoundedRectangleBorder(radius=10),
+                padding=ft.Padding.symmetric(horizontal=16, vertical=8),
+            ),
+            on_click=self._handle_exit,
+        )
+
+        minimize_btn = ft.OutlinedButton(
+            content=ft.Text(
+                minimize_label,
+                size=12,
+                color=ft.Colors.WHITE,
+                weight=ft.FontWeight.W_400,
+            ),
+            style=ft.ButtonStyle(
+                bgcolor=ft.Colors.with_opacity(0.06, ft.Colors.WHITE),
+                side=ft.BorderSide(1.0, ft.Colors.with_opacity(0.10, ft.Colors.WHITE)),
+                shape=ft.RoundedRectangleBorder(radius=10),
+                padding=ft.Padding.symmetric(horizontal=16, vertical=8),
+            ),
+            on_click=self._handle_minimize,
+        )
+
+        buttons_row = ft.Row(
+            [exit_btn, minimize_btn],
+            alignment=ft.MainAxisAlignment.END,
+            spacing=10,
+        )
 
         return ft.Container(
             content=ft.Column(
                 [
-                    # Header
-                    ft.Row(
-                        [
-                            ft.Icon(
-                                ft.Icons.EXIT_TO_APP_ROUNDED,
-                                color=ft.Colors.BLUE_ACCENT,
-                                size=28,
-                            ),
-                            ft.Text(title_text, size=18, weight=ft.FontWeight.BOLD),
-                        ],
-                        alignment=ft.MainAxisAlignment.START,
-                        spacing=10,
-                    ),
-                    # Message
-                    ft.Text(message_text, size=14, opacity=0.9),
-                    ft.Divider(height=10, color=ft.Colors.TRANSPARENT),
-                    # Buttons Row (Moved into content for precise placement)
-                    ft.Row(
-                        [
-                            ft.TextButton(
-                                exit_label,
-                                on_click=self._handle_exit,
-                                icon=ft.Icons.POWER_SETTINGS_NEW,
-                                icon_color=ft.Colors.RED_ACCENT,
-                                style=ft.ButtonStyle(color=ft.Colors.RED_ACCENT),
-                            ),
-                            ft.ElevatedButton(
-                                minimize_label,
-                                on_click=self._handle_minimize,
-                                icon=ft.Icons.MINIMIZE,
-                                style=ft.ButtonStyle(
-                                    bgcolor=ft.Colors.BLUE_ACCENT,
-                                    color=ft.Colors.WHITE,
-                                ),
-                            ),
-                        ],
-                        alignment=ft.MainAxisAlignment.START,
-                        spacing=10,
-                    ),
-                    # Checkbox (Under the buttons)
-                    ft.Container(
-                        content=self.remember_checkbox,
-                        margin=ft.Margin.only(top=5),
-                    ),
+                    header,
+                    message,
+                    ft.Container(height=4),
+                    self.remember_checkbox,
+                    ft.Container(height=4),
+                    buttons_row,
                 ],
                 tight=True,
                 spacing=10,
             ),
-            padding=10,
-            width=320,
+            padding=ft.Padding.symmetric(horizontal=8, vertical=6),
+            width=340,
         )
 
     def _handle_exit(self, e):

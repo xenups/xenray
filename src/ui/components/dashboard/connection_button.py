@@ -1,4 +1,5 @@
-"""Connection button component with animated glow, sweep disc, and embedded status/timer."""
+"""Connection button component with animated glow, rotating neon sweep ring,
+and embedded status/timer."""
 
 from __future__ import annotations
 
@@ -18,52 +19,50 @@ class ConnectionButton(ft.Container):
     """Flet composite widget for the circular connection power button."""
 
     def __init__(self, on_click: Optional[Callable] = None):
-        # 1. Main Power Icon (Proportional size = 42)
-        self._icon = ft.Icon(ft.Icons.POWER_SETTINGS_NEW, size=42, color=ft.Colors.WHITE)
+        # 1. Main Power Icon — dark indigo on the bold lilac core.
+        self._icon = ft.Icon(ft.Icons.POWER_SETTINGS_NEW, size=44, color="#1E1B4B")
 
-        # 2. Connection Status Text inside button (size=12, W_500)
+        # 2. Connection Status Text inside button
         self._status_text = ft.Text(
             "Disconnected",
-            size=12,
+            size=13,
             weight=ft.FontWeight.W_500,
-            color=ft.Colors.WHITE_70,
+            color="#1E1B4B",
             text_align=ft.TextAlign.CENTER,
             no_wrap=True,
             overflow=ft.TextOverflow.ELLIPSIS,
         )
 
-        # 3. Connection Timer inside button (size=11, opacity=0.5, monospace)
+        # 3. Connection Timer inside button (subtle muted monospace timer)
         self._uptime_text = ft.Text(
             "00:00:00",
-            size=11,
-            color=ft.Colors.with_opacity(0.5, ft.Colors.WHITE),
+            size=10,
+            color="#8B8BA7",
             font_family="monospace",
+            weight=ft.FontWeight.W_400,
             text_align=ft.TextAlign.CENTER,
+            visible=True,
         )
 
         # 4. Controller handling state, animations, and transitions
         self._controller = ConnectionButtonController(self, on_click)
 
-        # 5. Vertical Content Column centered inside circular power button
+        # 5. Vertical content column inside the circular button
         self._content_column = ft.Column(
-            controls=[
-                self._icon,
-                self._status_text,
-                self._uptime_text,
-            ],
+            controls=[self._icon, self._status_text, self._uptime_text],
             alignment=ft.MainAxisAlignment.CENTER,
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            spacing=3,
+            spacing=4,
         )
 
-        # 6. Outer Ambient Glow Layer
+        # 6. Outer ambient glow layer (soft blurred halo behind the disc)
         self._glow_layer = ConnectionGlowLayer()
 
-        # 7. Rotating sweep disc (behind button)
+        # 7. Rotating neon sweep ring (the disc the controller spins).
         self._border_container = ft.Container(
-            width=170,
-            height=170,
-            border_radius=85,
+            width=178,
+            height=178,
+            border_radius=89,
             gradient=None,
             visible=False,
             rotate=ft.Rotate(angle=0.0),
@@ -73,34 +72,48 @@ class ConnectionButton(ft.Container):
             ),
         )
 
-        # 8. Static opaque mask behind button (165px)
+        # 8. Static opaque mask behind button so the sweep only shows as a rim.
         self._mask = ft.Container(
             width=165,
             height=165,
             border_radius=82.5,
-            bgcolor="#0f172a",
+            bgcolor="#0B0813",
             visible=False,
         )
 
-        # 9. Inner clickable 165x165 glass button
+        # 9. Inner clickable 165x165 button — 100% solid opaque lilac core (never blends with underlying glow)
         self._button = ft.Container(
             content=self._content_column,
             width=165,
             height=165,
             border_radius=82.5,
-            bgcolor=ft.Colors.with_opacity(0.15, "#1e293b"),
-            border=ft.Border.all(1.5, ft.Colors.with_opacity(0.2, ft.Colors.WHITE)),
+            opacity=1.0,
+            bgcolor="#EDE9FE",
+            gradient=ft.LinearGradient(
+                begin=ft.Alignment.TOP_LEFT,
+                end=ft.Alignment.BOTTOM_RIGHT,
+                colors=[
+                    "#F5F3FF",
+                    "#EDE9FE",
+                    "#DDD6FE",
+                ],
+            ),
+            border=ft.Border.all(2.0, ft.Colors.WHITE),
             on_click=self._controller.on_button_click,
             alignment=ft.Alignment.CENTER,
             padding=ft.Padding.symmetric(horizontal=10, vertical=6),
+            shadow=ft.BoxShadow(
+                spread_radius=0,
+                blur_radius=16,
+                color=ft.Colors.with_opacity(0.35, "#A78BFA"),
+                offset=ft.Offset(0, 3),
+            ),
         )
 
         super().__init__(
             content=ft.Stack(
                 [
                     self._glow_layer,
-                    self._border_container,
-                    self._mask,
                     self._button,
                 ],
                 alignment=ft.Alignment.CENTER,
@@ -197,59 +210,45 @@ class ConnectionButton(ft.Container):
     # Public API Delegations
     # -----------------------------------------------------------------------
     def did_mount(self) -> None:
-        """Flet lifecycle hook."""
         self._controller.did_mount()
 
     def update_theme(self, is_dark: bool) -> None:
-        """Update button appearance based on theme."""
         self._controller.update_theme(is_dark)
 
     def set_connected(self, status_label: Optional[str] = None) -> None:
-        """Set button to connected state."""
         self._controller.set_connected(status_label)
 
     def set_disconnected(self, status_label: Optional[str] = None) -> None:
-        """Set button to disconnected state."""
         self._controller.set_disconnected(status_label)
 
     def set_connecting(self, status_label: Optional[str] = None) -> None:
-        """Set connecting state with amber pulse."""
         self._controller.set_connecting(status_label)
 
     def set_disconnecting(self, status_label: str = "Disconnecting...") -> None:
-        """Set disconnecting state with red pulse."""
         self._controller.set_disconnecting(status_label)
 
     def set_step(self, step_msg: str) -> None:
-        """Update status text during connection step transitions."""
         self._controller.set_step(step_msg)
 
     def start_ping_animation(self) -> None:
-        """Start native neon sweep around button."""
         self._controller.start_ping_animation()
 
     def stop_ping_animation(self) -> None:
-        """Remove neon sweep and mask instantly."""
         self._controller.stop_ping_animation()
 
-    def set_pre_connection_ping(self, latency_text: str | int | float, is_success: bool) -> None:
-        """Show pre-connection latency result on status line."""
+    def set_pre_connection_ping(self, latency_text, is_success: bool) -> None:
         self._controller.set_pre_connection_ping(latency_text, is_success)
 
-    def update_uptime(self, elapsed: int | float | str) -> None:
-        """Update uptime timer text inside button."""
+    def update_uptime(self, elapsed) -> None:
         self._controller.update_uptime(elapsed)
 
     def set_uptime(self, uptime_str: str) -> None:
-        """Update uptime timer text inside button."""
         self._controller.update_uptime(uptime_str)
 
     def set_online_status(self, is_online: bool) -> None:
-        """Update online status indicator."""
         self._controller.set_online_status(is_online)
 
     def update_network_activity(self, total_bps: float) -> None:
-        """Update glow layer using network activity."""
         self._controller.update_network_activity(total_bps)
 
     def _has_page_attached(self) -> bool:

@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 import flet as ft
 
 from src.core.i18n import t
+from src.utils.clipboard import get_clipboard_text
 from src.utils.link_parser import LinkParser
 
 
@@ -27,45 +28,40 @@ class AddServerDialog(ft.AlertDialog):
         self._on_create_chain = on_create_chain
 
         WHITE = ft.Colors.WHITE
-        MUTED = ft.Colors.GREY_500
+        MUTED = "#94A3B8"
         ACCENT = "#A78BFA"
 
-        title_control = ft.Row(
-            controls=[
-                ft.Icon(
-                    ft.Icons.ADD_LINK_ROUNDED,
-                    color=ACCENT,
-                    size=20,
-                ),
-                ft.Text(
-                    t("add_dialog.title", default="Add Server or Subscription"),
-                    size=15,
-                    weight=ft.FontWeight.BOLD,
-                    color=WHITE,
-                ),
-            ],
-            spacing=8,
+        title_control = ft.Text(
+            t("add_dialog.title", default="Add Server"),
+            size=16,
+            weight=ft.FontWeight.W_300,
+            color=WHITE,
+            style=ft.TextStyle(letter_spacing=0.6),
         )
 
-        # Single Clean Input Field with Prefix Margin Container
+        # Single Clean Input Field with Paste suffix button
         self._content_input = ft.TextField(
-            prefix=ft.Container(
-                content=ft.Icon(ft.Icons.TERMINAL_ROUNDED, color=ACCENT, size=18),
-                margin=ft.Margin.only(right=10, left=4),
-            ),
             hint_text=t(
                 "add_dialog.link_hint",
                 default="Paste vless://, vmess://, ss:// or subscription URL",
             ),
-            hint_style=ft.TextStyle(size=12, color=MUTED),
-            bgcolor="#1A1B26",
-            border_color=ft.Colors.with_opacity(0.25, "#7C3AED"),
-            focused_border_color="#7C3AED",
+            hint_style=ft.TextStyle(size=12, color=MUTED, weight=ft.FontWeight.W_300),
+            suffix=ft.IconButton(
+                icon=ft.Icons.PASTE_ROUNDED,
+                icon_color=ACCENT,
+                icon_size=18,
+                tooltip=t("add_dialog.paste", default="Paste from clipboard"),
+                on_click=self._handle_paste,
+            ),
+            bgcolor=ft.Colors.with_opacity(0.05, WHITE),
+            border_color=ft.Colors.with_opacity(0.08, WHITE),
+            focused_border_color=ft.Colors.with_opacity(0.50, "#A855F7"),
             color=WHITE,
             cursor_color=ACCENT,
             text_size=12,
-            height=46,
-            content_padding=ft.Padding.symmetric(horizontal=12, vertical=10),
+            height=44,
+            border_radius=10,
+            content_padding=ft.Padding.symmetric(horizontal=12, vertical=8),
             autofocus=True,
             on_submit=self._handle_add,
         )
@@ -73,26 +69,23 @@ class AddServerDialog(ft.AlertDialog):
         self._cancel_btn = ft.TextButton(
             t("add_dialog.cancel", default="Cancel"),
             style=ft.ButtonStyle(
-                color=ft.Colors.GREY_400,
-                overlay_color=ft.Colors.with_opacity(0.1, WHITE),
+                color=MUTED,
             ),
             on_click=self._handle_close,
         )
 
-        self._add_btn = ft.ElevatedButton(
-            content=ft.Row(
-                [
-                    ft.Icon(ft.Icons.CHECK, size=16, color=WHITE),
-                    ft.Text(t("add_dialog.add", default="Add"), color=WHITE),
-                ],
-                spacing=4,
-                tight=True,  # Crucial: prevents ft.Row from expanding button to full width
+        self._add_btn = ft.OutlinedButton(
+            content=ft.Text(
+                t("add_dialog.add", default="Add"),
+                size=13,
+                weight=ft.FontWeight.W_400,
+                color=WHITE,
             ),
-            bgcolor="#6D28D9",
-            color=WHITE,
             style=ft.ButtonStyle(
-                shape=ft.RoundedRectangleBorder(radius=8),
-                padding=ft.Padding.symmetric(horizontal=16, vertical=8),
+                bgcolor=ft.Colors.with_opacity(0.20, "#A855F7"),
+                side=ft.BorderSide(1.0, ft.Colors.with_opacity(0.50, "#A855F7")),
+                shape=ft.RoundedRectangleBorder(radius=10),
+                padding=ft.Padding.symmetric(horizontal=18, vertical=8),
             ),
             on_click=self._handle_add,
         )
@@ -102,27 +95,49 @@ class AddServerDialog(ft.AlertDialog):
         super().__init__(
             modal=True,
             barrier_color=ft.Colors.with_opacity(0.7, ft.Colors.BLACK),
-            bgcolor="#12131C",
+            bgcolor=ft.Colors.with_opacity(0.95, "#141023"),
             shape=ft.RoundedRectangleBorder(
-                radius=16,
-                side=ft.BorderSide(1.5, ft.Colors.with_opacity(0.3, "#7C3AED")),
+                radius=18,
+                side=ft.BorderSide(1.0, ft.Colors.with_opacity(0.08, WHITE)),
             ),
             title=title_control,
             content=ft.Container(
-                width=400,  # Comfortable fixed width
+                width=420,
                 content=ft.Column(
                     controls=[
                         self._content_input,
                     ],
                     tight=True,
                     spacing=0,
-                    horizontal_alignment=ft.CrossAxisAlignment.STRETCH,  # Forces TextField to stretch across full width
+                    horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
                 ),
             ),
             actions=actions,
             actions_alignment=ft.MainAxisAlignment.END,
             actions_padding=ft.Padding.only(right=16, bottom=16, left=16),
         )
+
+    def _handle_paste(self, e=None) -> None:
+        """Paste text from clipboard directly into the input field."""
+        try:
+            clip_text = get_clipboard_text()
+            if not clip_text and hasattr(self, "page") and self.page:
+                try:
+                    clip_text = self.page.get_clipboard()
+                except Exception:
+                    pass
+            if clip_text:
+                self._content_input.value = clip_text
+                self._content_input.error_text = None
+                try:
+                    if self._content_input.page:
+                        self._content_input.update()
+                    elif hasattr(self, "page") and self.page:
+                        self.page.update()
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
     def _handle_add(self, e=None):
         """Handle the add button click. Supports single/multiple server links or subscription URLs."""
@@ -246,44 +261,39 @@ class AddServerModalContainer(ft.Container):
         self._on_create_chain = on_create_chain
 
         WHITE = ft.Colors.WHITE
-        MUTED = ft.Colors.GREY_500
+        MUTED = "#94A3B8"
         ACCENT = "#A78BFA"
 
-        title_control = ft.Row(
-            controls=[
-                ft.Icon(
-                    ft.Icons.ADD_LINK_ROUNDED,
-                    color=ACCENT,
-                    size=20,
-                ),
-                ft.Text(
-                    t("add_dialog.title", default="Add Server or Subscription"),
-                    size=15,
-                    weight=ft.FontWeight.BOLD,
-                    color=WHITE,
-                ),
-            ],
-            spacing=8,
+        title_control = ft.Text(
+            t("add_dialog.title", default="Add Server"),
+            size=16,
+            weight=ft.FontWeight.W_300,
+            color=WHITE,
+            style=ft.TextStyle(letter_spacing=0.6),
         )
 
         self._content_input = ft.TextField(
-            prefix=ft.Container(
-                content=ft.Icon(ft.Icons.TERMINAL_ROUNDED, color=ACCENT, size=18),
-                margin=ft.Margin.only(right=10, left=4),
-            ),
             hint_text=t(
                 "add_dialog.link_hint",
                 default="Paste vless://, vmess://, ss:// or subscription URL",
             ),
-            hint_style=ft.TextStyle(size=12, color=MUTED),
-            bgcolor="#1A1B26",
-            border_color=ft.Colors.with_opacity(0.25, "#7C3AED"),
-            focused_border_color="#7C3AED",
+            hint_style=ft.TextStyle(size=12, color=MUTED, weight=ft.FontWeight.W_300),
+            suffix=ft.IconButton(
+                icon=ft.Icons.PASTE_ROUNDED,
+                icon_color=ACCENT,
+                icon_size=18,
+                tooltip=t("add_dialog.paste", default="Paste from clipboard"),
+                on_click=self._handle_paste,
+            ),
+            bgcolor=ft.Colors.with_opacity(0.05, WHITE),
+            border_color=ft.Colors.with_opacity(0.08, WHITE),
+            focused_border_color=ft.Colors.with_opacity(0.50, "#A855F7"),
             color=WHITE,
             cursor_color=ACCENT,
             text_size=12,
-            height=46,
-            content_padding=ft.Padding.symmetric(horizontal=12, vertical=10),
+            height=44,
+            border_radius=10,
+            content_padding=ft.Padding.symmetric(horizontal=12, vertical=8),
             autofocus=True,
             on_submit=self._handle_add,
         )
@@ -291,26 +301,23 @@ class AddServerModalContainer(ft.Container):
         self._cancel_btn = ft.TextButton(
             t("add_dialog.cancel", default="Cancel"),
             style=ft.ButtonStyle(
-                color=ft.Colors.GREY_400,
-                overlay_color=ft.Colors.with_opacity(0.1, WHITE),
+                color=MUTED,
             ),
             on_click=self._handle_close,
         )
 
-        self._add_btn = ft.ElevatedButton(
-            content=ft.Row(
-                [
-                    ft.Icon(ft.Icons.CHECK, size=16, color=WHITE),
-                    ft.Text(t("add_dialog.add", default="Add"), color=WHITE),
-                ],
-                spacing=4,
-                tight=True,
+        self._add_btn = ft.OutlinedButton(
+            content=ft.Text(
+                t("add_dialog.add", default="Add"),
+                size=13,
+                weight=ft.FontWeight.W_400,
+                color=WHITE,
             ),
-            bgcolor="#6D28D9",
-            color=WHITE,
             style=ft.ButtonStyle(
-                shape=ft.RoundedRectangleBorder(radius=8),
-                padding=ft.Padding.symmetric(horizontal=16, vertical=8),
+                bgcolor=ft.Colors.with_opacity(0.20, "#A855F7"),
+                side=ft.BorderSide(1.0, ft.Colors.with_opacity(0.50, "#A855F7")),
+                shape=ft.RoundedRectangleBorder(radius=10),
+                padding=ft.Padding.symmetric(horizontal=18, vertical=8),
             ),
             on_click=self._handle_add,
         )
@@ -329,9 +336,9 @@ class AddServerModalContainer(ft.Container):
                 horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
             ),
             width=420,
-            bgcolor="#12131C",
-            border_radius=16,
-            border=ft.Border.all(1.5, ft.Colors.with_opacity(0.3, "#7C3AED")),
+            bgcolor=ft.Colors.with_opacity(0.95, "#141023"),
+            border_radius=18,
+            border=ft.Border.all(1.0, ft.Colors.with_opacity(0.08, WHITE)),
             padding=20,
         )
 
@@ -342,6 +349,28 @@ class AddServerModalContainer(ft.Container):
             content=card,
             visible=False,
         )
+
+    def _handle_paste(self, e=None) -> None:
+        """Paste text from clipboard directly into the input field."""
+        try:
+            clip_text = get_clipboard_text()
+            if not clip_text and hasattr(self, "page") and self.page:
+                try:
+                    clip_text = self.page.get_clipboard()
+                except Exception:
+                    pass
+            if clip_text:
+                self._content_input.value = clip_text
+                self._content_input.error_text = None
+                try:
+                    if self._content_input.page:
+                        self._content_input.update()
+                    elif hasattr(self, "page") and self.page:
+                        self.page.update()
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
     def _handle_add(self, e=None):
         """Handle the add button click. Supports single/multiple links or a subscription URL."""

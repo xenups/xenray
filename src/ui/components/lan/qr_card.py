@@ -11,11 +11,7 @@ from src.core.i18n import t
 
 
 class QRCard(ft.Container):
-    """Container holding 'Scan to Connect' text and the QR image box.
-
-    Owns the internal QR container and exposes high-level reactive methods so
-    pages never touch raw Flet container/content state directly.
-    """
+    """Container holding 'Scan with Mobile / TV' text and the QR image box."""
 
     def __init__(self, is_rtl: bool = False):
         self._is_rtl = is_rtl
@@ -23,28 +19,29 @@ class QRCard(ft.Container):
         self._pulsing = False
 
         self._qr_box = ft.Container(
-            width=170,
-            height=170,
-            border_radius=8,
-            padding=4,
-            bgcolor="#13141C",
+            width=140,
+            height=140,
+            border_radius=16,
+            padding=10,
+            bgcolor=ft.Colors.with_opacity(0.03, ft.Colors.WHITE),
+            border=ft.Border.all(1, ft.Colors.with_opacity(0.06, ft.Colors.WHITE)),
             alignment=ft.Alignment.CENTER,
         )
         self._qr_box.content = self._build_placeholder()
 
         super().__init__(
-            bgcolor="#13141C",
-            border_radius=10,
-            padding=8,
+            bgcolor=ft.Colors.with_opacity(0.02, ft.Colors.WHITE),
+            border_radius=14,
+            padding=ft.Padding.symmetric(vertical=8, horizontal=10),
             alignment=ft.Alignment.CENTER,
-            border=ft.Border.all(1, ft.Colors.with_opacity(0.08, ft.Colors.WHITE)),
+            border=ft.Border.all(1, ft.Colors.with_opacity(0.05, ft.Colors.WHITE)),
             content=ft.Column(
                 [
                     ft.Text(
-                        t("lan_sharing.scan_to_connect", default="Scan to Connect"),
+                        t("lan_sharing.scan_to_connect", default="Scan with Mobile / TV"),
                         size=11,
-                        weight=ft.FontWeight.BOLD,
-                        color="white",
+                        weight=ft.FontWeight.W_300,
+                        color="#94A3B8",
                         rtl=is_rtl,
                     ),
                     self._qr_box,
@@ -62,41 +59,46 @@ class QRCard(ft.Container):
     def set_qr_visible(self, visible: bool) -> None:
         """Show or hide the QR image box (loading placeholder while visible)."""
         self._stop_pulse()
-        self._qr_box.bgcolor = "#13141C"
+        self._qr_box.bgcolor = ft.Colors.with_opacity(0.03, ft.Colors.WHITE)
+        self._qr_box.border = ft.Border.all(1, ft.Colors.with_opacity(0.06, ft.Colors.WHITE))
+        self._qr_box.shadow = None
         self._qr_box.content = self._build_loading() if visible else self._build_placeholder()
         self._refresh()
 
     def show_loading(self) -> None:
-        """Render the loading state while a QR code resolves asynchronously.
-
-        Starts a gentle pulsing animation (opacity 0.4 <-> 1.0) on the
-        skeleton so the loading state is visibly alive, not a static frame.
-        """
-        self._qr_box.bgcolor = "#13141C"
+        """Render the loading state while a QR code resolves asynchronously."""
+        self._qr_box.bgcolor = ft.Colors.with_opacity(0.03, ft.Colors.WHITE)
+        self._qr_box.border = ft.Border.all(1, ft.Colors.with_opacity(0.06, ft.Colors.WHITE))
+        self._qr_box.shadow = None
         self._qr_box.content = self._build_loading()
         self._start_pulse()
         self._refresh()
 
     def update_qr(self, qr_str: Optional[str]) -> None:
-        """Render the QR image from a base64 PNG string, or the disabled placeholder.
-
-        Stops the loading pulse and fades the QR in (450ms EASE_OUT) so the
-        swap from the skeleton is smooth instead of a jarring cut.
-        """
+        """Render the QR image from a base64 PNG string, or the disabled placeholder."""
         self._stop_pulse()
         if qr_str:
             self._qr_box.bgcolor = "white"
+            self._qr_box.border = None
+            self._qr_box.shadow = ft.BoxShadow(
+                spread_radius=2,
+                blur_radius=20,
+                color="rgba(168, 85, 247, 0.22)",
+                offset=ft.Offset(0, 0),
+            )
             self._qr_box.content = self._build_qr_image(qr_str)
         else:
-            self._qr_box.bgcolor = "#13141C"
+            self._qr_box.bgcolor = ft.Colors.with_opacity(0.03, ft.Colors.WHITE)
+            self._qr_box.border = ft.Border.all(1, ft.Colors.with_opacity(0.06, ft.Colors.WHITE))
+            self._qr_box.shadow = None
             self._qr_box.content = self._build_placeholder()
         self._refresh()
 
     def _build_qr_image(self, qr_str: str) -> ft.Image:
         return ft.Image(
             src=f"data:image/png;base64,{qr_str}",
-            width=170,
-            height=170,
+            width=120,
+            height=120,
             fit=ft.BoxFit.CONTAIN,
             animate_opacity=450,
             opacity=1.0,

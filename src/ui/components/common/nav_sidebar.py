@@ -8,7 +8,6 @@ import flet as ft
 
 from src.core.i18n import t
 from src.ui.controllers.navigation_controller import NavigationController
-from src.ui.theme import AppColors
 
 
 class NavSidebar(ft.Container):
@@ -63,29 +62,29 @@ class NavSidebar(ft.Container):
 
         # ── Apple-Style Sliding Active Indicator Overlay ─────────────────────
         self._active_indicator = ft.Container(
-            width=44,
-            height=44,
+            width=42,
+            height=42,
             border_radius=12,
-            bgcolor=ft.Colors.with_opacity(0.15, AppColors.PRIMARY),
-            border=ft.Border.all(1.5, AppColors.PRIMARY),
+            bgcolor=ft.Colors.with_opacity(0.18, "#A855F7"),
+            border=ft.Border.all(1.0, ft.Colors.with_opacity(0.35, "#A855F7")),
             shadow=ft.BoxShadow(
                 spread_radius=0,
-                blur_radius=12,
-                color=ft.Colors.with_opacity(0.35, AppColors.PRIMARY),
+                blur_radius=10,
+                color=ft.Colors.with_opacity(0.25, "#A855F7"),
                 offset=ft.Offset(0, 0),
             ),
             animate_position=ft.Animation(350, curve=ft.AnimationCurve.DECELERATE),
             animate_opacity=ft.Animation(200),
             top=0,
-            left=5,
+            left=0,
         )
 
         self._buttons_container = ft.Column(
             spacing=8,
             alignment=ft.MainAxisAlignment.START,
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            left=5,
-            width=44,
+            left=0,
+            width=42,
         )
         self._build_nav_buttons()
 
@@ -94,8 +93,8 @@ class NavSidebar(ft.Container):
                 self._active_indicator,
                 self._buttons_container,
             ],
-            width=54,
-            height=len(self._nav_items) * 44 + (len(self._nav_items) - 1) * 8,
+            width=42,
+            height=len(self._nav_items) * 42 + (len(self._nav_items) - 1) * 8,
         )
 
         # ── Quick Connect / Disconnect bolt ─────────────────────────────────
@@ -104,8 +103,8 @@ class NavSidebar(ft.Container):
 
         self._quick_action_btn = ft.Container(
             content=self._quick_action_icon,
-            width=44,
-            height=44,
+            width=42,
+            height=42,
             padding=ft.Padding.all(10),
             border_radius=12,
             bgcolor=qc_style.bgcolor,
@@ -125,8 +124,8 @@ class NavSidebar(ft.Container):
         )
         self._lan_btn = ft.Container(
             content=self._lan_icon,
-            width=44,
-            height=44,
+            width=42,
+            height=42,
             padding=ft.Padding.all(10),
             border_radius=12,
             bgcolor=lan_style.bgcolor,
@@ -140,10 +139,12 @@ class NavSidebar(ft.Container):
 
         self._actions_panel = ft.Column(
             [
+                ft.Divider(height=1, color=ft.Colors.with_opacity(0.06, ft.Colors.WHITE)),
+                ft.Container(height=4),
                 self._lan_btn,
                 self._quick_action_btn,
             ],
-            spacing=10,
+            spacing=8,
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
         )
 
@@ -151,17 +152,18 @@ class NavSidebar(ft.Container):
             content=ft.Column(
                 [
                     self._nav_stack,
+                    ft.Container(expand=True),
                     self._actions_panel,
                 ],
-                spacing=16,
-                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                spacing=0,
+                alignment=ft.MainAxisAlignment.START,
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                 expand=True,
             ),
-            width=70,
+            width=68,
             padding=ft.Padding.symmetric(vertical=16, horizontal=8),
             bgcolor=ft.Colors.with_opacity(0.4, "#0b0518"),
-            border=ft.Border.only(right=ft.BorderSide(1, ft.Colors.with_opacity(0.12, "#a855f7"))),
+            border=ft.Border.only(right=ft.BorderSide(1, ft.Colors.with_opacity(0.08, "#a855f7"))),
         )
 
     @property
@@ -193,7 +195,7 @@ class NavSidebar(ft.Container):
         self._apply_lan_styles(is_active)
 
     def update_sni_spoof_button(self, enabled: bool):
-        """Update SNI Spoof button icon to green (#4ADE80) when enabled, or default when disabled."""
+        """Update SNI Spoof status."""
         self._controller.set_sni_spoof_enabled(enabled)
         self._apply_active_styles()
         try:
@@ -208,7 +210,7 @@ class NavSidebar(ft.Container):
         nav_ids = [item[0] for item in self._nav_items]
         if tab_id in nav_ids:
             idx = nav_ids.index(tab_id)
-            self._active_indicator.top = idx * 52
+            self._active_indicator.top = idx * 50
             self._active_indicator.opacity = 1
         else:
             self._active_indicator.opacity = 0
@@ -270,8 +272,8 @@ class NavSidebar(ft.Container):
             )
             btn = ft.Container(
                 content=icon_ctrl,
-                width=44,
-                height=44,
+                width=42,
+                height=42,
                 border_radius=12,
                 bgcolor=ft.Colors.TRANSPARENT,
                 border=None,

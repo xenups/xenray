@@ -119,9 +119,7 @@ class TestSniSpoofProbe:
                 side_effect=[100.0, 100.05],  # start, end -> 50ms
             ),
         ):
-            ok, latency = ConnectionTester._sni_spoof_probe(
-                {"host": "127.0.0.1", "port": 40443}
-            )
+            ok, latency = ConnectionTester._sni_spoof_probe({"host": "127.0.0.1", "port": 40443})
         assert ok is True
         assert latency == 50
         assert fake_sock.sent  # a probe was actually forwarded
@@ -155,9 +153,7 @@ class TestSniSpoofProbe:
                 side_effect=[100.0, 100.001],  # delta = 1ms -> loopback fake
             ),
         ):
-            ok, latency = ConnectionTester._sni_spoof_probe(
-                {"host": "127.0.0.1", "port": 40443}
-            )
+            ok, latency = ConnectionTester._sni_spoof_probe({"host": "127.0.0.1", "port": 40443})
         assert ok is False
         assert latency == 999999
 
@@ -166,11 +162,30 @@ class TestSniSpoofProbe:
             "src.services.connection.connection_tester.socket.create_connection",
             side_effect=ConnectionRefusedError("refused"),
         ):
-            ok, latency = ConnectionTester._sni_spoof_probe(
-                {"host": "127.0.0.1", "port": 40443}
-            )
+            ok, latency = ConnectionTester._sni_spoof_probe({"host": "127.0.0.1", "port": 40443})
         assert ok is False
         assert latency == 999999
+
+
+class TestSniSpoofDisabledShortCircuit:
+    def test_disabled_never_invokes_relay_probe(self, monkeypatch):
+        """When SNI Spoof is disabled, the standard probe runs immediately and the
+        relay probe (and its timeout/fallback logs) is NEVER touched."""
+        monkeypatch.setattr(ConnectionTester, "_is_sni_spoof_enabled", staticmethod(lambda: False))
+        monkeypatch.setattr(
+            ConnectionTester,
+            "_sni_spoof_probe",
+            staticmethod(lambda *a, **k: (_ for _ in ()).throw(AssertionError("relay probed while disabled"))),
+        )
+        from src.utils import network_utils
+
+        monkeypatch.setattr(
+            network_utils.NetworkUtils,
+            "check_proxy_connectivity",
+            staticmethod(lambda port: True),
+        )
+        ok, result, _ = ConnectionTester.test_connection_sync({}, fetch_country=False, socks_port=10805)
+        assert ok is True  # standard SOCKS path, no relay probe/fallback
 
 
 class TestSniSpoofProxyRouting:
@@ -192,9 +207,7 @@ class TestSniSpoofProxyRouting:
             "_sni_spoof_probe",
             lambda sni: (True, 42),
         )
-        ok, result, country = ConnectionTester.test_connection_sync(
-            {}, fetch_country=False, socks_port=10805
-        )
+        ok, result, country = ConnectionTester.test_connection_sync({}, fetch_country=False, socks_port=10805)
         assert ok is True
         # 42ms reported
         assert "42" in result
@@ -213,9 +226,7 @@ class TestSniSpoofProxyRouting:
             "check_proxy_connectivity",
             staticmethod(lambda port: True),
         )
-        ok, result, country = ConnectionTester.test_connection_sync(
-            {}, fetch_country=False, socks_port=10805
-        )
+        ok, result, country = ConnectionTester.test_connection_sync({}, fetch_country=False, socks_port=10805)
         assert ok is True
         probe_mock.assert_not_called()
 
@@ -242,9 +253,7 @@ class TestSniSpoofDirectModeRouting:
         )
         # Direct mode (test_connection_sync currently lacks socks_port) must NOT
         # spawn an Xray nor probe generate_204 — it short-circuits via the relay.
-        ok, result, country = ConnectionTester.test_connection_sync(
-            {}, fetch_country=False, socks_port=0
-        )
+        ok, result, country = ConnectionTester.test_connection_sync({}, fetch_country=False, socks_port=0)
         assert ok is True
         assert "37" in result
 
@@ -257,9 +266,7 @@ class TestSniSpoofDirectModeRouting:
 
         # Without SNI, Direct mode reaches the "no valid outbound" error path
         # (no Xray spawn) — proving the SNI gate was skipped.
-        ok, result, country = ConnectionTester.test_connection_sync(
-            {}, fetch_country=False, socks_port=0
-        )
+        ok, result, country = ConnectionTester.test_connection_sync({}, fetch_country=False, socks_port=0)
         assert ok is False
         assert "invalid" in result.lower() or "config" in result.lower()
         probe_mock.assert_not_called()
@@ -281,9 +288,7 @@ class TestSniSpoofRelayFallback:
             lambda: {"host": "127.0.0.1", "port": 40443},
         )
         # Relay connect fails (refused) → fall through below
-        monkeypatch.setattr(
-            ConnectionTester, "_sni_spoof_probe", lambda sni: (False, 999999)
-        )
+        monkeypatch.setattr(ConnectionTester, "_sni_spoof_probe", lambda sni: (False, 999999))
 
         from src.utils import network_utils
 
@@ -292,9 +297,7 @@ class TestSniSpoofRelayFallback:
             "check_proxy_connectivity",
             staticmethod(lambda port: True),
         )
-        ok, result, country = ConnectionTester.test_connection_sync(
-            {}, fetch_country=False, socks_port=10805
-        )
+        ok, result, country = ConnectionTester.test_connection_sync({}, fetch_country=False, socks_port=10805)
         # Even though relay was down, the SOCKS fallback succeeded → no error.
         assert ok is True
 
@@ -310,9 +313,7 @@ class TestSniSpoofRelayFallback:
             "_sni_spoof_endpoint",
             lambda: {"host": "127.0.0.1", "port": 40443},
         )
-        monkeypatch.setattr(
-            ConnectionTester, "_sni_spoof_probe", lambda sni: (False, 999999)
-        )
+        monkeypatch.setattr(ConnectionTester, "_sni_spoof_probe", lambda sni: (False, 999999))
 
         from src.utils import network_utils
 
@@ -321,8 +322,5 @@ class TestSniSpoofRelayFallback:
             "check_proxy_connectivity",
             staticmethod(lambda port: False),
         )
-        ok, result, country = ConnectionTester.test_connection_sync(
-            {}, fetch_country=False, socks_port=10805
-        )
+        ok, result, country = ConnectionTester.test_connection_sync({}, fetch_country=False, socks_port=10805)
         assert ok is False
-

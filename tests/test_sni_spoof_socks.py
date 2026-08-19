@@ -97,9 +97,7 @@ def test_get_physical_nic_ip_last_resort_fallback(monkeypatch):
         lambda self: (None, None, None, None),
     )
     monkeypatch.setattr(listener_mod, "_scan_physical_nic_ip", lambda: "")
-    monkeypatch.setattr(
-        listener_mod, "get_default_interface_ipv4", lambda: "203.0.113.55"
-    )
+    monkeypatch.setattr(listener_mod, "get_default_interface_ipv4", lambda: "203.0.113.55")
     assert listener_mod.get_physical_nic_ip() == "203.0.113.55"
 
 

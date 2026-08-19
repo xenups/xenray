@@ -86,9 +86,9 @@ class WaveVisualizer(ft.Container):
     def _is_attached(self) -> bool:
         """Return True only when this chart is mounted on a live page."""
         try:
-            return self.page is not None
+            return getattr(self, "_page", None) is not None or self.page is not None
         except Exception:
-            return False
+            return getattr(self, "_page", None) is not None
 
     def update_heights(self, dl_heights: List[float], ul_heights: List[float]) -> None:
         """Mutate the existing bar instances' heights in place and refresh once.

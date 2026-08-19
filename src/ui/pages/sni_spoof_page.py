@@ -28,7 +28,7 @@ class SniSpoofPage(ft.Container):
     def __init__(self, app_context=None, controller: Optional[SniSpoofController] = None):
         super().__init__()
         self.expand = True
-        self.padding = ft.Padding.symmetric(horizontal=24, vertical=20)
+        self.padding = ft.Padding.symmetric(horizontal=24, vertical=16)
 
         self._controller = controller or SniSpoofController(app_context=app_context)
         is_rtl = get_language() == "fa"
@@ -68,7 +68,6 @@ class SniSpoofPage(ft.Container):
                 self._settings_card,
             ],
             spacing=0,
-            scroll=ft.ScrollMode.AUTO,
             expand=True,
         )
 

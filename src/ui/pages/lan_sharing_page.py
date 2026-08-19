@@ -31,7 +31,7 @@ class LanSharingPage(ft.Container):
     ):
         super().__init__()
         self.expand = True
-        self.padding = 12
+        self.padding = ft.Padding.symmetric(horizontal=14, vertical=10)
 
         self._app_context = app_context
         self._on_back = on_back
@@ -52,26 +52,12 @@ class LanSharingPage(ft.Container):
 
         header_row = ft.Row(
             controls=[
-                ft.Column(
-                    [
-                        ft.Text(
-                            t("lan_sharing.title", default="LAN Proxy Sharing"),
-                            size=18,
-                            weight=ft.FontWeight.BOLD,
-                            color="white",
-                            rtl=self.is_rtl,
-                        ),
-                        ft.Text(
-                            t(
-                                "lan_sharing.subtitle",
-                                default="Share your proxy connection across devices on your local network",
-                            ),
-                            size=11,
-                            color="#8E8C99",
-                            rtl=self.is_rtl,
-                        ),
-                    ],
-                    spacing=2,
+                ft.Text(
+                    t("lan_sharing.title", default="LAN Sharing"),
+                    size=20,
+                    weight=ft.FontWeight.W_300,
+                    color="white",
+                    rtl=self.is_rtl,
                 ),
                 self._master_switch,
             ],
@@ -125,7 +111,7 @@ class LanSharingPage(ft.Container):
                 self._qr_card,
                 guide_card,
             ],
-            spacing=6,
+            spacing=8,
             horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
         )
 

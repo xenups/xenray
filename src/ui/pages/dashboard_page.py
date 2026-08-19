@@ -1,4 +1,4 @@
-"""Dashboard Page – connection centerpiece + traffic cards + ServerCard."""
+"""Dashboard Page – connection centerpiece + active server hero + dynamic wave footer."""
 
 from __future__ import annotations
 
@@ -16,13 +16,13 @@ from src.core.event_bus import (
 from src.core.i18n import t
 from src.ui.components.dashboard.connection_button import ConnectionButton
 from src.ui.components.dashboard.traffic_cards import TrafficCards
+from src.ui.components.dashboard.wave_visualizer import WaveVisualizer
 from src.ui.controllers.dashboard_controller import DashboardController, DashboardState
 from src.ui.helpers.status_helper import get_short_status_label
-from src.ui.theme import AppColors
 
 
 class DashboardPage(ft.Container):
-    """Dashboard Page – connection centerpiece + traffic cards + ServerCard."""
+    """Dashboard Page – central connection hero with server title/flag and dynamic wave visualizer."""
 
     def __init__(
         self,
@@ -59,93 +59,172 @@ class DashboardPage(ft.Container):
         event_bus.subscribe(TOPIC_CONNECTION_STATE_CHANGED, self._on_connection_state_event)
         event_bus.subscribe(TOPIC_ACTIVE_SERVER_PING_UPDATED, self._on_active_server_ping_updated)
 
-        hero_center_section = ft.Container(
-            content=self._toggle_button,
-            alignment=ft.Alignment.CENTER,
-            padding=ft.Padding.symmetric(vertical=8),
-            expand=True,
+        # 1. Active Server Title and Location Details (Balanced, Clean Typography)
+        self._server_name_text = ft.Text(
+            t("server_list.no_server"),
+            font_family="Segoe UI Light",
+            size=36,
+            weight=ft.FontWeight.W_300,
+            style=ft.TextStyle(letter_spacing=1.0),
+            color="#FFFFFF",
+            text_align=ft.TextAlign.CENTER,
+            no_wrap=True,
+            overflow=ft.TextOverflow.ELLIPSIS,
         )
 
-        self._traffic_cards = TrafficCards(on_card_click=self._on_open_statistics_click)
+        self._server_flag_text = ft.Text(
+            "",
+            size=16,
+            visible=False,
+            text_align=ft.TextAlign.CENTER,
+        )
 
-        if self._server_card_component:
-            self._server_card_component.margin = None
-            self._server_card_component.height = 124
-            self._server_card_component.border_radius = 14
-            self._server_card_component.border = None
-            self._server_card_component.padding = ft.Padding.symmetric(horizontal=12, vertical=8)
-            self._server_card_component.alignment = ft.Alignment.CENTER
+        self._server_location_text = ft.Text(
+            "",
+            font_family="Segoe UI Light",
+            size=13,
+            weight=ft.FontWeight.W_300,
+            style=ft.TextStyle(letter_spacing=0.8),
+            color=ft.Colors.with_opacity(0.65, ft.Colors.WHITE),
+            text_align=ft.TextAlign.CENTER,
+            no_wrap=True,
+            overflow=ft.TextOverflow.ELLIPSIS,
+        )
 
-            try:
-                self._server_card_component._list_btn.visible = False
-                if hasattr(self._server_card_component, "_text_column"):
-                    self._server_card_component._text_column.expand = False
-                self._server_card_component._content_row.vertical_alignment = ft.CrossAxisAlignment.CENTER
-                self._server_card_component._content_row.alignment = ft.MainAxisAlignment.CENTER
-            except Exception:
-                pass
-
-            self._server_card_component.on_click = lambda e: (
-                self._on_change_server_click(e) if self._on_change_server_click else None
-            )
-
-            server_card_wrapper = ft.Container(
-                content=self._server_card_component,
-                width=235,
-                height=124,
-                clip_behavior=ft.ClipBehavior.HARD_EDGE,
-            )
-        else:
-            server_card_wrapper = ft.Container(
-                content=ft.Text(
-                    t("server_list.no_server"),
-                    size=12,
-                    color=AppColors.ON_SURFACE_VARIANT,
-                ),
-                width=235,
-                height=124,
-                alignment=ft.Alignment.CENTER,
-                border_radius=14,
-                bgcolor=ft.Colors.with_opacity(0.035, ft.Colors.WHITE),
-                border=None,
-                on_click=lambda e: (self._on_change_server_click(e) if self._on_change_server_click else None),
-                ink=True,
-            )
-
-        cards_grid_row = ft.Row(
-            [self._traffic_cards, server_card_wrapper],
-            spacing=14,
-            height=124,
+        self._server_location_row = ft.Row(
+            controls=[
+                self._server_location_text,
+            ],
             alignment=ft.MainAxisAlignment.CENTER,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
         )
 
-        cards_grid_container = ft.Container(
-            content=cards_grid_row,
+        self._server_info_container = ft.Container(
+            content=ft.Column(
+                [
+                    self._server_name_text,
+                    self._server_location_row,
+                ],
+                spacing=6,
+                alignment=ft.MainAxisAlignment.CENTER,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
             alignment=ft.Alignment.CENTER,
-            margin=ft.Margin.only(bottom=10),
+            margin=ft.Margin(left=0, right=10, top=0, bottom=0),
+            padding=ft.Padding.symmetric(horizontal=24, vertical=6),
+            border_radius=12,
+            bgcolor=ft.Colors.TRANSPARENT,
+            on_click=lambda e: (self._on_change_server_click(e) if self._on_change_server_click else None),
+            tooltip=t("server_list.change_server", default="Change Server"),
         )
 
-        canvas_layout = ft.Column(
-            [hero_center_section, cards_grid_container],
-            spacing=10,
-            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+        # Backward compatibility traffic cards reference
+        self._traffic_cards = TrafficCards(on_card_click=self._on_open_statistics_click)
+
+        # Initialize active server info from app_context if present
+        self._init_server_info_from_context()
+
+        # Hero Center Section positioned in the dashboard (optically balanced against sidebar)
+        hero_center_section = ft.Container(
+            content=ft.Column(
+                [
+                    ft.Container(height=75),
+                    self._toggle_button,
+                    ft.Container(height=18),
+                    self._server_info_container,
+                ],
+                alignment=ft.MainAxisAlignment.START,
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                spacing=0,
+            ),
+            alignment=ft.Alignment.TOP_CENTER,
+            margin=ft.Margin(left=0, right=25, top=0, bottom=0),
             expand=True,
         )
+
+        self._wave_visualizer = None
 
         super().__init__(
-            content=canvas_layout,
-            padding=14,
+            content=hero_center_section,
+            padding=0,
             expand=True,
-            bgcolor=ft.Colors.TRANSPARENT,
+            bgcolor="#0B0813",
         )
+
+    @classmethod
+    def _extract_location_details(
+        cls,
+        profile: Optional[dict] = None,
+        country_code: str = "",
+        country_name: str = "",
+    ) -> tuple[str, str]:
+        """Extract emoji flag and formatted 'City, Country' or 'Country' string."""
+        from src.core.country_translator import translate_country
+        from src.utils.country_flags import country_code_to_flag, get_country_flag
+
+        profile = profile or {}
+        name = profile.get("name", "")
+        cc = country_code or profile.get("country_code", "")
+        cname = country_name or profile.get("country_name", "")
+        city = profile.get("city", "") if isinstance(profile, dict) else ""
+
+        if not cc and name:
+            from src.utils.country_flags import extract_country_code_from_name
+
+            cc = extract_country_code_from_name(name) or ""
+
+        flag = country_code_to_flag(cc) if cc else (get_country_flag(name) if name else "🌐")
+        resolved_country = translate_country(cc, fallback=cname) if cc else (cname or "")
+
+        if resolved_country and city:
+            loc_str = f"{resolved_country}, {city}"
+        elif resolved_country:
+            loc_str = resolved_country
+        elif city:
+            loc_str = city
+        elif cc:
+            loc_str = cc.upper()
+        else:
+            loc_str = t("server_list.unknown_location", default="Unknown Location") if name else ""
+
+        return "", loc_str
+
+    def _init_server_info_from_context(self) -> None:
+        """Initialize active server display from app context if available."""
+        if not self._app_context:
+            return
+        try:
+            selected_pid = getattr(self._app_context, "selected_profile_id", None)
+            if hasattr(self._app_context, "settings"):
+                selected_pid = selected_pid or self._app_context.settings.get_last_selected_profile_id()
+            if selected_pid and hasattr(self._app_context, "get_profile_by_id"):
+                profile = self._app_context.get_profile_by_id(selected_pid)
+                if profile:
+                    name = profile.get("name", "")
+                    self._server_name_text.value = name or t("server_list.no_server")
+                    _, loc_str = self._extract_location_details(profile)
+                    self._server_flag_text.visible = False
+                    self._server_location_text.value = loc_str
+                    self._server_location_text.visible = bool(loc_str)
+        except Exception:
+            pass
+
+    @staticmethod
+    def _get_flag_emoji(country_code: Optional[str]) -> str:
+        """Convert ISO-2 country code to unicode flag emoji (e.g. 'FI' -> '🇫🇮')."""
+        if not country_code or len(country_code) != 2:
+            return "🌐"
+        try:
+            return "".join(chr(127397 + ord(c.upper())) for c in country_code)
+        except Exception:
+            return "🌐"
 
     def dispose(self) -> None:
         """Release EventBus subscriptions held by this view."""
         event_bus.unsubscribe(TOPIC_TELEMETRY_UPDATED, self._on_telemetry_event)
         event_bus.unsubscribe(TOPIC_CONNECTION_STATE_CHANGED, self._on_connection_state_event)
         event_bus.unsubscribe(TOPIC_ACTIVE_SERVER_PING_UPDATED, self._on_active_server_ping_updated)
+        # WaveVisualizer has no owned resources; nothing to dispose.
 
     def _on_controller_state_changed(self, state: DashboardState, label: str) -> None:
         """Handle state change notification from DashboardController."""
@@ -166,6 +245,8 @@ class DashboardPage(ft.Container):
         """Handle stats update from DashboardController."""
         self._traffic_cards.update_speeds(dl_text, ul_text)
         self._toggle_button.update_network_activity(total_bps)
+        if self._wave_visualizer is not None:
+            self._wave_visualizer.update_traffic(total_bps)
 
     def _on_telemetry_event(self, data) -> None:
         """Handle telemetry_updated EventBus events (published on the UI event loop)."""
@@ -198,20 +279,7 @@ class DashboardPage(ft.Container):
             pass
 
     def _on_connection_state_event(self, data) -> None:
-        """Handle connection_state_changed EventBus events in real time.
-
-        The payload arrives as an ``EngineEvent`` (typed envelope) from
-        ConnectionManager, or as a plain dict in legacy/test call paths. Both
-        are normalized to a dict and mapped to the same reactive UI state so a
-        core crash (which drives the FSM directly to ``ERROR`` without emitting
-        a ConnectionManager event) still resets the button to DISCONNECTED.
-
-        EventBus handlers execute on whatever thread published the event (the
-        background connect/disconnect workers or the health-monitor thread), so
-        every UI mutation is marshaled onto the Flet event loop via ``run_task``
-        (``loop.call_soon_threadsafe`` under the hood) instead of mutating Flet
-        controls directly from a foreign thread.
-        """
+        """Handle connection_state_changed EventBus events in real time."""
         if isinstance(data, EngineEvent):
             data = data.to_dict()
         if not isinstance(data, dict):
@@ -226,11 +294,7 @@ class DashboardPage(ft.Container):
         self._apply_connection_event(data)
 
     def _safe_page(self):
-        """Return the Flet page this control is mounted on, or None.
-
-        ``Control.page`` raises RuntimeError when the control is not mounted,
-        which happens in headless tests and during teardown — treat that as None.
-        """
+        """Return the Flet page this control is mounted on, or None."""
         try:
             return self.page
         except Exception:
@@ -241,13 +305,11 @@ class DashboardPage(ft.Container):
         self._apply_connection_event(data)
 
     def _reset_traffic_metrics(self) -> None:
-        """Reset Download/Upload speed badges to zero in-place (no page re-render).
-
-        Called when the connection FSM reaches DISCONNECTED / STOPPING / ERROR so
-        the throughput cards never stay stuck on their last recorded values.
-        """
+        """Reset speed metrics and wave visualizer in-place."""
         try:
             self._traffic_cards.update_speeds("0 B/s", "0 B/s")
+            if self._wave_visualizer is not None:
+                self._wave_visualizer.reset_heights()
         except Exception:
             pass
 
@@ -272,12 +334,7 @@ class DashboardPage(ft.Container):
             pass
 
     def _apply_fsm_state_event(self, data) -> None:
-        """React to raw ConnectionFSM transition payloads (no 'event' key).
-
-        FSM transitions are the single source of truth for the connection
-        lifecycle; a ``ERROR`` state (e.g. core crash) must reset the UI to
-        DISCONNECTED exactly like an explicit disconnect.
-        """
+        """React to raw ConnectionFSM transition payloads (no 'event' key)."""
         try:
             new_state = data.get("new_state") or data.get("state")
             if new_state in ("error", "disconnected", "stopping"):
@@ -339,11 +396,7 @@ class DashboardPage(ft.Container):
         self.set_connection_state(is_connected=False, is_disconnecting=True)
 
     def update_uptime(self, elapsed: int | str) -> None:
-        """Update uptime counter.
-
-        The uptime timer runs on a plain daemon thread, so the Flet control
-        mutation is marshaled to the event loop unless already executing there.
-        """
+        """Update uptime counter."""
         page = self._safe_page()
         if page is not None:
             try:
@@ -376,7 +429,7 @@ class DashboardPage(ft.Container):
         upload_total: Optional[str] = None,
         download_total: Optional[str] = None,
     ) -> None:
-        """Update download and upload throughput text values."""
+        """Update download and upload throughput text values and wave visualizer."""
         self._controller.process_network_stats(
             rate_str=rate_str,
             upload_str=upload_str,
@@ -388,14 +441,56 @@ class DashboardPage(ft.Container):
             upload_total=upload_total,
             download_total=download_total,
         )
+        if self._wave_visualizer is not None:
+            self._wave_visualizer.update_traffic(total_bps)
 
     def update_internet_status(self, is_online: bool) -> None:
         """Update internet status indicator."""
         self._is_online = is_online
         self._toggle_button.set_online_status(is_online)
 
-    def update_server_info(self, *args, **kwargs) -> None:
-        """No-op: ServerCard updates itself via main_window's profile update flow."""
+    def update_server_info(
+        self,
+        name: str = "",
+        latency: str = "",
+        protocol: str = "",
+        encryption: str = "",
+        server_ip: str = "",
+        country_code: str = "",
+        country_name: str = "",
+        **kwargs,
+    ) -> None:
+        """Update active server title and flag/location subtitle."""
+        profile = kwargs.get("profile")
+        if isinstance(profile, dict):
+            name = name or profile.get("name", "")
+            country_code = country_code or profile.get("country_code", "")
+            country_name = country_name or profile.get("country_name", "")
+        else:
+            profile = {}
+
+        if name:
+            self._server_name_text.value = name
+        else:
+            self._server_name_text.value = t("server_list.no_server")
+
+        _, loc_str = self._extract_location_details(profile, country_code, country_name)
+        self._server_flag_text.visible = False
+        self._server_location_text.value = loc_str
+        self._server_location_text.visible = bool(loc_str)
+
+        try:
+            if self._server_info_container.page:
+                self._server_info_container.update()
+        except Exception:
+            pass
+
+        if self._server_card_component and hasattr(self._server_card_component, "update_server"):
+            if profile:
+                try:
+                    self._server_card_component.update_server(profile)
+                except Exception:
+                    pass
 
     def update_lan_sharing(self, is_enabled: bool, ip_address: str = "") -> None:
         """Update LAN sharing status indicator."""

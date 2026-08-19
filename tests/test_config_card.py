@@ -325,3 +325,37 @@ def test_unmount_cleanup(sample_profile):
     card.will_unmount()
     assert card._is_inspecting is False
     assert card._inspect_task is None
+
+
+def test_can_select_uninspected_profile_for_connection():
+    """Verify that an uninspected profile with ping=None can be clicked and selected."""
+    selected_profiles = []
+    uninspected_profile = {
+        "id": "srv-uninspected-999",
+        "name": "Fresh Server 1",
+        "country_code": "us",
+        "ping": None,
+        "last_latency": None,
+        "last_latency_val": None,
+        "config": {"outbounds": [{"protocol": "vless", "settings": {"vnext": [{"address": "1.1.1.1", "port": 443}]}}]},
+    }
+
+    card = ConfigCard(
+        profile=uninspected_profile,
+        on_select=lambda p: selected_profiles.append(p),
+        is_selected=False,
+    )
+
+    assert card.latency_text.value in ("-", "—", "N/A")
+    assert card.latency_text.color == "#94A3B8"
+    assert card.on_click is not None
+    assert card._inner_card.on_click is not None
+
+    # Simulate card click
+    card.on_click(None)
+    assert len(selected_profiles) == 1
+    assert selected_profiles[0]["id"] == "srv-uninspected-999"
+
+    # Simulate inner card click
+    card._inner_card.on_click(None)
+    assert len(selected_profiles) == 2

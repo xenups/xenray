@@ -1,37 +1,18 @@
-"""SNI Spoof field input rows — reusable components.
-
-Mirror the settings component architecture (e.g. settings/port_input_row.py):
-each field is a self-contained ``ft.Container`` with an icon, label, hint and a
-bound TextField. The view composes them, it does not inline every TextField.
-"""
+"""SNI Spoof field input rows — Apple-style clean settings row components."""
 
 from __future__ import annotations
 
-from typing import Callable
+from typing import Callable, Optional
 
 import flet as ft
 
 from src.core.i18n import t
 
-ICON_ACCENT = "#8B5CF6"
-
-
-def _input_styles():
-    return {
-        "border_color": ft.Colors.with_opacity(0.08, ft.Colors.WHITE),
-        "focused_border_color": "#7c3aed",
-        "bgcolor": "#0a0d14",
-        "text_size": 13,
-        "cursor_color": "#A78BFA",
-        "content_padding": ft.Padding.symmetric(horizontal=12, vertical=11),
-    }
-
 
 class SniFieldRow(ft.Container):
-    """A labelled, icon-prefixed text input row for an SNI spoof setting.
+    """A clean, borderless Apple macOS/iOS style setting row:
 
-    Mirrors the settings-architecture row style: icon + label + field, top-level
-    bounded so save/change handlers stay with the component's controller hook.
+    Label on the left (light muted text) + borderless transparent field on the right.
     """
 
     def __init__(
@@ -42,52 +23,88 @@ class SniFieldRow(ft.Container):
         label_key: str,
         label_default: str,
         hint_default: str,
-        icon: ft.Icons,
+        icon: Optional[ft.Icons] = None,
         numeric: bool = False,
     ):
+        self._label = ft.Text(
+            t(label_key, default=label_default),
+            size=13,
+            weight=ft.FontWeight.W_300,
+            color=ft.Colors.with_opacity(0.75, ft.Colors.WHITE),
+        )
+
         self._field = ft.TextField(
             value=initial_value,
-            label=t(label_key, default=label_default),
             hint_text=hint_default,
-            prefix=ft.Container(
-                content=ft.Icon(icon, color=ICON_ACCENT, size=16),
-                margin=ft.Margin.only(right=8, left=2),
+            hint_style=ft.TextStyle(
+                color=ft.Colors.with_opacity(0.30, ft.Colors.WHITE),
+                size=13,
+                weight=ft.FontWeight.W_300,
             ),
+            text_size=13,
+            text_align=ft.TextAlign.RIGHT,
+            cursor_color="#A78BFA",
+            cursor_width=1.5,
             keyboard_type=ft.KeyboardType.NUMBER if numeric else ft.KeyboardType.TEXT,
-            border_radius=10,
-            expand=1,
+            border=ft.InputBorder.NONE,
+            bgcolor=ft.Colors.TRANSPARENT,
+            content_padding=ft.Padding.symmetric(horizontal=6, vertical=5),
             on_change=on_change,
-            **_input_styles(),
+            expand=True,
         )
-        super().__init__(content=self._field, expand=True)
+
+        super().__init__(
+            content=ft.Row(
+                [
+                    ft.Container(
+                        content=self._label,
+                        width=170,
+                        alignment=ft.Alignment.CENTER_LEFT,
+                    ),
+                    ft.Container(
+                        content=self._field,
+                        expand=True,
+                        alignment=ft.Alignment.CENTER_RIGHT,
+                    ),
+                ],
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
+            padding=ft.Padding.symmetric(horizontal=4, vertical=1),
+            expand=True,
+        )
 
     @property
     def value(self) -> str:
         return self._field.value or ""
+
+    @property
+    def field(self) -> ft.TextField:
+        return self._field
 
     def set_value(self, value: str) -> None:
         self._field.value = value
         try:
             if self._field.page:
                 self._field.update()
-        except RuntimeError:
+        except Exception:
             pass
 
 
 class SniStatusChip(ft.Container):
-    """Running / Stopped status indicator chip (mirrors dashboard status chips)."""
+    """Running / Stopped minimal flat status badge."""
 
     def __init__(self):
         self._dot = ft.Container(
-            width=7,
-            height=7,
-            border_radius=4,
-            bgcolor=ft.Colors.with_opacity(0.5, "#f87171"),
+            width=6,
+            height=6,
+            border_radius=3,
+            bgcolor=ft.Colors.with_opacity(0.60, "#f87171"),
         )
         self._label = ft.Text(
             t("sni_spoof.stopped", default="Stopped"),
             size=11,
-            weight=ft.FontWeight.W_600,
+            weight=ft.FontWeight.W_400,
             color="#f87171",
         )
         super().__init__(
@@ -96,16 +113,16 @@ class SniStatusChip(ft.Container):
                 spacing=5,
                 tight=True,
             ),
-            padding=ft.Padding.symmetric(horizontal=10, vertical=4),
-            border_radius=10,
-            bgcolor=ft.Colors.with_opacity(0.10, "#f87171"),
-            border=ft.Border.all(1, ft.Colors.with_opacity(0.18, "#f87171")),
+            padding=ft.Padding.symmetric(horizontal=8, vertical=3),
+            border_radius=8,
+            bgcolor=ft.Colors.with_opacity(0.08, "#f87171"),
+            border=ft.Border.all(1, ft.Colors.with_opacity(0.15, "#f87171")),
         )
 
     def set_status(self, running: bool) -> None:
         color = "#4ADE80" if running else "#f87171"
-        self.bgcolor = ft.Colors.with_opacity(0.10, color)
-        self.border = ft.Border.all(1, ft.Colors.with_opacity(0.20, color))
+        self.bgcolor = ft.Colors.with_opacity(0.08, color)
+        self.border = ft.Border.all(1, ft.Colors.with_opacity(0.15, color))
         self._dot.bgcolor = color
         self._label.value = t(
             "sni_spoof.running" if running else "sni_spoof.stopped",

@@ -77,10 +77,23 @@ class StatisticsPage(ft.Container):
             icon_color="#a855f7",
         )
 
-        self._cards_row = ft.Row(
-            [self._dl_card, self._ul_card, self._total_card],
-            spacing=12,
-            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+        self._cards_row = ft.Container(
+            content=ft.Row(
+                [
+                    self._dl_card,
+                    ft.VerticalDivider(width=1, color=ft.Colors.with_opacity(0.05, ft.Colors.WHITE)),
+                    self._ul_card,
+                    ft.VerticalDivider(width=1, color=ft.Colors.with_opacity(0.05, ft.Colors.WHITE)),
+                    self._total_card,
+                ],
+                spacing=8,
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            ),
+            padding=ft.Padding.symmetric(horizontal=16, vertical=10),
+            border_radius=14,
+            border=ft.Border.all(1, ft.Colors.with_opacity(0.06, ft.Colors.WHITE)),
+            bgcolor=ft.Colors.with_opacity(0.03, ft.Colors.WHITE),
         )
 
         self._wave_chart = WaveVisualizer(num_bars=32)
@@ -88,7 +101,7 @@ class StatisticsPage(ft.Container):
 
         content_column = ft.Column(
             [self._rate_header, self._cards_row, self._wave_card],
-            spacing=16,
+            spacing=14,
             expand=True,
         )
 
@@ -97,7 +110,7 @@ class StatisticsPage(ft.Container):
                 content=ft.Container(content=content_column, expand=True),
                 expand=True,
             ),
-            padding=20,
+            padding=ft.Padding.symmetric(horizontal=24, vertical=16),
             expand=True,
             bgcolor=ft.Colors.TRANSPARENT,
         )

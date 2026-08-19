@@ -102,16 +102,17 @@ class ServerListHeader(ft.Container):
         """Display the main server list header."""
         self._current_subscription = None
         self._inner_row.controls = [
-            ft.Text(t("server_list.title"), size=17, weight=ft.FontWeight.BOLD),
+            ft.Text(
+                t("server_list.title"),
+                size=22,
+                weight=ft.FontWeight.W_300,
+                color=ft.Colors.WHITE,
+                style=ft.TextStyle(letter_spacing=0.8),
+            ),
             ft.Row(
                 [
                     self._create_ping_btn(),
                     self._create_sort_menu(),
-                    ft.IconButton(
-                        ft.Icons.ADD,
-                        tooltip=t("server_list.add_server"),
-                        on_click=self._on_add_click,
-                    ),
                 ]
             ),
         ]

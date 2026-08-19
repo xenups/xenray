@@ -30,7 +30,7 @@ def test_navigation_controller_lan_style_tokens():
 
     # 1. Inactive & LAN OFF
     style_idle = ctrl.get_lan_button_style()
-    assert style_idle.icon_color == "#c084fc"
+    assert style_idle.icon_color == "rgba(255, 255, 255, 0.45)"
 
     # 2. LAN ON
     ctrl.set_allow_lan(True)
@@ -41,7 +41,7 @@ def test_navigation_controller_lan_style_tokens():
     ctrl.set_allow_lan(False)
     ctrl.set_active_tab("lan")
     style_active = ctrl.get_lan_button_style()
-    assert style_active.icon_color == "#8B5CF6"
+    assert style_active.icon_color == "#FFFFFF"
 
 
 def test_navigation_controller_quick_connect_style_tokens():
@@ -50,12 +50,12 @@ def test_navigation_controller_quick_connect_style_tokens():
 
     # Disconnected state
     style_idle = ctrl.get_quick_connect_style(is_running=False)
-    assert style_idle.icon_color == "#c084fc"
+    assert style_idle.icon_color == "rgba(255, 255, 255, 0.45)"
     assert style_idle.tooltip == "Quick Connect"
 
     # Running state
     style_running = ctrl.get_quick_connect_style(is_running=True)
-    assert style_running.icon_color == "#f43f5e"
+    assert style_running.icon_color == "#F87171"
     assert style_running.tooltip == "Quick Disconnect"
 
 
@@ -65,28 +65,29 @@ def test_navigation_controller_nav_item_style_tokens():
 
     # Active item (dashboard)
     style_active = ctrl.get_nav_item_style("dashboard")
-    assert style_active.icon_color == "#c084fc"
+    assert style_active.icon_color == "#FFFFFF"
     assert style_active.border is not None
 
     # Inactive item (servers)
     style_inactive = ctrl.get_nav_item_style("servers")
     assert style_inactive.border is None
+    assert style_inactive.icon_color == "rgba(255, 255, 255, 0.45)"
 
 
 def test_navigation_controller_sni_spoof_style_tokens():
-    """Test SNI Spoof nav icon color is green (#4ADE80) when enabled, and default when disabled."""
+    """Test SNI Spoof nav icon remains standard/neutral without turning green."""
     ctrl = NavigationController(initial_tab="dashboard", sni_spoof_enabled=False)
 
-    # 1. Disabled and inactive: default muted color
+    # 1. Disabled and inactive: standard neutral color
     style_off = ctrl.get_nav_item_style("sni_spoof")
-    assert style_off.icon_color != "#4ADE80"
+    assert style_off.icon_color == "rgba(255, 255, 255, 0.45)"
 
-    # 2. Enabled: green icon color (#4ADE80)
+    # 2. Enabled: remains standard neutral color (user requested no green on sidebar icon)
     ctrl.set_sni_spoof_enabled(True)
     style_on = ctrl.get_nav_item_style("sni_spoof")
-    assert style_on.icon_color == "#4ADE80"
+    assert style_on.icon_color == "rgba(255, 255, 255, 0.45)"
 
-    # 3. Disabled again: returns to default color
-    ctrl.set_sni_spoof_enabled(False)
-    style_off_again = ctrl.get_nav_item_style("sni_spoof")
-    assert style_off_again.icon_color != "#4ADE80"
+    # 3. Active tab: white
+    ctrl.set_active_tab("sni_spoof")
+    style_active = ctrl.get_nav_item_style("sni_spoof")
+    assert style_active.icon_color == "#FFFFFF"

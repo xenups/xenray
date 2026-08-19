@@ -59,7 +59,7 @@ class LogsPage(ft.Container):
 
         self._threads_card = MetricCard(
             icon=ft.Icons.SWAP_CALLS,
-            icon_color=AppColors.PRIMARY,
+            icon_color="#38BDF8",
             title=t("logs.active_threads", default="Active Threads"),
             value_control=self._threads_value,
             footer_control=self._threads_sub,
@@ -70,7 +70,7 @@ class LogsPage(ft.Container):
 
         self._health_card = MetricCard(
             icon=ft.Icons.VERIFIED_USER,
-            icon_color=AppColors.PRIMARY,
+            icon_color="#34D399",
             title=t("logs.health_status", default="Health Status"),
             value_control=self._health_value,
             footer_control=self._health_sub,
@@ -101,7 +101,7 @@ class LogsPage(ft.Container):
                 top_metrics_row,
                 self._terminal_window,
             ],
-            spacing=16,
+            spacing=12,
             expand=True,
         )
 

@@ -116,8 +116,8 @@ def test_nav_sidebar_lan_button_styling():
         on_connect_click=lambda: None,
         allow_lan=False,
     )
-    assert sb_off._lan_icon.color == "#c084fc"
-    assert sb_off._lan_btn.border.top.color == "#a855f7,0.3"
+    assert sb_off._lan_icon.color == "rgba(255, 255, 255, 0.45)"
+    assert sb_off._lan_btn.bgcolor == ft.Colors.with_opacity(0.03, ft.Colors.WHITE)
 
     sb_on = NavSidebar(
         active_tab="dashboard",
@@ -126,10 +126,11 @@ def test_nav_sidebar_lan_button_styling():
         allow_lan=True,
     )
     assert sb_on._lan_icon.color == "#4ADE80"
-    assert sb_on._lan_btn.bgcolor == ft.Colors.with_opacity(0.15, "#10B981")
+    assert sb_on._lan_btn.bgcolor == ft.Colors.with_opacity(0.08, "#10B981")
 
     sb_on.set_active_tab("lan")
-    assert sb_on._lan_btn.border.top.color == "#8B5CF6"
+    assert sb_on._lan_icon.color == "#4ADE80"
+    assert sb_on._lan_btn.bgcolor == ft.Colors.with_opacity(0.08, "#10B981")
 
 
 def test_toast_manager_top_center_positioning():
