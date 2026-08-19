@@ -170,8 +170,8 @@ class PosixNetworkAdapter(INetworkAdapter):
     def get_system_dns_servers(self) -> list[str]:
         return []
 
-    def get_primary_interface(self):
-        return None
+    def get_primary_interface(self) -> tuple[Optional[str], Optional[str], Optional[str], Optional[str]]:
+        return (None, None, None, None)
 
     def ping_mtu(self, host: str, payload_size: int, timeout: int) -> bool:
         """Ping host with Don't Fragment (DF) flag on POSIX (macOS/Linux)."""

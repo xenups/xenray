@@ -155,17 +155,19 @@ class TestServicesSmhrDelegation:
     """Verify XrayService and SingboxService delegate SMHR to the settings adapter."""
 
     def test_xray_service_smhr_delegation(self):
-        with patch("src.platform.windows.settings._suppress_smhr", return_value=True) as mock_suppress:
-            with patch("src.platform.windows.settings._restore_smhr") as mock_restore:
-                xray = XrayService()
-                xray._suppress_smhr()
-                mock_suppress.assert_called_once()
+        with patch("src.platform.factory._is_windows", return_value=True):
+            with patch("src.platform.windows.settings._suppress_smhr", return_value=True) as mock_suppress:
+                with patch("src.platform.windows.settings._restore_smhr") as mock_restore:
+                    xray = XrayService()
+                    xray._suppress_smhr()
+                    mock_suppress.assert_called_once()
 
-                xray._restore_smhr()
-                mock_restore.assert_called_once_with(True)
+                    xray._restore_smhr()
+                    mock_restore.assert_called_once_with(True)
 
     def test_singbox_service_smhr_delegation(self):
         with (
+            patch("src.platform.factory._is_windows", return_value=True),
             patch(
                 "src.platform.windows.settings.WindowsSystemSettingsAdapter.suppress_smhr",
                 return_value=True,

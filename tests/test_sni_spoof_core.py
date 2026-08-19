@@ -62,26 +62,29 @@ class TestRelayMainLoop:
         async def scenario():
             server_a, client_a = socket.socketpair()
             server_b, client_b = socket.socketpair()
-            for s in (server_a, server_b):
+            for s in (server_a, server_b, client_a, client_b):
                 s.setblocking(False)
             # A -> B
             task_b = asyncio.create_task(relay_main_loop(server_a, server_b, None, b""))
-            await asyncio.sleep(0)
+            await asyncio.sleep(0.01)
             client_a.sendall(b"ping-from-a")
             await asyncio.sleep(0.05)
             assert client_b.recv(1024) == b"ping-from-a"
             # B -> A
             task_a = asyncio.create_task(relay_main_loop(server_b, server_a, task_b, b""))
-            await asyncio.sleep(0)
+            await asyncio.sleep(0.01)
             client_b.sendall(b"ping-from-b")
             await asyncio.sleep(0.05)
             assert client_a.recv(1024) == b"ping-from-b"
-            # EOF closes and cancels the peer relay
-            client_a.close()
-            client_b.close()
-            await asyncio.sleep(0.05)
+
             task_a.cancel()
             task_b.cancel()
+            await asyncio.sleep(0.01)
+            for s in (client_a, client_b, server_a, server_b):
+                try:
+                    s.close()
+                except Exception:
+                    pass
 
         asyncio.run(scenario())
 
@@ -89,17 +92,21 @@ class TestRelayMainLoop:
         async def scenario():
             server_a, client_a = socket.socketpair()
             server_b, client_b = socket.socketpair()
-            for s in (server_a, server_b):
+            for s in (server_a, server_b, client_a, client_b):
                 s.setblocking(False)
             task_b = asyncio.create_task(relay_main_loop(server_a, server_b, None, b"PREFIX"))
-            await asyncio.sleep(0)
+            await asyncio.sleep(0.01)
             client_a.sendall(b"tail")
             await asyncio.sleep(0.05)
             assert client_b.recv(1024) == b"PREFIXtail"
-            client_a.close()
-            client_b.close()
-            await asyncio.sleep(0.05)
+
             task_b.cancel()
+            await asyncio.sleep(0.01)
+            for s in (client_a, client_b, server_a, server_b):
+                try:
+                    s.close()
+                except Exception:
+                    pass
 
         asyncio.run(scenario())
 

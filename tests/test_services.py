@@ -70,15 +70,16 @@ class TestXrayService:
             calls.append(cmd)
             return MagicMock(returncode=0)
 
-        with patch("builtins.open", mock_open(read_data=fake_cfg)):
-            with patch("time.sleep", return_value=None):
-                with patch("src.platform.windows.tun_dns.subprocess.run", side_effect=fake_run):
-                    pid = xray_service.start("config.json")
-                    # TUN DNS is configured in a daemon thread; wait for it so the
-                    # recorded netsh commands are complete before asserting.
-                    for thread in threading.enumerate():
-                        if thread.name == "xenray-tun-dns":
-                            thread.join(timeout=10)
+        with patch("src.platform.factory._is_windows", return_value=True):
+            with patch("builtins.open", mock_open(read_data=fake_cfg)):
+                with patch("time.sleep", return_value=None):
+                    with patch("src.platform.windows.tun_dns.subprocess.run", side_effect=fake_run):
+                        pid = xray_service.start("config.json")
+                        # TUN DNS is configured in a daemon thread; wait for it so the
+                        # recorded netsh commands are complete before asserting.
+                        for thread in threading.enumerate():
+                            if thread.name == "xenray-tun-dns":
+                                thread.join(timeout=10)
         return pid, calls
 
     @patch("src.utils.platform_utils.PlatformUtils.get_platform", return_value="windows")

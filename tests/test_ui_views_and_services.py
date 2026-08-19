@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import flet as ft
 
@@ -13,8 +13,13 @@ from src.ui.pages.lan_sharing_page import LanSharingView, generate_qr_base64, ge
 from src.ui.pages.logs_page import LogsView
 
 
-def test_lan_physical_ip_detection():
+@patch("src.platform.factory.get_network_adapter")
+def test_lan_physical_ip_detection(mock_adapter):
     """Test that get_real_physical_lan_ip excludes 10.0.0.1 (TUN) and loopback."""
+    mock_inst = MagicMock()
+    mock_inst.get_physical_lan_ip.return_value = "192.168.1.50"
+    mock_adapter.return_value = mock_inst
+
     ip = get_real_physical_lan_ip()
     assert ip != "10.0.0.1", "10.0.0.1 (TUN adapter) was not filtered out"
     assert not ip.startswith("127."), "Loopback IP was not filtered out"

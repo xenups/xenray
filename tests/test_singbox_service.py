@@ -191,6 +191,7 @@ class TestStaticRouteFiltering:
         service._process.pid = 999
 
         with (
+            patch("src.platform.factory._is_windows", return_value=True),
             patch(
                 "src.platform.windows.network.WindowsNetworkAdapter.get_primary_interface",
                 return_value=("Wi-Fi", "192.168.1.10", "192.168.1.0/24", "192.168.1.1"),

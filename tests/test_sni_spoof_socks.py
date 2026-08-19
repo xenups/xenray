@@ -41,10 +41,15 @@ def test_get_physical_nic_uses_os_default_egress(monkeypatch):
     # OS Default-Route Discovery wins: the dummy-UDP egress IP is the primary NIC,
     # and the interface name is derived from a psutil IP match.
     monkeypatch.setattr(
+        "src.platform.windows.network.get_physical_nic_candidates",
+        lambda: [],
+    )
+    monkeypatch.setattr(
         "src.services.sni_spoof.nic_detect.get_physical_nic_candidates",
         lambda: [],
     )
     monkeypatch.setattr(listener_mod, "_os_default_egress_ip", lambda: "192.168.70.125")
+    monkeypatch.setattr(listener_mod, "_is_physical_link", lambda iface: True)
 
     def _fake_addrs():
         return {
@@ -74,10 +79,22 @@ def test_get_physical_nic_uses_os_default_egress(monkeypatch):
 def test_get_physical_nic_falls_back_to_route_table(monkeypatch):
     # If OS egress fails, the route-table primary interface is used.
     monkeypatch.setattr(
+        "src.platform.windows.network.get_physical_nic_candidates",
+        lambda: [],
+    )
+    monkeypatch.setattr(
         "src.services.sni_spoof.nic_detect.get_physical_nic_candidates",
         lambda: [],
     )
     monkeypatch.setattr(listener_mod, "_os_default_egress_ip", lambda: "")
+    mock_adapter = Mock()
+    mock_adapter.get_primary_interface.return_value = (
+        "Ethernet 2",
+        "192.168.70.125",
+        "192.168.70.0/24",
+        "192.168.70.1",
+    )
+    monkeypatch.setattr("src.platform.factory.get_network_adapter", lambda: mock_adapter)
     monkeypatch.setattr(
         "src.utils.network_interface.NetworkInterfaceDetector.get_primary_interface",
         lambda: ("Ethernet 2", "192.168.70.125", "192.168.70.0/24", "192.168.70.1"),

@@ -136,16 +136,18 @@ class TestGetPrimaryLanIp:
     """LAN IP discovery is systemic: only physical, up, gateway-bearing
     adapters (from nic_detect / IP Helper) qualify."""
 
+    @patch("src.platform.factory._is_windows", return_value=True)
     @patch("src.platform.windows.network.get_physical_nic_candidates")
-    def test_returns_first_private_ip(self, mock_cands):
+    def test_returns_first_private_ip(self, mock_cands, mock_win):
         mock_cands.return_value = [
             {"name": "Wi-Fi", "ip": "192.168.1.15", "iftype": 71, "operstatus": 1, "gateway": True},
             {"name": "Ethernet", "ip": "10.57.20.22", "iftype": 6, "operstatus": 1, "gateway": True},
         ]
         assert NetworkInterfaceDetector.get_primary_lan_ip() == "192.168.1.15"
 
+    @patch("src.platform.factory._is_windows", return_value=True)
     @patch("src.platform.windows.network.get_physical_nic_candidates")
-    def test_ignores_loopback(self, mock_cands):
+    def test_ignores_loopback(self, mock_cands, mock_win):
         # Loopback is rejected by the private-IPv4 check; physical gateway NIC wins.
         mock_cands.return_value = [
             {"name": "Ethernet", "ip": "192.168.70.125", "iftype": 6, "operstatus": 1, "gateway": True},
@@ -234,7 +236,7 @@ class TestOrchestratorLanWiring:
 
 
 class TestLanSharingCardUI:
-    """LAN proxy sharing top bar status chip/badge UI tests."""
+    """LanSharingCard badge reflects LAN IP and opens the modal dialog."""
 
     @pytest.fixture
     def app_context(self):
@@ -242,25 +244,37 @@ class TestLanSharingCardUI:
         ctx.settings.get_proxy_port.return_value = 10805
         return ctx
 
-    @patch("src.utils.network_interface.NetworkInterfaceDetector.get_primary_lan_ip", return_value="192.168.70.125")
-    def test_initial_state(self, mock_ip, app_context):
+    @patch("src.platform.factory.get_network_adapter")
+    def test_initial_state(self, mock_get_adapter, app_context):
         from src.ui.components.lan.lan_sharing_card import LanSharingCard
+
+        mock_adapter = MagicMock()
+        mock_adapter.get_physical_lan_ip.return_value = "192.168.70.125"
+        mock_get_adapter.return_value = mock_adapter
 
         card = LanSharingCard(app_context)
         assert card.visible is False
 
-    @patch("src.utils.network_interface.NetworkInterfaceDetector.get_primary_lan_ip", return_value="192.168.70.125")
-    def test_set_visible_shows_badge(self, mock_ip, app_context):
+    @patch("src.platform.factory.get_network_adapter")
+    def test_set_visible_shows_badge(self, mock_get_adapter, app_context):
         from src.ui.components.lan.lan_sharing_card import LanSharingCard
+
+        mock_adapter = MagicMock()
+        mock_adapter.get_physical_lan_ip.return_value = "192.168.70.125"
+        mock_get_adapter.return_value = mock_adapter
 
         card = LanSharingCard(app_context)
         card.set_visible(True)
         assert card.visible is True
         assert card._label_text.value == "LAN 192.168.70.125"
 
-    @patch("src.utils.network_interface.NetworkInterfaceDetector.get_primary_lan_ip", return_value="192.168.70.125")
-    def test_open_dialog_opens_modal(self, mock_ip, app_context):
+    @patch("src.platform.factory.get_network_adapter")
+    def test_open_dialog_opens_modal(self, mock_get_adapter, app_context):
         from src.ui.components.lan.lan_sharing_card import LanSharingCard
+
+        mock_adapter = MagicMock()
+        mock_adapter.get_physical_lan_ip.return_value = "192.168.70.125"
+        mock_get_adapter.return_value = mock_adapter
 
         card = LanSharingCard(app_context)
         mock_page = MagicMock()
