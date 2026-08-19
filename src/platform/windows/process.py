@@ -102,7 +102,8 @@ class WindowsProcessAdapter(IProcessAdapter):
         """Restart application as administrator on Windows."""
         try:
             executable = self._current_executable()
-            logger.info(f"[WindowsProcessAdapter] Restarting as admin: {executable}")
+            params = self._restart_params()
+            logger.info(f"[WindowsProcessAdapter] Restarting as admin: {executable} {params}")
 
             # STEP 1: Kill all child processes FIRST (to release file locks)
             current_pid = os.getpid()
@@ -119,14 +120,44 @@ class WindowsProcessAdapter(IProcessAdapter):
                 logger.warning(f"Error cleaning up child processes: {e}")
 
             # STEP 2: Launch new admin instance via elevation
-            if self.request_elevation(executable=executable):
+            if self.request_elevation(executable=executable, params=params):
                 logger.info("Process elevated successfully. Terminating current process...")
-                sys.exit(0)
+                # Give the spawned (elevated) process a moment to begin before we
+                # tear the old one down, so the relaunch is never removed from the
+                # job too early. Then os._exit: a bare sys.exit inside a GUI event
+                # handler / worker thread only raises SystemExit, which can be
+                # swallowed by the thread and Flet's async loop, leaving the
+                # window alive and the old EXE locked.
+                time.sleep(1.0)
+                os._exit(0)
             else:
                 logger.warning("Elevation request cancelled or failed")
 
         except Exception as e:
             logger.error(f"Failed to restart as admin: {e}")
+
+    @staticmethod
+    def _restart_params() -> str:
+        """Command-line args to pass to the elevated relaunch.
+
+        Under a frozen one-file EXE the program needs no extra args; under a
+        source/dev run we must re-invoke the entry script (sys.argv[0]) so the
+        relaunched interpreter actually starts the app.
+        """
+        try:
+            import shlex
+
+            frozen = getattr(sys, "frozen", False)
+            args = list(sys.argv[1:])
+            if not frozen and args and args[0].lower().endswith((".py", ".pyz")):
+                # entry script already leading; keep as-is
+                pass
+            elif not frozen and sys.argv:
+                # prepend the script so `python.exe <script> ...` relaunches the app
+                args.insert(0, sys.argv[0])
+            return " ".join(shlex.quote(a) for a in args)
+        except Exception:
+            return " ".join(sys.argv[1:])
 
     def acquire_singleton_mutex(self, name: str = "XenRay_Singleton_Mutex_v1") -> bool:
         """Acquire Windows single-instance mutex. Returns False if already running."""
