@@ -64,21 +64,30 @@ class TestRelayMainLoop:
             server_b, client_b = socket.socketpair()
             for s in (server_a, server_b, client_a, client_b):
                 s.setblocking(False)
+
             # A -> B
             task_b = asyncio.create_task(relay_main_loop(server_a, server_b, None, b""))
             await asyncio.sleep(0.01)
             client_a.sendall(b"ping-from-a")
             await asyncio.sleep(0.05)
             assert client_b.recv(1024) == b"ping-from-a"
+            # End the A->B relay before starting B->A so the two loops never
+            # compete on the same sockets (avoids EPIPE races on unix peers).
+            task_b.cancel()
+            try:
+                await asyncio.wait_for(task_b, timeout=1.0)
+            except (asyncio.CancelledError, asyncio.TimeoutError):
+                pass
+            await asyncio.sleep(0.02)
+
             # B -> A
-            task_a = asyncio.create_task(relay_main_loop(server_b, server_a, task_b, b""))
+            task_a = asyncio.create_task(relay_main_loop(server_b, server_a, None, b""))
             await asyncio.sleep(0.01)
             client_b.sendall(b"ping-from-b")
             await asyncio.sleep(0.05)
             assert client_a.recv(1024) == b"ping-from-b"
 
             task_a.cancel()
-            task_b.cancel()
             await asyncio.sleep(0.01)
             for s in (client_a, client_b, server_a, server_b):
                 try:
@@ -97,6 +106,7 @@ class TestRelayMainLoop:
             task_b = asyncio.create_task(relay_main_loop(server_a, server_b, None, b"PREFIX"))
             await asyncio.sleep(0.01)
             client_a.sendall(b"tail")
+            # Allow the relay to exit (EOF seen on far side) before asserting.
             await asyncio.sleep(0.05)
             assert client_b.recv(1024) == b"PREFIXtail"
 

@@ -267,6 +267,22 @@ async def relay_main_loop(
             sent_len = await loop.sock_sendall(sock_2, data)
             if sent_len != len(data):
                 raise ValueError("incomplete send")
+    except (BrokenPipeError, ConnectionResetError, OSError):
+        # A peer socket closed or the pipe broke (e.g. Linux EPIPE on a
+        # socketpair whose far end shut down). This is a normal relay
+        # termination, not an error — tear down both sides.
+        if peer_task and not peer_task.done():
+            peer_task.cancel()
+            try:
+                await asyncio.gather(peer_task, return_exceptions=True)
+            except Exception:
+                pass
+        for s in (sock_1, sock_2):
+            try:
+                s.close()
+            except Exception:
+                pass
+        return
     except Exception:
         # On Windows, closing a socket that has an overlapped recv/send still in
         # flight makes asyncio's `_cancel_overlapped` raise "WinError 6 — handle
