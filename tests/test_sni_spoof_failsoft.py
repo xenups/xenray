@@ -5,11 +5,7 @@ import sys
 from unittest.mock import patch
 
 from src.services.sni_spoof import sni_spoof_service as svc_mod
-from src.services.sni_spoof.sni_spoof_service import (
-    STATUS_FAILED,
-    STATUS_STOPPED,
-    SniSpoofService,
-)
+from src.services.sni_spoof.sni_spoof_service import STATUS_FAILED, STATUS_STOPPED, SniSpoofService
 
 
 class FakeRepo:

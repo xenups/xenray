@@ -141,7 +141,7 @@ class _FakeService:
 
 def test_toggle_enabled_starts_with_fsm_state():
     """Enable toggle starts service with enable_pid_watcher reflecting FSM state."""
-    from src.core.fsm.connection_fsm import ConnectionState, connection_fsm
+    from src.core.fsm.connection_fsm import connection_fsm
 
     connection_fsm.reset()
     fake = _FakeService()
@@ -208,11 +208,7 @@ def test_connection_connected_starts_with_watcher():
 
 
 def test_lifecycle_bridge_wires_subscriptions():
-    from src.core.event_bus import (
-        TOPIC_CONNECTION_STATE_CHANGED,
-        TOPIC_SNI_SPOOF_CHANGED,
-        event_bus,
-    )
+    from src.core.event_bus import TOPIC_CONNECTION_STATE_CHANGED, TOPIC_SNI_SPOOF_CHANGED, event_bus
 
     bridge_mod.install_sni_spoof_lifecycle_bridge()
     fake = _FakeService()

@@ -8,7 +8,6 @@ import flet as ft
 
 from src.core.i18n import t
 from src.ui.components.dashboard.wave_visualizer import WaveVisualizer
-from src.ui.theme import AppColors, create_glass_container
 
 
 class WaveCard(ft.Container):

@@ -27,11 +27,7 @@ import threading
 
 import loguru
 
-from src.core.event_bus import (
-    TOPIC_CONNECTION_STATE_CHANGED,
-    TOPIC_SNI_SPOOF_CHANGED,
-    event_bus,
-)
+from src.core.event_bus import TOPIC_CONNECTION_STATE_CHANGED, TOPIC_SNI_SPOOF_CHANGED, event_bus
 from src.core.fsm.connection_fsm import ConnectionState, connection_fsm
 from src.services.sni_spoof.sni_spoof_service import get_sni_spoof_service
 

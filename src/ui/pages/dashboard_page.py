@@ -16,7 +16,6 @@ from src.core.event_bus import (
 from src.core.i18n import t
 from src.ui.components.dashboard.connection_button import ConnectionButton
 from src.ui.components.dashboard.traffic_cards import TrafficCards
-from src.ui.components.dashboard.wave_visualizer import WaveVisualizer
 from src.ui.controllers.dashboard_controller import DashboardController, DashboardState
 from src.ui.helpers.status_helper import get_short_status_label
 
@@ -123,8 +122,6 @@ class DashboardPage(ft.Container):
 
         # Initialize active server info from app_context if present
         self._init_server_info_from_context()
-
-        # Hero Center Section positioned in the dashboard (optically balanced against sidebar)
         hero_center_section = ft.Container(
             content=ft.Column(
                 [
@@ -160,7 +157,6 @@ class DashboardPage(ft.Container):
     ) -> tuple[str, str]:
         """Extract emoji flag and formatted 'City, Country' or 'Country' string."""
         from src.core.country_translator import translate_country
-        from src.utils.country_flags import country_code_to_flag, get_country_flag
 
         profile = profile or {}
         name = profile.get("name", "")
@@ -173,7 +169,6 @@ class DashboardPage(ft.Container):
 
             cc = extract_country_code_from_name(name) or ""
 
-        flag = country_code_to_flag(cc) if cc else (get_country_flag(name) if name else "🌐")
         resolved_country = translate_country(cc, fallback=cname) if cc else (cname or "")
 
         if resolved_country and city:

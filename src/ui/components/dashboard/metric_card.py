@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import flet as ft
 
-from src.ui.theme import AppColors, create_glass_container
-
 
 class MetricCard(ft.Container):
     """Reusable glass metric card container with equal flex dimensions."""

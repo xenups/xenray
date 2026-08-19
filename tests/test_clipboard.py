@@ -2,13 +2,7 @@
 
 from __future__ import annotations
 
-import flet as ft
-import pytest
-
-from src.ui.components.servers.add_server_dialog import (
-    AddServerDialog,
-    AddServerModalContainer,
-)
+from src.ui.components.servers.add_server_dialog import AddServerDialog, AddServerModalContainer
 from src.utils.clipboard import get_clipboard_text
 
 

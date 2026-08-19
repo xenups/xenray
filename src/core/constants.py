@@ -11,7 +11,7 @@ _project_root = Path(__file__).parent.parent.parent
 load_dotenv(_project_root / ".env")
 
 # Application version from single source of truth
-from src.__version__ import APP_VERSION, __version__
+from src.__version__ import APP_VERSION, __version__  # noqa: E402
 
 __all__ = ["APP_VERSION", "__version__"]
 

@@ -105,9 +105,7 @@ def _scan_physical_nic_ip() -> str:
     try:
         import psutil
 
-        from src.services.sni_spoof.nic_detect import (
-            get_physical_nic_candidates,
-        )
+        from src.services.sni_spoof.nic_detect import get_physical_nic_candidates
 
         # 1) IP Helper API (real IF_TYPE + OperStatus + gateway) when available.
         cands = get_physical_nic_candidates()

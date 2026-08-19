@@ -1,8 +1,5 @@
 """Tests for ConnectionButton states and NeonSweepBorder.set_palette."""
 
-import flet as ft
-
-from src.ui.components.common.neon_sweep_border import NeonSweepBorder
 from src.ui.components.dashboard.connection_button import ConnectionButton
 
 

@@ -69,8 +69,8 @@ for _mod in list(sys.modules):
     if _mod == "src.core.constants" or _mod.startswith("src.core.constants."):
         del sys.modules[_mod]
 
-import pytest
-from loguru import logger
+import pytest  # noqa: E402
+from loguru import logger  # noqa: E402
 
 
 @pytest.fixture(autouse=True, scope="session")

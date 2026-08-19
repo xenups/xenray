@@ -133,11 +133,7 @@ class TestDomainServicesPackaging:
     """Verify domain-driven package structure and re-exports."""
 
     def test_connection_domain_exports(self):
-        from src.services.connection import (
-            ConnectionOrchestrator,
-            ConnectionTester,
-            RouteManagerService,
-        )
+        from src.services.connection import ConnectionOrchestrator, ConnectionTester, RouteManagerService
 
         assert ConnectionOrchestrator is not None
         assert ConnectionTester is not None

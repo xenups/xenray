@@ -7,13 +7,7 @@ from typing import Optional
 
 from loguru import logger
 
-from src.core.constants import (
-    CORE_SINGBOX,
-    CORE_XRAY,
-    MODE_PROXY,
-    MODE_VPN,
-    OUTPUT_CONFIG_PATH,
-)
+from src.core.constants import CORE_SINGBOX, CORE_XRAY, MODE_PROXY, MODE_VPN, OUTPUT_CONFIG_PATH
 from src.core.i18n import t
 from src.services.connection.connection_tester import ConnectionTester
 from src.utils.firewall_manager import FirewallManager

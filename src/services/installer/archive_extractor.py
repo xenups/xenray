@@ -13,10 +13,7 @@ from typing import Optional
 
 from loguru import logger
 
-from src.platform.constants import (
-    XRAY_EXTRACT_RETRIES,
-    XRAY_EXTRACT_RETRY_DELAY_SECONDS,
-)
+from src.platform.constants import XRAY_EXTRACT_RETRIES, XRAY_EXTRACT_RETRY_DELAY_SECONDS
 from src.services.core_engines.xray_process_manager import XrayProcessManager
 
 # Files the archive would overwrite are renamed to ``<name>.old`` so extraction

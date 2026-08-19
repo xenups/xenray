@@ -108,8 +108,8 @@ class ISystemSettingsAdapter(ABC):
         """Disable application autostart."""
 
 
-from src.platform.interfaces.route import IRouteAdapter
-from src.platform.interfaces.tun_driver import ITunDriverAdapter
+from src.platform.interfaces.route import IRouteAdapter  # noqa: E402
+from src.platform.interfaces.tun_driver import ITunDriverAdapter  # noqa: E402
 
 
 @runtime_checkable

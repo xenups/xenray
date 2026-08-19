@@ -5,11 +5,7 @@ from __future__ import annotations
 import urllib.parse
 from typing import Any, Dict, List, Optional
 
-from src.core.parsers.base import (
-    DEFAULT_PORT,
-    _get_cipher_suites,
-    build_minimal_config,
-)
+from src.core.parsers.base import DEFAULT_PORT, _get_cipher_suites, build_minimal_config
 
 
 class Hysteria2Parser:

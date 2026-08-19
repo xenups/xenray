@@ -11,10 +11,7 @@ import importlib
 
 import pytest
 
-from src.core.event_bus import (
-    TOPIC_CONNECTION_STATE_CHANGED,
-    EngineEvent,
-)
+from src.core.event_bus import TOPIC_CONNECTION_STATE_CHANGED, EngineEvent
 from src.core.fsm.connection_fsm import ConnectionFSM, ConnectionState
 
 

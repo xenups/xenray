@@ -14,17 +14,7 @@ from src.ui.helpers.button_animation_loops import (
     disconnecting_pulse_loop,
     ping_sweep_loop,
 )
-from src.ui.helpers.button_theme_styles import (
-    COLOR_CONNECTED_BG,
-    COLOR_CONNECTED_BORDER,
-    COLOR_CONNECTED_TEXT,
-    COLOR_CONNECTING_BG,
-    COLOR_CONNECTING_BORDER,
-    COLOR_DISCONNECTING_BG,
-    COLOR_DISCONNECTING_BORDER,
-    format_uptime,
-    get_sweep_gradient,
-)
+from src.ui.helpers.button_theme_styles import format_uptime, get_sweep_gradient
 from src.ui.helpers.glow_calculator import GlowCalculator
 from src.ui.helpers.status_helper import get_short_status_label
 

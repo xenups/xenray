@@ -7,7 +7,6 @@ from typing import Callable, NamedTuple, Optional
 import flet as ft
 
 from src.core.i18n import t
-from src.ui.theme import AppColors
 
 
 class LanButtonStyle(NamedTuple):

@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from src.services.monitoring.active_connectivity_monitor import (
-    ActiveConnectivityMonitor,
-)
+from src.services.monitoring.active_connectivity_monitor import ActiveConnectivityMonitor
 from src.services.monitoring.auto_reconnect_service import AutoReconnectService
 from src.services.monitoring.core_health_monitor import CoreHealthMonitor
 from src.services.monitoring.network_stats import NetworkStatsService

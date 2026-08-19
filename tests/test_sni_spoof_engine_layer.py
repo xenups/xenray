@@ -10,11 +10,7 @@ import pytest
 
 from src.services.sni_spoof.engines import BaseSpoofEngine, WinDivertWrongSeqEngine
 from src.services.sni_spoof.factory import SpoofEngineFactory
-from src.services.sni_spoof.models import (
-    EngineHealthStatus,
-    SpoofEngineConfig,
-    SpoofMethod,
-)
+from src.services.sni_spoof.models import EngineHealthStatus, SpoofEngineConfig, SpoofMethod
 
 
 def _cfg(**over) -> SpoofEngineConfig:

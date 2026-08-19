@@ -6,11 +6,7 @@ import base64
 import json
 from typing import Any, Dict
 
-from src.core.parsers.base import (
-    _maybe_split,
-    _validate_fingerprint,
-    build_minimal_config,
-)
+from src.core.parsers.base import _maybe_split, _validate_fingerprint, build_minimal_config
 
 
 class VmessParser:

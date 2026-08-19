@@ -15,10 +15,7 @@ from src.services.connection.ping_service import (
     ping_manager,
 )
 from src.services.connection.route_manager_service import RouteManagerService
-from src.services.connection.server_inspector import (
-    ServerInspector,
-    server_inspector,
-)
+from src.services.connection.server_inspector import ServerInspector, server_inspector
 from src.services.connection.tun_dns_service import TunDnsService
 from src.services.connection.tun_injector import TunInjector
 
