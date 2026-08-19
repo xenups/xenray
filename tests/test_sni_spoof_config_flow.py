@@ -135,22 +135,33 @@ class _FakeService:
         self.start = Mock(return_value=True)
         self.stop = Mock()
         self.running = False
+        self.update_target = Mock()
+        self._adjust_pid_watcher = Mock()
 
 
-def test_toggle_enabled_with_active_connection_starts():
+def test_toggle_enabled_starts_with_fsm_state():
+    """Enable toggle starts service with enable_pid_watcher reflecting FSM state."""
+    from src.core.fsm.connection_fsm import ConnectionState, connection_fsm
+
+    connection_fsm.reset()
     fake = _FakeService()
-    bridge_mod._connection_active = True
     with patch.object(bridge_mod, "get_sni_spoof_service", return_value=fake):
         bridge_mod._on_sni_spoof_changed({"enabled": True, "enabled_changed": True})
-    fake.start.assert_called_once()
+    fake.start.assert_called_once_with(enable_pid_watcher=False)
 
 
-def test_toggle_enabled_without_active_connection_does_not_start():
+def test_toggle_enabled_while_connected_starts_with_watcher():
+    """Enable toggle while connected starts service with enable_pid_watcher=True."""
+    from src.core.fsm.connection_fsm import ConnectionState, connection_fsm
+
+    connection_fsm.transition_to(ConnectionState.STARTING, force=True)
+    connection_fsm.transition_to(ConnectionState.PREPARING, force=True)
+    connection_fsm.transition_to(ConnectionState.CONNECTED, force=True)
     fake = _FakeService()
-    bridge_mod._connection_active = False
     with patch.object(bridge_mod, "get_sni_spoof_service", return_value=fake):
         bridge_mod._on_sni_spoof_changed({"enabled": True, "enabled_changed": True})
-    fake.start.assert_not_called()
+    fake.start.assert_called_once_with(enable_pid_watcher=True)
+    connection_fsm.reset()
 
 
 def test_toggle_disabled_stops():
@@ -178,17 +189,22 @@ def test_toggle_event_without_enabled_field_is_ignored():
 
 
 def test_connection_disconnected_stops_service():
+    """On disconnect with SNI disabled, stop() is called."""
     fake = _FakeService()
-    with patch.object(bridge_mod, "get_sni_spoof_service", return_value=fake):
+    with patch.object(bridge_mod, "get_sni_spoof_service", return_value=fake), patch.object(
+        bridge_mod, "_sni_spoof_is_enabled", return_value=False
+    ):
         bridge_mod._on_connection_state_changed({"state": "disconnected"})
     fake.stop.assert_called_once()
 
 
-def test_connection_connected_does_not_stop():
+def test_connection_connected_starts_with_watcher():
     fake = _FakeService()
-    with patch.object(bridge_mod, "get_sni_spoof_service", return_value=fake):
+    with patch.object(bridge_mod, "get_sni_spoof_service", return_value=fake), patch.object(
+        bridge_mod, "_sni_spoof_is_enabled", return_value=True
+    ):
         bridge_mod._on_connection_state_changed({"state": "connected"})
-    fake.stop.assert_not_called()
+    fake.start.assert_called_once_with(enable_pid_watcher=True)
 
 
 def test_lifecycle_bridge_wires_subscriptions():

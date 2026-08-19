@@ -97,7 +97,9 @@ def test_get_physical_nic_ip_last_resort_fallback(monkeypatch):
         lambda self: (None, None, None, None),
     )
     monkeypatch.setattr(listener_mod, "_scan_physical_nic_ip", lambda: "")
-    monkeypatch.setattr(listener_mod, "get_default_interface_ipv4", lambda: "203.0.113.55")
+    monkeypatch.setattr(
+        listener_mod, "get_default_interface_ipv4", lambda: "203.0.113.55"
+    )
     assert listener_mod.get_physical_nic_ip() == "203.0.113.55"
 
 
@@ -198,6 +200,62 @@ def test_injector_run_calls_on_fail_on_driver_open_error():
         result = fixture.run(on_fail=on_fail)
     assert result is False
     on_fail.assert_called_once()
+
+
+def _recv_crash_fake(fixture, stop_on_crash: bool):
+    stop_flag = fixture._stop_flag
+
+    class _Crash:
+        _raised = False
+
+        def __init__(self, *a, **k):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def recv(self, n):
+            if not _Crash._raised:
+                _Crash._raised = True
+                if stop_on_crash:
+                    stop_flag.set()  # teardown signalled while recv was blocked
+                raise OSError("WinDivert handle is not open")
+            return None
+
+    class _FakePydivert:
+        WinDivert = _Crash
+
+    return _FakePydivert()
+
+
+def test_injector_recv_crash_while_running_calls_on_fail():
+    """A recv crash while NOT stopping is a REAL failure → on_fail fires."""
+    on_fail = Mock()
+    fixture = FakeTcpInjector("tcp", {})
+    fake_pyd = _recv_crash_fake(fixture, stop_on_crash=False)
+    with patch.dict(sys.modules, {"pydivert": fake_pyd}):
+        result = fixture.run(on_fail=on_fail)
+    assert result is False
+    assert not fixture._stop_flag.is_set()
+    on_fail.assert_called_once()
+
+
+def test_injector_recv_handle_closed_during_teardown_is_graceful():
+    """When the WinDivert handle is closed as part of an intentional teardown
+    (stop() signals the stop flag + closes the handle while recv is blocked),
+    the resulting 'handle is not open' recv error must be a silent graceful exit:
+    NEVER call on_fail (which would flip to plain relay + ERROR)."""
+    on_fail = Mock()
+    fixture = FakeTcpInjector("tcp", {})
+    fake_pyd = _recv_crash_fake(fixture, stop_on_crash=True)
+    with patch.dict(sys.modules, {"pydivert": fake_pyd}):
+        result = fixture.run(on_fail=on_fail)
+        assert fixture._stop_flag.is_set()
+    assert result is False
+    on_fail.assert_not_called()
 
 
 # --------------------------------------------------------------------------- #

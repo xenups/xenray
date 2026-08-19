@@ -6,6 +6,7 @@ from typing import Callable, Optional
 
 import flet as ft
 
+from src.core.constants import APP_VERSION
 from src.core.event_bus import event_bus
 from src.core.i18n import t
 from src.core.logger import logger
@@ -279,7 +280,7 @@ class SettingsController:
                     default="Failed to check for updates",
                 )
                 self._show_toast(err_msg, "error", page=page_ref)
-                return False, "0.3.0-beta", None, None
+                return False, APP_VERSION, None, None
             finally:
                 if update_card_ref and hasattr(update_card_ref, "set_checking"):
                     update_card_ref.set_checking(False)

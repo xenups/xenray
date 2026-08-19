@@ -1,6 +1,6 @@
 """SNI-spoof service lifecycle — in-process asyncio listener task + fail-soft.
 
-start():
+start(enable_pid_watcher):
   1. Reads the persisted config (SettingsRepository).
   2. Checks prerequisites — pydivert importable AND process elevated
      (WinDivert opens a kernel driver; without admin the injector thread dies
@@ -8,7 +8,18 @@ start():
      When prerequisites are missing: log warning, publish stopped status,
      return False (fail-soft). Nothing is spawned.
   3. Spawns the listener as an in-process asyncio task and publishes status.
+  enable_pid_watcher=True  → attach the Xray-PID watcher (connected mode).
+  enable_pid_watcher=False → no watcher (standby/ping-probe mode).
+
+  If the listener is already running, start() is idempotent for the loop but
+  can attach or detach the PID watcher in-place (promote/demote).
+
 stop():  cancels the task, publishes stopped status.
+
+update_target(host, port):
+  Hot-updates CONNECT_IP/CONNECT_PORT in the running listener without closing
+  the local socket. New connections will dial the new target; existing relay
+  connections keep their established pipes until they close naturally.
 
 Parent-PID watch: a short background thread polls the Xray PID file
 (``XRAY_PID_FILE``); when Xray dies while we are running, the listener task is
@@ -55,7 +66,13 @@ def _prerequisites_ok() -> tuple:
 
 
 class SniSpoofService:
-    """Lifecycle facade for the SNI-spoof listener task."""
+    """Lifecycle facade for the SNI-spoof listener task.
+
+    State is expressed purely through the listener task's liveness and the
+    presence/absence of the PID-watcher thread — no separate boolean flags.
+    The bridge reads connection_fsm.state directly to decide whether a PID
+    watcher is appropriate; this service only knows how to start/stop/update.
+    """
 
     def __init__(self, settings_repo=None, event_bus: EventBus = None):
         self._settings_repo = settings_repo
@@ -64,6 +81,7 @@ class SniSpoofService:
         self.status = STATUS_STOPPED
         self._watcher_stop = threading.Event()
         self._watcher = None
+        self._watcher_lock = threading.Lock()
         self._loop = None
         self._loop_thread = None
         self._loop_ready = threading.Event()
@@ -92,11 +110,30 @@ class SniSpoofService:
     def running(self) -> bool:
         return self._task is not None and not self._task.done()
 
-    def start(self) -> bool:
-        """Start the listener. Returns False (fail-soft) when prerequisites
-        are missing — never raises."""
+    @property
+    def pid_watcher_active(self) -> bool:
+        """True when the parent-PID watcher thread is running (connected mode)."""
+        return self._watcher is not None and self._watcher.is_alive()
+
+    def start(self, enable_pid_watcher: bool = False) -> bool:
+        """Start (or promote/demote) the SNI-spoof listener.
+
+        Parameters
+        ----------
+        enable_pid_watcher:
+            True  → attach the Xray-PID watcher (VPN tunnel is active).
+            False → no watcher; listener is in standby/ping-probe mode.
+
+        If the listener is already running, this call is used only to adjust
+        the PID-watcher state (promote standby→connected or demote on
+        disconnect) without restarting the listener loop or rebinding the port.
+
+        Returns False (fail-soft) when prerequisites are missing.
+        """
         if self.running:
+            self._adjust_pid_watcher(enable_pid_watcher)
             return True
+
         ok, reason = _prerequisites_ok()
         if not ok:
             logger.warning(f"[SniSpoof] start refused: {reason}")
@@ -105,23 +142,64 @@ class SniSpoofService:
             return False
 
         config = build_config(self._settings_repo)
-        logger.info(f"[SniSpoof] starting listener with {config}")
-        # Build the typed engine (factory) — pure mapping, no behaviour change.
+        mode = "connected" if enable_pid_watcher else "standby"
+        logger.info(f"[SniSpoof] starting listener ({mode}) on {config.get('LISTEN_HOST')}:{config.get('LISTEN_PORT')}")
         try:
             self._build_engine_from_config(config)
         except Exception as e:
             logger.warning(f"[SniSpoof] engine build failed (non-fatal): {e}")
-        # Persisted config must reach the actual listener before the task runs.
         configure(config)
 
         self._start_listener_loop()
 
-        self._watcher_stop.clear()
-        self._watcher = threading.Thread(target=self._watch_parent, daemon=True, name="sni-spoof-parent-watch")
-        self._watcher.start()
+        if enable_pid_watcher:
+            self._attach_pid_watcher()
+
         self.status = STATUS_RUNNING
         self._publish(self.status)
         return True
+
+    def _adjust_pid_watcher(self, enable: bool) -> None:
+        """Attach or detach the PID watcher on a running listener."""
+        if enable and not self.pid_watcher_active:
+            self._attach_pid_watcher()
+            logger.info("[SniSpoof] promoted to connected mode (PID watcher attached)")
+        elif not enable and self.pid_watcher_active:
+            self._detach_pid_watcher()
+            logger.info("[SniSpoof] demoted to standby mode (PID watcher detached)")
+
+    def _attach_pid_watcher(self) -> None:
+        with self._watcher_lock:
+            if self._watcher is not None and self._watcher.is_alive():
+                return  # already running
+            self._watcher_stop.clear()
+            self._watcher = threading.Thread(
+                target=self._watch_parent,
+                daemon=True,
+                name="sni-spoof-parent-watch",
+            )
+            self._watcher.start()
+
+    def _detach_pid_watcher(self) -> None:
+        with self._watcher_lock:
+            self._watcher_stop.set()
+            self._watcher = None
+
+    def update_target(self, host: str, port: int) -> None:
+        """Hot-update the relay destination without closing the local socket.
+
+        New inbound connections will be forwarded to (host, port). Existing
+        relay connections keep their established pipes until they close.
+        Called by the bridge when SNI-spoof config changes (CONNECT_IP/PORT).
+        """
+        try:
+            import src.services.sni_spoof.listener as _listener_mod
+
+            _listener_mod.CONNECT_IP = host
+            _listener_mod.CONNECT_PORT = port
+            logger.info(f"[SniSpoof] target hot-updated to {host}:{port}")
+        except Exception as e:
+            logger.debug(f"[SniSpoof] update_target failed (non-fatal): {e}")
 
     def _listener_coro(self):
         """Wrap the blocking listener so a crash is logged, never a raise."""
@@ -181,7 +259,7 @@ class SniSpoofService:
 
     def stop(self) -> bool:
         """Cancel the listener task, stop the loop, and stop the watcher thread."""
-        self._watcher_stop.set()
+        self._detach_pid_watcher()
         # Publish stopped state before draining the loop so the loop thread's
         # cleanup finally-block can never overwrite it back to FAILED.
         self.status = STATUS_STOPPED
@@ -243,7 +321,7 @@ _SHARED_LOCK = threading.Lock()
 _SHARED_SERVICE = None
 
 
-def get_sni_spoof_service(settings_repo=None) -> SniSpoofService:
+def get_sni_spoof_service(settings_repo=None) -> "SniSpoofService":
     """Return the process-shared SniSpoofService, creating it once.
 
     XrayService and the UI lifecycle bridge (bridge.py) must drive the SAME

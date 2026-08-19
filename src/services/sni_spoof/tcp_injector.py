@@ -98,13 +98,19 @@ class FakeTcpInjector:
             if packet.ipv4:
                 packet.ipv4.ident = (packet.ipv4.ident + 1) & 0xFFFF
             if connection.bypass_method == "wrong_seq":
-                packet.tcp.seq_num = (connection.syn_seq + 1 - len(packet.tcp.payload)) & 0xFFFFFFFF
+                packet.tcp.seq_num = (
+                    connection.syn_seq + 1 - len(packet.tcp.payload)
+                ) & 0xFFFFFFFF
                 connection.fake_sent = True
                 self.w.send(packet, True)
             else:
-                raise ValueError(f"not implemented bypass method: {connection.bypass_method}")
+                raise ValueError(
+                    f"not implemented bypass method: {connection.bypass_method}"
+                )
 
-    def on_unexpected_packet(self, packet, connection: FakeInjectiveConnection, info_m: str):
+    def on_unexpected_packet(
+        self, packet, connection: FakeInjectiveConnection, info_m: str
+    ):
         connection.sock.close()
         connection.peer_sock.close()
         connection.monitor = False
@@ -114,7 +120,9 @@ class FakeTcpInjector:
 
     def on_inbound_packet(self, packet, connection: FakeInjectiveConnection):
         if connection.syn_seq == -1:
-            self.on_unexpected_packet(packet, connection, "unexpected inbound packet, no syn sent!")
+            self.on_unexpected_packet(
+                packet, connection, "unexpected inbound packet, no syn sent!"
+            )
             return
         if (
             packet.tcp.ack
@@ -152,7 +160,10 @@ class FakeTcpInjector:
         ):
             seq_num = packet.tcp.seq_num
             ack_num = packet.tcp.ack_num
-            if connection.syn_ack_seq == -1 or ((connection.syn_ack_seq + 1) & 0xFFFFFFFF) != seq_num:
+            if (
+                connection.syn_ack_seq == -1
+                or ((connection.syn_ack_seq + 1) & 0xFFFFFFFF) != seq_num
+            ):
                 self.on_unexpected_packet(
                     packet,
                     connection,
@@ -215,14 +226,19 @@ class FakeTcpInjector:
         ):
             seq_num = packet.tcp.seq_num
             ack_num = packet.tcp.ack_num
-            if connection.syn_seq == -1 or ((connection.syn_seq + 1) & 0xFFFFFFFF) != seq_num:
+            if (
+                connection.syn_seq == -1
+                or ((connection.syn_seq + 1) & 0xFFFFFFFF) != seq_num
+            ):
                 self.on_unexpected_packet(
                     packet,
                     connection,
                     f"unexpected outbound ack packet, seq not matched! {seq_num} {connection.syn_seq}",
                 )
                 return
-            if connection.syn_ack_seq == -1 or ack_num != ((connection.syn_ack_seq + 1) & 0xFFFFFFFF):
+            if connection.syn_ack_seq == -1 or ack_num != (
+                (connection.syn_ack_seq + 1) & 0xFFFFFFFF
+            ):
                 self.on_unexpected_packet(
                     packet,
                     connection,
@@ -231,7 +247,9 @@ class FakeTcpInjector:
                 return
             self.w.send(packet, False)
             connection.sch_fake_sent = True
-            threading.Thread(target=self.fake_send_thread, args=(packet, connection), daemon=True).start()
+            threading.Thread(
+                target=self.fake_send_thread, args=(packet, connection), daemon=True
+            ).start()
             return
         self.on_unexpected_packet(packet, connection, "unexpected outbound packet")
 
@@ -294,6 +312,15 @@ class FakeTcpInjector:
                     packet = self.w.recv(65575)
                     self.inject(packet)
         except Exception as e:
+            if self._stop_flag.is_set():
+                # Intentional teardown: stop() set the flag AND closed the handle,
+                # so the pending recv() raising "WinDivert handle is not open" is
+                # EXPECTED — a graceful exit, not a crash. Exit silently (Debug)
+                # and NEVER call on_fail (which would flip to plain relay + ERROR).
+                logger.debug(
+                    f"[SniSpoof] WinDivert capture loop exited during teardown: {e}"
+                )
+                return False
             logger.error(f"[SniSpoof] WinDivert capture loop exited: {e}")
             if on_fail:
                 on_fail()

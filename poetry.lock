@@ -1409,6 +1409,25 @@ files = [
 ]
 
 [[package]]
+name = "pydivert"
+version = "3.1.3"
+description = "Python binding to windivert driver"
+optional = false
+python-versions = ">=3.10"
+groups = ["main"]
+markers = "sys_platform == \"win32\""
+files = [
+    {file = "pydivert-3.1.3-py3-none-any.whl", hash = "sha256:74ae83a5d1b4a31db8f84a55c1cf875eb4e7a0d2bc2e4730ef171819bc5e9008"},
+    {file = "pydivert-3.1.3.tar.gz", hash = "sha256:e5cba087f3f17eb66cf50965cf9670c55691c580f81dcad20549a0ef49af8e06"},
+]
+
+[package.extras]
+docs = ["pdoc (>=14.0.0)"]
+lint = ["ruff (>=0.1.0)"]
+test = ["codecov (>=2.0.5)", "hypothesis (>=3.5.3)", "mock (>=1.0.1)", "pytest (>=7.0.0)", "pytest-asyncio", "pytest-cov (>=2.2.1)", "pytest-timeout (>=2.1.0)", "setuptools", "wheel (>=0.29)"]
+typecheck = ["pytest (>=7.0.0)", "ty"]
+
+[[package]]
 name = "pyflakes"
 version = "3.4.0"
 description = "passive checker of Python programs"
@@ -2147,4 +2166,4 @@ cffi = ["cffi (>=1.17,<2.0) ; platform_python_implementation != \"PyPy\" and pyt
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<3.14"
-content-hash = "d9fc9d476120f1dcf84e9529e0d184a3bacaa3a0247b4bf8e3c3a21008073ff1"
+content-hash = "267fa6714d2b8b3ecae5f24a07fea6e74530674aada15267c691a93f846b5b1a"

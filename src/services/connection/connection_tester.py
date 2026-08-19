@@ -22,6 +22,16 @@ TEST_TIMEOUT = 10  # seconds for the whole test
 # a too-short timeout turns a healthy-but-slow connection into a false teardown.
 CONNECT_TIMEOUT = 5  # hard per-node timeout for the HTTP latency probe
 
+# A real cross-internet RTT cannot be this small. A ping below this means the
+# probe only touched the loopback listener and never crossed to the real server
+# (the fake "0/1ms" bug) — such a reading is rejected as invalid.
+SNI_PROBE_MIN_MS = 5
+
+# A few TLS-record bytes. The transparent relay forwards them to CONNECT_IP (a
+# TLS server), which rejects/responds with a TLS alert record — giving us a real
+# first-byte (TTFB) that has actually traversed the relay<->server link.
+SNI_PROBE_PAYLOAD = b"\x16\x03\x01\x00\x02\x01\x00"
+
 # v2rayNG-style latency probing: dedicated HTTP 204 No-Content endpoints with a
 # zero-byte body. Primary endpoint first, then a fallback. The probe measures the
 # handshake + first-byte (status header) RTT and never downloads a body.
@@ -58,7 +68,9 @@ class ConnectionTester:
         for url in GENERATE_204_URLS:
             start_time = time.time()
             try:
-                with requests.get(url, proxies=proxies, timeout=timeout, stream=True) as resp:
+                with requests.get(
+                    url, proxies=proxies, timeout=timeout, stream=True
+                ) as resp:
                     latency = int((time.time() - start_time) * 1000)
                     if resp.status_code < 400:
                         return True, latency
@@ -126,19 +138,32 @@ class ConnectionTester:
             return ""
 
     @staticmethod
+    def _is_sni_spoof_enabled() -> bool:
+        """Check if SNI spoofing is explicitly enabled in persisted settings."""
+        try:
+            from src.core.constants import CONFIG_DIR
+            from src.repositories.settings_repository import SettingsRepository
+
+            repo = SettingsRepository(CONFIG_DIR)
+            return bool(repo.get_sni_spoof_enabled())
+        except Exception as e:
+            logger.debug(f"[ConnectionTester] SNI spoof enabled check failed: {e}")
+            return False
+
+    @staticmethod
     def _sni_spoof_endpoint() -> Optional[dict]:
         """Return the SNI-spoof relay endpoint when spoofing is enabled.
 
         Reads persisted settings; returns None when disabled so latency tests
         keep the standard (non-spoofed) path.
         """
+        if not ConnectionTester._is_sni_spoof_enabled():
+            return None
         try:
             from src.core.constants import CONFIG_DIR
             from src.repositories.settings_repository import SettingsRepository
 
             repo = SettingsRepository(CONFIG_DIR)
-            if not repo.get_sni_spoof_enabled():
-                return None
             host = repo.get_sni_listen_host()
             port = repo.get_sni_listen_port()
             if not host or not port:
@@ -150,21 +175,37 @@ class ConnectionTester:
 
     @staticmethod
     def _sni_spoof_probe(sni: dict) -> Tuple[bool, int]:
-        """Probe the SNI-spoof relay: connect to LISTEN_HOST:LISTEN_PORT.
+        """Probe the SNI-spoof relay END-TO-END (real TTFB), not loopback connect.
 
-        Measures only the TCP round-trip (handshake RTT) through the spoof
-        relay — NOT a bare direct connection to a possibly-filtered server. The
-        relay dials CONNECT_IP with the fake-SNI wrong_seq injection, so a
-        successful connect here means the spoofed path is alive and usable.
+        A plain ``connect`` to 127.0.0.1:LISTEN_PORT is answered instantly by the
+        local listener and reported a fake 0-1ms ping. Here we instead connect to
+        the relay, send a small probe that it forwards to CONNECT_IP, then wait
+        for the FIRST byte back from the real server. The measured latency is the
+        relay→server→back round trip (TTFB), and readings below SNI_PROBE_MIN_MS
+        (loopback-only, implausible across the internet) are rejected as invalid.
         """
         sock = None
         try:
+            sock = socket.create_connection(
+                (sni["host"], sni["port"]), timeout=CONNECT_TIMEOUT
+            )
+            sock.settimeout(CONNECT_TIMEOUT)
             start_time = time.monotonic()
-            sock = socket.create_connection((sni["host"], sni["port"]), timeout=CONNECT_TIMEOUT)
+            sock.sendall(SNI_PROBE_PAYLOAD)
+            data = sock.recv(1)
+            if not data:
+                return False, 999999
             latency = int(round((time.monotonic() - start_time) * 1000))
+            if latency < SNI_PROBE_MIN_MS:
+                # Loopback-only round trip — never a genuine internet RTT.
+                logger.debug(
+                    f"[ConnectionTester] SNI-spoof latency {latency}ms < "
+                    f"{SNI_PROBE_MIN_MS}ms — rejecting loopback-only reading"
+                )
+                return False, 999999
             return True, latency
         except Exception as e:
-            logger.debug(f"[ConnectionTester] SNI-spoof relay connect failed: {e}")
+            logger.debug(f"[ConnectionTester] SNI-spoof relay probe failed: {e}")
             return False, 999999
         finally:
             if sock:
@@ -195,30 +236,27 @@ class ConnectionTester:
         # spoof relay (127.0.0.1:LISTEN_PORT -> CONNECT_IP), never a bare direct
         # connection to a possibly-filtered server. Direct probing of a filtered
         # server timeouts — the very thing spoofing is meant to bypass — so the
-        # relay handshake is the only real "connection alive" signal. Disabled
-        # SNI keeps the standard path unchanged.
+        # relay handshake is the only real "connection alive" signal.
         #
-        # IMPORTANT: if the relay is NOT actually listening at this moment (the
-        # listener may not have come up yet, or the VPN is mid-(re)connect), a
-        # connect to 127.0.0.1:LISTEN_PORT is refused. That MUST NOT report a hard
-        # Connection Error while the real tunnel works — so on probe failure we
-        # FALL THROUGH to the standard path below (SOCKS proxy / direct) instead
-        # of returning an error. Only a successful relay probe short-circuits.
-        sni = ConnectionTester._sni_spoof_endpoint()
-        if sni:
-            ok, latency = ConnectionTester._sni_spoof_probe(sni)
-            if ok:
-                logger.info(
-                    f"[ConnectionTester] SNI-spoof probe verified via relay "
-                    f"{sni['host']}:{sni['port']} ({latency}ms)"
+        # Explicit status guard: Check if SNI Spoof is enabled before probing relay or touching port 40443.
+        # If disabled: immediately bypass relay probing and run standard probe path.
+        # Only when enabled: probe the local relay.
+        if ConnectionTester._is_sni_spoof_enabled():
+            sni = ConnectionTester._sni_spoof_endpoint()
+            if sni:
+                ok, latency = ConnectionTester._sni_spoof_probe(sni)
+                if ok:
+                    logger.info(
+                        f"[ConnectionTester] SNI-spoof probe verified via relay "
+                        f"{sni['host']}:{sni['port']} ({latency}ms)"
+                    )
+                    return (True, t("connection.latency_ms", value=latency), None)
+                # Relay not reachable right now — fall through to the standard path
+                # rather than reporting a false failure.
+                logger.debug(
+                    f"[ConnectionTester] SNI-spoof relay unavailable "
+                    f"({sni['host']}:{sni['port']}) — falling back to standard probe"
                 )
-                return (True, t("connection.latency_ms", value=latency), None)
-            # Relay not reachable right now — fall through to the standard path
-            # rather than reporting a false failure.
-            logger.debug(
-                f"[ConnectionTester] SNI-spoof relay unavailable "
-                f"({sni['host']}:{sni['port']}) — falling back to standard probe"
-            )
 
         # ── SOCKS proxy mode (bypass TUN interference on Windows) ──
         # For the real end-to-end check we route an HTTP/generate_204 probe
@@ -231,10 +269,14 @@ class ConnectionTester:
             start_time = time.time()
             if NetworkUtils.check_proxy_connectivity(socks_port):
                 latency = int((time.time() - start_time) * 1000)
-                logger.info(f"[ConnectionTester] SOCKS proxy verified at 127.0.0.1:{socks_port} ({latency}ms)")
+                logger.info(
+                    f"[ConnectionTester] SOCKS proxy verified at 127.0.0.1:{socks_port} ({latency}ms)"
+                )
                 return (True, t("connection.latency_ms", value=latency), None)
 
-            logger.warning(f"[ConnectionTester] HTTP health check failed through SOCKS proxy {socks_port}")
+            logger.warning(
+                f"[ConnectionTester] HTTP health check failed through SOCKS proxy {socks_port}"
+            )
             return False, t("connection.conn_error"), None
 
         # ── Direct Xray instance mode (proxy mode / Linux) ──
@@ -286,12 +328,18 @@ class ConnectionTester:
             # retry rides out transient stalls; each request is bounded by the 3s
             # CONNECT_TIMEOUT and the probe never downloads a response body.
             for attempt in range(2):
-                ok, latency = ConnectionTester._probe_204(proxies, timeout=CONNECT_TIMEOUT)
+                ok, latency = ConnectionTester._probe_204(
+                    proxies, timeout=CONNECT_TIMEOUT
+                )
                 if ok:
                     country_data = None
                     if fetch_country:
                         try:
-                            geo_resp = requests.get(GEOIP_API_URL, proxies=proxies, timeout=GEOIP_API_TIMEOUT)
+                            geo_resp = requests.get(
+                                GEOIP_API_URL,
+                                proxies=proxies,
+                                timeout=GEOIP_API_TIMEOUT,
+                            )
                             if geo_resp.status_code == 200:
                                 gdata = geo_resp.json()
                                 if gdata.get("status") == "success":
@@ -335,7 +383,9 @@ class ConnectionTester:
         """Run test in a dedicated thread and invoke callback(success, result_str, country_data)."""
 
         def _wrapper():
-            success, result, country_data = ConnectionTester.test_connection_sync(profile_config, fetch_country)
+            success, result, country_data = ConnectionTester.test_connection_sync(
+                profile_config, fetch_country
+            )
             if callback:
                 callback(success, result, country_data)
 

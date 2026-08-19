@@ -46,12 +46,14 @@ class StartupWarmupManager:
             task_logs = self._warmup_logs_engine()
             task_views = self._warmup_views_and_navigation()
             task_i18n = self._warmup_i18n()
+            task_sni = self._warmup_sni_spoof_standby()
 
             await asyncio.gather(
                 task_system_info,
                 task_logs,
                 task_views,
                 task_i18n,
+                task_sni,
                 return_exceptions=True,
             )
 
@@ -92,6 +94,32 @@ class StartupWarmupManager:
                     await loop.run_in_executor(None, self._mw._log_viewer.load_history)
         except Exception as e:
             logger.debug(f"[StartupWarmupManager] Log engine pre-fill non-critical error: {e}")
+
+    async def _warmup_sni_spoof_standby(self) -> None:
+        """Start the SNI-spoof listener in standby mode during startup.
+
+        When SNI Spoof is enabled, port 40443 must be bound BEFORE the first
+        active-server ping probe runs (Phase 2) so ConnectionTester can route
+        through the spoof relay instead of falling back to a bare direct connect.
+        Fail-soft: prerequisites missing (no pydivert / non-admin) → no-op.
+        """
+        try:
+            from src.core.constants import CONFIG_DIR
+            from src.repositories.settings_repository import SettingsRepository
+            from src.services.sni_spoof.sni_spoof_service import get_sni_spoof_service
+
+            loop = asyncio.get_running_loop()
+            repo = await loop.run_in_executor(None, lambda: SettingsRepository(CONFIG_DIR))
+            enabled = await loop.run_in_executor(None, repo.get_sni_spoof_enabled)
+            if not enabled:
+                return
+            service = get_sni_spoof_service(repo)
+            if not service.running:
+                # Standby mode: no PID watcher (Xray is not started yet).
+                await loop.run_in_executor(None, lambda: service.start(enable_pid_watcher=False))
+                logger.info("[StartupWarmupManager] SNI-spoof standby listener started")
+        except Exception as e:
+            logger.debug(f"[StartupWarmupManager] SNI-spoof standby warmup non-critical error: {e}")
 
     async def _warmup_active_server_ping(self) -> None:
         """Run the active server ping at PRIORITY_MANUAL and pre-populate the dashboard.
