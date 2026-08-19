@@ -7,6 +7,7 @@ from typing import Callable
 import flet as ft
 
 from src.ui.components.servers.server_search_bar import ServerSearchBar
+from src.ui.theme import GlassTokens
 
 
 class ServersPage(ft.Container):
@@ -41,6 +42,7 @@ class ServersPage(ft.Container):
             ),
             padding=14,
             expand=True,
+            bgcolor=GlassTokens.BG_PAGE,
         )
 
 

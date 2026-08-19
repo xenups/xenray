@@ -18,6 +18,7 @@ from src.ui.components.dashboard.connection_button import ConnectionButton
 from src.ui.components.dashboard.traffic_cards import TrafficCards
 from src.ui.controllers.dashboard_controller import DashboardController, DashboardState
 from src.ui.helpers.status_helper import get_short_status_label
+from src.ui.theme import GlassTokens
 
 
 class DashboardPage(ft.Container):
@@ -145,7 +146,7 @@ class DashboardPage(ft.Container):
             content=hero_center_section,
             padding=0,
             expand=True,
-            bgcolor="#0B0813",
+            bgcolor=GlassTokens.BG_PAGE,
         )
 
     @classmethod

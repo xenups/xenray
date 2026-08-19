@@ -20,6 +20,7 @@ from src.ui.components.sni.sni_field_row import SniStatusChip
 from src.ui.components.sni.sni_header import SniHeader
 from src.ui.components.sni.sni_sections import SniRelaySection, SniSettingsCard, SniTargetSection
 from src.ui.controllers.sni_spoof_controller import SniSpoofController
+from src.ui.theme import GlassTokens
 
 
 class SniSpoofPage(ft.Container):
@@ -28,6 +29,7 @@ class SniSpoofPage(ft.Container):
     def __init__(self, app_context=None, controller: Optional[SniSpoofController] = None):
         super().__init__()
         self.expand = True
+        self.bgcolor = GlassTokens.BG_PAGE
         self.padding = ft.Padding.symmetric(horizontal=24, vertical=16)
 
         self._controller = controller or SniSpoofController(app_context=app_context)

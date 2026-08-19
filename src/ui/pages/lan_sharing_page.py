@@ -13,6 +13,7 @@ from src.services.system.lan_service import LanService
 from src.ui.components.dashboard.connection_guide_card import ConnectionGuideCard
 from src.ui.components.lan import MicroChip, QRCard
 from src.ui.controllers.lan_sharing_controller import LanSharingController
+from src.ui.theme import GlassTokens
 
 # Aliases for backward compatibility
 get_real_physical_lan_ip = LanService.get_real_physical_lan_ip
@@ -31,6 +32,7 @@ class LanSharingPage(ft.Container):
     ):
         super().__init__()
         self.expand = True
+        self.bgcolor = GlassTokens.BG_PAGE
         self.padding = ft.Padding.symmetric(horizontal=14, vertical=10)
 
         self._app_context = app_context

@@ -22,6 +22,7 @@ from src.ui.components.settings import (
     TunEngineRow,
     UpdateCard,
 )
+from src.ui.theme import GlassTokens
 
 
 class SettingsPage(ft.Container):
@@ -191,6 +192,7 @@ class SettingsPage(ft.Container):
             ),
             padding=ft.Padding.only(left=20, right=20, top=20, bottom=16),
             expand=True,
+            bgcolor=GlassTokens.BG_PAGE,
         )
 
     def did_mount(self) -> None:

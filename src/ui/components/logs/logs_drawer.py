@@ -13,6 +13,7 @@ from src.core.constants import SINGBOX_LOG_FILE, XRAY_LOG_FILE
 from src.core.i18n import get_language, t
 from src.core.logger import log_file as APP_LOG_FILE
 from src.ui.components.logs.log_viewer import LogViewer
+from src.ui.theme import GlassTokens
 
 
 def to_persian_numerals(text: str) -> str:
@@ -200,7 +201,7 @@ class LogsDrawer(ft.NavigationDrawer):
                     expand=True,
                 ),
             ],
-            bgcolor=ft.Colors.with_opacity(0.9, "#0f172a"),
+            bgcolor=ft.Colors.with_opacity(0.95, GlassTokens.BG_PAGE),
             shadow_color=ft.Colors.with_opacity(0.2, ft.Colors.BLACK),
         )
 

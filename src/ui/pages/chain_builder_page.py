@@ -11,6 +11,7 @@ from src.core.i18n import t
 from src.ui.components.chain import ChainNodeRow
 from src.ui.components.common import PageHeader
 from src.ui.controllers.chain_builder_controller import ChainBuilderController
+from src.ui.theme import GlassTokens
 
 
 class ChainBuilderPage(ft.Container):
@@ -35,8 +36,7 @@ class ChainBuilderPage(ft.Container):
         super().__init__(
             expand=True,
             padding=0,
-            bgcolor=ft.Colors.with_opacity(0.3, "#0f172a"),
-            blur=ft.Blur(20, 20, ft.BlurTileMode.MIRROR),
+            bgcolor=GlassTokens.BG_PAGE,
         )
 
         self._setup_ui()

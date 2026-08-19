@@ -29,6 +29,7 @@ from src.ui.components.settings.sections import (
 from src.ui.components.settings.startup_toggle_row import StartupToggleRow
 from src.ui.controllers.settings_controller import SettingsController
 from src.ui.handlers.settings_handler import SettingsHandler
+from src.ui.theme import GlassTokens
 
 
 class SettingsDrawer(ft.NavigationDrawer):
@@ -218,7 +219,7 @@ class SettingsDrawer(ft.NavigationDrawer):
 
         glass_content = ft.Container(
             content=settings_content,
-            bgcolor=ft.Colors.with_opacity(0.7, "#0f172a"),
+            bgcolor=ft.Colors.with_opacity(0.95, GlassTokens.BG_PAGE),
             blur=ft.Blur(20, 20, ft.BlurTileMode.MIRROR),
             expand=True,
         )

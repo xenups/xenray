@@ -10,6 +10,7 @@ import flet as ft
 from src.ui.components.dashboard.connection_glow_layer import ConnectionGlowLayer
 from src.ui.controllers.connection_button_controller import ConnectionButtonController
 from src.ui.helpers.connection_animation_helper import schedule_animation_task
+from src.ui.theme import GlassTokens
 
 # Re-export for backward compatibility
 _schedule_animation_task = schedule_animation_task
@@ -77,7 +78,7 @@ class ConnectionButton(ft.Container):
             width=165,
             height=165,
             border_radius=82.5,
-            bgcolor="#0B0813",
+            bgcolor=GlassTokens.BG_PAGE,
             visible=False,
         )
 

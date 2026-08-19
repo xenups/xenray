@@ -9,9 +9,9 @@ class AppColors:
     """Define Slate Dark & Deep Apple Purple color constants for application theme."""
 
     # Background gradient
-    BACKGROUND_GRADIENT_START = "#0b0e14"
-    BACKGROUND_GRADIENT_CENTER = "#10141d"
-    BACKGROUND_GRADIENT_END = "#151a23"
+    BACKGROUND_GRADIENT_START = "#0B0813"
+    BACKGROUND_GRADIENT_CENTER = "#0B0813"
+    BACKGROUND_GRADIENT_END = "#0B0813"
 
     # Frosted glass overlay & borders
     GLASS_OVERLAY = "#00000000"
@@ -19,7 +19,7 @@ class AppColors:
     GLASS_BG_OPACITY = 0.85
 
     # Slate Dark & Deep Apple Purple Design Tokens
-    BACKGROUND = "#0b0e14"
+    BACKGROUND = "#0B0813"
     SURFACE_CONTAINER_LOW = "#10141d"
     SURFACE_CONTAINER = "#151a23"
     SURFACE_CONTAINER_HIGH = "#1c2330"
@@ -49,6 +49,7 @@ class AppColors:
 class GlassTokens:
     """Apple-style translucent glass tokens used consistently across views."""
 
+    BG_PAGE = "#0B0813"
     BG_CARD = "rgba(255, 255, 255, 0.03)"
     BG_CARD_SUBTLE = "rgba(255, 255, 255, 0.02)"
     BG_DIALOG = "rgba(20, 16, 35, 0.95)"

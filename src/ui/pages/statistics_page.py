@@ -11,7 +11,7 @@ from src.core.i18n import t
 from src.ui.components.dashboard.wave_visualizer import WaveVisualizer
 from src.ui.components.statistics import StatCard, StatsHeader, WaveCard
 from src.ui.controllers.statistics_controller import StatisticsController
-from src.ui.theme import AppColors
+from src.ui.theme import AppColors, GlassTokens
 
 
 class StatisticsPage(ft.Container):
@@ -112,7 +112,7 @@ class StatisticsPage(ft.Container):
             ),
             padding=ft.Padding.symmetric(horizontal=24, vertical=16),
             expand=True,
-            bgcolor=ft.Colors.TRANSPARENT,
+            bgcolor=GlassTokens.BG_PAGE,
         )
 
     def dispose(self) -> None:

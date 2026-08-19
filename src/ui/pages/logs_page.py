@@ -10,7 +10,7 @@ from src.core.i18n import t
 from src.ui.components.dashboard.metric_card import MetricCard
 from src.ui.components.logs import TerminalWindow
 from src.ui.controllers.logger_controller import LoggerController
-from src.ui.theme import AppColors
+from src.ui.theme import AppColors, GlassTokens
 
 
 class LogsPage(ft.Container):
@@ -25,6 +25,7 @@ class LogsPage(ft.Container):
     ):
         super().__init__()
         self.expand = True
+        self.bgcolor = GlassTokens.BG_PAGE
         self.padding = 24
 
         self._log_text_control = log_text_control
