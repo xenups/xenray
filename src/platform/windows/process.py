@@ -41,15 +41,36 @@ class WindowsProcessAdapter(IProcessAdapter):
         except Exception:
             return False
 
+    @staticmethod
+    def _current_executable() -> str:
+        """Return the real application executable path.
+
+        Under a PyInstaller one-file build, the running process is the memory
+        bootstrap (temp ``_MEI...`` extraction), but ``sys.executable`` still
+        points at the real frozen ``.exe`` on disk. Prefer that; fall back to
+        ``sys.argv[0]`` when it is a concrete ``.exe`` so we never hand UAC a
+        temp extraction folder as the executable.
+        """
+        try:
+            if getattr(sys, "frozen", False) and sys.executable:
+                if sys.executable.lower().endswith(".exe"):
+                    return sys.executable
+            if sys.argv and sys.argv[0].lower().endswith(".exe"):
+                return os.path.abspath(sys.argv[0])
+        except Exception:
+            pass
+        return sys.executable
+
     def request_elevation(self, executable: Optional[str] = None, params: Optional[str] = None) -> bool:
         """Request UAC elevation or restart executable as administrator."""
         try:
             import ctypes
+            import subprocess
 
             if not executable:
-                executable = sys.executable
+                executable = self._current_executable()
             if params is None:
-                params = " ".join(sys.argv[1:]) if len(sys.argv) > 1 else ""
+                params = subprocess.list2cmdline(sys.argv[1:]) if len(sys.argv) > 1 else ""
 
             ret = ctypes.windll.shell32.ShellExecuteW(None, "runas", executable, params, None, 1)
             return ret > 32
@@ -80,7 +101,7 @@ class WindowsProcessAdapter(IProcessAdapter):
     def restart_as_admin(self) -> None:
         """Restart application as administrator on Windows."""
         try:
-            executable = sys.executable
+            executable = self._current_executable()
             logger.info(f"[WindowsProcessAdapter] Restarting as admin: {executable}")
 
             # STEP 1: Kill all child processes FIRST (to release file locks)

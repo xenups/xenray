@@ -21,6 +21,7 @@ from typing import Optional, Tuple
 from loguru import logger
 
 from src.platform.constants import CMD_IPCONFIG, CMD_POWERSHELL, CMD_ROUTE
+from src.platform.factory import get_process_adapter
 from src.platform.interfaces import INetworkAdapter
 
 # Windows IP Helper API constants (GetAdaptersAddresses)
@@ -312,6 +313,8 @@ class WindowsNetworkAdapter(INetworkAdapter):
                         capture_output=True,
                         text=True,
                         timeout=5,
+                        creationflags=get_process_adapter().get_subprocess_flags(),
+                        startupinfo=get_process_adapter().get_startupinfo(),
                     )
                     for line in (out.stdout or "").splitlines():
                         line = line.strip()
@@ -324,7 +327,14 @@ class WindowsNetworkAdapter(INetworkAdapter):
                     pass
                 # Fallback: ipconfig
                 if not servers:
-                    out = subprocess.run([CMD_IPCONFIG, "/all"], capture_output=True, text=True, timeout=5)
+                    out = subprocess.run(
+                        [CMD_IPCONFIG, "/all"],
+                        capture_output=True,
+                        text=True,
+                        timeout=5,
+                        creationflags=get_process_adapter().get_subprocess_flags(),
+                        startupinfo=get_process_adapter().get_startupinfo(),
+                    )
                     lines = (out.stdout or "").splitlines()
                     for i, line in enumerate(lines):
                         if "DNS Servers" in line and i + 1 < len(lines):
@@ -379,6 +389,8 @@ class WindowsNetworkAdapter(INetworkAdapter):
                 text=True,
                 timeout=ROUTE_COMMAND_TIMEOUT,
                 check=False,
+                creationflags=get_process_adapter().get_subprocess_flags(),
+                startupinfo=get_process_adapter().get_startupinfo(),
             )
             if result.returncode != 0:
                 logger.error(f"[WindowsNetworkAdapter] Failed to get route table: {result.stderr}")
@@ -430,6 +442,8 @@ class WindowsNetworkAdapter(INetworkAdapter):
                 text=True,
                 timeout=IPCONFIG_COMMAND_TIMEOUT,
                 check=False,
+                creationflags=get_process_adapter().get_subprocess_flags(),
+                startupinfo=get_process_adapter().get_startupinfo(),
             )
             if result.returncode != 0:
                 logger.warning("[WindowsNetworkAdapter] Failed to run ipconfig")
@@ -460,8 +474,6 @@ class WindowsNetworkAdapter(INetworkAdapter):
     def ping_mtu(self, host: str, payload_size: int, timeout: int) -> bool:
         """Ping host with Don't Fragment (DF) flag set for the given payload size on Windows."""
         try:
-            from src.platform.factory import get_process_adapter
-
             cmd = [
                 "ping",
                 "-n",

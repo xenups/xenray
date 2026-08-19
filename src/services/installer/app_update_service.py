@@ -245,6 +245,11 @@ class AppUpdateService:
             # Determine executable path
             if is_frozen:
                 exe_path = sys.executable
+                # A PyInstaller one-file build keeps the real EXE at
+                # sys.executable; never point at a temp _MEI extraction dir.
+                if not exe_path.lower().endswith(".exe"):
+                    if sys.argv and sys.argv[0].lower().endswith(".exe"):
+                        exe_path = os.path.abspath(sys.argv[0])
                 logger.info(f"[AppUpdate] EXE path (frozen): {exe_path}")
             else:
                 # Development mode - use poetry run
@@ -332,6 +337,19 @@ class AppUpdateService:
             )
 
             logger.info("Updater script launched successfully")
+
+            # The updater script is fully detached and will wait for (or
+            # force-kill) this process so it can overwrite the packed EXE. Exit
+            # ourselves now so the release happens promptly and cleanly instead
+            # of a 30s hang + forced kill inside the updater.
+            try:
+                import time as _time
+
+                _time.sleep(2.0)  # let the detached shell fully spawn first
+                os._exit(0)
+            except Exception:
+                os._exit(0)
+
             return True
 
         except Exception as e:
