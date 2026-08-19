@@ -69,8 +69,8 @@ force_grid_wrap = 0
 use_parentheses = true
 ensure_newline_before_comments = true
 skip_gitignore = true
-src_paths = ["src", "tests"]
-known_first_party = ["src"]
+src_paths = [".", "src", "tests"]
+known_first_party = ["src", "tests"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
