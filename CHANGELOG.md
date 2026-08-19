@@ -2,6 +2,36 @@
 
 All notable changes to XenRay will be documented in this file.
 
+## [0.3.1] - 2026-08-19
+
+### Added
+- **OS Abstraction Layer** (`src/platform/`): a clean cross-platform contract isolating the app from the operating system.
+  - `interfaces/` — typed ABC/`Protocol` contracts: `INetworkAdapter`, `ITunDnsConfigurator`, `IFirewallAdapter`, `ISystemSettingsAdapter`, `IProcessAdapter`.
+  - `windows/` — one file per component (network, tun_dns, firewall, settings, process); all ctypes / winreg / netsh / PowerShell / IP Helper code lives behind the interfaces.
+  - `posix/` — no-op / minimal stubs for Linux & macOS so the app imports and runs without Windows-only dependencies.
+  - `factory.py` — single entry point (`get_network_adapter()`, `get_tun_dns_configurator()`, `get_firewall_adapter()`, ...) so business logic never touches the OS directly.
+- **Type-safe platform enums** (`src/platform/enums.py`): `PlatformType` (WINDOWS/MACOS/LINUX) and `ArchType` — str-based so legacy string comparisons stay valid while new code is enum-safe.
+- **Zero platform-awareness in business logic**: services, controllers, orchestrators and UI route OS calls exclusively through the factory and interfaces.
+- **SNI Spoofing transparent TCP relay**: raw packet capture/injection via WinDivert (Windows) with a wrong-sequence SNI-spoof engine, wired into connection teardown with fail-safe relays.
+- **TUN DNS service**: NRPT rules + TUN-adapter DNS + SMHR registry state, fully behind `ITunDnsConfigurator`.
+- **SOCKS/HTTP inbounds bind to `0.0.0.0`** for LAN proxy sharing (was `127.0.0.1`).
+
+### Changed
+- **PlatformUtils → pure system-metadata container**: DNS, SMHR, subprocess flags/startupinfo and physical-NIC discovery moved into the platform adapters with the real OS code (IP Helper `GetAdaptersAddresses`, winreg, netsh).
+- **`WindowsTunDnsManager` → `TunDnsService`**: no Windows-prefixed class name leaks into the business layer; OS adapters resolve lazily so non-Windows test runners behave deterministically.
+- **Connection button redesign**: bolder solid/glass lilac core with a soft lilac gradient, a per-state rotating neon sweep ring (connecting=amber, connected=purple/cyan, disconnected=faint), and a blurred radial glow (purple→cyan) behind the disc. The hard neon ring pulse of earlier builds became a soft cloud fade that breathes with traffic.
+- **Sidebar-aware centered layout** and ultra-light, airy config-name typography on the dashboard hero.
+- **CI / code quality**: standard `isort` config (`src_paths`, `known_first_party`) for the Linux runner; all `flake8`/`black`/`isort` gates green.
+
+### Fixed
+- **Cross-platform test flakiness**: `TunDnsService` and `LanSharingCard` now resolve OS adapters lazily so the Windows TUN-DNS and LAN-badge tests pass deterministically on the Linux CI runner.
+- **`BrokenPipeError` in the relay main loop**: a peer socket closing (Linux `EPIPE`) is treated as normal relay termination instead of crashing the task; each test direction uses its own socketpair.
+- **`WaveVisualizer` init & `dispose` guard** on the dashboard page.
+- **Dependency updates** (dependabot) landed cleanly against the test suite.
+
+### Technical
+- Test suite grown to **950 passing** (up from 633 in 0.3.0-beta) with flake8/black/isort clean.
+
 ## [0.3.0-beta] - 2026-08-12
 
 ### Added

@@ -59,41 +59,30 @@ class TestClientHelloMaker:
 
 class TestRelayMainLoop:
     def test_relay_forwards_both_directions(self):
-        async def scenario():
-            server_a, client_a = socket.socketpair()
-            server_b, client_b = socket.socketpair()
-            for s in (server_a, server_b, client_a, client_b):
+        async def _round(prefix: bytes) -> bytes:
+            # Each direction gets its own socketpair so a relay teardown
+            # (which closes both ends) can never break the next direction.
+            server_in, client_in = socket.socketpair()
+            server_out, client_out = socket.socketpair()
+            for s in (server_in, server_out, client_in, client_out):
                 s.setblocking(False)
-
-            # A -> B
-            task_b = asyncio.create_task(relay_main_loop(server_a, server_b, None, b""))
+            task = asyncio.create_task(relay_main_loop(server_in, server_out, None, prefix))
             await asyncio.sleep(0.01)
-            client_a.sendall(b"ping-from-a")
+            await asyncio.to_thread(client_in.sendall, b"payload")
             await asyncio.sleep(0.05)
-            assert client_b.recv(1024) == b"ping-from-a"
-            # End the A->B relay before starting B->A so the two loops never
-            # compete on the same sockets (avoids EPIPE races on unix peers).
-            task_b.cancel()
-            try:
-                await asyncio.wait_for(task_b, timeout=1.0)
-            except (asyncio.CancelledError, asyncio.TimeoutError):
-                pass
-            await asyncio.sleep(0.02)
-
-            # B -> A
-            task_a = asyncio.create_task(relay_main_loop(server_b, server_a, None, b""))
+            echoed = client_out.recv(1024)
+            task.cancel()
             await asyncio.sleep(0.01)
-            client_b.sendall(b"ping-from-b")
-            await asyncio.sleep(0.05)
-            assert client_a.recv(1024) == b"ping-from-b"
-
-            task_a.cancel()
-            await asyncio.sleep(0.01)
-            for s in (client_a, client_b, server_a, server_b):
+            for s in (client_in, client_out, server_in, server_out):
                 try:
                     s.close()
                 except Exception:
                     pass
+            return echoed
+
+        async def scenario():
+            assert await _round(b"") == b"payload"
+            assert await _round(b"PREFIX") == b"PREFIXpayload"
 
         asyncio.run(scenario())
 
