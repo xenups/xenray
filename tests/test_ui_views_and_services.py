@@ -200,3 +200,24 @@ def test_lan_service_failure_fallbacks(monkeypatch):
 
     # Invalid QR input
     assert LanService.generate_qr_base64(None) is None
+
+
+def test_server_card_update_without_name_key():
+    """Selecting a server whose profile lacks a 'name' key must not crash the
+    selection cascade (regression: KeyError killed dashboard nav + name)."""
+    from unittest.mock import MagicMock
+    from src.ui.components.dashboard.server_card import ServerCard
+
+    card = ServerCard.__new__(ServerCard)
+    card._profile = None
+    card._name_text = MagicMock()
+    card._globe_icon = MagicMock()
+    card._icon_container = MagicMock()
+    card._address_text = MagicMock()
+    card._country_city_text = MagicMock()
+    card._update_gradient_colors = MagicMock()
+    card.update = MagicMock()
+
+    profile = {"id": "x", "remark": "My Server", "config": None}
+    card.update_server(profile)
+    assert card._name_text.value == "My Server"

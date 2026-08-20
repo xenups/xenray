@@ -67,21 +67,28 @@ class ProfilePresenter:
         config = profile.get("config") or {}
         outbounds = config.get("outbounds") if isinstance(config, dict) else []
         if outbounds:
-            ob = outbounds[0]
-            proto = (ob.get("protocol") or "").upper()
-            if proto:
-                info["protocol"] = f"Xray / {proto}"
+            try:
+                ob = outbounds[0]
+            except (IndexError, KeyError, TypeError):
+                ob = None
+            if isinstance(ob, dict):
+                proto = (ob.get("protocol") or "").upper()
+                if proto:
+                    info["protocol"] = f"Xray / {proto}"
 
-            stream = ob.get("streamSettings") or {}
-            security = stream.get("security", "")
-            if security:
-                info["encryption"] = security.upper()
-            elif proto == "shadowsocks":
-                ss_settings = ob.get("settings", {}).get("servers", [{}])[0]
-                method = ss_settings.get("method", "")
-                info["encryption"] = method.upper() if method else "AES-256-GCM"
-            elif proto in ("vless", "vmess"):
-                info["encryption"] = "none"
+                stream = ob.get("streamSettings") or {}
+                security = stream.get("security", "")
+                if security:
+                    info["encryption"] = security.upper()
+                elif proto == "shadowsocks":
+                    try:
+                        ss_settings = ob.get("settings", {}).get("servers", [{}])[0]
+                        method = ss_settings.get("method", "")
+                        info["encryption"] = method.upper() if method else "AES-256-GCM"
+                    except (IndexError, KeyError, TypeError):
+                        pass
+                elif proto in ("vless", "vmess"):
+                    info["encryption"] = "none"
 
         exit_ip = profile.get("exit_ip") or profile.get("public_ip")
         if exit_ip:

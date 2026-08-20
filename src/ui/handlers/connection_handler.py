@@ -439,6 +439,31 @@ class ConnectionHandler:
         self._set_connecting(False)
         self._show_connected_ui(profile)
         self._start_network_stats()
+        # If this server was never inspected (no cached location/latency), kick
+        # off a one-off inspection now that we're connected so its country and
+        # name propagate to the server list and dashboard via the event bus.
+        self._inspect_unresolved_profile(profile)
+
+    def _inspect_unresolved_profile(self, profile: dict) -> None:
+        """Trigger a single inspection for a connected server that has no
+        resolved location yet, then publish the result through the event bus.
+
+        ``server_inspector.inspect`` submits a ping through the global queue and
+        publishes ``TOPIC_SERVER_INSPECTED`` on completion — the same event the
+        server list already uses to update a card live, and which the dashboard
+        subscribes to so the country/name refresh immediately.
+        """
+        try:
+            if not profile or not profile.get("config"):
+                return
+            # Already resolved (has a country or a measured latency) → skip.
+            if profile.get("country_code") or profile.get("last_latency_val") is not None:
+                return
+            from src.services.connection.server_inspector import server_inspector
+
+            server_inspector.inspect(profile)
+        except Exception as e:
+            logger.warning(f"[ConnectionHandler] Failed to schedule post-connect inspection: {e}")
 
     def _start_network_stats(self):
         """Start network stats monitoring."""

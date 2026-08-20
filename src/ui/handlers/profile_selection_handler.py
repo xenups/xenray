@@ -22,11 +22,20 @@ class ProfileSelectionHandler:
         """Updates all Stitch views and server cards with selected profile attributes."""
         self._mw._selected_profile = profile
         if self._mw._server_card:
-            self._mw._server_card.update_server(profile)
+            try:
+                self._mw._server_card.update_server(profile)
+            except Exception:
+                pass
 
         info: dict = {}
         try:
             info = ProfilePresenter.extract_profile_info(profile)
+        except Exception:
+            pass
+        # Always push the name (and whatever info we could derive) to the views
+        # so a freshly-selected, un-inspected server never leaves the dashboard
+        # showing the previously-selected server.
+        try:
             self._apply_profile_info(profile, info)
         except Exception:
             pass
@@ -67,6 +76,7 @@ class ProfileSelectionHandler:
                 server_ip=server_ip,
                 country_code=country_code,
                 country_name=country_name,
+                profile=profile,
             )
 
         if hasattr(self._mw, "_stitch_servers_view") and self._mw._stitch_servers_view:
@@ -130,7 +140,19 @@ class ProfileSelectionHandler:
 
     def on_server_selected(self, profile: dict) -> None:
         """Handle server item selection from server list or bottom sheet."""
-        self._mw._ui_helper.call(lambda: self.update_selected_profile_ui(profile))
+        # This runs on the UI thread (event handler). Apply the profile update
+        # synchronously BEFORE navigating so the dashboard never renders stale
+        # (previous server) info for a freshly selected, un-inspected server.
+        try:
+            self.update_selected_profile_ui(profile)
+        except Exception as e:
+            from src.core.logger import logger
+
+            logger.error(f"[ProfileSelection] update_selected_profile_ui failed: {e}")
+            try:
+                self._mw._ui_helper.call(lambda: self.update_selected_profile_ui(profile))
+            except Exception:
+                pass
 
         try:
             self._mw._app_context.settings.set_last_selected_profile_id(profile.get("id"))

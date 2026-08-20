@@ -90,3 +90,40 @@ class TestVerifyPostConnection:
         assert ok is True
         assert mock_check.call_count == 2
         handler._connection_manager.disconnect.assert_not_called()
+
+
+class TestPostConnectInspect:
+    """A connected server that was never inspected gets a one-off inspection."""
+
+    def _handler(self):
+        h = ConnectionHandler.__new__(ConnectionHandler)
+        h._set_connecting = MagicMock()
+        h._show_connected_ui = MagicMock()
+        h._start_network_stats = MagicMock()
+        return h
+
+    @patch("src.services.connection.server_inspector.server_inspector.inspect")
+    def test_unresolved_triggers_inspect(self, mock_inspect):
+        handler = self._handler()
+        profile = {"id": "p1", "name": "Sv", "config": {"outbounds": []}}
+        handler._inspect_unresolved_profile(profile)
+        mock_inspect.assert_called_once_with(profile)
+
+    @patch("src.services.connection.server_inspector.server_inspector.inspect")
+    def test_resolved_skips_inspect(self, mock_inspect):
+        handler = self._handler()
+        profile = {"id": "p1", "name": "Sv", "country_code": "FI", "config": {"outbounds": []}}
+        handler._inspect_unresolved_profile(profile)
+        mock_inspect.assert_not_called()
+
+    @patch("src.services.connection.server_inspector.server_inspector.inspect")
+    def test_missing_config_skips_inspect(self, mock_inspect):
+        handler = self._handler()
+        handler._inspect_unresolved_profile({"id": "p1", "name": "Sv"})
+        mock_inspect.assert_not_called()
+
+    def test_finalize_schedules_inspect_by_default(self):
+        handler = self._handler()
+        with patch.object(handler, "_inspect_unresolved_profile") as mock_ins:
+            handler._finalize_connection({"id": "p1", "config": {"outbounds": []}})
+            mock_ins.assert_called_once()

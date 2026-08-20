@@ -9,6 +9,7 @@ import flet as ft
 from src.core.event_bus import (
     TOPIC_ACTIVE_SERVER_PING_UPDATED,
     TOPIC_CONNECTION_STATE_CHANGED,
+    TOPIC_SERVER_INSPECTED,
     TOPIC_TELEMETRY_UPDATED,
     EngineEvent,
     event_bus,
@@ -58,6 +59,7 @@ class DashboardPage(ft.Container):
         event_bus.subscribe(TOPIC_TELEMETRY_UPDATED, self._on_telemetry_event)
         event_bus.subscribe(TOPIC_CONNECTION_STATE_CHANGED, self._on_connection_state_event)
         event_bus.subscribe(TOPIC_ACTIVE_SERVER_PING_UPDATED, self._on_active_server_ping_updated)
+        event_bus.subscribe(TOPIC_SERVER_INSPECTED, self._on_server_inspected)
 
         # 1. Active Server Title and Location Details (Balanced, Clean Typography)
         self._server_name_text = ft.Text(
@@ -220,6 +222,7 @@ class DashboardPage(ft.Container):
         event_bus.unsubscribe(TOPIC_TELEMETRY_UPDATED, self._on_telemetry_event)
         event_bus.unsubscribe(TOPIC_CONNECTION_STATE_CHANGED, self._on_connection_state_event)
         event_bus.unsubscribe(TOPIC_ACTIVE_SERVER_PING_UPDATED, self._on_active_server_ping_updated)
+        event_bus.unsubscribe(TOPIC_SERVER_INSPECTED, self._on_server_inspected)
         # WaveVisualizer has no owned resources; nothing to dispose.
 
     def _on_controller_state_changed(self, state: DashboardState, label: str) -> None:
@@ -271,6 +274,49 @@ class DashboardPage(ft.Container):
             return
         try:
             self._toggle_button.set_pre_connection_ping(result_str, bool(data.get("success", False)))
+        except Exception:
+            pass
+
+    def _on_server_inspected(self, data) -> None:
+        """Refresh dashboard server info when the selected/active server's
+        inspection completes (a server that was never inspected now resolves a
+        country/name after the first successful connect or selection)."""
+        if not isinstance(data, dict):
+            return
+        server_id = data.get("server_id")
+        if server_id is None:
+            return
+        try:
+            app_ctx = self._app_context
+            if app_ctx is None or not hasattr(app_ctx, "get_profile_by_id") or not hasattr(
+                app_ctx, "settings"
+            ):
+                return
+            # Only refresh for the server the user actually has selected, so a
+            # background batch ping never clobbers the dashboard title. Works for
+            # both the connected case and the just-selected (not yet connected)
+            # case.
+            try:
+                selected_id = app_ctx.settings.get_last_selected_profile_id()
+            except Exception:
+                selected_id = None
+            if selected_id is not None and str(selected_id) != str(server_id):
+                return
+            profile = app_ctx.get_profile_by_id(server_id)
+            if not profile:
+                return
+            # Re-resolve (country/name may have just landed from the inspect).
+            from src.ui.helpers.profile_presenter import ProfilePresenter
+
+            info = ProfilePresenter.extract_profile_info(profile)
+            self.update_server_info(
+                name=profile.get("name") or profile.get("remark", ""),
+                latency=info.get("latency", ""),
+                protocol=info.get("protocol", ""),
+                country_code=info.get("country_code", ""),
+                country_name=info.get("country_name", ""),
+                profile=profile,
+            )
         except Exception:
             pass
 
@@ -478,6 +524,14 @@ class DashboardPage(ft.Container):
         try:
             if self._server_info_container.page:
                 self._server_info_container.update()
+        except Exception:
+            pass
+
+        # Also refresh the page-level control so the change reaches the render
+        # even if the info container's own .page accessor was unavailable.
+        try:
+            if self.page is not None:
+                self.update()
         except Exception:
             pass
 

@@ -254,7 +254,7 @@ class ServerCard(ft.Container):
                 else:
                     self._country_city_text.value = country_name
 
-            self._name_text.value = profile["name"]
+            self._name_text.value = profile.get("name") or profile.get("remark") or t("server_list.no_server")
 
             self._name_text.color = ft.Colors.WHITE
 
