@@ -206,6 +206,7 @@ def test_server_card_update_without_name_key():
     """Selecting a server whose profile lacks a 'name' key must not crash the
     selection cascade (regression: KeyError killed dashboard nav + name)."""
     from unittest.mock import MagicMock
+
     from src.ui.components.dashboard.server_card import ServerCard
 
     card = ServerCard.__new__(ServerCard)

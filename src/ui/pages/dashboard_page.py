@@ -288,9 +288,7 @@ class DashboardPage(ft.Container):
             return
         try:
             app_ctx = self._app_context
-            if app_ctx is None or not hasattr(app_ctx, "get_profile_by_id") or not hasattr(
-                app_ctx, "settings"
-            ):
+            if app_ctx is None or not hasattr(app_ctx, "get_profile_by_id") or not hasattr(app_ctx, "settings"):
                 return
             # Only refresh for the server the user actually has selected, so a
             # background batch ping never clobbers the dashboard title. Works for
