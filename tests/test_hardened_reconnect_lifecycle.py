@@ -195,32 +195,20 @@ class TestPhase5SlidingWindowLogAggregator:
 class TestPhase6InterfaceWatcherDebounceAndFSM:
     """Test Phase 6: Interface Watcher Debounce, Filtering, and FSM Hot Transitions."""
 
-    def test_interface_watcher_suppresses_unchanged_physical_nic(self, monkeypatch):
+    def _make_watcher(self, monkeypatch, nic_state_holder):
+        """Helper: build a watcher with a monkeypatched nic candidate function."""
         from src.platform.windows.network import WindowsInterfaceWatcher
-
-        nic_state = [
-            {
-                "name": "Ethernet",
-                "guid": "{11111111-2222-3333-4444-555555555555}",
-                "ip": "192.168.1.100",
-                "gateway": "192.168.1.1",
-                "ifindex": 5,
-            }
-        ]
-        monkeypatch.setattr("src.platform.windows.network.get_physical_nic_candidates", lambda: nic_state)
-
+        monkeypatch.setattr(
+            "src.platform.windows.network.get_physical_nic_candidates",
+            lambda: nic_state_holder[0],
+        )
         callbacks = []
         watcher = WindowsInterfaceWatcher(callback=lambda: callbacks.append(True))
         watcher.DEBOUNCE_SECONDS = 0.05
-        watcher._last_physical_state = watcher._get_current_physical_state()
+        return watcher, callbacks
 
-        # Simulate debounced handler firing on internal route/TUN mutation
-        watcher._debounced_handler()
-        assert len(callbacks) == 0, "Callback must be suppressed when physical NIC and gateway are unchanged"
-
-    def test_interface_watcher_fires_when_physical_gateway_changes(self, monkeypatch):
-        from src.platform.windows.network import WindowsInterfaceWatcher
-
+    def test_interface_watcher_suppresses_unchanged_physical_nic(self, monkeypatch):
+        """TUN/virtual adapter mutations must NOT fire the callback (echo suppression)."""
         nic_state = [
             {
                 "name": "Ethernet",
@@ -230,22 +218,128 @@ class TestPhase6InterfaceWatcherDebounceAndFSM:
                 "ifindex": 5,
             }
         ]
-        monkeypatch.setattr("src.platform.windows.network.get_physical_nic_candidates", lambda: nic_state)
+        watcher, callbacks = self._make_watcher(monkeypatch, [nic_state])
+        # Establish baseline
+        watcher._last_physical_state = watcher._get_current_physical_state()
 
+        # Simulate debounced handler firing on internal route/TUN mutation (state unchanged)
+        watcher._debounced_handler()
+        assert len(callbacks) == 0, "Callback must be suppressed when physical NIC and gateway are unchanged"
+
+    def test_interface_watcher_fires_on_cable_unplug(self, monkeypatch):
+        """CORE BUG FIX: When the network cable is unplugged, nic candidates returns [].
+        The watcher must fire the callback (transition to _NETWORK_DOWN sentinel)."""
+        from src.platform.windows.network import WindowsInterfaceWatcher
+
+        nic_state = [[
+            {
+                "name": "Ethernet",
+                "guid": "{11111111-2222-3333-4444-555555555555}",
+                "ip": "192.168.1.100",
+                "gateway": "192.168.1.1",
+                "ifindex": 5,
+            }
+        ]]
+        monkeypatch.setattr(
+            "src.platform.windows.network.get_physical_nic_candidates",
+            lambda: nic_state[0],
+        )
+        callbacks = []
+        watcher = WindowsInterfaceWatcher(callback=lambda: callbacks.append(True))
+        watcher.DEBOUNCE_SECONDS = 0.05
+
+        # Establish baseline with a valid NIC
+        watcher._last_physical_state = watcher._get_current_physical_state()
+        assert watcher._last_physical_state != WindowsInterfaceWatcher._NETWORK_DOWN
+
+        # Simulate cable unplug: nic_state goes empty
+        nic_state[0] = []
+        watcher._debounced_handler()
+        assert len(callbacks) == 1, (
+            "Callback MUST fire when cable is unplugged (empty NIC list → _NETWORK_DOWN sentinel)"
+        )
+        # _last_physical_state must now be the down sentinel
+        assert watcher._last_physical_state == WindowsInterfaceWatcher._NETWORK_DOWN
+
+    def test_interface_watcher_fires_on_cable_reconnect(self, monkeypatch):
+        """When network comes back after unplug, callback must fire (DOWN → valid state)."""
+        from src.platform.windows.network import WindowsInterfaceWatcher
+
+        nic_state = [[]]  # Start with cable unplugged
+        monkeypatch.setattr(
+            "src.platform.windows.network.get_physical_nic_candidates",
+            lambda: nic_state[0],
+        )
+        callbacks = []
+        watcher = WindowsInterfaceWatcher(callback=lambda: callbacks.append(True))
+        watcher.DEBOUNCE_SECONDS = 0.05
+        # Baseline is NETWORK_DOWN (cable was already out at start)
+        watcher._last_physical_state = WindowsInterfaceWatcher._NETWORK_DOWN
+
+        # Cable plugged back in
+        nic_state[0] = [
+            {
+                "name": "Ethernet",
+                "guid": "{11111111-2222-3333-4444-555555555555}",
+                "ip": "192.168.1.100",
+                "gateway": "192.168.1.1",
+                "ifindex": 5,
+            }
+        ]
+        watcher._debounced_handler()
+        assert len(callbacks) == 1, (
+            "Callback MUST fire when cable is reconnected (_NETWORK_DOWN → valid adapter)"
+        )
+        assert watcher._last_physical_state != WindowsInterfaceWatcher._NETWORK_DOWN
+
+    def test_interface_watcher_suppresses_repeated_down_events(self, monkeypatch):
+        """Sustained disconnection must not fire repeated callbacks (DOWN stays DOWN)."""
+        nic_state = [[]]
+        monkeypatch.setattr(
+            "src.platform.windows.network.get_physical_nic_candidates",
+            lambda: nic_state[0],
+        )
+        from src.platform.windows.network import WindowsInterfaceWatcher
+        callbacks = []
+        watcher = WindowsInterfaceWatcher(callback=lambda: callbacks.append(True))
+        watcher.DEBOUNCE_SECONDS = 0.05
+        # Baseline is already NETWORK_DOWN (persisted from previous call)
+        watcher._last_physical_state = WindowsInterfaceWatcher._NETWORK_DOWN
+
+        watcher._debounced_handler()
+        assert len(callbacks) == 0, "Repeated DOWN→DOWN transitions must be suppressed"
+
+    def test_interface_watcher_fires_when_physical_gateway_changes(self, monkeypatch):
+        """WiFi handover (Ethernet→WiFi, different gateway) must fire the callback."""
+        nic_state = [[
+            {
+                "name": "Ethernet",
+                "guid": "{11111111-2222-3333-4444-555555555555}",
+                "ip": "192.168.1.100",
+                "gateway": "192.168.1.1",
+                "ifindex": 5,
+            }
+        ]]
+        monkeypatch.setattr(
+            "src.platform.windows.network.get_physical_nic_candidates",
+            lambda: nic_state[0],
+        )
+        from src.platform.windows.network import WindowsInterfaceWatcher
         callbacks = []
         watcher = WindowsInterfaceWatcher(callback=lambda: callbacks.append(True))
         watcher.DEBOUNCE_SECONDS = 0.05
         watcher._last_physical_state = watcher._get_current_physical_state()
 
         # Physical link changes (e.g. Wi-Fi handover / new default gateway)
-        nic_state[0] = {
-            "name": "Wi-Fi",
-            "guid": "{99999999-8888-7777-6666-555555555555}",
-            "ip": "10.0.0.50",
-            "gateway": "10.0.0.1",
-            "ifindex": 8,
-        }
-
+        nic_state[0] = [
+            {
+                "name": "Wi-Fi",
+                "guid": "{99999999-8888-7777-6666-555555555555}",
+                "ip": "10.0.0.50",
+                "gateway": "10.0.0.1",
+                "ifindex": 8,
+            }
+        ]
         watcher._debounced_handler()
         assert len(callbacks) == 1, "Callback must fire when physical NIC / gateway actually transitions"
 
@@ -272,4 +366,5 @@ class TestPhase6InterfaceWatcherDebounceAndFSM:
         assert fsm.transition_to(ConnectionState.PREPARING)
         assert fsm.transition_to(ConnectionState.CONNECTED)
         assert fsm.state == ConnectionState.CONNECTED
+
 

@@ -597,6 +597,11 @@ class WindowsInterfaceWatcher:
 
     DEBOUNCE_SECONDS = 1.5
 
+    # Sentinel returned when no physical adapter with a default gateway is found
+    # (cable unplugged, WiFi disconnected, etc.). Using a distinct sentinel lets
+    # _debounced_handler distinguish "network down" from "query failed".
+    _NETWORK_DOWN = ("__down__", None, -1)
+
     def __init__(self, callback: Callable[[], None]):
         self._callback = callback
         self._thread: Optional[threading.Thread] = None
@@ -607,8 +612,16 @@ class WindowsInterfaceWatcher:
         self._timer_lock = threading.Lock()
         self._last_physical_state: Optional[tuple] = None
 
-    def _get_current_physical_state(self) -> Optional[tuple]:
-        """Query the primary physical adapter state (GUID/name, gateway, ifindex)."""
+    def _get_current_physical_state(self) -> tuple:
+        """Query the primary physical adapter state (GUID/name, gateway, ifindex).
+
+        Returns:
+            A 3-tuple ``(guid_or_name, gateway, ifindex)`` when a physical
+            adapter with a routable gateway exists, or ``_NETWORK_DOWN`` when
+            no qualifying adapter is found (cable unplugged / Wi-Fi off / DHCP
+            not yet acquired).  Never returns ``None`` — callers can always
+            compare against ``_NETWORK_DOWN`` for the "offline" case.
+        """
         try:
             candidates = get_physical_nic_candidates()
             if candidates:
@@ -620,34 +633,52 @@ class WindowsInterfaceWatcher:
                 )
         except Exception as e:
             logger.debug(f"[WindowsInterfaceWatcher] Error querying physical state: {e}")
-        return None
+        return self._NETWORK_DOWN
 
     def _debounced_handler(self):
         if self._stop_event.is_set():
             return
         try:
             current_state = self._get_current_physical_state()
-            if not current_state:
-                logger.debug("[WindowsInterfaceWatcher] Debounced check: no active physical network interface")
-                return
 
+            # First event after start: establish baseline. Never fire on the
+            # initial sample — that would race with the tunnel coming up.
             if self._last_physical_state is None:
                 self._last_physical_state = current_state
-                logger.debug(f"[WindowsInterfaceWatcher] Baseline physical state initialized: {current_state}")
-                return
-
-            # Check if primary physical adapter GUID or default gateway changed
-            if current_state == self._last_physical_state:
                 logger.debug(
-                    f"[WindowsInterfaceWatcher] Suppressing event: physical adapter & gateway unchanged ({current_state})"
+                    f"[WindowsInterfaceWatcher] Baseline physical state established: "
+                    f"{'DOWN (no NIC/gateway)' if current_state == self._NETWORK_DOWN else current_state}"
                 )
                 return
 
+            # No change at all — this was a TUN/virtual adapter mutation echo.
+            if current_state == self._last_physical_state:
+                logger.debug(
+                    f"[WindowsInterfaceWatcher] Suppressing event: physical state unchanged "
+                    f"({'DOWN' if current_state == self._NETWORK_DOWN else str(current_state)})"
+                )
+                return
+
+            # State changed (includes transitions to/from NETWORK_DOWN).
             old_state = self._last_physical_state
             self._last_physical_state = current_state
-            logger.info(
-                f"[WindowsInterfaceWatcher] Physical network interface change confirmed: {old_state} -> {current_state}"
-            )
+
+            if current_state == self._NETWORK_DOWN:
+                logger.info(
+                    f"[WindowsInterfaceWatcher] Physical network DISCONNECTED: "
+                    f"{old_state} -> DOWN (cable/WiFi unplugged)"
+                )
+            elif old_state == self._NETWORK_DOWN:
+                logger.info(
+                    f"[WindowsInterfaceWatcher] Physical network RECONNECTED: "
+                    f"DOWN -> {current_state}"
+                )
+            else:
+                logger.info(
+                    f"[WindowsInterfaceWatcher] Physical network interface CHANGED: "
+                    f"{old_state} -> {current_state}"
+                )
+
             self._callback()
         except Exception as e:
             logger.debug(f"[WindowsInterfaceWatcher] Debounced handler error: {e}")
@@ -703,7 +734,7 @@ class WindowsInterfaceWatcher:
                     self._cb_func = PIPINTERFACE_CHANGE_CALLBACK(_on_ip_change)
                     handle = ctypes.c_void_p(0)
                     ret = iphlpapi.NotifyIpInterfaceChange(
-                        socket.AF_INET,
+                        socket.AF_UNSPEC,  # catch both AF_INET and AF_INET6 events
                         self._cb_func,
                         None,
                         False,
@@ -722,16 +753,7 @@ class WindowsInterfaceWatcher:
                 if self._stop_event.is_set():
                     break
                 try:
-                    current_state = self._get_current_physical_state()
-                    if current_state and self._last_physical_state is not None and current_state != self._last_physical_state:
-                        logger.info(
-                            f"[WindowsInterfaceWatcher] Physical network transition detected via polling: "
-                            f"{self._last_physical_state} -> {current_state}"
-                        )
-                        self._last_physical_state = current_state
-                        self._callback()
-                    elif current_state and self._last_physical_state is None:
-                        self._last_physical_state = current_state
+                    self._debounced_handler()
                 except Exception as e:
                     logger.debug(f"[WindowsInterfaceWatcher] Polling error: {e}")
         else:

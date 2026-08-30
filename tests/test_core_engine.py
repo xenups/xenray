@@ -56,7 +56,14 @@ class TestSingboxConfigBuilder:
         assert socks_outbound["server_port"] == 10805
 
         direct_outbound = next(o for o in cfg["outbounds"] if o["tag"] == "direct")
-        assert direct_outbound["bind_interface"] == "eth0"
+        # v2.4.4 architectural invariant: no static bind_interface — sing-box uses
+        # auto_detect_interface in the route block for dynamic interface selection.
+        assert "bind_interface" not in direct_outbound, (
+            "direct outbound must be interface-agnostic (no bind_interface); "
+            "dynamic routing is handled by route.auto_detect_interface=true"
+        )
+        assert direct_outbound["type"] == "direct"
+        assert cfg["route"]["auto_detect_interface"] is True
 
     def test_build_with_user_routing_rules(self, builder):
         cfg = builder.build(
