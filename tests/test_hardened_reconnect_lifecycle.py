@@ -368,3 +368,353 @@ class TestPhase6InterfaceWatcherDebounceAndFSM:
         assert fsm.state == ConnectionState.CONNECTED
 
 
+class TestPhase7LinkRecoveryBackoffReset:
+    """Phase 7: Link Recovery Triggers Backoff Reset.
+
+    Verifies the full lifecycle:
+      reconnect_paused (failures > 0) -> _NETWORK_DOWN -> valid state
+      -> auto_reconnect_service.reset_backoff() fires -> consecutive_failures == 0
+    """
+
+    def _make_watcher(self, monkeypatch, nic_state_holder):
+        from src.platform.windows.network import WindowsInterfaceWatcher
+        monkeypatch.setattr(
+            "src.platform.windows.network.get_physical_nic_candidates",
+            lambda: nic_state_holder[0],
+        )
+        callbacks = []
+        watcher = WindowsInterfaceWatcher(callback=lambda: callbacks.append(True))
+        watcher.DEBOUNCE_SECONDS = 0.05
+        return watcher, callbacks
+
+    def test_link_restore_resets_backoff_and_clears_failures(self, monkeypatch):
+        """DOWN -> valid transition MUST call reset_backoff(), zeroing consecutive_failures."""
+        from src.platform.windows.network import WindowsInterfaceWatcher
+        from src.services.monitoring.auto_reconnect_service import AutoReconnectService
+
+        nic_state = [[]]  # Start: cable unplugged
+        monkeypatch.setattr(
+            "src.platform.windows.network.get_physical_nic_candidates",
+            lambda: nic_state[0],
+        )
+
+        svc = AutoReconnectService(
+            network_validator=MagicMock(),
+            config_loader=MagicMock(),
+            connection_tester=MagicMock(),
+            connect_fn=MagicMock(),
+            event_emitter=MagicMock(),
+        )
+        svc._consecutive_failures = 5  # Simulate reconnect_paused
+
+        def _on_link_change():
+            """Mirrors ConnectionManager: reset backoff only on link recovery (DOWN->valid)."""
+            if watcher._last_physical_state != watcher._NETWORK_DOWN:
+                svc.reset_backoff(reason="interface_change")
+
+        watcher = WindowsInterfaceWatcher(callback=_on_link_change)
+        watcher._last_physical_state = watcher._NETWORK_DOWN  # Baseline: down
+
+        # Cable reconnected
+        nic_state[0] = [
+            {
+                "name": "Ethernet",
+                "guid": "{AAAA-BBBB-CCCC-DDDD}",
+                "ip": "192.168.1.100",
+                "gateway": "192.168.1.1",
+                "ifindex": 5,
+            }
+        ]
+        watcher._debounced_handler()
+
+        assert svc._consecutive_failures == 0, (
+            "reset_backoff() must zero consecutive_failures on link recovery"
+        )
+        assert watcher._last_physical_state != watcher._NETWORK_DOWN
+
+    def test_cable_unplug_does_not_reset_backoff(self, monkeypatch):
+        """valid -> _NETWORK_DOWN fires callback but reset_backoff must NOT be called on DOWN."""
+        from src.platform.windows.network import WindowsInterfaceWatcher
+        from src.services.monitoring.auto_reconnect_service import AutoReconnectService
+
+        nic_state = [[
+            {
+                "name": "Ethernet",
+                "guid": "{AAAA-BBBB-CCCC-DDDD}",
+                "ip": "192.168.1.100",
+                "gateway": "192.168.1.1",
+                "ifindex": 5,
+            }
+        ]]
+        monkeypatch.setattr(
+            "src.platform.windows.network.get_physical_nic_candidates",
+            lambda: nic_state[0],
+        )
+
+        svc = AutoReconnectService(
+            network_validator=MagicMock(),
+            config_loader=MagicMock(),
+            connection_tester=MagicMock(),
+            connect_fn=MagicMock(),
+            event_emitter=MagicMock(),
+        )
+        svc._consecutive_failures = 3
+
+        def _on_link_change():
+            if watcher._last_physical_state != watcher._NETWORK_DOWN:
+                svc.reset_backoff(reason="interface_change")
+
+        watcher = WindowsInterfaceWatcher(callback=_on_link_change)
+        watcher._last_physical_state = watcher._get_current_physical_state()
+
+        # Cable unplugged
+        nic_state[0] = []
+        watcher._debounced_handler()
+
+        # Callback fired but reset_backoff must NOT have been invoked (link went DOWN, not UP)
+        assert watcher._last_physical_state == watcher._NETWORK_DOWN
+        assert svc._consecutive_failures == 3, (
+            "reset_backoff must NOT be called on link DOWN transitions"
+        )
+
+    def test_paused_service_backoff_zeroed_after_link_recovery(self, monkeypatch):
+        """Integration: MAX consecutive failures (paused) -> link recovers -> failures zeroed."""
+        from src.platform.windows.network import WindowsInterfaceWatcher
+        from src.services.monitoring.auto_reconnect_service import AutoReconnectService
+
+        nic_state = [[]]
+        monkeypatch.setattr(
+            "src.platform.windows.network.get_physical_nic_candidates",
+            lambda: nic_state[0],
+        )
+        svc = AutoReconnectService(
+            network_validator=MagicMock(),
+            config_loader=MagicMock(),
+            connection_tester=MagicMock(),
+            connect_fn=MagicMock(),
+            event_emitter=MagicMock(),
+        )
+        svc._consecutive_failures = svc.MAX_CONSECUTIVE_ATTEMPTS  # fully paused
+
+        def _on_link_change():
+            if watcher._last_physical_state != watcher._NETWORK_DOWN:
+                svc.reset_backoff(reason="interface_change")
+
+        watcher = WindowsInterfaceWatcher(callback=_on_link_change)
+        watcher._last_physical_state = watcher._NETWORK_DOWN
+
+        nic_state[0] = [
+            {
+                "name": "Ethernet",
+                "guid": "{AAAA-BBBB-CCCC-DDDD}",
+                "ip": "10.20.30.40",
+                "gateway": "10.20.30.1",
+                "ifindex": 3,
+            }
+        ]
+        watcher._debounced_handler()
+
+        assert svc._consecutive_failures == 0, (
+            "Fully-paused service must resume after link recovery resets backoff"
+        )
+
+
+class TestPhase8NetworkResilienceEdgeCases:
+    """Phase 8: Rapid Flapping & Multi-Homed Resilience.
+
+    1. Rapid valid->DOWN->valid within debounce window collapses to zero callbacks.
+    2. Multi-homed failover (ETH drops, Wi-Fi stays) never triggers _NETWORK_DOWN.
+    """
+
+    # ------------------------------------------------------------------
+    # Rapid Network Flapping
+    # ------------------------------------------------------------------
+
+    def test_rapid_flap_same_nic_collapses_to_zero_callbacks(self, monkeypatch):
+        """valid -> DOWN -> valid (same NIC) within debounce window: 0 callbacks.
+
+        When the link oscillates faster than DEBOUNCE_SECONDS, the OS fires
+        NotifyIpInterfaceChange multiple times resetting the timer on each event.
+        After the dust settles the handler fires ONCE and sees the current state
+        matches the original baseline -> suppress.
+        """
+        from src.platform.windows.network import WindowsInterfaceWatcher
+
+        ETH = {
+            "name": "Ethernet",
+            "guid": "{AAAA-0000}",
+            "ip": "192.168.1.100",
+            "gateway": "192.168.1.1",
+            "ifindex": 5,
+        }
+
+        nic_state = [[ETH]]
+        monkeypatch.setattr(
+            "src.platform.windows.network.get_physical_nic_candidates",
+            lambda: nic_state[0],
+        )
+
+        callbacks = []
+        watcher = WindowsInterfaceWatcher(callback=lambda: callbacks.append(True))
+        watcher.DEBOUNCE_SECONDS = 0.05
+
+        # Baseline: Ethernet is UP
+        watcher._last_physical_state = watcher._get_current_physical_state()
+
+        # Simulate OS event burst (rapid DOWN then UP before debounce fires):
+        nic_state[0] = []     # OS event 1: link down  (timer reset, no handler yet)
+        nic_state[0] = [ETH]  # OS event 2: link back up (timer reset again, no handler yet)
+
+        # Single debounce handler invocation (after timer settles)
+        watcher._debounced_handler()
+
+        assert len(callbacks) == 0, (
+            "Rapid valid->DOWN->valid flap within debounce window MUST collapse to 0 callbacks"
+        )
+
+    def test_rapid_flap_net_different_nic_produces_single_callback(self, monkeypatch):
+        """valid A -> DOWN -> valid B (different NIC) within debounce: exactly 1 callback."""
+        from src.platform.windows.network import WindowsInterfaceWatcher
+
+        ETH = {
+            "name": "Ethernet",
+            "guid": "{AAAA-0000}",
+            "ip": "192.168.1.100",
+            "gateway": "192.168.1.1",
+            "ifindex": 5,
+        }
+        WIFI = {
+            "name": "Wi-Fi",
+            "guid": "{BBBB-1111}",
+            "ip": "10.0.0.50",
+            "gateway": "10.0.0.1",
+            "ifindex": 8,
+        }
+
+        nic_state = [[ETH]]
+        monkeypatch.setattr(
+            "src.platform.windows.network.get_physical_nic_candidates",
+            lambda: nic_state[0],
+        )
+
+        callbacks = []
+        watcher = WindowsInterfaceWatcher(callback=lambda: callbacks.append(True))
+        watcher.DEBOUNCE_SECONDS = 0.05
+
+        # Baseline: Ethernet
+        watcher._last_physical_state = watcher._get_current_physical_state()
+
+        # OS burst: ETH->DOWN->WIFI (net result after debounce: WIFI is primary)
+        nic_state[0] = []      # OS event 1: link down
+        nic_state[0] = [WIFI]  # OS event 2: Wi-Fi comes up before debounce fires
+
+        # Single debounce handler invocation
+        watcher._debounced_handler()
+
+        assert len(callbacks) == 1, (
+            "ETH->DOWN->WIFI flap must yield exactly 1 callback for the net adapter change"
+        )
+        assert watcher._last_physical_state != watcher._NETWORK_DOWN
+        assert watcher._last_physical_state[0] == WIFI["guid"]
+
+    # ------------------------------------------------------------------
+    # Multi-Homed Resilience
+    # ------------------------------------------------------------------
+
+    def test_multihomed_ethernet_drop_wifi_survives_no_network_down(self, monkeypatch):
+        """ETH drops while Wi-Fi remains: one callback for adapter change, never _NETWORK_DOWN."""
+        from src.platform.windows.network import WindowsInterfaceWatcher
+
+        ETH = {
+            "name": "Ethernet",
+            "guid": "{ETH-GUID}",
+            "ip": "192.168.1.100",
+            "gateway": "192.168.1.1",
+            "ifindex": 2,
+            "metric": 5,
+        }
+        WIFI = {
+            "name": "Wi-Fi",
+            "guid": "{WIFI-GUID}",
+            "ip": "10.0.0.50",
+            "gateway": "10.0.0.1",
+            "ifindex": 8,
+            "metric": 50,
+        }
+
+        # Both adapters up, Ethernet is primary (lower metric -> sorted first)
+        nic_state = [[ETH, WIFI]]
+        monkeypatch.setattr(
+            "src.platform.windows.network.get_physical_nic_candidates",
+            lambda: nic_state[0],
+        )
+
+        callbacks = []
+        false_downs = []
+
+        def _on_change():
+            callbacks.append(True)
+            if watcher._last_physical_state == watcher._NETWORK_DOWN:
+                false_downs.append("FALSE_DOWN")
+
+        watcher = WindowsInterfaceWatcher(callback=_on_change)
+        watcher.DEBOUNCE_SECONDS = 0.05
+
+        # Baseline: Ethernet is primary
+        watcher._last_physical_state = watcher._get_current_physical_state()
+        assert watcher._last_physical_state[0] == ETH["guid"]
+
+        # Ethernet drops — only Wi-Fi remains
+        nic_state[0] = [WIFI]
+        watcher._debounced_handler()
+
+        assert len(callbacks) == 1, "Ethernet failover to Wi-Fi must fire exactly one callback"
+        assert len(false_downs) == 0, (
+            "Multi-homed failover MUST NOT trigger _NETWORK_DOWN when Wi-Fi adapter survives"
+        )
+        assert watcher._last_physical_state[0] == WIFI["guid"], (
+            "After Ethernet drop, Wi-Fi must become the tracked primary"
+        )
+
+    def test_multihomed_both_drop_signals_network_down(self, monkeypatch):
+        """Both ETH and Wi-Fi drop simultaneously: _NETWORK_DOWN correctly signalled."""
+        from src.platform.windows.network import WindowsInterfaceWatcher
+
+        ETH = {
+            "name": "Ethernet",
+            "guid": "{ETH-GUID}",
+            "ip": "192.168.1.100",
+            "gateway": "192.168.1.1",
+            "ifindex": 2,
+            "metric": 5,
+        }
+        WIFI = {
+            "name": "Wi-Fi",
+            "guid": "{WIFI-GUID}",
+            "ip": "10.0.0.50",
+            "gateway": "10.0.0.1",
+            "ifindex": 8,
+            "metric": 50,
+        }
+
+        nic_state = [[ETH, WIFI]]
+        monkeypatch.setattr(
+            "src.platform.windows.network.get_physical_nic_candidates",
+            lambda: nic_state[0],
+        )
+
+        callbacks = []
+        watcher = WindowsInterfaceWatcher(callback=lambda: callbacks.append(True))
+        watcher.DEBOUNCE_SECONDS = 0.05
+
+        # Baseline: both up
+        watcher._last_physical_state = watcher._get_current_physical_state()
+
+        # Full outage: both adapters drop
+        nic_state[0] = []
+        watcher._debounced_handler()
+
+        assert len(callbacks) == 1, "Full outage (all NICs drop) must fire exactly one callback"
+        assert watcher._last_physical_state == watcher._NETWORK_DOWN, (
+            "When ALL adapters are gone, watcher state must be _NETWORK_DOWN"
+        )
