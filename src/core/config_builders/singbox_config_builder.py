@@ -186,31 +186,23 @@ class SingboxConfigBuilder:
         existing_tags = {o.get("tag") for o in outbounds if isinstance(o, dict)}
 
         if "direct" not in existing_tags:
-            direct_outbound = {"type": "direct", "tag": "direct"}
-            if interface_name:
-                direct_outbound["bind_interface"] = interface_name
-            outbounds.append(direct_outbound)
+            outbounds.append({"type": "direct", "tag": "direct"})
 
         if "block" not in existing_tags:
             outbounds.append({"type": "block", "tag": "block"})
-
-        direct_entry = next((o for o in outbounds if o.get("tag") == "direct"), None)
-        direct_is_empty = not direct_entry or not any(k for k in direct_entry if k not in ("type", "tag"))
 
         # Reconcile DNS servers against sing-box 1.13.14 rules
         for s in cfg.get("dns", {}).get("servers", []):
             tag = s.get("tag")
             if tag == "local_dns":
-                # If address == "local" is used, convert to type "local" detouring to direct
-                if s.get("address") == "local" or s.get("server") == "local":
+                # For default/local DNS, ensure native sing-box 1.13+ local resolver syntax without detour
+                if s.get("address") == "local" or s.get("server") == "local" or s.get("type") == "local":
                     s["type"] = "local"
                     s.pop("address", None)
                     s.pop("server", None)
-                    s["detour"] = "direct"
-                elif s.get("type") == "udp" and s.get("detour") == "direct" and direct_is_empty:
-                    # In sing-box 1.13.14, a UDP DNS server with detour to an empty direct
-                    # outbound causes a fatal panic ("detour to an empty direct outbound makes no sense").
-                    # Omit the detour so sing-box routes it directly via system default.
+                    s.pop("detour", None)
+                elif s.get("type") == "udp":
+                    # For explicit IP local DNS, omit detour to empty direct so it routes dynamically
                     s.pop("detour", None)
             elif tag in ("remote_proxy", "bootstrap"):
                 if "proxy" in existing_tags:

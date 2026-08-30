@@ -30,13 +30,11 @@ class DnsConfigBuilder:
                 "tag": "local_dns",
                 "type": "udp",
                 "server": local_dns_server,
-                "detour": "direct",
             }
         else:
             local_dns_entry = {
                 "tag": "local_dns",
                 "type": "local",
-                "detour": "direct",
             }
 
         return {

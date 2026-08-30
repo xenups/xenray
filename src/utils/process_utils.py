@@ -199,30 +199,22 @@ class ProcessUtils:
 
     @staticmethod
     def cleanup_orphaned_core(executable_path: str, exclude_pid: Optional[int] = None) -> int:
-        """Terminate orphaned core instances whose executable path matches executable_path."""
+        """Terminate orphaned core instances whose executable strictly matches XenRay's executable_path."""
         killed = 0
-        if not executable_path:
+        if not executable_path or not os.path.exists(executable_path):
             return 0
         try:
             target_norm = os.path.normcase(os.path.abspath(executable_path))
-            target_base = os.path.basename(executable_path).lower()
             current_pid = os.getpid()
-            for proc in psutil.process_iter(["pid", "name", "exe"]):
+            for proc in psutil.process_iter(["pid", "exe"]):
                 try:
                     p_info = proc.info
                     pid = p_info.get("pid")
-                    if pid in (exclude_pid, current_pid):
+                    if not pid or pid in (exclude_pid, current_pid):
                         continue
-                    name = (p_info.get("name") or "").lower()
                     exe = p_info.get("exe")
-                    is_match = False
                     if exe and os.path.normcase(os.path.abspath(exe)) == target_norm:
-                        is_match = True
-                    elif name and name in (target_base, target_base.replace(".exe", "")):
-                        is_match = True
-
-                    if is_match:
-                        logger.info(f"[ProcessUtils] Terminating orphaned core process PID {pid} ({name})")
+                        logger.info(f"[ProcessUtils] Terminating orphaned core process PID {pid} ({exe})")
                         proc.kill()
                         killed += 1
                 except (psutil.NoSuchProcess, psutil.AccessDenied):

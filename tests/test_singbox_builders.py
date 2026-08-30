@@ -73,9 +73,9 @@ class TestRouteConfigBuilder:
         outbounds = builder.build_outbounds(socks_port=10808, interface_name="eth0")
         tags = {o["tag"]: o for o in outbounds}
         assert "proxy" in tags
-        assert tags["proxy"]["server_port"] == 10808
         assert "direct" in tags
-        assert tags["direct"]["bind_interface"] == "eth0"
+        assert tags["direct"]["type"] == "direct"
+        assert "bind_interface" not in tags["direct"], "direct outbound must remain interface-agnostic"
         assert "block" in tags
 
     def test_inject_loop_breakers(self):

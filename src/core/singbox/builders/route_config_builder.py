@@ -38,14 +38,12 @@ class RouteConfigBuilder:
         ]
 
     def build_outbounds(self, socks_port: int, interface_name: Optional[str] = None) -> list[dict]:
-        """Build proxy, direct, and block outbounds."""
-        direct_outbound = {
-            "type": "direct",
-            "tag": "direct",
-        }
-        if interface_name:
-            direct_outbound["bind_interface"] = interface_name
+        """Build proxy, direct, and block outbounds.
 
+        Outbound 'direct' remains purely interface-agnostic without static
+        bind_interface, letting 'route.auto_detect_interface: true' handle
+        dynamic interface switching seamlessly across Wi-Fi and Ethernet.
+        """
         return [
             {
                 "type": "socks",
@@ -53,7 +51,10 @@ class RouteConfigBuilder:
                 "server": "127.0.0.1",
                 "server_port": socks_port,
             },
-            direct_outbound,
+            {
+                "type": "direct",
+                "tag": "direct",
+            },
             {
                 "type": "block",
                 "tag": "block",
