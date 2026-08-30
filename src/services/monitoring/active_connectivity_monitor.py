@@ -295,9 +295,11 @@ class ActiveConnectivityMonitor:
 
         now_rx = stats.bytes_recv
 
-        # Adapter rebuild / counter reset guard:
-        # If the TUN adapter was recreated during reconnect or OS reset, now_rx will
-        # drop below _last_rx_bytes. Reset the baseline and do not gate on this tick.
+        # Adapter rebuild / counter reset / wrap-around guard:
+        # If the TUN adapter was recreated during reconnect, or if the OS network
+        # byte counter rolled over (uint32/uint64 wrap-around on long-running sessions),
+        # now_rx will drop below _last_rx_bytes. Re-calibrate the baseline cleanly to now_rx
+        # and do not gate on this tick (benign 1-tick fallthrough to SOCKS5 probe).
         if self._last_rx_bytes == 0 or now_rx < self._last_rx_bytes:
             self._last_rx_bytes = now_rx
             self._last_total_bytes = now_rx
