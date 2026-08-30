@@ -84,8 +84,15 @@ class TunInjector:
         config["inbounds"].insert(0, tun_inbound)
         logger.info(f"[TunInjector] Injected TUN inbound (MTU={mtu})")
 
-        # Ensure dns-out outbound exists so Xray's DNS engine can process port 53 traffic
+        # Ensure direct, block, and dns-out outbounds exist so Xray routing rules can target them
         outbounds = config.setdefault("outbounds", [])
+        existing_tags = {ob.get("tag") for ob in outbounds}
+        if TAG_DIRECT not in existing_tags and not any(ob.get("protocol") == "freedom" for ob in outbounds):
+            outbounds.append({"protocol": "freedom", "tag": TAG_DIRECT, "settings": {}})
+            logger.info("[TunInjector] Injected direct (freedom) outbound")
+        if TAG_BLOCK not in existing_tags and not any(ob.get("protocol") == "blackhole" for ob in outbounds):
+            outbounds.append({"protocol": "blackhole", "tag": TAG_BLOCK, "settings": {}})
+            logger.info("[TunInjector] Injected block (blackhole) outbound")
         if not any(ob.get("protocol") == "dns" for ob in outbounds):
             outbounds.append({"protocol": "dns", "tag": "dns-out"})
             logger.info("[TunInjector] Injected dns-out outbound")
@@ -267,6 +274,18 @@ class TunInjector:
                 }
             )
 
+        # User PROXY rules BEFORE country-direct rules: Xray is first-match-wins,
+        # so an explicit user "proxy" choice must outrank geoip/geosite country
+        # bypass (e.g. a proxy-listed domain that also appears in geosite:ir).
+        user_proxy = routing_rules.get(TAG_PROXY, [])
+        if user_proxy:
+            proxy_ips = [t for t in user_proxy if is_ip(t)]
+            proxy_domains = [t for t in user_proxy if not is_ip(t)]
+            if proxy_ips:
+                rules.append({"type": RULE_FIELD, "ip": proxy_ips, "outboundTag": TAG_PROXY})
+            if proxy_domains:
+                rules.append({"type": RULE_FIELD, "domain": proxy_domains, "outboundTag": TAG_PROXY})
+
         country = (routing_country or "").lower().strip()
         geoip_tags = XRAY_COUNTRY_GEOIP.get(country, [])
         if geoip_tags:
@@ -278,14 +297,5 @@ class TunInjector:
                     "outboundTag": TAG_DIRECT,
                 }
             )
-
-        user_proxy = routing_rules.get(TAG_PROXY, [])
-        if user_proxy:
-            proxy_ips = [t for t in user_proxy if is_ip(t)]
-            proxy_domains = [t for t in user_proxy if not is_ip(t)]
-            if proxy_ips:
-                rules.append({"type": RULE_FIELD, "ip": proxy_ips, "outboundTag": TAG_PROXY})
-            if proxy_domains:
-                rules.append({"type": RULE_FIELD, "domain": proxy_domains, "outboundTag": TAG_PROXY})
 
         return rules

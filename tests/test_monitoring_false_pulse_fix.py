@@ -403,3 +403,70 @@ def test_is_direct_outbound_helper():
         "connection: open connection to 1.2.3.4:443 using outbound/proxy[proxy]: dial tcp"
     )
     assert not PassiveLogMonitor._is_direct_outbound("fatal: failed to create tun")
+
+
+# ---------------------------------------------------------------------------
+# FP-1: consecutive-line guard (production threshold = 3 via MonitoringService)
+# ---------------------------------------------------------------------------
+
+
+class TestConsecutiveLineGuard:
+    """A transient one-off dial error must NOT alert; a repeating outage must."""
+
+    def _monitor(self, callback, threshold):
+        m = PassiveLogMonitor(on_failure_callback=callback)
+        m.REQUIRED_FAILURE_LINES = threshold
+        m._running = True  # deliver callbacks without starting the tailer thread
+        return m
+
+    def test_single_transient_line_never_alerts(self):
+        received = []
+        m = self._monitor(lambda p: received.append(p), threshold=3)
+        # two failures then healthy traffic resets the partial streak
+        m._process_line("2026/01/01 dial tcp 1.2.3.4:443: i/o timeout")
+        m._process_line("2026/01/02 dial tcp 5.6.7.8:443: i/o timeout")
+        m._process_line("[Info] proxy: connection open")
+        assert received == [], "partial streak + reset must never alert"
+
+    def test_repeated_lines_alert_on_third(self):
+        received = []
+        m = self._monitor(lambda p: received.append(p), threshold=3)
+        line = "2026/01/01 dial tcp 1.2.3.4:443: i/o timeout"
+        m._process_line(line)
+        m._process_line(line)
+        assert received == [], "two lines below threshold (callback runs async)"
+        m._process_line(line)
+        assert m._pending_failures == {}, "streak consumed at threshold"
+
+        # The callback fires on the shared executor — wait for delivery.
+        deadline = time.time() + 5.0
+        while time.time() < deadline and not received:
+            time.sleep(0.02)
+        assert len(received) == 1, "third consecutive match alerts"
+
+    def test_streak_expires_after_window(self):
+        received = []
+        m = self._monitor(lambda p: received.append(p), threshold=3)
+        line = "2026/01/01 dial tcp 1.2.3.4:443: i/o timeout"
+        m._process_line(line)
+        m._process_line(line)
+        # simulate the streak going stale
+        src = "xray"
+        m._pending_failures[src]["first_seen"] -= (
+            m.FAILURE_STREAK_WINDOW + 5
+        )
+        m._process_line(line)  # fresh streak starts, count=1 < 3
+        assert received == [], "stale streak must not combine with new match"
+
+    def test_service_wires_production_threshold(self):
+        from unittest.mock import MagicMock
+
+        from src.services.monitoring.service import ConnectionMonitoringService
+
+        svc = ConnectionMonitoringService(
+            app_context=MagicMock(),
+            on_signal=lambda *a: None,
+            on_reconnect=lambda *a, **k: True,
+            on_reconnect_event=lambda *a: None,
+        )
+        assert svc._log_monitor.REQUIRED_FAILURE_LINES == 3

@@ -121,10 +121,15 @@ class TestConfigGeneration:
         # Rule order matters: sniff (port 53) must precede hijack-dns, which must
         # precede any direct/proxy outbound rule so DNS never hits 'direct'.
         actions = [(r.get("action"), r.get("protocol"), r.get("port")) for r in rules]
-        sniff_idx = next(i for i, a in enumerate(actions) if a[0] == "sniff")
+        # There are two sniff rules: general (no port) for TLS/HTTP SNI, and
+        # port-53 specifically for DNS detection.  The port-53 sniff must
+        # precede hijack-dns.
+        sniff53_idx = next(
+            i for i, a in enumerate(actions)
+            if a[0] == "sniff" and a[2] == [53]
+        )
         hijack_idx = next(i for i, a in enumerate(actions) if a[0] == "hijack-dns")
-        assert sniff_idx < hijack_idx, "sniff must precede hijack-dns"
-        assert actions[sniff_idx][2] == [53], "sniff must target port 53"
+        assert sniff53_idx < hijack_idx, "port-53 sniff must precede hijack-dns"
         assert actions[hijack_idx][1] == "dns", "hijack-dns must match dns protocol"
 
 

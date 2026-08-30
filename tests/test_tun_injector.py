@@ -312,7 +312,11 @@ class TestBuildRoutingRules:
         tags = [r.get("outboundTag") for r in rules]
         assert tags[0] == "dns-out"  # DNS port 53 rule is first
         assert "direct" in tags
-        assert tags[-1] == "proxy"  # user proxy rules at end
+        # User proxy outranks country-direct: proxy rule must come BEFORE the
+        # geoip:ir / geosite:ir country bypass (first-match-wins).
+        proxy_idx = tags.index("proxy")
+        ir_idx = next(i for i, t in enumerate(tags) if t == "direct" and "geoip:ir" in str(rules[i].get("ip", "")))
+        assert proxy_idx < ir_idx, "user proxy must precede country direct"
 
 
 def test_user_rules_inserted_before_hijack_dns():
@@ -356,3 +360,104 @@ def test_sni_spoof_connect_ip_goes_direct(injector):
     rules = injector._build_routing_rules("", {"direct": [], "proxy": [], "block": []}, ["5.5.5.5"])
     assert rules[0]["outboundTag"] == "direct"
     assert "185.193.30.94" in rules[0]["ip"]
+
+
+def test_singbox_builder_applies_routing_toggles():
+    """block_udp_443 / block_ads toggles must reach the sing-box TUN config
+    (previously they only applied to the Xray-TUN engine path)."""
+    from src.core.config_builders.singbox_config_builder import SingboxConfigBuilder
+
+    builder = SingboxConfigBuilder()
+    cfg = builder.build(
+        socks_port=10805,
+        proxy_server_ip="5.5.5.5",
+        routing_country="",
+        interface_name="eth0",
+        routing_rules={"direct": [], "proxy": [], "block": []},
+        mtu=1420,
+        local_dns_server="192.168.1.1",
+        sni_connect_ip=None,
+        toggles={"block_udp_443": True, "block_ads": True},
+    )
+
+    rules = cfg["route"]["rules"]
+    quic_block = [r for r in rules if r.get("network") == "udp" and r.get("port") == 443]
+    ads_block = [r for r in rules if r.get("rule_set") == "ads-rules"]
+    assert any(r.get("outbound") == "block" for r in quic_block)
+    assert any(r.get("outbound") == "block" for r in ads_block)
+    assert any(rs["tag"] == "ads-rules" for rs in cfg["route"]["rule_set"])
+
+
+def test_singbox_builder_without_toggles_no_extra_rules():
+    """Toggles disabled → no QUIC block, no ads rule-set emitted."""
+    from src.core.config_builders.singbox_config_builder import SingboxConfigBuilder
+
+    builder = SingboxConfigBuilder()
+    cfg = builder.build(
+        socks_port=10805,
+        proxy_server_ip="5.5.5.5",
+        routing_country="",
+        interface_name="eth0",
+        routing_rules={"direct": [], "proxy": [], "block": []},
+        mtu=1420,
+        local_dns_server="192.168.1.1",
+        sni_connect_ip=None,
+        toggles={"block_udp_443": False, "block_ads": False},
+    )
+
+    rules = cfg["route"]["rules"]
+    # The default udp/443→proxy rule exists; no udp/443→block may exist.
+    quic = [r for r in rules if r.get("network") == "udp" and r.get("port") == 443]
+    assert all(r.get("outbound") != "block" for r in quic)
+    assert not [r for r in rules if r.get("rule_set") == "ads-rules"]
+
+
+def test_singbox_dns_rules_user_domains_before_catchall():
+    """User direct domains MUST be resolved by local_dns, not remote_proxy.
+    DNS rules are first-match-wins — the catch-all inbound:[tun-in] rule
+    must come AFTER user domain-specific rules."""
+    from src.core.config_builders.singbox_config_builder import SingboxConfigBuilder
+
+    cfg = SingboxConfigBuilder().build(
+        socks_port=10805, proxy_server_ip="5.5.5.5", routing_country="none",
+        interface_name="eth0",
+        routing_rules={"direct": ["ikco.ir", "bmi.ir"], "proxy": [], "block": []},
+        mtu=1420, local_dns_server="192.168.1.1", sni_connect_ip=None,
+    )
+
+    dns_rules = cfg["dns"]["rules"]
+    # User domain rule must come BEFORE the catch-all
+    user_idx = next(
+        i for i, r in enumerate(dns_rules)
+        if r.get("domain_suffix") == ["ikco.ir", "bmi.ir"]
+    )
+    catchall_idx = next(
+        i for i, r in enumerate(dns_rules)
+        if r.get("inbound") == ["tun-in"] and "server" in r
+    )
+    assert user_idx < catchall_idx, (
+        f"user domain DNS rule (idx {user_idx}) must come before catch-all (idx {catchall_idx})"
+    )
+
+
+def test_singbox_has_tls_sniff_for_domain_routing():
+    """TLS/HTTP sniff must be present so domain-based route rules match
+    HTTPS traffic even when the browser uses DoH (bypasses sing-box DNS)."""
+    from src.core.config_builders.singbox_config_builder import SingboxConfigBuilder
+
+    cfg = SingboxConfigBuilder().build(
+        socks_port=10805, proxy_server_ip="5.5.5.5", routing_country="none",
+        interface_name="eth0",
+        routing_rules={"direct": [], "proxy": [], "block": []},
+        mtu=1420, local_dns_server="192.168.1.1", sni_connect_ip=None,
+    )
+
+    route_rules = cfg["route"]["rules"]
+    sniff = [
+        r for r in route_rules
+        if r.get("action") == "sniff" and r.get("inbound") == ["tun-in"]
+    ]
+    assert sniff, "no TUN sniff rule found in route.rules"
+    # Must have at least one sniff without port filter (covers TLS/HTTP)
+    general_sniff = [r for r in sniff if "port" not in r]
+    assert general_sniff, "no general (non-port-53) sniff rule — HTTPS SNI won't be extracted"

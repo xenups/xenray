@@ -1,5 +1,6 @@
 """Auto-Reconnect Service - Handles passive failure recovery with session scoping."""
 
+import random
 import threading
 import time
 from typing import Callable, Optional
@@ -35,8 +36,10 @@ class AutoReconnectService:
     """
 
     STABILIZATION_BUFFER = 2.0  # seconds to wait before reconnect
-    MAX_COOLDOWN_SECONDS = 300.0  # 5 minutes max between attempts
-    BASE_COOLDOWN_SECONDS = 5.0
+    BASE_COOLDOWN_SECONDS = 2.0  # T_base = 2s
+    MAX_COOLDOWN_SECONDS = 60.0  # T_max = 60s
+    MAX_CONSECUTIVE_ATTEMPTS = 5  # Cap at 5 attempts before Pausing
+    WATCHDOG_INTERVAL_SECONDS = 30.0  # Watchdog re-check in Paused state (30s-45s tuned)
 
     def __init__(
         self,
@@ -67,7 +70,7 @@ class AutoReconnectService:
         self._connect_fn = connect_fn
         self._event_emitter = event_emitter
         self._internet_check = internet_check
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
 
         # Session-scoped cancellation
         self._session_id = 0  # Incremented on each new connection
@@ -111,11 +114,110 @@ class AutoReconnectService:
             return self._cancelled
 
     def _backoff_seconds(self) -> float:
-        """Exponential backoff, capped at MAX_COOLDOWN_SECONDS."""
-        return min(
-            self.BASE_COOLDOWN_SECONDS * (2 ** max(self._consecutive_failures - 1, 0)),
+        """Exponential backoff: min(T_max, T_base * 2^(attempt - 1)) ± 20% jitter.
+
+        Attempt 0 is executed immediately (0s delay, not part of backoff wait).
+        Subsequent retries (attempts 1..5) scale as:
+        Attempt 1: 2s ± 20% (1.6s - 2.4s)
+        Attempt 2: 4s ± 20% (3.2s - 4.8s)
+        Attempt 3: 8s ± 20% (6.4s - 9.6s)
+        Attempt 4: 16s ± 20% (12.8s - 19.2s)
+        Attempt 5: 32s ± 20% (25.6s - 38.4s)
+        """
+        if self._consecutive_failures <= 0:
+            return 0.0
+        exponent = max(self._consecutive_failures - 1, 0)
+        base = min(
+            self.BASE_COOLDOWN_SECONDS * (2 ** exponent),
             self.MAX_COOLDOWN_SECONDS,
         )
+        jitter = random.uniform(-0.20, 0.20)
+        return max(1.0, base * (1.0 + jitter))
+
+    def reset_backoff(self, reason: str = "network_event"):
+        """Reset consecutive failure counter on external network restore event (e.g. link flap)."""
+        with self._lock:
+            logger.info(f"[AutoReconnectService] Resetting backoff counter (reason: {reason})")
+            self._consecutive_failures = 0
+
+    def _start_watchdog_timer(
+        self,
+        current_connection: Optional[dict],
+        session_id: int,
+        interval: Optional[float] = None,
+    ):
+        """Watchdog timer in paused state to re-check physical link with loop-breaker backoff.
+
+        If physical gateway is UP but server is unreachable, prevents infinite retry loops
+        by executing a single-shot probe and doubling the interval up to 300s (5m).
+        """
+        watchdog_interval = interval or self.WATCHDOG_INTERVAL_SECONDS
+
+        def _watchdog_worker():
+            logger.info(f"[AutoReconnectService] Watchdog timer started ({watchdog_interval:.1f}s)")
+            if self._cancel_event.wait(timeout=watchdog_interval):
+                return
+            with self._lock:
+                if self._cancelled or session_id != self._session_id:
+                    return
+                # Check if physical link is alive
+                internet_ok = (
+                    self._internet_check(current_connection)
+                    if self._internet_check
+                    else self._network_validator.check_internet_connection()
+                )
+                if internet_ok:
+                    logger.info(
+                        "[AutoReconnectService] Watchdog detected physical gateway UP. "
+                        "Executing single-shot recovery probe..."
+                    )
+                    # Allow 1 attempt (set count to 4 so failure immediately repauses)
+                    self._consecutive_failures = self.MAX_CONSECUTIVE_ATTEMPTS - 1
+
+                    def _reconnect_and_check():
+                        success = self.handle_failure(current_connection, session_id)
+                        if not success:
+                            # Server unreachable despite physical link -> backoff watchdog up to 5m
+                            next_interval = min(watchdog_interval * 2.0, 300.0)
+                            logger.warning(
+                                f"[AutoReconnectService] Server unreachable despite physical link. "
+                                f"Backing off watchdog to {next_interval:.1f}s"
+                            )
+                            self._emit_safe(
+                                "reconnect_paused",
+                                session_id,
+                                {
+                                    "reason": "server_unreachable_gateway_ok",
+                                    "watchdog_interval": next_interval,
+                                },
+                            )
+                            self._start_watchdog_timer(current_connection, session_id, interval=next_interval)
+
+                    threading.Thread(
+                        target=_reconnect_and_check,
+                        daemon=True,
+                        name="AutoReconnectWatchdogTrigger",
+                    ).start()
+                else:
+                    self._start_watchdog_timer(current_connection, session_id, interval=self.WATCHDOG_INTERVAL_SECONDS)
+
+        threading.Thread(target=_watchdog_worker, daemon=True, name="AutoReconnectWatchdog").start()
+
+    def _schedule_retry(self, current_connection: Optional[dict], session_id: int):
+        """Schedule next reconnect attempt on a background daemon thread."""
+        with self._lock:
+            if self._consecutive_failures >= self.MAX_CONSECUTIVE_ATTEMPTS:
+                return
+            wait = self._backoff_seconds()
+
+        def _worker():
+            logger.info(f"[AutoReconnectService] Scheduling next attempt in {wait:.1f}s")
+            if self._cancel_event.wait(timeout=wait):
+                return
+            if self._validate_session(session_id, "retry_worker"):
+                self.handle_failure(current_connection, session_id)
+
+        threading.Thread(target=_worker, daemon=True, name="AutoReconnectRetry").start()
 
     def _respect_backoff(self, session_id: int) -> bool:
         """If a reconnect attempt happened recently, wait out the backoff
@@ -148,6 +250,21 @@ class AutoReconnectService:
         Returns:
             True if reconnection succeeded, False otherwise
         """
+        # CHECKPOINT 0: Max consecutive attempts ceiling
+        with self._lock:
+            if self._consecutive_failures >= self.MAX_CONSECUTIVE_ATTEMPTS:
+                logger.warning(
+                    f"[AutoReconnectService] Max attempts ({self.MAX_CONSECUTIVE_ATTEMPTS}) reached. "
+                    "Pausing auto-reconnect — Manual Action Required."
+                )
+                self._emit_safe(
+                    "reconnect_paused",
+                    session_id,
+                    {"reason": "max_attempts_reached", "attempts": self._consecutive_failures},
+                )
+                self._start_watchdog_timer(current_connection, session_id)
+                return False
+
         # CHECKPOINT 1: Validate session before starting
         if not self._validate_session(session_id, "start"):
             return False
@@ -171,7 +288,10 @@ class AutoReconnectService:
 
         if not internet_ok:
             logger.warning("[AutoReconnectService] Internet is offline")
+            with self._lock:
+                self._consecutive_failures += 1
             self._emit_safe("reconnect_failed", session_id, {"reason": "no_internet"})
+            self._schedule_retry(current_connection, session_id)
             return False
 
         # CHECKPOINT 3: Stabilization buffer (interruptible)
@@ -295,6 +415,7 @@ class AutoReconnectService:
             # A failed reconnect runs inside the SAME (still valid) session, so
             # the failure event is still emitted against it.
             self._emit_safe("reconnect_failed", session_id, {"reason": "connect_failed"})
+            self._schedule_retry(current_connection, session_id)
 
         return success
 

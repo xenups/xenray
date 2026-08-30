@@ -296,6 +296,7 @@ class ConnectionOrchestrator:
         routing_country = self._app_context.settings.get_routing_country()
         proxy_server_ip = self._xray_processor.get_proxy_server_ip(processed_config)
         routing_rules = self._app_context.routing.load_rules()
+        routing_toggles = self._app_context.routing.load_toggles()
         allow_lan = self._app_context.settings.get_allow_lan()
 
         singbox_pid = self._singbox_service.start(
@@ -305,6 +306,7 @@ class ConnectionOrchestrator:
             routing_rules=routing_rules,
             mtu=optimal_mtu,
             allow_lan=allow_lan,
+            routing_toggles=routing_toggles,
         )
 
         if not singbox_pid:

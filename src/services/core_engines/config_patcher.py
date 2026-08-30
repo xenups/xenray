@@ -49,10 +49,30 @@ class ConfigPatcher:
             domain = server_obj["address"]
 
             applied = self._apply_stream_fallbacks(outbound, domain, default_cipher_suites)
-            if applied:
+            sockopt_applied = self._apply_sockopt_hardening(outbound)
+            if applied or sockopt_applied:
                 fallback_count += 1
         if fallback_count > 0:
-            logger.info(f"[ConfigPatcher] Applied safe fallbacks to {fallback_count} outbound(s)")
+            logger.info(f"[ConfigPatcher] Applied safe fallbacks/hardening to {fallback_count} outbound(s)")
+
+    def _apply_sockopt_hardening(self, outbound: dict) -> bool:
+        """Inject Windows-safe TCP keep-alive settings into streamSettings.sockopt.
+
+        Tuned for Winsock 10-retry kernel realities: 10s idle + (10 * 3s) = 40s kernel drop.
+        """
+        applied = False
+        stream_settings = outbound.setdefault(CONFIG_STREAM_SETTINGS, {})
+        sockopt = stream_settings.setdefault("sockopt", {})
+        if "tcpKeepAliveInterval" not in sockopt:
+            sockopt["tcpKeepAliveInterval"] = 3
+            applied = True
+        if "tcpKeepAliveIdle" not in sockopt:
+            sockopt["tcpKeepAliveIdle"] = 10
+            applied = True
+        if "tcpNoDelay" not in sockopt:
+            sockopt["tcpNoDelay"] = True
+            applied = True
+        return applied
 
     def _apply_stream_fallbacks(self, outbound: dict, domain: str, default_cipher_suites: str = "") -> bool:
         """Safe fallbacks for stream settings (SNI/Host) if missing."""

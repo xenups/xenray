@@ -118,6 +118,7 @@ class SingboxService:
         routing_rules: dict = None,
         mtu: int = 1420,
         allow_lan: bool = False,
+        routing_toggles: dict = None,
     ) -> Optional[int]:
         try:
             adapter = get_network_adapter()
@@ -143,12 +144,14 @@ class SingboxService:
             config = self._config_builder.build(
                 socks_port=xray_socks_port,
                 proxy_server_ip=proxy_server_ip,
-                routing_country=routing_country,
-                interface_name=iface_name,
+                # Pass interface_name=None so sing-box relies on auto_detect_interface: true
+                # rather than pinning to a single static interface that breaks on flap/switch.
+                interface_name=None,
                 routing_rules=routing_rules,
                 mtu=mtu,
                 local_dns_server=local_dns,
                 sni_connect_ip=sni_connect_ip,
+                toggles=routing_toggles,
             )
 
             if not self._wait_for_xray_ready(xray_socks_port) or not self._write_config_and_start(config):

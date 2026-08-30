@@ -1,9 +1,9 @@
-"""Network utilities."""
-
+import ipaddress
 import os
 import shutil
 import socket
 import subprocess
+from typing import List, Union
 
 from src.core.constants import DNS_IP_GOOGLE
 from src.core.logger import logger
@@ -12,6 +12,55 @@ from src.platform.factory import get_network_adapter, get_process_adapter
 
 class NetworkUtils:
     """Utilities for network operations."""
+
+    @staticmethod
+    def normalize_list(value: Union[str, List[str], None]) -> List[str]:
+        """Normalize input to a cleaned list of lowercase strings."""
+        if not value:
+            return []
+        if isinstance(value, str):
+            value = [value]
+        return [
+            item.strip().lower().replace("'", "").replace('"', "").replace("[", "").replace("]", "")
+            for item in value
+            if isinstance(item, str)
+        ]
+
+    @staticmethod
+    def filter_real_ips(lst: List[str]) -> List[str]:
+        """Return only the entries that are valid IP addresses."""
+        result = []
+        for item in lst:
+            try:
+                ipaddress.ip_address(item)
+                result.append(item)
+            except (ValueError, ipaddress.AddressValueError):
+                continue
+        return result
+
+    @staticmethod
+    def filter_domains(lst: List[str]) -> List[str]:
+        """Return only the entries that are domain names (not IPs)."""
+        valid_ips: set = set(NetworkUtils.filter_real_ips(lst))
+        return [item for item in lst if item not in valid_ips]
+
+    @staticmethod
+    def is_valid_ip_cidr(val: str) -> bool:
+        """Check if string is a valid IP or CIDR network notation."""
+        try:
+            ipaddress.ip_network(val, strict=False)
+            return True
+        except ValueError:
+            return False
+
+    @staticmethod
+    def is_ipv4(val: str) -> bool:
+        """True when val is a literal IPv4 (not a domain or IPv6)."""
+        try:
+            ipaddress.ip_address(val)
+            return val.count(".") == 3
+        except ValueError:
+            return False
 
     @staticmethod
     def check_internet_connection(host=DNS_IP_GOOGLE, port=53, timeout=3, retries=3):

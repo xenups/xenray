@@ -69,14 +69,15 @@ def test_probe_failure_triggers_lost_after_confirmation():
         on_connectivity_restored=lambda: restored.append(1),
         on_connectivity_degraded=lambda: degraded.append(1),
     )
-    with patch.object(monitor, "_probe_socks_socket", return_value=False):
-        with patch.object(monitor, "_verify_connectivity", return_value=False):
-            monitor.start(session_id=1)
-            try:
-                for _ in range(10):
-                    monitor._check_connectivity()
-            finally:
-                monitor.stop()
+    with patch.object(monitor, "_check_traffic_flow", return_value=False):
+        with patch.object(monitor, "_probe_socks_socket", return_value=False):
+            with patch.object(monitor, "_verify_connectivity", return_value=False):
+                monitor.start(session_id=1)
+                try:
+                    for _ in range(10):
+                        monitor._check_connectivity()
+                finally:
+                    monitor.stop()
     assert len(lost) == 1, f"Expected exactly 1 LOST event, got {len(lost)}"
 
 
@@ -91,14 +92,15 @@ def test_restored_emitted_after_recovery():
     )
 
     # Phase 1: fail repeatedly → LOST
-    with patch.object(monitor, "_probe_socks_socket", return_value=False):
-        with patch.object(monitor, "_verify_connectivity", return_value=False):
-            monitor.start(session_id=1)
-            try:
-                for _ in range(10):
-                    monitor._check_connectivity()
-            finally:
-                monitor.stop()
+    with patch.object(monitor, "_check_traffic_flow", return_value=False):
+        with patch.object(monitor, "_probe_socks_socket", return_value=False):
+            with patch.object(monitor, "_verify_connectivity", return_value=False):
+                monitor.start(session_id=1)
+                try:
+                    for _ in range(10):
+                        monitor._check_connectivity()
+                finally:
+                    monitor.stop()
 
     assert len(lost) == 1
 
@@ -137,3 +139,47 @@ def test_start_after_stop_recreates_executor():
         assert not monitor._callback_executor._shutdown, "executor must be recreated on restart"
     finally:
         monitor.stop()
+
+
+def test_single_heavy_probe_failure_does_not_trigger_lost():
+    """FP guard: ONE heavy-probe failure is absorbed; LOST needs 2 consecutive."""
+    lost, restored, degraded = [], [], []
+    monitor = ActiveConnectivityMonitor(
+        socks_port_getter=lambda: 10805,
+        on_connectivity_lost=lambda: lost.append(1),
+        on_connectivity_restored=lambda: restored.append(1),
+        on_connectivity_degraded=lambda: degraded.append(1),
+    )
+    with patch.object(monitor, "_probe_socks_socket", return_value=False):
+        # Heavy probe alternates: fail once, succeed once — never 2 consecutive.
+        results = [False, True, False, True, False, True, False, True, False, True]
+        it = iter(results)
+        with patch.object(monitor, "_verify_connectivity", side_effect=lambda *a, **k: next(it)):
+            monitor.start(session_id=7)
+            try:
+                for _ in range(len(results)):
+                    monitor._check_connectivity()
+            finally:
+                monitor.stop()
+    assert lost == [], "alternating heavy-probe results must never emit LOST"
+
+
+def test_two_consecutive_heavy_failures_emit_lost_once():
+    """True outage: light fails + 2 consecutive heavy failures → exactly 1 LOST."""
+    lost, restored, degraded = [], [], []
+    monitor = ActiveConnectivityMonitor(
+        socks_port_getter=lambda: 10805,
+        on_connectivity_lost=lambda: lost.append(1),
+        on_connectivity_restored=lambda: restored.append(1),
+        on_connectivity_degraded=lambda: degraded.append(1),
+    )
+    with patch.object(monitor, "_check_traffic_flow", return_value=False):
+        with patch.object(monitor, "_probe_socks_socket", return_value=False):
+            with patch.object(monitor, "_verify_connectivity", return_value=False):
+                monitor.start(session_id=7)
+                try:
+                    for _ in range(6):
+                        monitor._check_connectivity()
+                finally:
+                    monitor.stop()
+    assert len(lost) == 1

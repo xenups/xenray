@@ -15,8 +15,10 @@ import os
 import re
 import socket
 import subprocess
+import threading
+import time
 from ctypes import wintypes
-from typing import Optional, Tuple
+from typing import Callable, Optional, Tuple
 
 from loguru import logger
 
@@ -110,17 +112,49 @@ _IP_ADAPTER_ADDRESSES._fields_ = [
 ]
 
 
+VIRTUAL_ADAPTER_KEYWORDS = (
+    "tap",
+    "wintun",
+    "wireguard",
+    "tailscale",
+    "zerotier",
+    "warp",
+    "cloudflare",
+    "nordlynx",
+    "openvpn",
+    "sing-box",
+    "xray",
+    "hyper-v",
+    "virtualbox",
+    "vmware",
+    "vethernet",
+    "npcap",
+    "loopback",
+    "vpn",
+    "tunnel",
+    "dummy",
+    "xenray",
+    "xenray-tun",
+)
+
+
+def _is_virtual_adapter(name: str, desc: str) -> bool:
+    """True if adapter name or description contains virtual/tunnel device markers."""
+    target = f"{name} {desc}".lower()
+    return any(kw in target for kw in VIRTUAL_ADAPTER_KEYWORDS)
+
+
 def _is_physical_iftype(iftype: int) -> bool:
     """True for genuinely physical link types (Ethernet / IEEE 802.11)."""
     return iftype in (IF_TYPE_ETHERNET_CSMACD, IF_TYPE_IEEE80211)
 
 
 def get_physical_nic_candidates() -> list[dict]:
-    """Enumerate physical, up, gateway-bearing adapters via IP Helper API.
+    """Enumerate genuinely physical, up, gateway-bearing adapters via IP Helper API.
 
-    Returns a list of ``{"name", "ip", "iftype", "operstatus", "gateway"}`` for
-    adapters that are: physical link type, OperStatus UP, IPv4 present, and have
-    a non-loopback default gateway. Empty on non-Windows or API failure.
+    Explicitly excludes virtual adapters (TAP, WinTUN, WireGuard, Tailscale, Hyper-V).
+    Returns a list of ``{"name", "ip", "iftype", "operstatus", "gateway", "metric"}``
+    sorted by IPv4 metric.
     """
     if not hasattr(ctypes, "windll"):
         return []
@@ -165,31 +199,53 @@ def get_physical_nic_candidates() -> list[dict]:
     adapter = ctypes.cast(buf, ctypes.POINTER(_IP_ADAPTER_ADDRESSES))
     while adapter:
         a = adapter.contents
-        # Physical link type only (Ethernet / 802.11).
-        if _is_physical_iftype(a.IfType) and a.OperStatus == IfOperStatusUp:
-            # First usable IPv4 unicast address.
+        name = a.FriendlyName or a.AdapterName or ""
+        desc = a.Description or ""
+
+        # Physical link type only (Ethernet / 802.11) AND not an enumerated virtual/VPN adapter
+        if _is_physical_iftype(a.IfType) and a.OperStatus == IfOperStatusUp and not _is_virtual_adapter(name, desc):
+            # First usable IPv4 unicast address
             ip = None
             ua = a.FirstUnicastAddress
             while ua:
                 u = ua.contents
                 sock = u.Address.lpSockaddr
                 if sock and sock.contents.sa_family == AF_INET:
-                    # sockaddr_in: family(2) + port(2) + addr(4 bytes)
                     raw = ctypes.string_at(ctypes.addressof(sock.contents) + 4, 4)
-                    ip = socket.inet_ntoa(raw)
-                    break
+                    cand_ip = socket.inet_ntoa(raw)
+                    if not _is_loopback_or_nonlan(cand_ip):
+                        ip = cand_ip
+                        break
                 ua = u.Next
-            if ip:
+
+            # Extract default gateway IP string
+            gateway_ip = None
+            ga = a.FirstGatewayAddress
+            while ga:
+                g = ga.contents
+                sock = g.Address.lpSockaddr
+                if sock and sock.contents.sa_family == AF_INET:
+                    raw = ctypes.string_at(ctypes.addressof(sock.contents) + 4, 4)
+                    cand_gw = socket.inet_ntoa(raw)
+                    if not _is_loopback_or_nonlan(cand_gw):
+                        gateway_ip = cand_gw
+                        break
+                ga = g.Next
+
+            if ip and gateway_ip:
                 result.append(
                     {
-                        "name": a.FriendlyName or a.AdapterName or "",
+                        "name": name,
                         "ip": ip,
                         "iftype": a.IfType,
                         "operstatus": a.OperStatus,
-                        "gateway": bool(a.FirstGatewayAddress),
+                        "gateway": gateway_ip,
+                        "metric": getattr(a, "Ipv4Metric", 999),
                     }
                 )
         adapter = a.Next
+
+    result.sort(key=lambda c: c.get("metric", 999))
     return result
 
 
@@ -499,5 +555,110 @@ class WindowsNetworkAdapter(INetworkAdapter):
             logger.debug(f"[WindowsNetworkAdapter] MTU ping failed for size {payload_size}: {e}")
             return False
 
+    def __init__(self):
+        self._watcher: Optional[WindowsInterfaceWatcher] = None
 
-__all__ = ["WindowsNetworkAdapter"]
+    def start_interface_watcher(self, on_change_callback: Callable[[], None]) -> None:
+        """Start background interface watcher using NotifyIpInterfaceChange (with polling fallback)."""
+        self.stop_interface_watcher()
+        self._watcher = WindowsInterfaceWatcher(on_change_callback)
+        self._watcher.start()
+
+    def stop_interface_watcher(self) -> None:
+        """Stop background interface watcher."""
+        if self._watcher:
+            self._watcher.stop()
+            self._watcher = None
+
+
+class WindowsInterfaceWatcher:
+    """Watches for network interface / IP / link status changes on Windows.
+
+    Uses Win32 NotifyIpInterfaceChange for asynchronous, low-overhead event notification
+    and falls back to 5-second polling if unavailable.
+    """
+
+    def __init__(self, callback: Callable[[], None]):
+        self._callback = callback
+        self._thread: Optional[threading.Thread] = None
+        self._stop_event = threading.Event()
+        self._notification_handle = ctypes.c_void_p(0)
+        self._cb_func = None
+
+    def start(self):
+        if self._thread and self._thread.is_alive():
+            return
+        self._stop_event.clear()
+        self._thread = threading.Thread(target=self._run, daemon=True, name="WindowsInterfaceWatcher")
+        self._thread.start()
+
+    def stop(self):
+        self._stop_event.set()
+        if hasattr(ctypes, "windll") and self._notification_handle.value:
+            try:
+                ctypes.windll.iphlpapi.CancelMibChangeNotify2(self._notification_handle)
+            except Exception:
+                pass
+            self._notification_handle = ctypes.c_void_p(0)
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=1.0)
+        self._thread = None
+
+    def _run(self):
+        use_polling = True
+        if hasattr(ctypes, "windll"):
+            try:
+                iphlpapi = ctypes.windll.iphlpapi
+                if hasattr(iphlpapi, "NotifyIpInterfaceChange"):
+                    PIPINTERFACE_CHANGE_CALLBACK = ctypes.WINFUNCTYPE(
+                        None,
+                        ctypes.c_void_p,
+                        ctypes.c_void_p,
+                        ctypes.c_int,
+                    )
+
+                    def _on_ip_change(caller_context, row, notif_type):
+                        # 0.5s debounce to absorb transient link renegotiation
+                        time.sleep(0.5)
+                        try:
+                            self._callback()
+                        except Exception as e:
+                            logger.debug(f"[WindowsInterfaceWatcher] Callback error: {e}")
+
+                    self._cb_func = PIPINTERFACE_CHANGE_CALLBACK(_on_ip_change)
+                    handle = ctypes.c_void_p(0)
+                    ret = iphlpapi.NotifyIpInterfaceChange(
+                        socket.AF_INET,
+                        self._cb_func,
+                        None,
+                        False,
+                        ctypes.byref(handle),
+                    )
+                    if ret == 0:
+                        self._notification_handle = handle
+                        use_polling = False
+                        logger.info("[WindowsInterfaceWatcher] NotifyIpInterfaceChange registered successfully")
+            except Exception as e:
+                logger.debug(f"[WindowsInterfaceWatcher] Failed NotifyIpInterfaceChange setup: {e}")
+
+        if use_polling:
+            last_state = None
+            while not self._stop_event.is_set():
+                self._stop_event.wait(5.0)
+                if self._stop_event.is_set():
+                    break
+                try:
+                    candidates = get_physical_nic_candidates()
+                    current = tuple((c.get("name"), c.get("ip"), c.get("gateway")) for c in candidates)
+                    if last_state is not None and current != last_state:
+                        logger.info("[WindowsInterfaceWatcher] Network change detected via polling fallback")
+                        self._callback()
+                    last_state = current
+                except Exception as e:
+                    logger.debug(f"[WindowsInterfaceWatcher] Polling error: {e}")
+        else:
+            while not self._stop_event.is_set():
+                self._stop_event.wait(2.0)
+
+
+__all__ = ["WindowsNetworkAdapter", "WindowsInterfaceWatcher"]

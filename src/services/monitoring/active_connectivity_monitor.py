@@ -45,6 +45,12 @@ class ActiveConnectivityMonitor:
     REQUIRED_SAMPLES = 2  # consecutive failures for fast detection (~6s)
     WARNING_SAMPLES = 4  # show warning in UI after this many (~12s)
     MAX_STALL_SAMPLES = 8  # failsafe: trigger after this many (~24s)
+    # FP guard: the heavy (HTTP) probe must fail on this many CONSECUTIVE
+    # samples before LOST fires. A single curl hiccup (DNS blip, endpoint
+    # rate-limit, momentary CPU spike) is then absorbed instead of tearing
+    # down a healthy session. With SAMPLE_INTERVAL=3s this costs ~3s extra
+    # detection latency in the true-outage case — an acceptable trade.
+    REQUIRED_LOST_CONFIRMATIONS = 2
 
     # Timeouts (short — never block the monitor thread for long)
     SOCKET_TIMEOUT = 2.0  # light probe (local socket)
@@ -52,6 +58,14 @@ class ActiveConnectivityMonitor:
 
     # Transports that need warmup grace period (slower initial handshake)
     SLOW_HANDSHAKE_TRANSPORTS = {"xhttp", "splithttp"}
+
+    # Probe target rotation pool for secondary heavy probing
+    PROBE_TARGETS = [
+        "https://cp.cloudflare.com/generate_204",
+        "https://www.gstatic.com/generate_204",
+        "https://connectivitycheck.gstatic.com/generate_204",
+        "http://www.gstatic.com/generate_204",
+    ]
 
     def __init__(
         self,
@@ -83,9 +97,11 @@ class ActiveConnectivityMonitor:
         self._stall_samples = 0
         self._is_connected = True
         self._warning_emitted = False  # Track if warning already shown
+        self._lost_confirmations = 0  # consecutive heavy-probe failures toward LOST
         self._needs_warmup = False  # True for transports with slow handshake (xhttp)
         self._handshake_complete = True  # Set to False during warmup phase
         self._session_id = 0  # Current session for event validation
+        self._last_total_bytes = 0  # For throughput-gated lazy probing
 
         # Single bounded executor for event callbacks (max 1 worker — no
         # unbounded daemon thread spawning per emitted event).
@@ -111,6 +127,8 @@ class ActiveConnectivityMonitor:
             self._stall_samples = 0
             self._is_connected = True
             self._warning_emitted = False
+            self._lost_confirmations = 0
+            self._last_total_bytes = 0
             self._stop_event.clear()
             # Recreate the callback executor if a previous stop() shut it down
             # (supports start → stop → start on the same instance).
@@ -163,53 +181,82 @@ class ActiveConnectivityMonitor:
             logger.error(f"[ActiveConnectivityMonitor] Error in monitor loop: {e}")
 
     def _check_connectivity(self):
-        """Check connectivity using light-then-heavy probe escalation."""
-        # 1. Light probe: cheap local SOCKS socket
+        """Check connectivity using lazy throughput gating and SOCKS5 tunnel escalation."""
         port = self._socks_port_getter() if self._socks_port_getter else 10805
-        light_ok = self._probe_socks_socket(port)
 
-        if light_ok:
-            # Proxy alive — connection is fine (may still be idle, but the
-            # tunnel endpoint is reachable). Reset stall state.
+        # 1. PRIMARY: Lazy throughput gating
+        # If live traffic is actively flowing, connection is demonstrably alive.
+        # Suppress active probes to prevent unnecessary DPI exposure.
+        if self._check_traffic_flow():
             self._on_healthy()
             return
 
-        # 2. Light probe failed → suspicious
+        # 2. SECONDARY: When idle or low throughput, probe SOCKS5 tunnel
+        if self._probe_socks_socket(port):
+            self._on_healthy()
+            return
+
+        # 3. Tunnel probe failed -> suspicious / stalled
         self._stall_samples += 1
-        logger.debug(f"[ActiveConnectivityMonitor] Light probe failed ({self._stall_samples}/{self.REQUIRED_SAMPLES})")
+        logger.debug(f"[ActiveConnectivityMonitor] Tunnel probe failed ({self._stall_samples}/{self.REQUIRED_SAMPLES})")
 
         # Soft warning: show UI feedback after WARNING_SAMPLES
         if self._stall_samples == self.WARNING_SAMPLES and not self._warning_emitted:
             if self._verify_connectivity(port):
                 # Heavy probe succeeded - system is just idle, not offline
                 logger.debug("[ActiveConnectivityMonitor] Stall but HTTP probe OK - system is idle")
-                self._stall_samples = 0  # Reset - connection is fine
+                self._stall_samples = 0
             else:
                 # Heavy probe failed - connection is degraded
                 self._warning_emitted = True
                 logger.info("[ActiveConnectivityMonitor] Connection degraded - probe failed")
                 self._emit_degraded()
 
-        # HYBRID ESCALATION:
-        # 1. Fast path: REQUIRED_SAMPLES light failures + heavy probe failure
-        # 2. Failsafe: MAX_STALL_SAMPLES light failures (probe confirms)
-        should_trigger = False
-        trigger_reason = ""
-
+        # HYBRID ESCALATION with FP confirmation guard:
         if self._stall_samples >= self.REQUIRED_SAMPLES:
             if not self._verify_connectivity(port):
-                should_trigger = True
-                trigger_reason = f"confirmed by HTTP probe after {self._stall_samples} samples"
+                self._lost_confirmations += 1
+                logger.debug(
+                    f"[ActiveConnectivityMonitor] Heavy probe failed "
+                    f"({self._lost_confirmations}/{self.REQUIRED_LOST_CONFIRMATIONS})"
+                )
             else:
-                # Heavy probe OK - connection is fine (idle), reset
+                # Heavy probe OK - connection is fine (idle), reset everything
                 logger.info("[ActiveConnectivityMonitor] HTTP probe OK - connection is fine, resetting")
                 self._stall_samples = 0
                 self._warning_emitted = False
+                self._lost_confirmations = 0
 
-        if should_trigger and self._is_connected:
+        confirmed = self._lost_confirmations >= self.REQUIRED_LOST_CONFIRMATIONS or (
+            self._stall_samples >= self.MAX_STALL_SAMPLES
+            and not self._verify_connectivity(port)
+        )
+
+        if confirmed and self._is_connected:
             self._is_connected = False
-            logger.warning(f"[ActiveConnectivityMonitor] Connectivity LOST ({trigger_reason})")
+            self._lost_confirmations = 0
+            reason = (
+                f"confirmed by {self.REQUIRED_LOST_CONFIRMATIONS} consecutive HTTP probe failures "
+                f"(after {self._stall_samples} stalled samples)"
+            )
+            logger.warning(f"[ActiveConnectivityMonitor] Connectivity LOST ({reason})")
             self._emit_lost()
+
+    def _check_traffic_flow(self) -> bool:
+        """PRIMARY: Lazy throughput gate. Check if live traffic is actively flowing."""
+        try:
+            import psutil
+            counters = psutil.net_io_counters()
+            now_bytes = counters.bytes_recv + counters.bytes_sent
+            if self._last_total_bytes == 0:
+                self._last_total_bytes = now_bytes
+                return False
+            delta = now_bytes - self._last_total_bytes
+            self._last_total_bytes = now_bytes
+            # If at least 1024 bytes transferred in sample interval, traffic is actively flowing
+            return delta >= 1024
+        except Exception:
+            return False
 
     def _on_healthy(self):
         """Reset stall state and emit RESTORED if we were in LOST/degraded."""
@@ -217,10 +264,11 @@ class ActiveConnectivityMonitor:
         was_lost = not self._is_connected
 
         if self._stall_samples > 0:
-            logger.debug("[ActiveConnectivityMonitor] Light probe OK, resetting stall counter")
+            logger.debug("[ActiveConnectivityMonitor] Tunnel probe OK, resetting stall counter")
 
         self._stall_samples = 0
         self._warning_emitted = False
+        self._lost_confirmations = 0
 
         if was_lost:
             self._is_connected = True
@@ -236,41 +284,61 @@ class ActiveConnectivityMonitor:
     # ------------------------------------------------------------------
 
     def _probe_socks_socket(self, port: int) -> bool:
-        """Cheap light probe: can we connect to the local SOCKS proxy?
+        """Backward-compatibility alias for tests and callers."""
+        return self._probe_socks_tunnel(port)
 
-        One ``socket.create_connection`` with a short timeout. Never blocks
-        the monitor thread for more than SOCKET_TIMEOUT seconds.
+    def _probe_socks_tunnel(self, port: int) -> bool:
+        """Send SOCKS5 handshake & connect command to verify real remote tunnel reachability.
+
+        Uses SOCKS5 ATYP=0x03 (Domain Name) to delegate DNS resolution strictly to the remote
+        proxy core, guaranteeing zero client-side DNS leaks on the physical NIC.
         """
         try:
-            with socket.create_connection(("127.0.0.1", port), timeout=self.SOCKET_TIMEOUT):
-                return True
+            with socket.create_connection(("127.0.0.1", port), timeout=self.SOCKET_TIMEOUT) as s:
+                # 1. SOCKS5 greeting: NO_AUTH (0x00)
+                s.sendall(b"\x05\x01\x00")
+                resp = s.recv(2)
+                if len(resp) < 2 or resp[0] != 0x05 or resp[1] != 0x00:
+                    return False
+
+                # 2. SOCKS5 CONNECT to cp.cloudflare.com:80 via ATYP=0x03 (Domain Name)
+                domain = b"cp.cloudflare.com"
+                connect_cmd = b"\x05\x01\x00\x03" + bytes([len(domain)]) + domain + b"\x00\x50"
+                s.sendall(connect_cmd)
+                resp = s.recv(10)
+                # SOCKS5 reply: resp[1] == 0x00 indicates success
+                return len(resp) >= 2 and resp[1] == 0x00
         except OSError:
             return False
 
+    def _probe_socks_socket(self, port: int) -> bool:
+        """Backward-compatible delegate."""
+        return self._probe_socks_tunnel(port)
+
     def _verify_connectivity(self, port: int) -> bool:
         """
-        Heavy probe: HTTP generate_204 THROUGH the SOCKS proxy.
+        Heavy probe: HTTP generate_204 THROUGH SOCKS proxy with target rotation & jitter.
 
-        Proves end-to-end routing (the tunnel actually forwards traffic),
-        unlike the light socket probe which only proves the proxy listens.
-
-        Returns:
-            True if connection is working, False if broken
+        Proves end-to-end routing (the tunnel actually forwards traffic).
         """
         try:
+            import random
             from src.utils.network_utils import NetworkUtils
 
-            # Connectivity check through proxy (1 retry, short timeout)
+            target_url = random.choice(self.PROBE_TARGETS)
+            jitter_timeout = self.HTTP_TIMEOUT * random.uniform(0.8, 1.2)
+
             result = NetworkUtils.check_proxy_connectivity(
                 port=port,
-                timeout=self.HTTP_TIMEOUT,
+                target_url=target_url,
+                timeout=max(jitter_timeout, 2.0),
                 retries=1,
             )
 
             if result:
-                logger.debug(f"[ActiveConnectivityMonitor] HTTP probe OK via port {port}")
+                logger.debug(f"[ActiveConnectivityMonitor] HTTP probe OK via {target_url}")
             else:
-                logger.debug(f"[ActiveConnectivityMonitor] HTTP probe failed via port {port}")
+                logger.debug(f"[ActiveConnectivityMonitor] HTTP probe failed via {target_url}")
 
             return result
 

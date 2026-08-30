@@ -1,6 +1,6 @@
 """Tests for DNS configuration in XrayConfigProcessor."""
 
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -348,32 +348,48 @@ class TestBuildTunDnsServers:
         servers = dns_configurator.build_tun_servers()
         assert "9.9.9.9" in servers
 
-    def test_doh_domain_filtered(self, dns_configurator, mock_dns):
-        """DoH domain name address is filtered out (not an IP)."""
+    def test_doh_domain_bootstrap_resolved(self, dns_configurator, mock_dns):
+        """DoH host is bootstrap-resolved to an IPv4 address for the adapter."""
         mock_dns.load.return_value = [
-            {"address": "dns.cloudflare.com", "protocol": "doh", "domains": []},
+            {"address": "https://dns.cloudflare.com/dns-query", "protocol": "doh", "domains": []},
         ]
-        servers = dns_configurator.build_tun_servers()
+        with patch("socket.getaddrinfo") as gi:
+            gi.return_value = [(2, 1, 6, "", ("104.16.249.249", 443))]
+            servers = dns_configurator.build_tun_servers()
         assert "dns.cloudflare.com" not in servers
-        assert servers == [DNS_IP_CLOUDFLARE]
+        assert "104.16.249.249" in servers
 
-    def test_dot_domain_filtered(self, dns_configurator, mock_dns):
-        """DoT domain name address is filtered out."""
+    def test_doh_bootstrap_failure_falls_back(self, dns_configurator, mock_dns):
+        """Unresolvable DoH host never leaks a hostname into adapter DNS."""
+        mock_dns.load.return_value = [
+            {"address": "https://blocked.example/dns-query", "protocol": "doh", "domains": []},
+        ]
+        with patch("socket.getaddrinfo", side_effect=OSError("resolve failed")):
+            servers = dns_configurator.build_tun_servers()
+        assert all(not s.endswith(".example") for s in servers)
+        assert all(":" not in s for s in servers)  # IPv4 only
+
+    def test_dot_domain_bootstrap_resolved(self, dns_configurator, mock_dns):
+        """DoT host is bootstrap-resolved to an IPv4 address."""
         mock_dns.load.return_value = [
             {"address": "dns.google", "protocol": "dot", "domains": []},
         ]
-        servers = dns_configurator.build_tun_servers()
+        with patch("socket.getaddrinfo") as gi:
+            gi.return_value = [(2, 1, 6, "", ("8.8.8.8", 853))]
+            servers = dns_configurator.build_tun_servers()
         assert "dns.google" not in servers
-        assert servers == [DNS_IP_CLOUDFLARE]
+        assert "8.8.8.8" in servers
 
-    def test_doq_domain_filtered(self, dns_configurator, mock_dns):
-        """DoQ domain name address is filtered out."""
+    def test_doq_domain_bootstrap_resolved(self, dns_configurator, mock_dns):
+        """DoQ host is bootstrap-resolved to an IPv4 address."""
         mock_dns.load.return_value = [
             {"address": "dns.nextdns.io", "protocol": "doq", "domains": []},
         ]
-        servers = dns_configurator.build_tun_servers()
+        with patch("socket.getaddrinfo") as gi:
+            gi.return_value = [(2, 1, 6, "", ("45.90.28.0", 853))]
+            servers = dns_configurator.build_tun_servers()
         assert "dns.nextdns.io" not in servers
-        assert servers == [DNS_IP_CLOUDFLARE]
+        assert "45.90.28.0" in servers
 
     def test_empty_address_skipped(self, dns_configurator, mock_dns):
         """Empty address entries are filtered out."""
@@ -385,22 +401,35 @@ class TestBuildTunDnsServers:
         assert "9.9.9.9" in servers
         assert "" not in servers
 
-    def test_empty_list_uses_defaults(self, dns_configurator, mock_dns):
-        """Empty DNS list falls back to the default IPv4 server."""
+    def test_empty_list_uses_system_then_default(self, dns_configurator, mock_dns):
+        """Empty DNS list prefers system resolvers; without them, default."""
         mock_dns.load.return_value = []
-        servers = dns_configurator.build_tun_servers()
-        assert servers == [DNS_IP_CLOUDFLARE]
+        with patch(
+            "src.platform.factory.get_network_adapter"
+        ) as ga:
+            ga.return_value.get_system_dns_servers.return_value = ["192.168.1.1"]
+            servers = dns_configurator.build_tun_servers()
+        assert servers == ["192.168.1.1"]
+
+        with patch(
+            "src.platform.factory.get_network_adapter"
+        ) as ga2:
+            ga2.return_value.get_system_dns_servers.return_value = []
+            servers2 = dns_configurator.build_tun_servers()
+        assert servers2 == [DNS_IP_CLOUDFLARE]
 
     def test_multiple_servers(self, dns_configurator, mock_dns):
-        """Multiple DNS entries are included if they are valid IPv4 addresses."""
+        """Multiple DNS entries: UDP IP as-is + DoT host bootstrap-resolved."""
         mock_dns.load.return_value = [
             {"address": "9.9.9.9", "protocol": "udp", "domains": []},
             {"address": "dns.google", "protocol": "dot", "domains": []},
         ]
-        servers = dns_configurator.build_tun_servers()
+        with patch("socket.getaddrinfo") as gi:
+            gi.return_value = [(2, 1, 6, "", ("8.8.4.4", 853))]
+            servers = dns_configurator.build_tun_servers()
         assert "9.9.9.9" in servers
         assert "dns.google" not in servers
-        assert len(servers) == 1
+        assert "8.8.4.4" in servers  # bootstrap IP of the DoT host
 
     def test_ipv6_resolver_dropped(self, dns_configurator, mock_dns):
         """IPv6 resolvers are excluded from the TUN adapter DNS (IPv4-only)."""

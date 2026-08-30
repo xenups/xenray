@@ -19,6 +19,7 @@ import os
 import re
 import threading
 import time
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, List, Optional
 
@@ -125,6 +126,12 @@ class PassiveLogMonitor:
     DEBOUNCE_SECONDS = 5.0  # Minimum time between alerts
     MAX_COOLDOWN_SECONDS = 300.0  # 5 minutes max
     BASE_COOLDOWN_SECONDS = 5.0
+    # FP guard: consecutive-match threshold before an alert fires. Default 1
+    # (alert on first match — keeps legacy single-line semantics for embedders
+    # and tests). Production wiring (ConnectionMonitoringService) raises this
+    # to 3 so transient one-off dial errors never trigger a reconnect while a
+    # real path outage (which repeats every request) still fires within ~2s.
+    REQUIRED_FAILURE_LINES = 1
 
     def __init__(
         self,
@@ -164,6 +171,12 @@ class PassiveLogMonitor:
         self._consecutive_failures = 0
         self._last_error_time = 0.0  # For cross-signal validation
         self._last_dns_warn_time = 0.0  # Debounce for DNS fallback warnings
+        # FP guard: sliding-window failure tracking per source.
+        # Tracks timestamps of failures within FAILURE_WINDOW_SECONDS (12s).
+        self._failure_windows: dict = {}  # {source: deque[float]}
+        self.FAILURE_WINDOW_SECONDS = 12.0  # 10-15s sliding window
+        self.FAILURE_STREAK_WINDOW = self.FAILURE_WINDOW_SECONDS  # backward-compat attribute
+        self._pending_failures: dict = {}  # backward-compat alias
 
     def has_recent_error(self, window_seconds: float = 30.0) -> bool:
         """
@@ -445,6 +458,55 @@ class PassiveLogMonitor:
     # Line processing
     # ------------------------------------------------------------------
 
+    def _reset_failure_streak(self, source: str) -> None:
+        """Clear the failure window for ``source`` (e.g. on manual recovery)."""
+        with self._lock:
+            if source in self._failure_windows:
+                self._failure_windows[source].clear()
+            self._pending_failures.pop(source, None)
+
+    def _record_failure_candidate(self, log_line: str, source: str) -> bool:
+        """Sliding-window failure accumulator.
+
+        Returns True when REQUIRED_FAILURE_LINES occur within FAILURE_WINDOW_SECONDS (12s).
+        Non-critical/healthy lines do NOT clear the window; old timestamps naturally expire.
+        """
+        now = time.time()
+        with self._lock:
+            if source not in self._failure_windows:
+                self._failure_windows[source] = deque()
+            window = self._failure_windows[source]
+
+            # If tests or external callers artificially modified _pending_failures, sync window
+            if source in self._pending_failures:
+                entry = self._pending_failures[source]
+                if (now - entry.get("first_seen", now)) > self.FAILURE_WINDOW_SECONDS:
+                    window.clear()
+
+            # Prune timestamps outside the sliding window
+            while window and (now - window[0]) > self.FAILURE_WINDOW_SECONDS:
+                window.popleft()
+
+            window.append(now)
+            self._last_error_time = now  # keep cross-signal validation fresh
+
+            # Maintain _pending_failures dict for backward-compatibility
+            self._pending_failures[source] = {
+                "count": len(window),
+                "first_seen": window[0],
+            }
+
+            if len(window) >= self.REQUIRED_FAILURE_LINES:
+                window.clear()
+                self._pending_failures.pop(source, None)
+                return True
+
+            logger.debug(
+                f"[PassiveLogMonitor] Failure candidate {len(window)}/"
+                f"{self.REQUIRED_FAILURE_LINES} ({source}) within {self.FAILURE_WINDOW_SECONDS}s window"
+            )
+            return False
+
     def _process_line(self, line: str, source: str = CORE_XRAY):
         """Process a single log line from a given core log."""
         lower_line = line.lower()
@@ -486,8 +548,13 @@ class PassiveLogMonitor:
                         )
                         break
                 logger.debug(f"[PassiveLogMonitor] Keyword '{keyword}' matched in {source} log")
-                self._trigger_alert(line.strip(), source)
+                if self._record_failure_candidate(line.strip(), source):
+                    self._trigger_alert(line.strip(), source)
                 break
+        else:
+            # Non-error log line: do NOT reset sliding window (normal traffic
+            # interleaved with failure lines must not suppress genuine outages).
+            pass
 
     @staticmethod
     def _is_private_target(line: str) -> bool:
