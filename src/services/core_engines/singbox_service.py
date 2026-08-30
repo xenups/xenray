@@ -144,15 +144,16 @@ class SingboxService:
             config = self._config_builder.build(
                 socks_port=xray_socks_port,
                 proxy_server_ip=proxy_server_ip,
-                # Pass interface_name=None so sing-box relies on auto_detect_interface: true
-                # rather than pinning to a single static interface that breaks on flap/switch.
-                interface_name=None,
+                # Pass interface_name=iface_name so direct outbound binds to physical interface
+                interface_name=iface_name,
                 routing_rules=routing_rules,
                 mtu=mtu,
                 local_dns_server=local_dns,
                 sni_connect_ip=sni_connect_ip,
                 toggles=routing_toggles,
             )
+
+            self._pre_launch_cleanup()
 
             if not self._wait_for_xray_ready(xray_socks_port) or not self._write_config_and_start(config):
                 self._route_manager.cleanup_routes()
@@ -172,16 +173,28 @@ class SingboxService:
             get_system_settings_adapter().restore_smhr(self._smhr_was_enabled)
             return None
 
+    def _pre_launch_cleanup(self) -> None:
+        """Ensure orphaned sing-box instances are terminated before launching a new process."""
+        try:
+            from src.utils.process_utils import ProcessUtils
+            ProcessUtils.cleanup_orphaned_core(SINGBOX_EXECUTABLE, exclude_pid=self._proc.pid)
+        except Exception as e:
+            logger.warning(f"[SingboxService] Pre-launch cleanup warning: {e}")
+
     def _wait_for_xray_ready(self, port: int) -> bool:
-        logger.info(f"[SingboxService] Waiting for Xray on port {port}...")
-        for _ in range(XRAY_READY_RETRY_COUNT):
+        logger.info(f"[SingboxService] Waiting for Xray SOCKS5 engine on port {port}...")
+        for attempt in range(1, XRAY_READY_RETRY_COUNT + 1):
             try:
-                with socket.create_connection(("127.0.0.1", port), timeout=0.1):
-                    logger.info("[SingboxService] Xray is ready.")
-                    return True
+                with socket.create_connection(("127.0.0.1", port), timeout=0.2) as s:
+                    s.sendall(b"\x05\x01\x00")
+                    s.settimeout(0.2)
+                    resp = s.recv(2)
+                    if len(resp) >= 2 and resp[0] == 0x05 and resp[1] == 0x00:
+                        logger.info(f"[SingboxService] Xray SOCKS5 is ready on port {port} (attempt {attempt}).")
+                        return True
             except (socket.timeout, TimeoutError, ConnectionRefusedError, OSError):
                 time.sleep(XRAY_READY_RETRY_DELAY)
-        logger.error("[SingboxService] Timed out waiting for Xray.")
+        logger.error(f"[SingboxService] Timed out waiting for Xray on port {port}.")
         return False
 
     def _write_config_and_start(self, config: dict) -> bool:
@@ -217,6 +230,13 @@ class SingboxService:
     @property
     def pid(self) -> Optional[int]:
         return self._proc.pid
+
+    @property
+    def exit_code(self) -> Optional[int]:
+        return self._proc.get_exit_code()
+
+    def get_last_logs(self, lines: int = 25) -> str:
+        return self._proc.get_last_logs(lines=lines)
 
     def get_version(self) -> Optional[str]:
         if not os.path.exists(SINGBOX_EXECUTABLE):

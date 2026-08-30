@@ -39,6 +39,13 @@ class RouteConfigBuilder:
 
     def build_outbounds(self, socks_port: int, interface_name: Optional[str] = None) -> list[dict]:
         """Build proxy, direct, and block outbounds."""
+        direct_outbound = {
+            "type": "direct",
+            "tag": "direct",
+        }
+        if interface_name:
+            direct_outbound["bind_interface"] = interface_name
+
         return [
             {
                 "type": "socks",
@@ -46,12 +53,11 @@ class RouteConfigBuilder:
                 "server": "127.0.0.1",
                 "server_port": socks_port,
             },
+            direct_outbound,
             {
-                "type": "direct",
-                "tag": "direct",
-                **({"bind_interface": interface_name} if interface_name else {}),
+                "type": "block",
+                "tag": "block",
             },
-            {"type": "block", "tag": "block"},
         ]
 
     def build_base_route(

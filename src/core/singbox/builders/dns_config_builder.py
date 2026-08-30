@@ -25,7 +25,19 @@ class DnsConfigBuilder:
         Returns:
             Dict containing the complete base sing-box DNS configuration.
         """
-        dns_local = local_dns_server or os.getenv("DNS_LOCAL_SERVER", DNS_IP_CLOUDFLARE_ALT)
+        if local_dns_server and local_dns_server != "local":
+            local_dns_entry = {
+                "tag": "local_dns",
+                "type": "udp",
+                "server": local_dns_server,
+                "detour": "direct",
+            }
+        else:
+            local_dns_entry = {
+                "tag": "local_dns",
+                "type": "local",
+                "detour": "direct",
+            }
 
         return {
             "servers": [
@@ -39,15 +51,7 @@ class DnsConfigBuilder:
                     "server": DNS_IP_CLOUDFLARE,
                     "detour": "proxy",
                 },
-                {
-                    "tag": "local_dns",
-                    # Local/system DNS for DIRECT-routed domains (e.g. Iranian
-                    # sites like ikco.ir). A LOCAL resolver (the router/gateway)
-                    # is reachable without leaving the network.
-                    "type": "udp",
-                    "server": dns_local,
-                    "detour": "direct",
-                },
+                local_dns_entry,
                 {
                     "tag": "remote_proxy",
                     # DoH through the SOCKS proxy avoids port-53 blocking and

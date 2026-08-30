@@ -198,6 +198,40 @@ class ProcessUtils:
             logger.error(f"Unexpected error killing process tree {pid}: {e}")
 
     @staticmethod
+    def cleanup_orphaned_core(executable_path: str, exclude_pid: Optional[int] = None) -> int:
+        """Terminate orphaned core instances whose executable path matches executable_path."""
+        killed = 0
+        if not executable_path:
+            return 0
+        try:
+            target_norm = os.path.normcase(os.path.abspath(executable_path))
+            target_base = os.path.basename(executable_path).lower()
+            current_pid = os.getpid()
+            for proc in psutil.process_iter(["pid", "name", "exe"]):
+                try:
+                    p_info = proc.info
+                    pid = p_info.get("pid")
+                    if pid in (exclude_pid, current_pid):
+                        continue
+                    name = (p_info.get("name") or "").lower()
+                    exe = p_info.get("exe")
+                    is_match = False
+                    if exe and os.path.normcase(os.path.abspath(exe)) == target_norm:
+                        is_match = True
+                    elif name and name in (target_base, target_base.replace(".exe", "")):
+                        is_match = True
+
+                    if is_match:
+                        logger.info(f"[ProcessUtils] Terminating orphaned core process PID {pid} ({name})")
+                        proc.kill()
+                        killed += 1
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    continue
+        except Exception as e:
+            logger.debug(f"[ProcessUtils] Error during orphaned core cleanup: {e}")
+        return killed
+
+    @staticmethod
     def restart_as_admin() -> None:
         """Restart the application with administrative privileges."""
         get_process_adapter().restart_as_admin()
