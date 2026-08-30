@@ -101,7 +101,8 @@ class ActiveConnectivityMonitor:
         self._needs_warmup = False  # True for transports with slow handshake (xhttp)
         self._handshake_complete = True  # Set to False during warmup phase
         self._session_id = 0  # Current session for event validation
-        self._last_total_bytes = 0  # For throughput-gated lazy probing
+        self._last_total_bytes = 0  # For backward-compatibility
+        self._last_rx_bytes = 0  # For TUN-scoped RX throughput-gated lazy probing
 
         # Single bounded executor for event callbacks (max 1 worker — no
         # unbounded daemon thread spawning per emitted event).
@@ -129,6 +130,7 @@ class ActiveConnectivityMonitor:
             self._warning_emitted = False
             self._lost_confirmations = 0
             self._last_total_bytes = 0
+            self._last_rx_bytes = 0
             self._stop_event.clear()
             # Recreate the callback executor if a previous stop() shut it down
             # (supports start → stop → start on the same instance).
@@ -242,21 +244,70 @@ class ActiveConnectivityMonitor:
             logger.warning(f"[ActiveConnectivityMonitor] Connectivity LOST ({reason})")
             self._emit_lost()
 
-    def _check_traffic_flow(self) -> bool:
-        """PRIMARY: Lazy throughput gate. Check if live traffic is actively flowing."""
+    def _get_tun_io_counters(self):
+        """Extract I/O counters strictly for the active TUN interface.
+
+        Resolves against PlatformUtils.get_tun_interface_name() ('SINGTUN' on Windows),
+        with case-insensitive matching and specific XenRay aliases ('xenray-tun', 'singtun').
+        Generic driver names like 'wintun' are explicitly excluded to prevent false-binding
+        to third-party VPN adapters.
+        """
         try:
             import psutil
-            counters = psutil.net_io_counters()
-            now_bytes = counters.bytes_recv + counters.bytes_sent
-            if self._last_total_bytes == 0:
-                self._last_total_bytes = now_bytes
-                return False
-            delta = now_bytes - self._last_total_bytes
-            self._last_total_bytes = now_bytes
-            # If at least 1024 bytes transferred in sample interval, traffic is actively flowing
-            return delta >= 1024
-        except Exception:
+            per_nic = psutil.net_io_counters(pernic=True)
+            if not per_nic:
+                return None
+
+            from src.utils.platform_utils import PlatformUtils
+            target_name = PlatformUtils.get_tun_interface_name()
+
+            # 1. Exact match (primary)
+            if target_name in per_nic:
+                return per_nic[target_name]
+
+            # 2. Case-insensitive exact match or XenRay-specific TUN alias
+            target_lower = target_name.lower()
+            for name, stats in per_nic.items():
+                name_lower = name.lower()
+                if name_lower == target_lower or name_lower in ("singtun", "xenray-tun"):
+                    return stats
+        except Exception as e:
+            logger.debug(f"[ActiveConnectivityMonitor] Error querying TUN counters: {e}")
+        return None
+
+    def _check_traffic_flow(self) -> bool:
+        """PRIMARY: Lazy throughput gate strictly on the TUN interface and RX payload.
+
+        In TUN/VPN mode:
+        Only incoming payload (bytes_recv) confirms that the remote proxy server is
+        actively delivering response data. Outgoing traffic (bytes_sent) during WAN
+        outages consists of unacknowledged TCP SYN retries and must never be treated
+        as evidence of a live connection.
+
+        In Proxy mode (system proxy):
+        No TUN adapter is instantiated. _get_tun_io_counters returns None, safely
+        bypassing the throughput gate and allowing the lightweight SOCKS5 active
+        heartbeat to run every 3s to guarantee immediate failure detection without TUN metrics.
+        """
+        stats = self._get_tun_io_counters()
+        if not stats:
             return False
+
+        now_rx = stats.bytes_recv
+
+        # Adapter rebuild / counter reset guard:
+        # If the TUN adapter was recreated during reconnect or OS reset, now_rx will
+        # drop below _last_rx_bytes. Reset the baseline and do not gate on this tick.
+        if self._last_rx_bytes == 0 or now_rx < self._last_rx_bytes:
+            self._last_rx_bytes = now_rx
+            self._last_total_bytes = now_rx
+            return False
+
+        delta_rx = max(0, now_rx - self._last_rx_bytes)
+        self._last_rx_bytes = now_rx
+        self._last_total_bytes = now_rx
+
+        return delta_rx >= 1024
 
     def _on_healthy(self):
         """Reset stall state and emit RESTORED if we were in LOST/degraded."""

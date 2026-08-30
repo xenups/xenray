@@ -59,14 +59,68 @@ class TestPhase2ActiveAdaptiveProbing:
     """Test Phase 2: Active & Adaptive Probing Redesign."""
 
     def test_lazy_throughput_gating_suppresses_probe(self):
+        """Valid incoming payload on TUN adapter suppresses active probe."""
         monitor = ActiveConnectivityMonitor()
-        monitor._last_total_bytes = 1000
+        monitor._last_rx_bytes = 1000
 
         with patch("psutil.net_io_counters") as mock_io:
-            # 2048 bytes transferred > 1024 bytes threshold
-            mock_io.return_value = MagicMock(bytes_recv=2000, bytes_sent=1048)
+            # pernic=True containing SINGTUN adapter with > 1024 delta_rx
+            mock_io.return_value = {
+                "SINGTUN": MagicMock(bytes_recv=2500, bytes_sent=5000),
+            }
             assert monitor._check_traffic_flow() is True
-            assert monitor._last_total_bytes == 3048
+            assert monitor._last_rx_bytes == 2500
+
+    def test_retransmission_storm_does_not_suppress_probe(self):
+        """CRITICAL: During WAN outage, outgoing SYN retries (high bytes_sent) with
+        0 incoming payload (delta_rx = 0) must NOT suppress probing."""
+        monitor = ActiveConnectivityMonitor()
+        monitor._last_rx_bytes = 5000
+
+        with patch("psutil.net_io_counters") as mock_io:
+            # Massive burst of outgoing packets (50KB retried), but 0 incoming bytes
+            mock_io.return_value = {
+                "SINGTUN": MagicMock(bytes_recv=5000, bytes_sent=55000),
+            }
+            assert monitor._check_traffic_flow() is False
+            assert monitor._last_rx_bytes == 5000
+
+    def test_tun_rebuild_counter_reset_guard(self):
+        """When TUN adapter is rebuilt, counters reset (now_rx < last_rx). Must reset cleanly without negative delta."""
+        monitor = ActiveConnectivityMonitor()
+        monitor._last_rx_bytes = 500000
+
+        with patch("psutil.net_io_counters") as mock_io:
+            # Newly spawned adapter starts at low counter (e.g. 200 bytes)
+            mock_io.return_value = {
+                "SINGTUN": MagicMock(bytes_recv=200, bytes_sent=100),
+            }
+            assert monitor._check_traffic_flow() is False
+            # Baseline updated cleanly to the new adapter counter
+            assert monitor._last_rx_bytes == 200
+
+    def test_proxy_mode_no_tun_safely_bypasses_gating(self):
+        """In Proxy mode (no TUN adapter present), gating returns False so active SOCKS5 heartbeat runs."""
+        monitor = ActiveConnectivityMonitor()
+        monitor._last_rx_bytes = 0
+
+        with patch("psutil.net_io_counters") as mock_io:
+            # Only physical adapters present, no TUN
+            mock_io.return_value = {
+                "Ethernet 2": MagicMock(bytes_recv=10000, bytes_sent=10000),
+            }
+            assert monitor._check_traffic_flow() is False
+
+    def test_third_party_wintun_adapter_is_ignored(self):
+        """Generic 'wintun' adapter from third-party VPN must NOT be bound."""
+        monitor = ActiveConnectivityMonitor()
+
+        with patch("psutil.net_io_counters") as mock_io:
+            mock_io.return_value = {
+                "wintun": MagicMock(bytes_recv=50000, bytes_sent=50000),
+            }
+            assert monitor._get_tun_io_counters() is None
+
 
     def test_socks5_tunnel_handshake_atyp3_payload(self):
         monitor = ActiveConnectivityMonitor()
