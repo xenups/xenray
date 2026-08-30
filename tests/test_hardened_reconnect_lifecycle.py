@@ -190,3 +190,86 @@ class TestPhase5SlidingWindowLogAggregator:
         time.sleep(0.2)  # wait for threadpool callback
         assert len(alerts) == 1
         monitor.stop()
+
+
+class TestPhase6InterfaceWatcherDebounceAndFSM:
+    """Test Phase 6: Interface Watcher Debounce, Filtering, and FSM Hot Transitions."""
+
+    def test_interface_watcher_suppresses_unchanged_physical_nic(self, monkeypatch):
+        from src.platform.windows.network import WindowsInterfaceWatcher
+
+        nic_state = [
+            {
+                "name": "Ethernet",
+                "guid": "{11111111-2222-3333-4444-555555555555}",
+                "ip": "192.168.1.100",
+                "gateway": "192.168.1.1",
+                "ifindex": 5,
+            }
+        ]
+        monkeypatch.setattr("src.platform.windows.network.get_physical_nic_candidates", lambda: nic_state)
+
+        callbacks = []
+        watcher = WindowsInterfaceWatcher(callback=lambda: callbacks.append(True))
+        watcher.DEBOUNCE_SECONDS = 0.05
+        watcher._last_physical_state = watcher._get_current_physical_state()
+
+        # Simulate debounced handler firing on internal route/TUN mutation
+        watcher._debounced_handler()
+        assert len(callbacks) == 0, "Callback must be suppressed when physical NIC and gateway are unchanged"
+
+    def test_interface_watcher_fires_when_physical_gateway_changes(self, monkeypatch):
+        from src.platform.windows.network import WindowsInterfaceWatcher
+
+        nic_state = [
+            {
+                "name": "Ethernet",
+                "guid": "{11111111-2222-3333-4444-555555555555}",
+                "ip": "192.168.1.100",
+                "gateway": "192.168.1.1",
+                "ifindex": 5,
+            }
+        ]
+        monkeypatch.setattr("src.platform.windows.network.get_physical_nic_candidates", lambda: nic_state)
+
+        callbacks = []
+        watcher = WindowsInterfaceWatcher(callback=lambda: callbacks.append(True))
+        watcher.DEBOUNCE_SECONDS = 0.05
+        watcher._last_physical_state = watcher._get_current_physical_state()
+
+        # Physical link changes (e.g. Wi-Fi handover / new default gateway)
+        nic_state[0] = {
+            "name": "Wi-Fi",
+            "guid": "{99999999-8888-7777-6666-555555555555}",
+            "ip": "10.0.0.50",
+            "gateway": "10.0.0.1",
+            "ifindex": 8,
+        }
+
+        watcher._debounced_handler()
+        assert len(callbacks) == 1, "Callback must fire when physical NIC / gateway actually transitions"
+
+    def test_connection_fsm_allows_hot_reconnect_from_connected(self):
+        from src.core.fsm.connection_fsm import ConnectionFSM, ConnectionState
+
+        fsm = ConnectionFSM()
+        # Navigate to CONNECTED
+        assert fsm.transition_to(ConnectionState.STARTING)
+        assert fsm.transition_to(ConnectionState.PREPARING)
+        assert fsm.transition_to(ConnectionState.CONNECTED)
+        assert fsm.state == ConnectionState.CONNECTED
+
+        # Hot reconnect: CONNECTED -> PREPARING must be allowed without warnings
+        assert fsm.transition_to(ConnectionState.PREPARING)
+        assert fsm.state == ConnectionState.PREPARING
+
+        # Recovery to CONNECTED
+        assert fsm.transition_to(ConnectionState.CONNECTED)
+        assert fsm.state == ConnectionState.CONNECTED
+
+        # Hot reconnect via STOPPING: CONNECTED -> STOPPING -> PREPARING
+        assert fsm.transition_to(ConnectionState.STOPPING)
+        assert fsm.transition_to(ConnectionState.PREPARING)
+        assert fsm.transition_to(ConnectionState.CONNECTED)
+        assert fsm.state == ConnectionState.CONNECTED
+

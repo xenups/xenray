@@ -80,6 +80,7 @@ class AutoReconnectService:
         # Reconnect backoff state
         self._consecutive_failures = 0
         self._last_attempt_time = 0.0
+        self._is_reconnecting = False
 
     def start_session(self, session_id: int):
         """
@@ -94,6 +95,7 @@ class AutoReconnectService:
             self._cancel_event.clear()
             self._consecutive_failures = 0
             self._last_attempt_time = 0.0
+            self._is_reconnecting = False
             logger.debug(f"[AutoReconnectService] Started session {self._session_id}")
 
     def cancel(self):
@@ -106,6 +108,7 @@ class AutoReconnectService:
         with self._lock:
             self._cancelled = True
             self._cancel_event.set()
+            self._is_reconnecting = False
             logger.info(f"[AutoReconnectService] Session {self._session_id} cancelled (hard override)")
 
     def is_cancelled(self) -> bool:
@@ -250,6 +253,22 @@ class AutoReconnectService:
         Returns:
             True if reconnection succeeded, False otherwise
         """
+        with self._lock:
+            if self._is_reconnecting:
+                logger.info(
+                    f"[AutoReconnectService] Reconnect attempt already in-flight for session {session_id}. "
+                    "Skipping concurrent handle_failure invocation."
+                )
+                return False
+            self._is_reconnecting = True
+
+        try:
+            return self._handle_failure_inner(current_connection, session_id)
+        finally:
+            with self._lock:
+                self._is_reconnecting = False
+
+    def _handle_failure_inner(self, current_connection: Optional[dict], session_id: int) -> bool:
         # CHECKPOINT 0: Max consecutive attempts ceiling
         with self._lock:
             if self._consecutive_failures >= self.MAX_CONSECUTIVE_ATTEMPTS:

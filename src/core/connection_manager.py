@@ -54,6 +54,7 @@ class ConnectionManager:
         self._current_connection = None
         self._reconnect_event_listener = None
         self._state_lock = threading.Lock()
+        self._reconnect_lock = threading.Lock()
         self._session_id = 0  # Unique ID for each connection session
         self._pending_stop_engines: set = set()  # engines awaiting stop event (H2 gate)
 
@@ -285,12 +286,44 @@ class ConnectionManager:
         with self._state_lock:
             current_conn = self._current_connection
             session_valid = self._session_id > 0
-        if session_valid and current_conn:
-            # Reset backoff so reconnect can happen immediately
-            if hasattr(self._monitoring, "_auto_reconnect"):
-                self._monitoring._auto_reconnect.reset_backoff(reason="interface_change")
-            logger.info("[ConnectionManager] Triggering auto-reconnect on interface change")
-            self._monitoring.handle_failure(current_conn)
+            current_session = self._session_id
+
+        if not session_valid or not current_conn:
+            logger.debug("[ConnectionManager] Interface change ignored: no active session")
+            return
+
+        # Check FSM state: if already in STARTING, PREPARING, or STOPPING, a connect/reconnect is already in-flight!
+        from src.core.fsm.connection_fsm import ConnectionState, connection_fsm
+
+        fsm_state = connection_fsm.state
+        if fsm_state in {ConnectionState.STARTING, ConnectionState.PREPARING, ConnectionState.STOPPING}:
+            logger.info(
+                f"[ConnectionManager] Connection or reconnection already in-flight (FSM: {fsm_state.value}). "
+                "Skipping duplicate interface event."
+            )
+            return
+
+        # Acquire non-blocking lock to avoid parallel reconnect workers
+        if not self._reconnect_lock.acquire(blocking=False):
+            logger.info(
+                "[ConnectionManager] Reconnection worker already in-progress on another thread. "
+                "Ignoring redundant interface event."
+            )
+            return
+
+        def _reconnect_runner():
+            try:
+                # Reset backoff so reconnect can happen immediately on physical link change
+                if hasattr(self._monitoring, "_auto_reconnect"):
+                    self._monitoring._auto_reconnect.reset_backoff(reason="interface_change")
+                logger.info(
+                    f"[ConnectionManager] Triggering auto-reconnect on interface change (session {current_session})"
+                )
+                self._monitoring.handle_failure(current_conn)
+            finally:
+                self._reconnect_lock.release()
+
+        threading.Thread(target=_reconnect_runner, daemon=True, name="InterfaceReconnectWorker").start()
 
     def _on_network_interface_changed(self):
         """Callback from WindowsInterfaceWatcher; emits to EventBus."""
@@ -582,6 +615,9 @@ class ConnectionManager:
                     ConnectionState.ERROR,
                 }:
                     connection_fsm.transition_to(ConnectionState.STARTING, payload=data)
+                elif current_state == ConnectionState.CONNECTED:
+                    # Hot reconnection: transition from CONNECTED -> STOPPING first, then PREPARING
+                    connection_fsm.transition_to(ConnectionState.STOPPING, payload=data)
                 fsm_transitioned = connection_fsm.transition_to(ConnectionState.PREPARING, payload=data)
             elif event_type in ("connected", "reconnected"):
                 fsm_transitioned = connection_fsm.transition_to(ConnectionState.CONNECTED, payload=data)

@@ -68,6 +68,18 @@ _IP_ADAPTER_UNICAST_ADDRESS._fields_ = [
 ]
 
 
+class _IP_ADAPTER_GATEWAY_ADDRESS(ctypes.Structure):
+    pass
+
+
+_IP_ADAPTER_GATEWAY_ADDRESS._fields_ = [
+    ("Length", ctypes.c_ulong),
+    ("Flags", ctypes.c_ulong),
+    ("Next", ctypes.POINTER(_IP_ADAPTER_GATEWAY_ADDRESS)),
+    ("Address", _SOCKET_ADDRESS),
+]
+
+
 class _IP_ADAPTER_ADDRESSES(ctypes.Structure):
     pass
 
@@ -96,7 +108,7 @@ _IP_ADAPTER_ADDRESSES._fields_ = [
     ("TransmitLinkSpeed", ctypes.c_ulonglong),
     ("ReceiveLinkSpeed", ctypes.c_ulonglong),
     ("FirstWinsServerAddress", ctypes.c_void_p),
-    ("FirstGatewayAddress", ctypes.c_void_p),
+    ("FirstGatewayAddress", ctypes.POINTER(_IP_ADAPTER_GATEWAY_ADDRESS)),
     ("Ipv4Metric", ctypes.c_ulong),
     ("Ipv6Metric", ctypes.c_ulong),
     ("Luid", ctypes.c_ulonglong),
@@ -115,6 +127,7 @@ _IP_ADAPTER_ADDRESSES._fields_ = [
 VIRTUAL_ADAPTER_KEYWORDS = (
     "tap",
     "wintun",
+    "singtun",
     "wireguard",
     "tailscale",
     "zerotier",
@@ -180,7 +193,7 @@ def get_physical_nic_candidates() -> list[dict]:
     while True:
         r = get_adapters(
             AF_INET,
-            GAA_FLAG_INCLUDE_PREFIX | GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST,
+            GAA_FLAG_INCLUDE_PREFIX | GAA_FLAG_SKIP_ANYCAST | GAA_FLAG_SKIP_MULTICAST | 0x0080,
             None,
             ctypes.cast(buf, ctypes.POINTER(_IP_ADAPTER_ADDRESSES)),
             ctypes.byref(buflen),
@@ -199,7 +212,7 @@ def get_physical_nic_candidates() -> list[dict]:
     adapter = ctypes.cast(buf, ctypes.POINTER(_IP_ADAPTER_ADDRESSES))
     while adapter:
         a = adapter.contents
-        name = a.FriendlyName or a.AdapterName or ""
+        name = a.FriendlyName or ""
         desc = a.Description or ""
 
         # Physical link type only (Ethernet / 802.11) AND not an enumerated virtual/VPN adapter
@@ -227,16 +240,19 @@ def get_physical_nic_candidates() -> list[dict]:
                 if sock and sock.contents.sa_family == AF_INET:
                     raw = ctypes.string_at(ctypes.addressof(sock.contents) + 4, 4)
                     cand_gw = socket.inet_ntoa(raw)
-                    if not _is_loopback_or_nonlan(cand_gw):
+                    if not _is_loopback_or_nonlan(cand_gw) and not _is_tun_subnet_ip(cand_gw):
                         gateway_ip = cand_gw
                         break
                 ga = g.Next
 
+            adapter_guid = a.AdapterName.decode("latin1") if a.AdapterName else ""
             if ip and gateway_ip:
                 result.append(
                     {
                         "name": name,
+                        "guid": adapter_guid,
                         "ip": ip,
+                        "ifindex": a.IfIndex,
                         "iftype": a.IfType,
                         "operstatus": a.OperStatus,
                         "gateway": gateway_ip,
@@ -572,11 +588,14 @@ class WindowsNetworkAdapter(INetworkAdapter):
 
 
 class WindowsInterfaceWatcher:
-    """Watches for network interface / IP / link status changes on Windows.
+    """Watches for physical network interface / IP / link status changes on Windows.
 
-    Uses Win32 NotifyIpInterfaceChange for asynchronous, low-overhead event notification
-    and falls back to 5-second polling if unavailable.
+    Uses Win32 NotifyIpInterfaceChange with a 1.5s debounce and physical NIC state
+    filtering to suppress internal TUN route/adapter mutations and echo loops.
+    Falls back to 5-second polling if NotifyIpInterfaceChange is unavailable.
     """
+
+    DEBOUNCE_SECONDS = 1.5
 
     def __init__(self, callback: Callable[[], None]):
         self._callback = callback
@@ -584,16 +603,71 @@ class WindowsInterfaceWatcher:
         self._stop_event = threading.Event()
         self._notification_handle = ctypes.c_void_p(0)
         self._cb_func = None
+        self._debounce_timer: Optional[threading.Timer] = None
+        self._timer_lock = threading.Lock()
+        self._last_physical_state: Optional[tuple] = None
+
+    def _get_current_physical_state(self) -> Optional[tuple]:
+        """Query the primary physical adapter state (GUID/name, gateway, ifindex)."""
+        try:
+            candidates = get_physical_nic_candidates()
+            if candidates:
+                primary = candidates[0]
+                return (
+                    primary.get("guid") or primary.get("name"),
+                    primary.get("gateway"),
+                    primary.get("ifindex"),
+                )
+        except Exception as e:
+            logger.debug(f"[WindowsInterfaceWatcher] Error querying physical state: {e}")
+        return None
+
+    def _debounced_handler(self):
+        if self._stop_event.is_set():
+            return
+        try:
+            current_state = self._get_current_physical_state()
+            if not current_state:
+                logger.debug("[WindowsInterfaceWatcher] Debounced check: no active physical network interface")
+                return
+
+            if self._last_physical_state is None:
+                self._last_physical_state = current_state
+                logger.debug(f"[WindowsInterfaceWatcher] Baseline physical state initialized: {current_state}")
+                return
+
+            # Check if primary physical adapter GUID or default gateway changed
+            if current_state == self._last_physical_state:
+                logger.debug(
+                    f"[WindowsInterfaceWatcher] Suppressing event: physical adapter & gateway unchanged ({current_state})"
+                )
+                return
+
+            old_state = self._last_physical_state
+            self._last_physical_state = current_state
+            logger.info(
+                f"[WindowsInterfaceWatcher] Physical network interface change confirmed: {old_state} -> {current_state}"
+            )
+            self._callback()
+        except Exception as e:
+            logger.debug(f"[WindowsInterfaceWatcher] Debounced handler error: {e}")
 
     def start(self):
         if self._thread and self._thread.is_alive():
             return
         self._stop_event.clear()
+        self._last_physical_state = self._get_current_physical_state()
+        logger.debug(f"[WindowsInterfaceWatcher] Starting with initial physical baseline: {self._last_physical_state}")
         self._thread = threading.Thread(target=self._run, daemon=True, name="WindowsInterfaceWatcher")
         self._thread.start()
 
     def stop(self):
         self._stop_event.set()
+        with self._timer_lock:
+            if self._debounce_timer is not None:
+                self._debounce_timer.cancel()
+                self._debounce_timer = None
+
         if hasattr(ctypes, "windll") and self._notification_handle.value:
             try:
                 ctypes.windll.iphlpapi.CancelMibChangeNotify2(self._notification_handle)
@@ -618,12 +692,13 @@ class WindowsInterfaceWatcher:
                     )
 
                     def _on_ip_change(caller_context, row, notif_type):
-                        # 0.5s debounce to absorb transient link renegotiation
-                        time.sleep(0.5)
-                        try:
-                            self._callback()
-                        except Exception as e:
-                            logger.debug(f"[WindowsInterfaceWatcher] Callback error: {e}")
+                        # Collapse rapid bursts of NotifyIpInterfaceChange into a single 1.5s debounce
+                        with self._timer_lock:
+                            if self._debounce_timer is not None:
+                                self._debounce_timer.cancel()
+                            self._debounce_timer = threading.Timer(self.DEBOUNCE_SECONDS, self._debounced_handler)
+                            self._debounce_timer.daemon = True
+                            self._debounce_timer.start()
 
                     self._cb_func = PIPINTERFACE_CHANGE_CALLBACK(_on_ip_change)
                     handle = ctypes.c_void_p(0)
@@ -642,18 +717,21 @@ class WindowsInterfaceWatcher:
                 logger.debug(f"[WindowsInterfaceWatcher] Failed NotifyIpInterfaceChange setup: {e}")
 
         if use_polling:
-            last_state = None
             while not self._stop_event.is_set():
                 self._stop_event.wait(5.0)
                 if self._stop_event.is_set():
                     break
                 try:
-                    candidates = get_physical_nic_candidates()
-                    current = tuple((c.get("name"), c.get("ip"), c.get("gateway")) for c in candidates)
-                    if last_state is not None and current != last_state:
-                        logger.info("[WindowsInterfaceWatcher] Network change detected via polling fallback")
+                    current_state = self._get_current_physical_state()
+                    if current_state and self._last_physical_state is not None and current_state != self._last_physical_state:
+                        logger.info(
+                            f"[WindowsInterfaceWatcher] Physical network transition detected via polling: "
+                            f"{self._last_physical_state} -> {current_state}"
+                        )
+                        self._last_physical_state = current_state
                         self._callback()
-                    last_state = current
+                    elif current_state and self._last_physical_state is None:
+                        self._last_physical_state = current_state
                 except Exception as e:
                     logger.debug(f"[WindowsInterfaceWatcher] Polling error: {e}")
         else:
