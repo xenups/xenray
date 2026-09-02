@@ -452,9 +452,7 @@ class TestConsecutiveLineGuard:
         m._process_line(line)
         # simulate the streak going stale
         src = "xray"
-        m._pending_failures[src]["first_seen"] -= (
-            m.FAILURE_STREAK_WINDOW + 5
-        )
+        m._pending_failures[src]["first_seen"] -= m.FAILURE_STREAK_WINDOW + 5
         m._process_line(line)  # fresh streak starts, count=1 < 3
         assert received == [], "stale streak must not combine with new match"
 

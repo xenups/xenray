@@ -2,14 +2,9 @@
 
 from __future__ import annotations
 
-import os
 from typing import Optional
 
-from src.core.constants import (
-    DNS_IP_CLOUDFLARE,
-    DNS_IP_CLOUDFLARE_ALT,
-    DNS_IP_GOOGLE,
-)
+from src.core.constants import DNS_IP_CLOUDFLARE, DNS_IP_GOOGLE
 
 
 class DnsConfigBuilder:

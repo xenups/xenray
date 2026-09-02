@@ -4,13 +4,9 @@ from __future__ import annotations
 
 import os
 import sys
-from typing import List, Optional, Union
+from typing import List, Optional
 
-from src.core.constants import (
-    BASE_BYPASS_PROCESSES,
-    TUN_GATEWAY_IPV4,
-    XRAY_EXECUTABLE,
-)
+from src.core.constants import BASE_BYPASS_PROCESSES, TUN_GATEWAY_IPV4, XRAY_EXECUTABLE
 from src.core.logger import logger
 from src.utils.network_utils import NetworkUtils
 from src.utils.platform_utils import PlatformUtils

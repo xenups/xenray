@@ -92,9 +92,7 @@ class UserRulesInjector:
                 toggle_rules.append({"network": "udp", "port": 443, "outbound": "block"})
             if toggles.get("block_ads", False):
                 if cfg_route is not None:
-                    from src.core.singbox.builders.rule_set_utils import (
-                        materialize_rule_set,
-                    )
+                    from src.core.singbox.builders.rule_set_utils import materialize_rule_set
 
                     ads_url = (
                         "https://raw.githubusercontent.com/Chocolate4U/"
@@ -102,9 +100,7 @@ class UserRulesInjector:
                     )
                     # Offline-first: cached on disk -> local; missing -> rule dropped
                     # entirely (never a remote @url fetch that FATALs with EOF).
-                    rule_set = materialize_rule_set(
-                        "ads-rules", ads_url, download_detour="proxy"
-                    )
+                    rule_set = materialize_rule_set("ads-rules", ads_url, download_detour="proxy")
                     if rule_set is not None:
                         toggle_rules.append({"rule_set": "ads-rules", "outbound": "block"})
                         new_dns_rules.append({"rule_set": "ads-rules", "action": "reject"})

@@ -16,7 +16,6 @@ import re
 import socket
 import subprocess
 import threading
-import time
 from ctypes import wintypes
 from typing import Callable, Optional, Tuple
 
@@ -669,14 +668,10 @@ class WindowsInterfaceWatcher:
                     f"{old_state} -> DOWN (cable/WiFi unplugged)"
                 )
             elif old_state == self._NETWORK_DOWN:
-                logger.info(
-                    f"[WindowsInterfaceWatcher] Physical network RECONNECTED: "
-                    f"DOWN -> {current_state}"
-                )
+                logger.info(f"[WindowsInterfaceWatcher] Physical network RECONNECTED: " f"DOWN -> {current_state}")
             else:
                 logger.info(
-                    f"[WindowsInterfaceWatcher] Physical network interface CHANGED: "
-                    f"{old_state} -> {current_state}"
+                    f"[WindowsInterfaceWatcher] Physical network interface CHANGED: " f"{old_state} -> {current_state}"
                 )
 
             self._callback()

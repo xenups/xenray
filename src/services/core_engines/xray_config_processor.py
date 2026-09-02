@@ -32,6 +32,7 @@ from src.core.constants import (
     CONFIG_STREAM_SETTINGS,
     CONFIG_TAG,
     DOMAIN_ASIS,
+    GEOSITE_PREFIX,
     MODE_PROXY,
     MODE_VPN,
     NETWORK_HTTP3,
@@ -52,7 +53,6 @@ from src.core.constants import (
     TAG_BLOCK,
     TAG_DIRECT,
     TAG_PROXY,
-    GEOSITE_PREFIX,
     XRAY_LOCATION_ASSET,
 )
 from src.services.connection.dns_configurator import DnsConfigurator
@@ -332,8 +332,7 @@ class XrayConfigProcessor:
                 infos = socket.getaddrinfo(addr, None, socket.AF_INET)
                 entry[CONFIG_ADDRESS] = infos[0][4][0]
                 logger.info(
-                    f"[XrayConfigProcessor] TUN mode: outbound '{addr}' -> "
-                    f"{entry[CONFIG_ADDRESS]} (no DNS loop)"
+                    f"[XrayConfigProcessor] TUN mode: outbound '{addr}' -> " f"{entry[CONFIG_ADDRESS]} (no DNS loop)"
                 )
             except OSError as exc:
                 logger.warning(f"[XrayConfigProcessor] Could not resolve outbound '{addr}' for TUN pinning: {exc}")

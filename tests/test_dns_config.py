@@ -404,16 +404,12 @@ class TestBuildTunDnsServers:
     def test_empty_list_uses_system_then_default(self, dns_configurator, mock_dns):
         """Empty DNS list prefers system resolvers; without them, default."""
         mock_dns.load.return_value = []
-        with patch(
-            "src.platform.factory.get_network_adapter"
-        ) as ga:
+        with patch("src.platform.factory.get_network_adapter") as ga:
             ga.return_value.get_system_dns_servers.return_value = ["192.168.1.1"]
             servers = dns_configurator.build_tun_servers()
         assert servers == ["192.168.1.1"]
 
-        with patch(
-            "src.platform.factory.get_network_adapter"
-        ) as ga2:
+        with patch("src.platform.factory.get_network_adapter") as ga2:
             ga2.return_value.get_system_dns_servers.return_value = []
             servers2 = dns_configurator.build_tun_servers()
         assert servers2 == [DNS_IP_CLOUDFLARE]

@@ -109,13 +109,12 @@ def test_tun_flow_pins_outbound_ip_on_disk(tmp_path, monkeypatch):
     dial = on_disk["outbounds"][0]["settings"]["vnext"][0]["address"]
     assert dial == "188.114.99.6", f"outbound not pinned on disk: {dial}"
     assert (
-        on_disk["outbounds"][0]["streamSettings"]["tlsSettings"]["serverName"]
-        == "4fcb3020-64c0-4e4d-b23b-xenups.ir"
+        on_disk["outbounds"][0]["streamSettings"]["tlsSettings"]["serverName"] == "4fcb3020-64c0-4e4d-b23b-xenups.ir"
     ), "SNI must stay untouched"
     # The wire log line must have been emitted (this is what the live run shows).
-    assert "TUN mode: outbound '1mobility.zenups.ir' -> 188.114.99.6" in sink.getvalue(), (
-        "pinning log line missing from the real flow"
-    )
+    assert (
+        "TUN mode: outbound '1mobility.zenups.ir' -> 188.114.99.6" in sink.getvalue()
+    ), "pinning log line missing from the real flow"
 
 
 def test_proxy_flow_leaves_domain_untouched(tmp_path, monkeypatch):

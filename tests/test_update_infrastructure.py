@@ -84,6 +84,7 @@ def test_extract_core_missing_zip_returns_false(tmp_path):
     """A missing zip must yield False, not raise."""
     assert ArchiveExtractor(str(tmp_path / "bin")).extract_core(str(tmp_path / "nope.zip")) is False
 
+
 # ── SHA-256 verification tests ──────────────────────────────────────────────
 
 

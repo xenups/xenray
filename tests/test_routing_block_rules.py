@@ -147,9 +147,7 @@ class TestXrayBlockRouting:
                 {
                     "protocol": "vless",
                     "tag": "proxy",
-                    "settings": {
-                        "vnext": [{"address": "example.com", "port": 443}]
-                    },
+                    "settings": {"vnext": [{"address": "example.com", "port": 443}]},
                 }
             ],
             "routing": {"rules": []},

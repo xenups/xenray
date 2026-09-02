@@ -131,7 +131,7 @@ class AutoReconnectService:
             return 0.0
         exponent = max(self._consecutive_failures - 1, 0)
         base = min(
-            self.BASE_COOLDOWN_SECONDS * (2 ** exponent),
+            self.BASE_COOLDOWN_SECONDS * (2**exponent),
             self.MAX_COOLDOWN_SECONDS,
         )
         jitter = random.uniform(-0.20, 0.20)

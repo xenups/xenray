@@ -423,25 +423,23 @@ def test_singbox_dns_rules_user_domains_before_catchall():
     from src.core.config_builders.singbox_config_builder import SingboxConfigBuilder
 
     cfg = SingboxConfigBuilder().build(
-        socks_port=10805, proxy_server_ip="5.5.5.5", routing_country="none",
+        socks_port=10805,
+        proxy_server_ip="5.5.5.5",
+        routing_country="none",
         interface_name="eth0",
         routing_rules={"direct": ["ikco.ir", "bmi.ir"], "proxy": [], "block": []},
-        mtu=1420, local_dns_server="192.168.1.1", sni_connect_ip=None,
+        mtu=1420,
+        local_dns_server="192.168.1.1",
+        sni_connect_ip=None,
     )
 
     dns_rules = cfg["dns"]["rules"]
     # User domain rule must come BEFORE the catch-all
-    user_idx = next(
-        i for i, r in enumerate(dns_rules)
-        if r.get("domain_suffix") == ["ikco.ir", "bmi.ir"]
-    )
-    catchall_idx = next(
-        i for i, r in enumerate(dns_rules)
-        if r.get("inbound") == ["tun-in"] and "server" in r
-    )
-    assert user_idx < catchall_idx, (
-        f"user domain DNS rule (idx {user_idx}) must come before catch-all (idx {catchall_idx})"
-    )
+    user_idx = next(i for i, r in enumerate(dns_rules) if r.get("domain_suffix") == ["ikco.ir", "bmi.ir"])
+    catchall_idx = next(i for i, r in enumerate(dns_rules) if r.get("inbound") == ["tun-in"] and "server" in r)
+    assert (
+        user_idx < catchall_idx
+    ), f"user domain DNS rule (idx {user_idx}) must come before catch-all (idx {catchall_idx})"
 
 
 def test_singbox_has_tls_sniff_for_domain_routing():
@@ -450,17 +448,18 @@ def test_singbox_has_tls_sniff_for_domain_routing():
     from src.core.config_builders.singbox_config_builder import SingboxConfigBuilder
 
     cfg = SingboxConfigBuilder().build(
-        socks_port=10805, proxy_server_ip="5.5.5.5", routing_country="none",
+        socks_port=10805,
+        proxy_server_ip="5.5.5.5",
+        routing_country="none",
         interface_name="eth0",
         routing_rules={"direct": [], "proxy": [], "block": []},
-        mtu=1420, local_dns_server="192.168.1.1", sni_connect_ip=None,
+        mtu=1420,
+        local_dns_server="192.168.1.1",
+        sni_connect_ip=None,
     )
 
     route_rules = cfg["route"]["rules"]
-    sniff = [
-        r for r in route_rules
-        if r.get("action") == "sniff" and r.get("inbound") == ["tun-in"]
-    ]
+    sniff = [r for r in route_rules if r.get("action") == "sniff" and r.get("inbound") == ["tun-in"]]
     assert sniff, "no TUN sniff rule found in route.rules"
     # Must have at least one sniff without port filter (covers TLS/HTTP)
     general_sniff = [r for r in sniff if "port" not in r]

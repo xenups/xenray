@@ -67,7 +67,7 @@ class ConnectionFSM:
         ConnectionState.CONNECTED: {
             ConnectionState.STOPPING,
             ConnectionState.PREPARING,  # hot reconnection transition
-            ConnectionState.STARTING,   # hot restart transition
+            ConnectionState.STARTING,  # hot restart transition
             ConnectionState.ERROR,
             ConnectionState.DISCONNECTED,
         },

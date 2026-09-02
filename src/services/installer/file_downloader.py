@@ -146,8 +146,7 @@ class FileDownloader:
 
         if actual != expected:
             logger.error(
-                f"[FileDownloader] SHA-256 MISMATCH — expected {expected}, got {actual}. "
-                "Discarding downloaded file."
+                f"[FileDownloader] SHA-256 MISMATCH — expected {expected}, got {actual}. " "Discarding downloaded file."
             )
             try:
                 os.remove(file_path)

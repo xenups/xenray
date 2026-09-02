@@ -230,8 +230,7 @@ class ActiveConnectivityMonitor:
                 self._lost_confirmations = 0
 
         confirmed = self._lost_confirmations >= self.REQUIRED_LOST_CONFIRMATIONS or (
-            self._stall_samples >= self.MAX_STALL_SAMPLES
-            and not self._verify_connectivity(port)
+            self._stall_samples >= self.MAX_STALL_SAMPLES and not self._verify_connectivity(port)
         )
 
         if confirmed and self._is_connected:
@@ -254,11 +253,13 @@ class ActiveConnectivityMonitor:
         """
         try:
             import psutil
+
             per_nic = psutil.net_io_counters(pernic=True)
             if not per_nic:
                 return None
 
             from src.utils.platform_utils import PlatformUtils
+
             target_name = PlatformUtils.get_tun_interface_name()
 
             # 1. Exact match (primary)
@@ -364,10 +365,6 @@ class ActiveConnectivityMonitor:
         except OSError:
             return False
 
-    def _probe_socks_socket(self, port: int) -> bool:
-        """Backward-compatible delegate."""
-        return self._probe_socks_tunnel(port)
-
     def _verify_connectivity(self, port: int) -> bool:
         """
         Heavy probe: HTTP generate_204 THROUGH SOCKS proxy with target rotation & jitter.
@@ -376,6 +373,7 @@ class ActiveConnectivityMonitor:
         """
         try:
             import random
+
             from src.utils.network_utils import NetworkUtils
 
             target_url = random.choice(self.PROBE_TARGETS)

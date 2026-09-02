@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-
 import pytest
 
 from src.services.core_engines.xray_config_processor import XrayConfigProcessor
@@ -61,10 +60,7 @@ class TestPinOutboundServerIp:
         address = config["outbounds"][0]["settings"]["vnext"][0]["address"]
         # Pinned to an IPv4 literal; serverName (SNI) stays the original domain.
         assert "." in address and address[0].isdigit(), address
-        assert (
-            config["outbounds"][0]["streamSettings"]["tlsSettings"]["serverName"]
-            == "my.proxy.example.com"
-        )
+        assert config["outbounds"][0]["streamSettings"]["tlsSettings"]["serverName"] == "my.proxy.example.com"
 
     def test_keeps_existing_ip_untouched(self):
         config = _vless_config(address="185.105.239.126")
@@ -77,11 +73,7 @@ class TestPinOutboundServerIp:
                 {
                     "tag": "proxy",
                     "protocol": "trojan",
-                    "settings": {
-                        "servers": [
-                            {"address": "trojan.example.com", "port": 443, "password": "x"}
-                        ]
-                    },
+                    "settings": {"servers": [{"address": "trojan.example.com", "port": 443, "password": "x"}]},
                 }
             ]
         }

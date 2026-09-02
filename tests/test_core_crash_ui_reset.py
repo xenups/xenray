@@ -317,9 +317,7 @@ def test_schedule_crash_reconnect_calls_internal_reconnect():
         def start(self):
             captured_target["fn"]()
 
-    with patch("time.sleep", lambda s: None), patch(
-        "threading.Thread", _InstantThread
-    ):
+    with patch("time.sleep", lambda s: None), patch("threading.Thread", _InstantThread):
         type(cm)._schedule_crash_reconnect(cm, crashed)
 
     cm._reconnect_internal.assert_called_once_with("cfg.json", "vpn", crashed)
@@ -346,8 +344,6 @@ def test_schedule_crash_reconnect_skips_adopted_session():
     cm._reconnect_internal = MagicMock()
 
     with patch("time.sleep", lambda s: None):
-        type(cm)._schedule_crash_reconnect(
-            cm, {"file": "Adopted Connection", "mode": "proxy"}
-        )
+        type(cm)._schedule_crash_reconnect(cm, {"file": "Adopted Connection", "mode": "proxy"})
 
     cm._reconnect_internal.assert_not_called()

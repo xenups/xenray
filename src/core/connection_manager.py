@@ -328,6 +328,7 @@ class ConnectionManager:
     def _on_network_interface_changed(self):
         """Callback from WindowsInterfaceWatcher; emits to EventBus."""
         from src.core.event_bus import EVENT_NETWORK_INTERFACE_CHANGED, event_bus
+
         event_bus.publish(EVENT_NETWORK_INTERFACE_CHANGED, {})
 
     @staticmethod
@@ -470,6 +471,7 @@ class ConnectionManager:
                 # Start OS network interface watcher for link/gateway change detection
                 try:
                     from src.platform.factory import get_network_adapter
+
                     get_network_adapter().start_interface_watcher(self._on_network_interface_changed)
                 except Exception as e:
                     logger.debug(f"[ConnectionManager] Could not start interface watcher: {e}")
@@ -517,6 +519,7 @@ class ConnectionManager:
         # Stop OS network interface watcher
         try:
             from src.platform.factory import get_network_adapter
+
             get_network_adapter().stop_interface_watcher()
         except Exception as e:
             logger.debug(f"[ConnectionManager] Could not stop interface watcher: {e}")

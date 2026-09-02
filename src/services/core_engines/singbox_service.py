@@ -179,6 +179,7 @@ class SingboxService:
         """Ensure orphaned sing-box instances are terminated before launching a new process."""
         try:
             from src.utils.process_utils import ProcessUtils
+
             ProcessUtils.cleanup_orphaned_core(SINGBOX_EXECUTABLE, exclude_pid=self._proc.pid)
         except Exception as e:
             logger.warning(f"[SingboxService] Pre-launch cleanup warning: {e}")
