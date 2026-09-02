@@ -8,6 +8,7 @@ DNS, TUN, and patching responsibilities to specialized classes.
 import copy
 import json
 import os
+import socket
 from typing import Optional
 
 from loguru import logger
@@ -297,6 +298,47 @@ class XrayConfigProcessor:
         if redirected:
             logger.info(f"[XrayConfigProcessor] SNI spoof relay: outbound -> 127.0.0.1:{listen_port}")
 
+    def pin_outbound_server_ip(self, config: dict, use_tun: bool = False) -> None:
+        """Rewrite the FIRST proxy outbound's dial address from domain to a
+        resolved IP when the TUN engine is active.
+
+        In TUN mode Xray must never issue DNS: its query hits the TUN ->
+        sing-box -> remote_proxy (which is Xray itself) -> recursion loop, so
+        the server address is pinned to a resolved IPv4. serverName/SNI in the
+        outbound header stays as-is (same pattern as the SNI relay rewrite).
+        """
+        if not use_tun:
+            return
+        for outbound in config.get(CONFIG_OUTBOUNDS, []):
+            if outbound.get(CONFIG_PROTOCOL) not in (
+                PROTOCOL_VLESS,
+                PROTOCOL_VMESS,
+                PROTOCOL_TROJAN,
+                PROTOCOL_SHADOWSOCKS,
+            ):
+                continue
+            servers = outbound.get(CONFIG_SETTINGS, {})
+            if "vnext" in servers:
+                servers_list = servers["vnext"]
+            else:
+                servers_list = servers.get("servers", [])
+            entry = next((s for s in servers_list if s.get(CONFIG_ADDRESS)), None)
+            if entry is None:
+                continue
+            addr = entry.get(CONFIG_ADDRESS)
+            if is_ip(addr):
+                continue
+            try:
+                infos = socket.getaddrinfo(addr, None, socket.AF_INET)
+                entry[CONFIG_ADDRESS] = infos[0][4][0]
+                logger.info(
+                    f"[XrayConfigProcessor] TUN mode: outbound '{addr}' -> "
+                    f"{entry[CONFIG_ADDRESS]} (no DNS loop)"
+                )
+            except OSError as exc:
+                logger.warning(f"[XrayConfigProcessor] Could not resolve outbound '{addr}' for TUN pinning: {exc}")
+            break
+
     def get_proxy_server_ip(self, config: dict) -> list[str]:
         """Extract proxy server IPs/domains from config."""
         addresses = []
@@ -410,7 +452,9 @@ class XrayConfigProcessor:
         if TAG_DIRECT not in existing_tags and not any(ob.get(CONFIG_PROTOCOL) == PROTOCOL_FREEDOM for ob in outbounds):
             outbounds.append({"protocol": PROTOCOL_FREEDOM, "tag": TAG_DIRECT, "settings": {}})
             logger.debug("[XrayConfigProcessor] Injected direct (freedom) outbound")
-        if TAG_BLOCK not in existing_tags and not any(ob.get(CONFIG_PROTOCOL) == PROTOCOL_BLACKHOLE for ob in outbounds):
+        if TAG_BLOCK not in existing_tags and not any(
+            ob.get(CONFIG_PROTOCOL) == PROTOCOL_BLACKHOLE for ob in outbounds
+        ):
             outbounds.append({"protocol": PROTOCOL_BLACKHOLE, "tag": TAG_BLOCK, "settings": {}})
             logger.debug("[XrayConfigProcessor] Injected block (blackhole) outbound")
 
@@ -436,7 +480,13 @@ class XrayConfigProcessor:
         if toggles.get("block_udp_443", False):
             new_rules.append({"type": RULE_FIELD, "network": "udp", "port": "443", "outboundTag": TAG_BLOCK})
         if toggles.get("block_ads", False):
-            new_rules.append({"type": RULE_FIELD, "domain": [GEOSITE_PREFIX + "category-ads-all"], "outboundTag": TAG_BLOCK})
+            new_rules.append(
+                {
+                    "type": RULE_FIELD,
+                    "domain": [GEOSITE_PREFIX + "category-ads-all"],
+                    "outboundTag": TAG_BLOCK,
+                }
+            )
 
         if routing_rules:
             user_direct = routing_rules.get(TAG_DIRECT, [])

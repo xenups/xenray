@@ -144,9 +144,10 @@ class SingboxService:
             config = self._config_builder.build(
                 socks_port=xray_socks_port,
                 proxy_server_ip=proxy_server_ip,
-                # Pass interface_name=None so sing-box relies on dynamic auto_detect_interface: true
-                # and keeps outbound direct cleanly interface-agnostic (no static pinning).
-                interface_name=None,
+                # Pin the physical NIC as default_interface: direct outbound for
+                # proxy-server traffic MUST leave via the real NIC, not back into
+                # the TUN (loop). auto_detect_interface stays true for switching.
+                interface_name=iface_name,
                 routing_rules=routing_rules,
                 mtu=mtu,
                 local_dns_server=local_dns,

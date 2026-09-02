@@ -117,6 +117,13 @@ class ConnectionOrchestrator:
             if not processed_config:
                 return self.ATTEMPT_SKIPPED, None
 
+            # TUN (dual-engine) mode: pin the proxy outbound to a resolved IP so
+            # Xray never issues DNS (its queries would TUN -> sing-box ->
+            # remote_proxy -> Xray recursion). serverName/SNI stays untouched.
+            if use_singbox:
+                self._xray_processor.pin_outbound_server_ip(processed_config, use_tun=True)
+                self._xray_processor.save_config(processed_config, OUTPUT_CONFIG_PATH)
+
             xray_pid = self._start_xray(step_callback)
             if not xray_pid:
                 return self.ATTEMPT_SKIPPED, None
