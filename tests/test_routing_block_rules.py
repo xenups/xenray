@@ -1,7 +1,6 @@
 """Unit tests for Block routing rules in Sing-box and Xray."""
 
 from unittest.mock import Mock
-import pytest
 
 from src.core.config_builders.singbox_config_builder import SingboxConfigBuilder
 from src.services.connection.tun_injector import TunInjector
@@ -67,7 +66,12 @@ class TestSingboxBlockRouting:
         assert "198.51.100.1" in blocked_cidrs
         assert "203.0.113.0/24" in blocked_cidrs
 
-    def test_block_ads_toggle_creates_reject_dns_and_rule_set(self):
+    def test_block_ads_toggle_creates_reject_dns_and_rule_set(self, tmp_path, monkeypatch):
+        from src.core.singbox.builders import rule_set_utils
+
+        (tmp_path / "geosite-category-ads-all.srs").write_bytes(b"x")
+        monkeypatch.setattr(rule_set_utils, "_RULE_CACHE", str(tmp_path))
+
         builder = SingboxConfigBuilder()
         cfg = builder.build(
             socks_port=10805,
@@ -85,6 +89,7 @@ class TestSingboxBlockRouting:
         route_rules = cfg["route"]["rules"]
         block_ads = [r for r in route_rules if r.get("outbound") == "block" and r.get("rule_set") == "ads-rules"]
         assert len(block_ads) == 1
+        assert all(rs["type"] == "local" for rs in cfg["route"]["rule_set"])
 
 
 class TestXrayBlockRouting:
@@ -138,7 +143,15 @@ class TestXrayBlockRouting:
         processor = XrayConfigProcessor(ctx)
         base_config = {
             "inbounds": [],
-            "outbounds": [{"protocol": "vless", "tag": "proxy", "settings": {"vnext": [{"address": "example.com", "port": 443}]}}],
+            "outbounds": [
+                {
+                    "protocol": "vless",
+                    "tag": "proxy",
+                    "settings": {
+                        "vnext": [{"address": "example.com", "port": 443}]
+                    },
+                }
+            ],
             "routing": {"rules": []},
         }
 

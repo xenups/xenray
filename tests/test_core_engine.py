@@ -81,7 +81,13 @@ class TestSingboxConfigBuilder:
         assert "proxy" in outbounds
         assert "block" in outbounds
 
-    def test_build_with_country_rules(self, builder):
+    def test_build_with_country_rules(self, builder, tmp_path, monkeypatch):
+        from src.core.singbox.builders import rule_set_utils
+
+        (tmp_path / "geoip-ir.srs").write_bytes(b"x")
+        (tmp_path / "geosite-ir.srs").write_bytes(b"x")
+        monkeypatch.setattr(rule_set_utils, "_RULE_CACHE", str(tmp_path))
+
         cfg = builder.build(
             socks_port=10805,
             proxy_server_ip="1.2.3.4",
@@ -90,6 +96,7 @@ class TestSingboxConfigBuilder:
         assert "rule_set" in cfg["route"]
         rule_set_tags = [rs["tag"] for rs in cfg["route"]["rule_set"]]
         assert any("ir-rules" in t for t in rule_set_tags)
+        assert all(rs["type"] == "local" for rs in cfg["route"]["rule_set"])
 
 
 class TestRouteManagerService:

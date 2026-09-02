@@ -91,23 +91,24 @@ class UserRulesInjector:
             if toggles.get("block_udp_443", False):
                 toggle_rules.append({"network": "udp", "port": 443, "outbound": "block"})
             if toggles.get("block_ads", False):
-                toggle_rules.append({"rule_set": "ads-rules", "outbound": "block"})
-                new_dns_rules.append({"rule_set": "ads-rules", "action": "reject"})
                 if cfg_route is not None:
+                    from src.core.singbox.builders.rule_set_utils import (
+                        materialize_rule_set,
+                    )
+
                     ads_url = (
                         "https://raw.githubusercontent.com/Chocolate4U/"
                         "Iran-sing-box-rules/rule-set/geosite-category-ads-all.srs"
                     )
-                    cfg_route.setdefault("rule_set", []).append(
-                        {
-                            "tag": "ads-rules",
-                            "type": "remote",
-                            "format": "binary",
-                            "url": ads_url,
-                            "download_detour": "proxy",
-                            "update_interval": "24h",
-                        }
+                    # Offline-first: cached on disk -> local; missing -> rule dropped
+                    # entirely (never a remote @url fetch that FATALs with EOF).
+                    rule_set = materialize_rule_set(
+                        "ads-rules", ads_url, download_detour="proxy"
                     )
+                    if rule_set is not None:
+                        toggle_rules.append({"rule_set": "ads-rules", "outbound": "block"})
+                        new_dns_rules.append({"rule_set": "ads-rules", "action": "reject"})
+                        cfg_route.setdefault("rule_set", []).append(rule_set)
             new_rules.extend(toggle_rules)
 
         # Insert BEFORE the default chain (hijack-dns / block / private-direct).

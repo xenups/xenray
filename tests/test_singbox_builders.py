@@ -1,7 +1,5 @@
 """Unit tests for specialized sing-box builders and injectors."""
 
-import pytest
-
 from src.core.singbox.builders.country_rules_injector import CountryRulesInjector
 from src.core.singbox.builders.dns_config_builder import DnsConfigBuilder
 from src.core.singbox.builders.route_config_builder import RouteConfigBuilder
@@ -132,7 +130,13 @@ class TestUserRulesInjector:
 class TestCountryRulesInjector:
     """Test CountryRulesInjector behavior."""
 
-    def test_inject_country_rules(self):
+    def test_inject_country_rules(self, tmp_path, monkeypatch):
+        from src.core.singbox.builders import rule_set_utils
+
+        (tmp_path / "geoip-ir.srs").write_bytes(b"x")
+        (tmp_path / "geosite-ir.srs").write_bytes(b"x")
+        monkeypatch.setattr(rule_set_utils, "_RULE_CACHE", str(tmp_path))
+
         injector = CountryRulesInjector()
         cfg_route = {"rules": []}
         dns_rules = []
@@ -141,5 +145,6 @@ class TestCountryRulesInjector:
 
         assert "rule_set" in cfg_route
         assert len(cfg_route["rule_set"]) >= 1
+        assert all(rs["type"] == "local" for rs in cfg_route["rule_set"])
         assert any(r.get("outbound") == "direct" for r in cfg_route["rules"])
         assert any(r.get("server") == "bootstrap" for r in dns_rules)

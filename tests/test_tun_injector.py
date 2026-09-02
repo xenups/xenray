@@ -362,10 +362,14 @@ def test_sni_spoof_connect_ip_goes_direct(injector):
     assert "185.193.30.94" in rules[0]["ip"]
 
 
-def test_singbox_builder_applies_routing_toggles():
+def test_singbox_builder_applies_routing_toggles(tmp_path, monkeypatch):
     """block_udp_443 / block_ads toggles must reach the sing-box TUN config
     (previously they only applied to the Xray-TUN engine path)."""
     from src.core.config_builders.singbox_config_builder import SingboxConfigBuilder
+    from src.core.singbox.builders import rule_set_utils
+
+    (tmp_path / "geosite-category-ads-all.srs").write_bytes(b"x")
+    monkeypatch.setattr(rule_set_utils, "_RULE_CACHE", str(tmp_path))
 
     builder = SingboxConfigBuilder()
     cfg = builder.build(

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import List
-
 from src.core.constants import SINGBOX_RULE_SETS
 from src.core.logger import logger
 
@@ -38,18 +36,14 @@ class CountryRulesInjector:
             tag_name = f"{country}-rules-{idx}"
             logger.debug(f"[CountryRulesInjector] Adding rule set: {tag_name} from {url}")
 
-            cfg_route["rule_set"].append(
-                {
-                    "tag": tag_name,
-                    "type": "remote",
-                    "format": "binary",
-                    "url": url,
-                    # Download through the tunneled proxy so censored networks
-                    # can fetch the rules (direct githubusercontent is blocked).
-                    "download_detour": "proxy",
-                    "update_interval": "24h",
-                }
-            )
+            from src.core.singbox.builders.rule_set_utils import materialize_rule_set
+
+            # Offline-first: cached on disk -> local; missing -> both the rule-set
+            # and its dependent rules are dropped (never a remote @url fetch FATAL).
+            rule_set = materialize_rule_set(tag_name, url, download_detour="proxy")
+            if rule_set is None:
+                continue
+            cfg_route["rule_set"].append(rule_set)
             cfg_route["rules"].append({"rule_set": tag_name, "outbound": "direct"})
             dns_rules.append({"rule_set": tag_name, "server": "bootstrap"})
             logger.info(f"[CountryRulesInjector] Country rule added: {tag_name} → direct")
