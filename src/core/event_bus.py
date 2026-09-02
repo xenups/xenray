@@ -24,6 +24,7 @@ TOPIC_SNI_SPOOF_CHANGED = "sni_spoof_changed"
 # Core Event Topics (connection lifecycle facts)
 EVENT_CORE_PROCESS_STOPPED = "core_process_stopped"
 EVENT_CORE_CRASHED = "core_crashed"
+EVENT_NETWORK_INTERFACE_CHANGED = "network_interface_changed"
 
 
 @dataclass(frozen=True)

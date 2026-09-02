@@ -71,6 +71,9 @@ class ConnectionMonitoringService:
         self._log_monitor = PassiveLogMonitor(
             on_failure_callback=lambda payload: self._emit_signal(MonitorSignal.PASSIVE_FAILURE, payload)
         )
+        # FP guard: require repeated failure lines before alerting. One-off
+        # dial errors to a single endpoint are noise; a real outage repeats.
+        self._log_monitor.REQUIRED_FAILURE_LINES = 3
 
         # Create AutoReconnectService
         # Only emits reconnect-flow events, not monitor signals
@@ -148,14 +151,11 @@ class ConnectionMonitoringService:
         # Start auto-reconnect session
         self._auto_reconnect.start_session(session_id)
 
-        # Start active monitor (VPN mode only — real probe-based)
-        if mode == "vpn":
-            self._active_monitor.start(transport_type, session_id=session_id)
-            logger.info(
-                f"[MonitoringService] Started (VPN mode, session {session_id}, " f"transport={transport_type or 'tcp'})"
-            )
-        else:
-            logger.info(f"[MonitoringService] Started (Proxy mode, session {session_id})")
+        # Start active monitor in all modes (adaptive lazy probing)
+        self._active_monitor.start(transport_type, session_id=session_id)
+        logger.info(
+            f"[MonitoringService] Started ({mode} mode, session {session_id}, transport={transport_type or 'tcp'})"
+        )
 
         return True
 
@@ -202,22 +202,11 @@ class ConnectionMonitoringService:
         self._auto_reconnect.handle_failure(current_connection, session_id)
 
     def _mode_aware_internet_check(self, current_connection: Optional[dict]) -> bool:
-        """Check internet availability through the path that matches the active mode.
+        """Check physical internet availability before attempting reconnect.
 
-        In VPN/TUN mode all traffic is captured by the tunnel, so a raw direct
-        socket check is blocked by the TUN engine — sing-box's ``strict_route``
-        WFP filter rejects it with WinError 10013 (WSAEACCES). Verify through the
-        SOCKS proxy (the tunnel egress) instead.
+        Validates physical network reachability (gateway/DNS) rather than probing
+        the dead tunnel, eliminating the Catch-22 failure abort loop.
         """
-        from src.core.constants import MODE_VPN
-        from src.utils.network_utils import NetworkUtils
-
-        mode = (current_connection or {}).get("mode")
-        if mode == MODE_VPN:
-            proxy_port = self._app_context.settings.get_proxy_port()
-            if not proxy_port:
-                return False
-            return NetworkUtils.check_proxy_connectivity(proxy_port)
         return self._network_validator.check_internet_connection()
 
     @property

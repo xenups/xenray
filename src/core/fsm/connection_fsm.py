@@ -66,11 +66,14 @@ class ConnectionFSM:
         },
         ConnectionState.CONNECTED: {
             ConnectionState.STOPPING,
+            ConnectionState.PREPARING,  # hot reconnection transition
+            ConnectionState.STARTING,  # hot restart transition
             ConnectionState.ERROR,
             ConnectionState.DISCONNECTED,
         },
         ConnectionState.STOPPING: {
             ConnectionState.DISCONNECTED,
+            ConnectionState.PREPARING,  # hot reconnect continuation: stopping -> preparing
             ConnectionState.ERROR,
         },
         ConnectionState.ERROR: {

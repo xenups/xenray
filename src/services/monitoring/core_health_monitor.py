@@ -202,6 +202,13 @@ class CoreHealthMonitor:
     async def handle_crash(self, crashed_engine: str, pid: Optional[int]) -> None:
         """Execute crash detection, cascading teardown, TUN/DNS cleanup, FSM error reset, and Toast."""
         logger.error(f"[CoreHealthMonitor] Handling crash for engine='{crashed_engine}', pid={pid}")
+        if crashed_engine == "singbox" and self._singbox_service:
+            exit_code = getattr(self._singbox_service, "exit_code", None)
+            last_logs = getattr(self._singbox_service, "get_last_logs", lambda: "")()
+            logger.critical(
+                f"[CoreHealthMonitor] Sing-box process (PID {pid}) crash diagnostics (exit_code={exit_code}):\n"
+                f"--- Sing-box Stderr / Log Tail ---\n{last_logs}\n----------------------------------"
+            )
         self._is_monitoring = False
 
         # 1. Publish EVENT_CORE_CRASHED event over EventBus

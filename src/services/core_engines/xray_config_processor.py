@@ -8,6 +8,7 @@ DNS, TUN, and patching responsibilities to specialized classes.
 import copy
 import json
 import os
+import socket
 from typing import Optional
 
 from loguru import logger
@@ -31,12 +32,15 @@ from src.core.constants import (
     CONFIG_STREAM_SETTINGS,
     CONFIG_TAG,
     DOMAIN_ASIS,
+    GEOSITE_PREFIX,
     MODE_PROXY,
     MODE_VPN,
     NETWORK_HTTP3,
     NETWORK_QUIC,
     NETWORK_TCP,
     OUTPUT_CONFIG_PATH,
+    PROTOCOL_BLACKHOLE,
+    PROTOCOL_FREEDOM,
     PROTOCOL_HTTP,
     PROTOCOL_HYSTERIA2,
     PROTOCOL_SHADOWSOCKS,
@@ -44,11 +48,15 @@ from src.core.constants import (
     PROTOCOL_TROJAN,
     PROTOCOL_VLESS,
     PROTOCOL_VMESS,
+    RULE_FIELD,
     SNIFF_DEST_OVERRIDE,
+    TAG_BLOCK,
+    TAG_DIRECT,
+    TAG_PROXY,
     XRAY_LOCATION_ASSET,
 )
 from src.services.connection.dns_configurator import DnsConfigurator
-from src.services.connection.tun_injector import TunInjector
+from src.services.connection.tun_injector import TunInjector, is_ip
 from src.services.core_engines.config_patcher import ConfigPatcher
 from src.utils.network_utils import NetworkUtils
 
@@ -122,6 +130,7 @@ class XrayConfigProcessor:
         os.environ["XRAY_LOCATION_ASSET"] = XRAY_LOCATION_ASSET
 
         self._ensure_inbounds(new_config)
+        self._ensure_outbounds(new_config)
 
         proxy_server_ips = self.get_proxy_server_ip(new_config)
 
@@ -138,7 +147,7 @@ class XrayConfigProcessor:
         except Exception:
             pass
         routing_rules = None
-        if mode == MODE_VPN and hasattr(self._app_context, "routing"):
+        if hasattr(self._app_context, "routing"):
             routing_rules = self._app_context.routing.load_rules()
 
         self._dns_configurator.configure(
@@ -158,8 +167,6 @@ class XrayConfigProcessor:
             routing_country = ""
             if hasattr(self._app_context, "settings"):
                 routing_country = self._app_context.settings.get_routing_country()
-            if routing_rules is None and hasattr(self._app_context, "routing"):
-                routing_rules = self._app_context.routing.load_rules()
             dns_servers = self._dns_configurator.build_tun_servers()
             self._tun_injector.inject(
                 new_config,
@@ -169,7 +176,12 @@ class XrayConfigProcessor:
                 routing_rules=routing_rules,
                 proxy_server_ips=proxy_server_ips,
             )
+        else:
+            # Proxy mode: inject routing rules directly into Xray routing table
+            toggles = self._app_context.routing.load_toggles() if hasattr(self._app_context, "routing") else {}
+            self._inject_proxy_routing_rules(new_config, routing_rules=routing_rules, toggles=toggles)
 
+        new_config["schema_version"] = 2
         return new_config
 
     def build_chain_config(self, chain_profile: dict) -> tuple[bool, Optional[dict], str]:
@@ -286,6 +298,46 @@ class XrayConfigProcessor:
         if redirected:
             logger.info(f"[XrayConfigProcessor] SNI spoof relay: outbound -> 127.0.0.1:{listen_port}")
 
+    def pin_outbound_server_ip(self, config: dict, use_tun: bool = False) -> None:
+        """Rewrite the FIRST proxy outbound's dial address from domain to a
+        resolved IP when the TUN engine is active.
+
+        In TUN mode Xray must never issue DNS: its query hits the TUN ->
+        sing-box -> remote_proxy (which is Xray itself) -> recursion loop, so
+        the server address is pinned to a resolved IPv4. serverName/SNI in the
+        outbound header stays as-is (same pattern as the SNI relay rewrite).
+        """
+        if not use_tun:
+            return
+        for outbound in config.get(CONFIG_OUTBOUNDS, []):
+            if outbound.get(CONFIG_PROTOCOL) not in (
+                PROTOCOL_VLESS,
+                PROTOCOL_VMESS,
+                PROTOCOL_TROJAN,
+                PROTOCOL_SHADOWSOCKS,
+            ):
+                continue
+            servers = outbound.get(CONFIG_SETTINGS, {})
+            if "vnext" in servers:
+                servers_list = servers["vnext"]
+            else:
+                servers_list = servers.get("servers", [])
+            entry = next((s for s in servers_list if s.get(CONFIG_ADDRESS)), None)
+            if entry is None:
+                continue
+            addr = entry.get(CONFIG_ADDRESS)
+            if is_ip(addr):
+                continue
+            try:
+                infos = socket.getaddrinfo(addr, None, socket.AF_INET)
+                entry[CONFIG_ADDRESS] = infos[0][4][0]
+                logger.info(
+                    f"[XrayConfigProcessor] TUN mode: outbound '{addr}' -> " f"{entry[CONFIG_ADDRESS]} (no DNS loop)"
+                )
+            except OSError as exc:
+                logger.warning(f"[XrayConfigProcessor] Could not resolve outbound '{addr}' for TUN pinning: {exc}")
+            break
+
     def get_proxy_server_ip(self, config: dict) -> list[str]:
         """Extract proxy server IPs/domains from config."""
         addresses = []
@@ -390,5 +442,68 @@ class XrayConfigProcessor:
                     inbound[CONFIG_PORT] = http_port
                     inbound["listen"] = listen
 
-    # DISABLED — pre-resolution was breaking ECH / Reality / SNI
-    # (Methods _add_outbound_dns_entries and _resolve_outbound_addresses removed)
+    def _ensure_outbounds(self, config: dict):
+        """Ensure direct (freedom) and block (blackhole) outbounds exist in Xray outbounds list."""
+        outbounds = config.setdefault(CONFIG_OUTBOUNDS, [])
+        if not outbounds:
+            return
+        existing_tags = {ob.get(CONFIG_TAG) for ob in outbounds}
+        if TAG_DIRECT not in existing_tags and not any(ob.get(CONFIG_PROTOCOL) == PROTOCOL_FREEDOM for ob in outbounds):
+            outbounds.append({"protocol": PROTOCOL_FREEDOM, "tag": TAG_DIRECT, "settings": {}})
+            logger.debug("[XrayConfigProcessor] Injected direct (freedom) outbound")
+        if TAG_BLOCK not in existing_tags and not any(
+            ob.get(CONFIG_PROTOCOL) == PROTOCOL_BLACKHOLE for ob in outbounds
+        ):
+            outbounds.append({"protocol": PROTOCOL_BLACKHOLE, "tag": TAG_BLOCK, "settings": {}})
+            logger.debug("[XrayConfigProcessor] Injected block (blackhole) outbound")
+
+    def _inject_proxy_routing_rules(self, config: dict, routing_rules: Optional[dict], toggles: dict):
+        """Inject user routing rules into Xray routing table for proxy mode."""
+        if not routing_rules and not toggles:
+            return
+
+        routing_section = config.setdefault(CONFIG_ROUTING, {})
+        existing_rules = routing_section.setdefault(CONFIG_RULES, [])
+        new_rules = []
+
+        if routing_rules:
+            user_block = routing_rules.get(TAG_BLOCK, [])
+            if user_block:
+                block_ips = [t for t in user_block if is_ip(t)]
+                block_domains = [t for t in user_block if not is_ip(t)]
+                if block_ips:
+                    new_rules.append({"type": RULE_FIELD, "ip": block_ips, "outboundTag": TAG_BLOCK})
+                if block_domains:
+                    new_rules.append({"type": RULE_FIELD, "domain": block_domains, "outboundTag": TAG_BLOCK})
+
+        if toggles.get("block_udp_443", False):
+            new_rules.append({"type": RULE_FIELD, "network": "udp", "port": "443", "outboundTag": TAG_BLOCK})
+        if toggles.get("block_ads", False):
+            new_rules.append(
+                {
+                    "type": RULE_FIELD,
+                    "domain": [GEOSITE_PREFIX + "category-ads-all"],
+                    "outboundTag": TAG_BLOCK,
+                }
+            )
+
+        if routing_rules:
+            user_direct = routing_rules.get(TAG_DIRECT, [])
+            if user_direct:
+                direct_ips = [t for t in user_direct if is_ip(t)]
+                direct_domains = [t for t in user_direct if not is_ip(t)]
+                if direct_ips:
+                    new_rules.append({"type": RULE_FIELD, "ip": direct_ips, "outboundTag": TAG_DIRECT})
+                if direct_domains:
+                    new_rules.append({"type": RULE_FIELD, "domain": direct_domains, "outboundTag": TAG_DIRECT})
+
+            user_proxy = routing_rules.get(TAG_PROXY, [])
+            if user_proxy:
+                proxy_ips = [t for t in user_proxy if is_ip(t)]
+                proxy_domains = [t for t in user_proxy if not is_ip(t)]
+                if proxy_ips:
+                    new_rules.append({"type": RULE_FIELD, "ip": proxy_ips, "outboundTag": TAG_PROXY})
+                if proxy_domains:
+                    new_rules.append({"type": RULE_FIELD, "domain": proxy_domains, "outboundTag": TAG_PROXY})
+
+        routing_section[CONFIG_RULES] = new_rules + existing_rules

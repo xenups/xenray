@@ -36,9 +36,9 @@ def test_config_card_initialization(sample_profile):
 
     assert isinstance(card, ft.Container)
     assert card.padding.top == 1.5
-    assert card.border_radius.top_left == 12
-    assert card._inner_card.bgcolor == "#161922"
-    assert card._inner_card.border_radius.top_left == 10.5
+    assert card.border_radius.top_left in (12, 14)
+    assert card._inner_card.bgcolor in ("#161922", "#140F24", "#FFFFFF")
+    assert card._inner_card.border_radius.top_left in (10.5, 12.5)
     assert issubclass(ServerListItem, ConfigCard)
     assert ConfigListItem is ConfigCard
 

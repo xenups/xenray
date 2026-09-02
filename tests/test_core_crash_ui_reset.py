@@ -271,3 +271,79 @@ def test_disconnect_task_still_resets_when_not_superseded():
         handler._disconnect_task()
 
     assert any(cb == handler.reset_ui_disconnected for cb in calls)
+
+
+def test_handle_core_crash_schedules_post_crash_reconnect():
+    """After a crash teardown, an auto-reconnect of the crashed session must be
+    scheduled (this is the primary auto-reconnect use case)."""
+    cm = _bare_connection_manager()
+    cm._app_context = MagicMock()
+    cm._reconnect_internal = MagicMock(return_value=True)
+
+    scheduled = {}
+    real_schedule = type(cm)._schedule_crash_reconnect
+
+    def _capture(self_, conn):
+        scheduled["conn"] = conn
+
+    # Capture instead of spawning the daemon thread (deterministic).
+    type(cm)._schedule_crash_reconnect = _capture
+    try:
+        cm._handle_core_crash({"crashed_engine": "singbox", "pid": 2222})
+    finally:
+        type(cm)._schedule_crash_reconnect = real_schedule
+
+    assert scheduled["conn"]["mode"] == "vpn"
+    assert scheduled["conn"]["singbox_pid"] == 2222
+
+
+def test_schedule_crash_reconnect_calls_internal_reconnect():
+    """The scheduled worker re-invokes connect for the crashed config."""
+    cm = _bare_connection_manager()
+    cm._app_context = MagicMock()
+    cm._app_context.settings.get_auto_reconnect_enabled.return_value = True
+    cm._reconnect_internal = MagicMock(return_value=True)
+    cm._emit_event = MagicMock()
+
+    crashed = {"file": "cfg.json", "mode": "vpn", "xray_pid": 1}
+
+    # Run the worker body synchronously by stubbing threading.Thread.
+    captured_target = {}
+
+    class _InstantThread:
+        def __init__(self, target=None, daemon=False, name=None):
+            captured_target["fn"] = target
+
+        def start(self):
+            captured_target["fn"]()
+
+    with patch("time.sleep", lambda s: None), patch("threading.Thread", _InstantThread):
+        type(cm)._schedule_crash_reconnect(cm, crashed)
+
+    cm._reconnect_internal.assert_called_once_with("cfg.json", "vpn", crashed)
+
+
+def test_schedule_crash_reconnect_respects_battery_saver():
+    """Battery-saver (auto-reconnect disabled) blocks the post-crash recovery."""
+    cm = _bare_connection_manager()
+    cm._app_context = MagicMock()
+    cm._app_context.settings.get_auto_reconnect_enabled.return_value = False
+    cm._reconnect_internal = MagicMock()
+
+    with patch("time.sleep", lambda s: None):
+        type(cm)._schedule_crash_reconnect(cm, {"file": "cfg.json", "mode": "vpn"})
+
+    cm._reconnect_internal.assert_not_called()
+
+
+def test_schedule_crash_reconnect_skips_adopted_session():
+    """Adopted sessions have no config file to reconnect with."""
+    cm = _bare_connection_manager()
+    cm._app_context = MagicMock()
+    cm._app_context.settings.get_auto_reconnect_enabled.return_value = True
+    cm._reconnect_internal = MagicMock()
+
+    with patch("time.sleep", lambda s: None):
+        type(cm)._schedule_crash_reconnect(cm, {"file": "Adopted Connection", "mode": "proxy"})
+
+    cm._reconnect_internal.assert_not_called()

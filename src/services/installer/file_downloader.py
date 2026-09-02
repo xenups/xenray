@@ -6,6 +6,7 @@ wintun.dll bootstrap). No extraction, no version logic.
 
 from __future__ import annotations
 
+import hashlib
 import os
 import tempfile
 from typing import Callable, Optional
@@ -121,7 +122,68 @@ class FileDownloader:
             progress_callback("Download failed after all retries.")
         return None
 
+    # ---- SHA-256 verification (Xray .dgst sidecar) -------------------------
+
     @staticmethod
+    def _verify_sha256(file_path: str, download_url: str) -> bool:
+        """Verify file SHA-256 against the .dgst sidecar published by Xray-core.
+
+        The .dgst URL is derived from *download_url* by appending ``.dgst``.
+        If the sidecar is missing (404), verification is **skipped** and the
+        file is accepted — this keeps the flow backward-compatible with
+        releases that don't publish checksums.
+        """
+        dgst_url = download_url + ".dgst"
+        expected = FileDownloader._fetch_expected_sha256(dgst_url)
+        if expected is None:
+            logger.info(f"[FileDownloader] No .dgst sidecar at {dgst_url} — skipping SHA-256 check")
+            return True
+
+        actual = FileDownloader._sha256_hex(file_path)
+        if actual is None:
+            logger.warning("[FileDownloader] Could not compute SHA-256 of downloaded file")
+            return False
+
+        if actual != expected:
+            logger.error(
+                f"[FileDownloader] SHA-256 MISMATCH — expected {expected}, got {actual}. " "Discarding downloaded file."
+            )
+            try:
+                os.remove(file_path)
+            except OSError:
+                pass
+            return False
+
+        logger.info(f"[FileDownloader] SHA-256 verified: {actual[:16]}…")
+        return True
+
+    @staticmethod
+    def _sha256_hex(path: str) -> Optional[str]:
+        try:
+            h = hashlib.sha256()
+            with open(path, "rb") as f:
+                for chunk in iter(lambda: f.read(1 << 16), b""):
+                    h.update(chunk)
+            return h.hexdigest()
+        except OSError as e:
+            logger.warning(f"[FileDownloader] SHA-256 read error: {e}")
+            return None
+
+    @staticmethod
+    def _fetch_expected_sha256(dgst_url: str) -> Optional[str]:
+        """Fetch the .dgst sidecar and extract the ``SHA2-256=`` value."""
+        try:
+            resp = requests.get(dgst_url, timeout=15)
+            if resp.status_code == 404:
+                return None
+            resp.raise_for_status()
+            for line in resp.text.splitlines():
+                if line.startswith("SHA2-256="):
+                    return line.split("=", 1)[1].strip().lower()
+        except Exception as e:
+            logger.warning(f"[FileDownloader] Could not fetch .dgst: {e}")
+        return None
+
     def temp_dest(filename: str) -> str:
         """Absolute temp path for a downloaded archive."""
         return os.path.join(tempfile.gettempdir(), filename)

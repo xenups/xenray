@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "xenray"
-version = "0.3.1"
+version = "0.3.2"
 description = "An Xray GUI for Linux/Windows, focusing on simplicity and enhancing VPN experience"
 authors = ["Xenups"]
 license = "AGPL-3.0-or-later"

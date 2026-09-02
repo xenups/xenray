@@ -54,6 +54,7 @@ class ConnectionManager:
         self._current_connection = None
         self._reconnect_event_listener = None
         self._state_lock = threading.Lock()
+        self._reconnect_lock = threading.Lock()
         self._session_id = 0  # Unique ID for each connection session
         self._pending_stop_engines: set = set()  # engines awaiting stop event (H2 gate)
 
@@ -87,12 +88,18 @@ class ConnectionManager:
         # and to graceful core-process stop completions. Keeps the deterministic
         # ConnectionFSM / session state in sync even when the crash bypasses the
         # normal connect/disconnect flow.
-        from src.core.event_bus import EVENT_CORE_CRASHED, EVENT_CORE_PROCESS_STOPPED, event_bus
+        from src.core.event_bus import (
+            EVENT_CORE_CRASHED,
+            EVENT_CORE_PROCESS_STOPPED,
+            EVENT_NETWORK_INTERFACE_CHANGED,
+            event_bus,
+        )
 
         self._core_crash_event = EVENT_CORE_CRASHED
         self._core_process_stopped_event = EVENT_CORE_PROCESS_STOPPED
         event_bus.subscribe(EVENT_CORE_CRASHED, self._handle_core_crash)
         event_bus.subscribe(EVENT_CORE_PROCESS_STOPPED, self._handle_core_process_stopped)
+        event_bus.subscribe(EVENT_NETWORK_INTERFACE_CHANGED, self._handle_network_interface_changed)
 
         # Connection Adoption: Check if services are already running (CLI persistence)
         self._adopt_existing_connection()
@@ -151,12 +158,15 @@ class ConnectionManager:
         - Monitoring + auto-reconnect are cancelled (no zombie reconnect loop).
         - The current session is invalidated so late signals/events are ignored.
         - The FSM/UI is driven to DISCONNECTED via the normal ``disconnected`` event.
+        - THEN, if auto-reconnect is enabled, a fresh reconnect of the crashed
+          session is scheduled (the #1 use case for auto-reconnect).
         """
         with self._state_lock:
             if self._session_id <= 0 or not self._current_connection:
                 logger.debug(f"[ConnectionManager] Core crash event ignored (no active session): {payload}")
                 return
             logger.warning("[ConnectionManager] Core crash detected — hard reset of connection session")
+            crashed_connection = dict(self._current_connection)
             self._current_connection = None
             self._session_id = 0
 
@@ -167,6 +177,53 @@ class ConnectionManager:
         # Emit disconnected through the canonical path so the FSM transitions to
         # DISCONNECTED and the UI (DashboardPage, tray, etc.) resets reactively.
         self._emit_event("disconnected", {"reason": "core_crashed", "crash_payload": payload})
+
+        # Schedule an automatic reconnect for the crashed session. This runs on
+        # a daemon thread: the crash handler itself executes on the health
+        # monitor's polling thread, and connect() blocks until the new session
+        # is established.
+        self._schedule_crash_reconnect(crashed_connection)
+
+    def _schedule_crash_reconnect(self, crashed_connection: dict) -> None:
+        """Auto-reconnect after a core crash (if the feature is enabled).
+
+        A small initial delay lets the OS release the dead process's handles
+        and gives transient crashes (OOM, port still bound) time to clear. The
+        reconnect goes through ``_reconnect_internal`` → ``connect()`` which
+        owns a brand-new session and emits ``connecting``/``connected`` so the
+        full UI flow replays naturally.
+        """
+        import threading
+
+        def _worker():
+            try:
+                # Let the crashed process fully die and ports/handles release.
+                time.sleep(3.0)
+
+                # Respect the user's battery-saver choice at reconnect time.
+                if not self._app_context.settings.get_auto_reconnect_enabled():
+                    logger.info("[ConnectionManager] Auto-reconnect disabled — not recovering from core crash")
+                    return
+
+                file_path = crashed_connection.get("file")
+                mode = crashed_connection.get("mode")
+                if not file_path or file_path == "Adopted Connection":
+                    logger.warning(
+                        "[ConnectionManager] Cannot auto-reconnect adopted/crashed session without a config file"
+                    )
+                    return
+
+                logger.info(f"[ConnectionManager] Auto-reconnecting after core crash ({mode})...")
+                success = self._reconnect_internal(file_path, mode, crashed_connection)
+                if success:
+                    logger.info("[ConnectionManager] Post-crash reconnect succeeded")
+                else:
+                    logger.error("[ConnectionManager] Post-crash reconnect failed")
+                    self._emit_event("reconnect_failed", {"reason": "crash_reconnect_failed"})
+            except Exception as e:
+                logger.error(f"[ConnectionManager] Post-crash reconnect error: {e}")
+
+        threading.Thread(target=_worker, daemon=True, name="CrashReconnect").start()
 
     def _handle_core_process_stopped(self, payload=None) -> None:
         """Transition FSM to DISCONNECTED once teardown has fully completed.
@@ -222,6 +279,57 @@ class ConnectionManager:
                 connection_fsm.transition_to(ConnectionState.DISCONNECTED, payload=payload or {})
         except Exception as e:
             logger.error(f"[ConnectionManager] Error syncing FSM on core process stop: {e}")
+
+    def _handle_network_interface_changed(self, payload: dict = None):
+        """React to network interface change event (link flap, Wi-Fi toggle, default gateway change)."""
+        logger.info("[ConnectionManager] Physical network interface change detected")
+        with self._state_lock:
+            current_conn = self._current_connection
+            session_valid = self._session_id > 0
+            current_session = self._session_id
+
+        if not session_valid or not current_conn:
+            logger.debug("[ConnectionManager] Interface change ignored: no active session")
+            return
+
+        # Check FSM state: if already in STARTING, PREPARING, or STOPPING, a connect/reconnect is already in-flight!
+        from src.core.fsm.connection_fsm import ConnectionState, connection_fsm
+
+        fsm_state = connection_fsm.state
+        if fsm_state in {ConnectionState.STARTING, ConnectionState.PREPARING, ConnectionState.STOPPING}:
+            logger.info(
+                f"[ConnectionManager] Connection or reconnection already in-flight (FSM: {fsm_state.value}). "
+                "Skipping duplicate interface event."
+            )
+            return
+
+        # Acquire non-blocking lock to avoid parallel reconnect workers
+        if not self._reconnect_lock.acquire(blocking=False):
+            logger.info(
+                "[ConnectionManager] Reconnection worker already in-progress on another thread. "
+                "Ignoring redundant interface event."
+            )
+            return
+
+        def _reconnect_runner():
+            try:
+                # Reset backoff so reconnect can happen immediately on physical link change
+                if hasattr(self._monitoring, "_auto_reconnect"):
+                    self._monitoring._auto_reconnect.reset_backoff(reason="interface_change")
+                logger.info(
+                    f"[ConnectionManager] Triggering auto-reconnect on interface change (session {current_session})"
+                )
+                self._monitoring.handle_failure(current_conn)
+            finally:
+                self._reconnect_lock.release()
+
+        threading.Thread(target=_reconnect_runner, daemon=True, name="InterfaceReconnectWorker").start()
+
+    def _on_network_interface_changed(self):
+        """Callback from WindowsInterfaceWatcher; emits to EventBus."""
+        from src.core.event_bus import EVENT_NETWORK_INTERFACE_CHANGED, event_bus
+
+        event_bus.publish(EVENT_NETWORK_INTERFACE_CHANGED, {})
 
     @staticmethod
     def _engine_is_running(service) -> bool:
@@ -360,6 +468,14 @@ class ConnectionManager:
                 self._monitoring.start(current_session, mode=mode, transport_type=transport_type)
                 self._health_monitor.start_monitoring()
 
+                # Start OS network interface watcher for link/gateway change detection
+                try:
+                    from src.platform.factory import get_network_adapter
+
+                    get_network_adapter().start_interface_watcher(self._on_network_interface_changed)
+                except Exception as e:
+                    logger.debug(f"[ConnectionManager] Could not start interface watcher: {e}")
+
                 # Emit connected state
                 self._emit_event(
                     "connected",
@@ -399,6 +515,14 @@ class ConnectionManager:
         # After this, no signals will be forwarded
         self._monitoring.stop()
         self._health_monitor.stop_monitoring()
+
+        # Stop OS network interface watcher
+        try:
+            from src.platform.factory import get_network_adapter
+
+            get_network_adapter().stop_interface_watcher()
+        except Exception as e:
+            logger.debug(f"[ConnectionManager] Could not stop interface watcher: {e}")
 
         with self._state_lock:
             if not self._current_connection:
@@ -494,6 +618,9 @@ class ConnectionManager:
                     ConnectionState.ERROR,
                 }:
                     connection_fsm.transition_to(ConnectionState.STARTING, payload=data)
+                elif current_state == ConnectionState.CONNECTED:
+                    # Hot reconnection: transition from CONNECTED -> STOPPING first, then PREPARING
+                    connection_fsm.transition_to(ConnectionState.STOPPING, payload=data)
                 fsm_transitioned = connection_fsm.transition_to(ConnectionState.PREPARING, payload=data)
             elif event_type in ("connected", "reconnected"):
                 fsm_transitioned = connection_fsm.transition_to(ConnectionState.CONNECTED, payload=data)

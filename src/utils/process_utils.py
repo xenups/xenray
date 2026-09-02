@@ -198,6 +198,32 @@ class ProcessUtils:
             logger.error(f"Unexpected error killing process tree {pid}: {e}")
 
     @staticmethod
+    def cleanup_orphaned_core(executable_path: str, exclude_pid: Optional[int] = None) -> int:
+        """Terminate orphaned core instances whose executable strictly matches XenRay's executable_path."""
+        killed = 0
+        if not executable_path or not os.path.exists(executable_path):
+            return 0
+        try:
+            target_norm = os.path.normcase(os.path.abspath(executable_path))
+            current_pid = os.getpid()
+            for proc in psutil.process_iter(["pid", "exe"]):
+                try:
+                    p_info = proc.info
+                    pid = p_info.get("pid")
+                    if not pid or pid in (exclude_pid, current_pid):
+                        continue
+                    exe = p_info.get("exe")
+                    if exe and os.path.normcase(os.path.abspath(exe)) == target_norm:
+                        logger.info(f"[ProcessUtils] Terminating orphaned core process PID {pid} ({exe})")
+                        proc.kill()
+                        killed += 1
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    continue
+        except Exception as e:
+            logger.debug(f"[ProcessUtils] Error during orphaned core cleanup: {e}")
+        return killed
+
+    @staticmethod
     def restart_as_admin() -> None:
         """Restart the application with administrative privileges."""
         get_process_adapter().restart_as_admin()

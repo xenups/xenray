@@ -121,10 +121,12 @@ class TestConfigGeneration:
         # Rule order matters: sniff (port 53) must precede hijack-dns, which must
         # precede any direct/proxy outbound rule so DNS never hits 'direct'.
         actions = [(r.get("action"), r.get("protocol"), r.get("port")) for r in rules]
-        sniff_idx = next(i for i, a in enumerate(actions) if a[0] == "sniff")
+        # There are two sniff rules: general (no port) for TLS/HTTP SNI, and
+        # port-53 specifically for DNS detection.  The port-53 sniff must
+        # precede hijack-dns.
+        sniff53_idx = next(i for i, a in enumerate(actions) if a[0] == "sniff" and a[2] == [53])
         hijack_idx = next(i for i, a in enumerate(actions) if a[0] == "hijack-dns")
-        assert sniff_idx < hijack_idx, "sniff must precede hijack-dns"
-        assert actions[sniff_idx][2] == [53], "sniff must target port 53"
+        assert sniff53_idx < hijack_idx, "port-53 sniff must precede hijack-dns"
         assert actions[hijack_idx][1] == "dns", "hijack-dns must match dns protocol"
 
 
@@ -229,11 +231,17 @@ class TestStaticRouteFiltering:
         mock_route.assert_called_once_with("104.17.121.70", "192.168.1.1")
 
 
-class TestCountryRuleSetProxy:
-    """Country rule-sets must download via the tunneled proxy (not direct),
-    otherwise censored networks FATAL the TUN engine at startup."""
+class TestCountryRuleSetOffline:
+    """Country rule-sets are offline-first: local cache only, never a remote
+    @url fetch (which FATALs with EOF when the network drops mid-transfer)."""
 
-    def test_country_ruleset_download_via_proxy(self, service):
+    def test_country_ruleset_dropped_when_not_cached(self, service, tmp_path, monkeypatch):
+        from src.core.singbox.builders import rule_set_utils
+
+        # No bundled assets and no cache dir -> rule-set dropped, never remote.
+        monkeypatch.setattr(rule_set_utils, "_ASSETS_RULES_DIR", str(tmp_path))
+        monkeypatch.setattr(rule_set_utils, "_RULE_CACHE", "")
+
         cfg = service._generate_config(
             socks_port=10805,
             proxy_server_ip="",
@@ -242,6 +250,45 @@ class TestCountryRuleSetProxy:
             mtu=1420,
         )
         rs = cfg["route"].get("rule_set", [])
-        assert rs, "expected country rule-sets"
+        assert rs == [], f"expected NO rule-sets without cache, got {rs}"
+        # No remote entry may survive anywhere in the generated config.
+        assert "_url" not in str(cfg)
+        assert "download_detour" not in str(cfg)
+
+    def test_country_ruleset_local_from_assets(self, service):
+        # assets/rules provides geoip-ir.srs + geosite-ir.srs offline.
+        cfg = service._generate_config(
+            socks_port=10805,
+            proxy_server_ip="",
+            routing_country="ir",
+            routing_rules={"direct": [], "proxy": [], "block": []},
+            mtu=1420,
+        )
+        rs = cfg["route"].get("rule_set", [])
+        assert rs, "expected bundled country rule-sets from assets"
         for r in rs:
-            assert r["download_detour"] == "proxy", r
+            assert r["type"] == "local", r
+            assert "url" not in r and "download_detour" not in r, r
+            assert "assets" in r["path"].lower(), r
+
+    def test_country_ruleset_local_when_cached(self, service, tmp_path, monkeypatch):
+        from src.core.singbox.builders import rule_set_utils
+
+        cache_dir = str(tmp_path)
+        (tmp_path / "geoip-ir.srs").write_bytes(b"\x53\x49\x4e\x47")  # fake srs bytes
+        (tmp_path / "geosite-ir.srs").write_bytes(b"\x53\x49\x4e\x47")
+        monkeypatch.setattr(rule_set_utils, "_ASSETS_RULES_DIR", str(tmp_path))
+        monkeypatch.setattr(rule_set_utils, "_RULE_CACHE", cache_dir)
+
+        cfg = service._generate_config(
+            socks_port=10805,
+            proxy_server_ip="",
+            routing_country="ir",
+            routing_rules={"direct": [], "proxy": [], "block": []},
+            mtu=1420,
+        )
+        rs = cfg["route"].get("rule_set", [])
+        assert rs, "expected cached country rule-sets"
+        for r in rs:
+            assert r["type"] == "local", r
+            assert "url" not in r and "download_detour" not in r, r

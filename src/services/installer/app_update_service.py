@@ -2,6 +2,7 @@
 
 This service handles checking for and installing application updates from GitHub releases.
 """
+import hashlib
 import os
 import shutil
 import subprocess
@@ -205,6 +206,10 @@ class AppUpdateService:
                 logger.error("Downloaded file validation failed")
                 return None
 
+            # SHA-256 verification when a .dgst sidecar is published.
+            if not AppUpdateService._verify_app_sha256(zip_path, url):
+                return None
+
             logger.info(f"Download complete: {zip_path}")
             return zip_path
 
@@ -301,6 +306,59 @@ class AppUpdateService:
         except Exception as e:
             logger.error(f"Failed to create updater script: {e}")
             return None
+
+    # ---- SHA-256 verification -------------------------------------------
+
+    @staticmethod
+    def _verify_app_sha256(file_path: str, download_url: str) -> bool:
+        """Verify downloaded update ZIP against .dgst sidecar (if published).
+
+        When the release doesn't include a .dgst file the check is skipped
+        gracefully — backward-compatible with existing releases.
+        """
+        dgst_url = download_url + ".dgst"
+        expected = None
+        try:
+            resp = requests.get(dgst_url, timeout=15)
+            if resp.status_code == 404:
+                logger.info(f"[AppUpdate] No .dgst at {dgst_url} — skipping SHA-256 check")
+                return True
+            resp.raise_for_status()
+            for line in resp.text.splitlines():
+                if line.startswith("SHA2-256="):
+                    expected = line.split("=", 1)[1].strip().lower()
+                    break
+        except Exception as e:
+            logger.warning(f"[AppUpdate] Could not fetch .dgst sidecar: {e}")
+            return True  # network hiccup on sidecar — don't block update
+
+        if not expected:
+            logger.info("[AppUpdate] .dgst has no SHA2-256 entry — skipping check")
+            return True
+
+        try:
+            h = hashlib.sha256()
+            with open(file_path, "rb") as f:
+                for chunk in iter(lambda: f.read(1 << 16), b""):
+                    h.update(chunk)
+            actual = h.hexdigest()
+        except OSError as e:
+            logger.error(f"[AppUpdate] SHA-256 read error: {e}")
+            return False
+
+        if actual != expected:
+            logger.error(
+                f"[AppUpdate] SHA-256 MISMATCH — expected {expected}, got {actual}. "
+                "Update ZIP is corrupted or tampered — discarding."
+            )
+            try:
+                os.remove(file_path)
+            except OSError:
+                pass
+            return False
+
+        logger.info(f"[AppUpdate] SHA-256 verified: {actual[:16]}…")
+        return True
 
     @staticmethod
     def apply_update(zip_path: str) -> bool:

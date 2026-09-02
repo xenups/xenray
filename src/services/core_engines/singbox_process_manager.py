@@ -132,7 +132,7 @@ class SingboxProcessManager:
         from src.utils.process_utils import rotate_oversized_log_file
 
         rotate_oversized_log_file(log_file)
-        self._log_handle = open(log_file, "w", encoding="utf-8")
+        self._log_handle = open(log_file, "a", encoding="utf-8", buffering=1)
 
     def close_log(self) -> None:
         if self._log_handle:
@@ -141,6 +141,31 @@ class SingboxProcessManager:
             except Exception:
                 pass
             self._log_handle = None
+
+    def flush_log(self) -> None:
+        if self._log_handle and not getattr(self._log_handle, "closed", True):
+            try:
+                self._log_handle.flush()
+            except Exception:
+                pass
+
+    def get_last_logs(self, lines: int = 25) -> str:
+        self.flush_log()
+        from src.core.constants import SINGBOX_LOG_FILE
+
+        if not os.path.exists(SINGBOX_LOG_FILE):
+            return "<no sing-box log file found>"
+        try:
+            with open(SINGBOX_LOG_FILE, "r", encoding="utf-8", errors="replace") as f:
+                content = f.readlines()
+                return "".join(content[-lines:]).strip()
+        except Exception as e:
+            return f"<failed to read log: {e}>"
+
+    def get_exit_code(self) -> Optional[int]:
+        if self._process is not None:
+            return self._process.returncode
+        return None
 
     # -- launch --------------------------------------------------------
     def validate_config(self, config_path: str) -> bool:
@@ -159,6 +184,20 @@ class SingboxProcessManager:
         self._process = self.run_async(self._spawn_process(config_path), timeout=30)
         if self._process is not None:
             self._pid = self._process.pid
+            # Startup liveness verification: ensure process didn't crash within 500ms
+            time.sleep(0.5)
+            if self._process.returncode is not None:
+                rc = self._process.returncode
+                self.flush_log()
+                err_tail = self.get_last_logs(lines=25)
+                logger.critical(
+                    f"[SingboxProcessManager] sing-box exited immediately on startup (rc={rc})!\n"
+                    f"--- Sing-box Stderr / Log Tail ---\n{err_tail}\n----------------------------------"
+                )
+                self.close_log()
+                self._pid = None
+                self._process = None
+                return None
         return self._process
 
     # -- PID / status --------------------------------------------------

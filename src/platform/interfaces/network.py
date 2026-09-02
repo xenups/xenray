@@ -29,3 +29,11 @@ class INetworkAdapter(ABC):
     @abstractmethod
     def ping_mtu(self, host: str, payload_size: int, timeout: int) -> bool:
         """Ping host with Don't Fragment (DF) flag set for the given payload size."""
+
+    def start_interface_watcher(self, on_change_callback) -> None:
+        """Start listening for network interface changes (link flap, gateway change)."""
+        pass
+
+    def stop_interface_watcher(self) -> None:
+        """Stop listening for network interface changes."""
+        pass

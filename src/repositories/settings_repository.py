@@ -149,7 +149,7 @@ class SettingsRepository:
     # --- Auto-Reconnect Preference ---
     def get_auto_reconnect_enabled(self) -> bool:
         val = self._read("auto_reconnect_enabled.txt")
-        return val.lower() != "false"  # Default True
+        return val.lower() == "true"  # Default False (offline-first: no surprise reconnects)
 
     def set_auto_reconnect_enabled(self, enabled: bool) -> None:
         self._write("auto_reconnect_enabled.txt", "true" if enabled else "false")

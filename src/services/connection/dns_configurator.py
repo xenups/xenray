@@ -196,21 +196,62 @@ class DnsConfigurator:
         """Build the IPv4-only DNS server list for the TUN inbound.
 
         Windows/Wintun adapter DNS settings only accept bare IP addresses, so
-        DoH/DoT/DoQ hosts are dropped. IPv6 is disabled on the TUN stack, so no
-        IPv6 resolver is added — AAAA queries are not answered by the adapter.
+        DoH/DoT/DoQ entries cannot be handed to the adapter directly. Their HOST
+        resolution still matters: a DoH server reached through the tunnel works,
+        but the ADAPTER-level resolver must be an IP reachable WITHOUT the tunnel.
+        Preference order:
+          1. Plain-IP UDP/TCP servers from user config (usable as-is).
+          2. Bootstrap IPs of DoH/DoT/DoQ hosts (resolved once via system DNS).
+          3. The system's own DHCP/DNS resolvers (always locally reachable).
+          4. Last resort: 1.1.1.1 (may be blocked on censored networks — logged).
         """
+        import socket as _socket
+
+        from src.platform.factory import get_network_adapter
+
         dns_config = self._app_context.dns.load()
         servers = []
+        bootstrap_hosts = []
         for item in dns_config:
             addr = item.get(CONFIG_ADDRESS, "")
+            proto = (item.get("protocol") or "").lower()
             if not addr:
                 continue
-            # Windows/Wintun adapter DNS settings only accept bare IP addresses.
-            if is_ip(addr) and ":" not in addr:
-                servers.append(addr)
+            bare = DnsConfigurator._to_bare_address(addr)
+            # Windows/Wintun adapter DNS settings only accept bare IPv4.
+            if is_ip(bare) and ":" not in bare:
+                servers.append(bare)
+            elif proto in ("doh", "dot", "doq") and bare and not is_ip(bare):
+                bootstrap_hosts.append(bare)
+
+        # Resolve DoH/DoT/DoQ hostnames to bootstrap IPs (system resolver, done
+        # BEFORE the tunnel exists so there is no chicken-and-egg).
+        for host in bootstrap_hosts:
+            try:
+                answers = _socket.getaddrinfo(host, 443, _socket.AF_INET, _socket.SOCK_STREAM)
+                for ans in answers:
+                    ip = ans[4][0]
+                    if is_ip(ip) and ":" not in ip:
+                        servers.append(ip)
+                        break
+            except OSError as e:
+                logger.warning(f"[DnsConfigurator] Could not bootstrap-resolve DoH host {host}: {e}")
 
         if not servers:
-            servers = [DNS_IP_CLOUDFLARE]
+            system_dns = []
+            try:
+                system_dns = get_network_adapter().get_system_dns_servers() or []
+            except Exception:
+                system_dns = []
+            servers = [d for d in system_dns if is_ip(d) and ":" not in d]
+            if servers:
+                logger.info(f"[DnsConfigurator] No usable user DNS IPs — using system resolvers: {servers}")
+            else:
+                servers = [DNS_IP_CLOUDFLARE]
+                logger.warning(
+                    "[DnsConfigurator] No IP DNS available (user config has only DoH and "
+                    "system resolvers unknown) — falling back to 1.1.1.1 which may be blocked"
+                )
 
         # Deduplicate while preserving order
         return list(dict.fromkeys(servers))

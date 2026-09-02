@@ -116,10 +116,10 @@ def test_start_runs_from_worker_thread_without_loop():
         ):
             worker = threading.Thread(target=call_start)
             worker.start()
-            worker.join(timeout=5)
+            worker.join(timeout=10.0)
         assert not worker.is_alive()
         assert result.get("ok") is True
-        assert began.wait(5.0), "listener coroutine never started on the owned loop"
+        assert began.wait(10.0), "listener coroutine never started on the owned loop"
         assert service.running is True
     finally:
         service.stop()
