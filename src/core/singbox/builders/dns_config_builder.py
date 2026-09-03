@@ -62,5 +62,4 @@ class DnsConfigBuilder:
             "strategy": "ipv4_only",
             "disable_cache": False,
             "disable_expire": False,
-            "independent_cache": True,
         }

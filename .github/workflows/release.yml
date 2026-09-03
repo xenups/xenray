@@ -90,13 +90,21 @@ jobs:
           # Create zip
           Compress-Archive -Path "package/*" -DestinationPath $zipName
           
+          # Generate SHA-256 checksum sidecar for update verification
+          $hash = Get-FileHash -Algorithm SHA256 -Path $zipName
+          "SHA2-256=$($hash.Hash.ToLower())" | Out-File -FilePath "$zipName.dgst" -Encoding ascii
+          Write-Host "Generated $zipName.dgst: SHA2-256=$($hash.Hash.ToLower())"
+          
           Write-Host "Created package: $zipName"
           echo "ZIP_NAME=$zipName" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "DGST_NAME=$zipName.dgst" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          files: ${{ env.ZIP_NAME }}
+          files: |
+            ${{ env.ZIP_NAME }}
+            ${{ env.DGST_NAME }}
           body: |
             ## XenRay ${{ github.ref_name }}
             

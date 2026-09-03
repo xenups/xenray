@@ -156,9 +156,14 @@ class SingboxConfigBuilder:
         )
 
         # --- User routing rules (direct / proxy / block) ---
-        # General TLS/HTTP sniff MUST be inserted BEFORE user domain rules
-        # so SNI/Host is extracted and domain_suffix rules can match HTTPS traffic.
+        # sniff → resolve → domain rules:
+        # 1. sniff extracts SNI/Host into metadata.SniffedHostname
+        # 2. resolve looks up the domain via bootstrap DNS and sets
+        #    metadata.Destination.Fqdn — which is what domain_suffix
+        #    and rule_set domain items actually match against.
         rules.insert(insert_index, {"inbound": ["tun-in"], "action": "sniff"})
+        insert_index += 1
+        rules.insert(insert_index, {"inbound": ["tun-in"], "action": "resolve", "server": "bootstrap"})
         insert_index += 1
 
         self.user_rules_injector.inject(
@@ -170,18 +175,21 @@ class SingboxConfigBuilder:
             cfg_route=cfg["route"],
         )
 
-        # Catch-all DNS rule AFTER user domain rules so first-match-wins
-        # routes ikco.ir etc. to local_dns, everything else to remote_proxy.
-        cfg["dns"]["rules"].append({"inbound": ["tun-in"], "server": "remote_proxy"})
-
         # --- Country rule sets ---
+        # Country DNS rules must come BEFORE the catch-all so geosite:ir
+        # domains resolve via bootstrap, not remote_proxy.
         self.country_rules_injector.inject(
             cfg_route=cfg["route"],
             dns_rules=dns_rules,
             routing_country=routing_country,
         )
 
-        # --- Outbounds & DNS Integrity Validation for sing-box 1.13.14 ---
+        # Catch-all DNS rule AFTER all specific rules (user + country)
+        # so first-match-wins routes ikco.ir → local_dns, ir domains →
+        # bootstrap, everything else → remote_proxy.
+        cfg["dns"]["rules"].append({"inbound": ["tun-in"], "server": "remote_proxy"})
+
+        # --- Outbounds & DNS Integrity Validation for sing-box 1.14.0 ---
         outbounds = cfg.setdefault("outbounds", [])
         existing_tags = {o.get("tag") for o in outbounds if isinstance(o, dict)}
 
@@ -191,7 +199,7 @@ class SingboxConfigBuilder:
         if "block" not in existing_tags:
             outbounds.append({"type": "block", "tag": "block"})
 
-        # Reconcile DNS servers against sing-box 1.13.14 rules
+        # Reconcile DNS servers against sing-box 1.14.0 rules
         for s in cfg.get("dns", {}).get("servers", []):
             tag = s.get("tag")
             if tag == "local_dns":

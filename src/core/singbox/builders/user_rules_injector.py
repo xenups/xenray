@@ -100,7 +100,7 @@ class UserRulesInjector:
                     )
                     # Offline-first: cached on disk -> local; missing -> rule dropped
                     # entirely (never a remote @url fetch that FATALs with EOF).
-                    rule_set = materialize_rule_set("ads-rules", ads_url, download_detour="proxy")
+                    rule_set = materialize_rule_set("ads-rules", ads_url)
                     if rule_set is not None:
                         toggle_rules.append({"rule_set": "ads-rules", "outbound": "block"})
                         new_dns_rules.append({"rule_set": "ads-rules", "action": "reject"})
