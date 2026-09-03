@@ -1,0 +1,9 @@
+# Normalize line endings: Python sources always LF, even on Windows.
+*.py text eol=lf
+*.pyi text eol=lf
+*.toml text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.srs binary

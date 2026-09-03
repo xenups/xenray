@@ -40,7 +40,7 @@ class CountryRulesInjector:
 
             # Offline-first: cached on disk -> local; missing -> both the rule-set
             # and its dependent rules are dropped (never a remote @url fetch FATAL).
-            rule_set = materialize_rule_set(tag_name, url, download_detour="proxy")
+            rule_set = materialize_rule_set(tag_name, url)
             if rule_set is None:
                 continue
             cfg_route["rule_set"].append(rule_set)

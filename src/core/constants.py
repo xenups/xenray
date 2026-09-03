@@ -22,7 +22,7 @@ GITHUB_REPO = os.getenv("GITHUB_REPO", "xenups/xenray")
 UPDATE_DOWNLOAD_TIMEOUT = float(os.getenv("UPDATE_DOWNLOAD_TIMEOUT", "60"))
 UPDATE_MIN_FILE_SIZE = int(os.getenv("UPDATE_MIN_FILE_SIZE", "1048576"))
 XRAY_VERSION = os.getenv("XRAY_VERSION", "26.7.28")
-SINGBOX_VERSION = os.getenv("SINGBOX_VERSION", "1.13.14")
+SINGBOX_VERSION = os.getenv("SINGBOX_VERSION", "1.14.0")
 # WINTUN_DLL — required for Xray native TUN on Windows
 WINTUN_DLL = os.path.join(os.path.join(os.path.join(Path(__file__).parent.parent.parent, "bin"), "wintun.dll"))
 WINTUN_DOWNLOAD_URL = os.getenv(

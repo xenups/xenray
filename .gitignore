@@ -229,3 +229,6 @@ temp_downloads/
 temp_geonames/
 package/
 nul
+
+# Hermes plan files (local only)
+.hermes/

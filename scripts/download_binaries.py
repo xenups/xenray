@@ -14,6 +14,7 @@ Usage:
 """
 
 import argparse
+import hashlib
 import os
 import sys
 import urllib.request
@@ -48,7 +49,7 @@ WINTUN_URL = "https://www.wintun.net/builds/wintun-0.14.1.zip"
 def get_config(arch: int = 64):
     """Get configuration from environment."""
     xray_version = os.getenv("XRAY_VERSION", "26.7.28")
-    singbox_version = os.getenv("SINGBOX_VERSION", "1.13.14")
+    singbox_version = os.getenv("SINGBOX_VERSION", "1.14.0")
     sb_arch = SINGBOX_ARCH_MAP.get(arch, "amd64")
     wintun_arch = WINTUN_ARCH_MAP.get(arch, "amd64")
 
@@ -64,7 +65,7 @@ def get_config(arch: int = 64):
 
 
 def download_file(url: str, dest: Path) -> Path:
-    """Download a file with progress."""
+    """Download a file with progress, then verify SHA-256 against .dgst sidecar."""
     print(f"  [DOWNLOAD] {url}")
 
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -76,6 +77,35 @@ def download_file(url: str, dest: Path) -> Path:
 
     urllib.request.urlretrieve(url, dest, reporthook=progress)
     print()  # New line after progress
+
+    # Verify SHA-256 against GitHub .dgst sidecar (Xray / sing-box releases)
+    try:
+        dgst_url = f"{url}.dgst"
+        with urllib.request.urlopen(dgst_url, timeout=30) as resp:
+            sidecar = resp.read().decode("utf-8", errors="ignore")
+        expected = ""
+        for line in sidecar.splitlines():
+            if line.strip().lower().startswith("sha2-256="):
+                expected = line.split("=", 1)[1].strip().lower()
+                break
+        if expected:
+            actual = hashlib.sha256(dest.read_bytes()).hexdigest()
+            if actual != expected:
+                dest.unlink(missing_ok=True)
+                raise RuntimeError(
+                    f"SHA-256 mismatch for {dest.name}: expected {expected[:16]}... got {actual[:16]}..."
+                )
+            print(f"  [OK] SHA-256 verified: {expected[:16]}...")
+        else:
+            print("  [WARN] No SHA2-256 entry in .dgst sidecar, skipping verification")
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            print("  [WARN] No .dgst sidecar, skipping SHA-256 verification")
+        else:
+            print(f"  [WARN] .dgst fetch failed ({exc.code}), skipping verification")
+    except urllib.error.URLError as exc:
+        print(f"  [WARN] .dgst fetch failed ({exc.reason}), skipping verification")
+
     print(f"  [OK] Downloaded to {dest}")
     return dest
 

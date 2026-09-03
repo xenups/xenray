@@ -40,7 +40,7 @@ def _default_cache_dir() -> str:
         return ""
 
 
-def materialize_rule_set(tag: str, url: str, download_detour: str = "proxy") -> dict | None:
+def materialize_rule_set(tag: str, url: str) -> dict | None:
     """Return a ``type: local`` rule-set dict, or ``None`` when not cached.
 
     Offline-first: NEVER a ``type: remote`` entry (sing-box would fetch at
@@ -48,11 +48,11 @@ def materialize_rule_set(tag: str, url: str, download_detour: str = "proxy") -> 
     skip the rule (and its dependent rules/dns-rules) when ``None`` is returned.
     """
     name = url.rsplit("/", 1)[-1]
-    bundled = os.path.join(_ASSETS_RULES_DIR, name)
+    bundled = os.path.normpath(os.path.join(_ASSETS_RULES_DIR, name))
     if os.path.exists(bundled):
         return {"tag": tag, "type": "local", "format": "binary", "path": bundled}
     cache_dir = _RULE_CACHE or _default_cache_dir()
-    cached = os.path.join(cache_dir, name) if cache_dir else ""
+    cached = os.path.normpath(os.path.join(cache_dir, name)) if cache_dir else ""
     if cached and os.path.exists(cached):
         return {"tag": tag, "type": "local", "format": "binary", "path": cached}
     logger.warning(

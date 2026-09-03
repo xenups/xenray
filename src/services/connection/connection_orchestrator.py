@@ -14,9 +14,9 @@ from src.utils.firewall_manager import FirewallManager
 from src.utils.log_utils import purge_all_logs_on_connect
 from src.utils.network_utils import NetworkUtils
 
-TUN_WARMUP_SECONDS = 0.8
+TUN_WARMUP_SECONDS = 3.5
 HEALTH_RETRIES = 3
-HEALTH_RETRY_DELAY_SECONDS = 0.5
+HEALTH_RETRY_DELAY_SECONDS = 1.0
 
 
 class ConnectionOrchestrator:

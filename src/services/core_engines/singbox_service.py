@@ -149,6 +149,7 @@ class SingboxService:
                 # the TUN (loop). auto_detect_interface stays true for switching.
                 interface_name=iface_name,
                 routing_rules=routing_rules,
+                routing_country=routing_country,
                 mtu=mtu,
                 local_dns_server=local_dns,
                 sni_connect_ip=sni_connect_ip,
@@ -162,6 +163,7 @@ class SingboxService:
                 get_system_settings_adapter().restore_smhr(self._smhr_was_enabled)
                 return None
 
+            self._wait_for_tun_ready()
             pid = self._proc.pid
             if pid:
                 self._proc.write_pid_file(pid)
@@ -183,6 +185,23 @@ class SingboxService:
             ProcessUtils.cleanup_orphaned_core(SINGBOX_EXECUTABLE, exclude_pid=self._proc.pid)
         except Exception as e:
             logger.warning(f"[SingboxService] Pre-launch cleanup warning: {e}")
+
+    def _wait_for_tun_ready(self) -> bool:
+        """Wait for the TUN interface to become reachable by pinging the gateway."""
+        import time as _time
+
+        from src.core.constants import TUN_GATEWAY_IPV4
+
+        for attempt in range(1, 5):
+            try:
+                sock = __import__("socket").create_connection((TUN_GATEWAY_IPV4, 80), timeout=0.5)
+                sock.close()
+                logger.info(f"[SingboxService] TUN gateway {TUN_GATEWAY_IPV4} reachable (attempt {attempt})")
+                return True
+            except (OSError, TimeoutError):
+                _time.sleep(0.5)
+        logger.warning("[SingboxService] TUN gateway unreachable after 4 attempts")
+        return True  # proceed anyway — some configs block ICMP/ping
 
     def _wait_for_xray_ready(self, port: int) -> bool:
         logger.info(f"[SingboxService] Waiting for Xray SOCKS5 engine on port {port}...")
