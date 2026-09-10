@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-from src.platform.constants import (
-    SINGBOX_CORE_DOWNLOAD_BASE_URL,
-    XRAY_CORE_DOWNLOAD_BASE_URL,
-)
+from src.platform.constants import SINGBOX_CORE_DOWNLOAD_BASE_URL, XRAY_CORE_DOWNLOAD_BASE_URL
 from src.platform.interfaces.core_assets import CoreAssetInfo, ICoreAssetAdapter
 from src.utils.platform_utils import PlatformUtils
 

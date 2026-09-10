@@ -11,10 +11,10 @@ from loguru import logger
 from src.core.constants import CORE_SINGBOX, CORE_XRAY, MODE_PROXY, MODE_VPN, OUTPUT_CONFIG_PATH
 from src.core.i18n import t
 from src.services.connection.connection_tester import ConnectionTester
+from src.utils.connection_trace import Trace
 from src.utils.firewall_manager import FirewallManager
 from src.utils.log_utils import purge_all_logs_on_connect
 from src.utils.network_utils import NetworkUtils
-from src.utils.connection_trace import Trace
 
 TUN_WARMUP_SECONDS = 3.5
 HEALTH_RETRIES = 3
@@ -244,9 +244,7 @@ class ConnectionOrchestrator:
         while time.monotonic() < deadline:
             attempt += 1
             try:
-                with socket.create_connection(
-                    ("127.0.0.1", socks_port), timeout=1.0
-                ) as sock:
+                with socket.create_connection(("127.0.0.1", socks_port), timeout=1.0) as sock:
                     # SOCKS5 greeting
                     sock.sendall(b"\x05\x01\x00")
                     sock.settimeout(1.0)
@@ -255,11 +253,7 @@ class ConnectionOrchestrator:
                         time.sleep(poll_interval)
                         continue
                     # SOCKS5 CONNECT to 1.1.1.1:853  (CMD=1, ATYP=1=IPv4)
-                    connect_req = (
-                        b"\x05\x01\x00\x01"
-                        + probe_host
-                        + probe_port.to_bytes(2, "big")
-                    )
+                    connect_req = b"\x05\x01\x00\x01" + probe_host + probe_port.to_bytes(2, "big")
                     sock.sendall(connect_req)
                     sock.settimeout(1.0)
                     resp = sock.recv(10)
@@ -276,8 +270,7 @@ class ConnectionOrchestrator:
                 pass
             time.sleep(poll_interval)
         logger.warning(
-            f"[ConnectionOrchestrator] Tunnel not ready after {timeout}s "
-            f"via port {socks_port} ({attempt} attempts)"
+            f"[ConnectionOrchestrator] Tunnel not ready after {timeout}s " f"via port {socks_port} ({attempt} attempts)"
         )
         return False
 
@@ -298,14 +291,11 @@ class ConnectionOrchestrator:
             if health_socks_port > 0:
                 probe_ok = self._wait_for_tunnel_ready(health_socks_port)
                 if trace:
-                    trace.mark(
-                        "TUN_PROBE_SUCCESS" if probe_ok else "TUN_PROBE_TIMEOUT"
-                    )
+                    trace.mark("TUN_PROBE_SUCCESS" if probe_ok else "TUN_PROBE_TIMEOUT")
             else:
                 # Safety fallback: no SOCKS port known yet
                 logger.warning(
-                    "[ConnectionOrchestrator] No SOCKS port for readiness "
-                    "probe — falling back to blind warm-up"
+                    "[ConnectionOrchestrator] No SOCKS port for readiness " "probe — falling back to blind warm-up"
                 )
                 time.sleep(1.0)
                 if trace:
@@ -405,7 +395,10 @@ class ConnectionOrchestrator:
         return xray_pid
 
     def _start_singbox(
-        self, processed_config: dict, socks_port: int, step_callback,
+        self,
+        processed_config: dict,
+        socks_port: int,
+        step_callback,
         trace: Trace = None,
     ) -> Optional[int]:
         if step_callback:

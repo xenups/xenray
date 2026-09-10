@@ -22,9 +22,9 @@ from typing import Optional
 from src.core.constants import XRAY_LOCATION_ASSET, XRAY_LOG_FILE
 from src.core.event_bus import EVENT_CORE_PROCESS_STOPPED, event_bus
 from src.core.logger import logger
-from src.utils.connection_trace import Trace
 from src.services.connection.tun_dns_service import TunDnsService
 from src.services.core_engines.xray_process_manager import XrayProcessManager
+from src.utils.connection_trace import Trace
 
 # Constants
 PROCESS_START_DELAY = 0.2  # seconds - delay to ensure previous instance is terminated

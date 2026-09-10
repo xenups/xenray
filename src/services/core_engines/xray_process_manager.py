@@ -105,8 +105,9 @@ class XrayProcessManager:
         no lingering or orphaned processes hold file locks on the binary.
         """
         try:
-            from src.platform.factory import get_process_adapter
             import psutil
+
+            from src.platform.factory import get_process_adapter
 
             adapter = get_process_adapter()
             flags = adapter.get_subprocess_flags()

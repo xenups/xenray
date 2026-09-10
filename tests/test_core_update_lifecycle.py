@@ -25,11 +25,7 @@ import requests
 
 from src.services.core_engines.singbox_process_manager import SingboxProcessManager
 from src.services.core_engines.xray_process_manager import XrayProcessManager
-from src.services.installer.archive_extractor import (
-    OLD_SUFFIX,
-    ArchiveExtractor,
-    CorePermissionError,
-)
+from src.services.installer.archive_extractor import OLD_SUFFIX, ArchiveExtractor, CorePermissionError
 from src.services.installer.file_downloader import FileDownloader
 from src.services.installer.singbox_installer import SingboxInstallerService
 from src.services.installer.singbox_version_checker import SingboxVersionChecker

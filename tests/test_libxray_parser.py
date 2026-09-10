@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
+
 import pytest
 
 from src.core.parsers.binary_parser_adapter import LibXrayParserAdapter

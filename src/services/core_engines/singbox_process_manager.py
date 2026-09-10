@@ -272,6 +272,7 @@ class SingboxProcessManager:
         """
         try:
             import psutil
+
             from src.platform.constants import XRAY_KILL_GRACE_SECONDS
 
             adapter = get_process_adapter()

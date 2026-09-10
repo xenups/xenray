@@ -76,6 +76,7 @@ def test_probe_failure_triggers_lost_after_confirmation():
                 try:
                     for _ in range(10):
                         monitor._check_connectivity()
+                    assert _wait_for(lambda: len(lost) == 1), f"Expected exactly 1 LOST event, got {len(lost)}"
                 finally:
                     monitor.stop()
     assert len(lost) == 1, f"Expected exactly 1 LOST event, got {len(lost)}"
@@ -99,6 +100,7 @@ def test_restored_emitted_after_recovery():
                 try:
                     for _ in range(10):
                         monitor._check_connectivity()
+                    assert _wait_for(lambda: len(lost) == 1), f"Expected exactly 1 LOST event, got {len(lost)}"
                 finally:
                     monitor.stop()
 
@@ -107,13 +109,15 @@ def test_restored_emitted_after_recovery():
     # Phase 2: healthy again → RESTORED
     # NOTE: start() resets _is_connected=True, so we simulate the recovery
     # by checking while the monitor is already running (not after stop).
-    with patch.object(monitor, "_probe_socks_socket", return_value=True):
-        monitor.start(session_id=2)
-        try:
-            monitor._is_connected = False  # simulate previous LOST state
-            monitor._check_connectivity()
-        finally:
-            monitor.stop()
+    with patch.object(monitor, "_check_traffic_flow", return_value=False):
+        with patch.object(monitor, "_probe_socks_socket", return_value=True):
+            monitor.start(session_id=2)
+            try:
+                monitor._is_connected = False  # simulate previous LOST state
+                monitor._check_connectivity()
+                assert _wait_for(lambda: len(restored) == 1), f"Expected exactly 1 RESTORED event, got {len(restored)}"
+            finally:
+                monitor.stop()
 
     assert len(restored) == 1, f"Expected exactly 1 RESTORED event, got {len(restored)}"
 
@@ -180,6 +184,7 @@ def test_two_consecutive_heavy_failures_emit_lost_once():
                 try:
                     for _ in range(6):
                         monitor._check_connectivity()
+                    assert _wait_for(lambda: len(lost) == 1), f"Expected exactly 1 LOST event, got {len(lost)}"
                 finally:
                     monitor.stop()
     assert len(lost) == 1

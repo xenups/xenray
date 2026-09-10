@@ -370,9 +370,7 @@ class TestWaitForTunnelReady:
         from src.services.connection.connection_orchestrator import ConnectionOrchestrator
 
         with patch("socket.create_connection", side_effect=ConnectionRefusedError):
-            result = ConnectionOrchestrator._wait_for_tunnel_ready(
-                socks_port=10805, timeout=5.0, poll_interval=0.1
-            )
+            result = ConnectionOrchestrator._wait_for_tunnel_ready(socks_port=10805, timeout=5.0, poll_interval=0.1)
         assert result is False
 
     @patch("socket.create_connection")
@@ -386,9 +384,7 @@ class TestWaitForTunnelReady:
         mock_conn.return_value.__enter__ = MagicMock(return_value=mock_sock)
         mock_conn.return_value.__exit__ = MagicMock(return_value=False)
 
-        result = ConnectionOrchestrator._wait_for_tunnel_ready(
-            socks_port=10805, timeout=5.0
-        )
+        result = ConnectionOrchestrator._wait_for_tunnel_ready(socks_port=10805, timeout=5.0)
         assert result is True
 
     def test_returns_false_for_zero_port(self):
