@@ -31,12 +31,32 @@ class WindowLifecycleHandler:
         self._mw._page.show_dialog(dialog)
 
     def _on_close_dialog_exit(self) -> None:
-        """Exit handler — triggers clean shutdown."""
+        """Exit handler — triggers clean shutdown.
+
+        Order matters: kill child cores BEFORE destroying the window so no
+        engine outlives the UI, then let the native window destroy through
+        the Flet event loop before the interpreter exits. Killing self
+        (kill_process_tree) first would orphan the HWND and leave a frozen
+        DWM ghost frame on the desktop.
+        """
         self.cleanup()
         from src.main import signal_exit
 
         signal_exit()
-        ProcessUtils.kill_process_tree()
+        ProcessUtils.kill_children()
+        page = self._mw._page
+        try:
+            page.window.prevent_close = False
+            page.update()
+            page.run_task(page.window.destroy)
+        except Exception:
+            pass
+        # Give the Flet event loop a beat to flush the native destroy
+        # (DestroyWindow + DWM shadow teardown) before the interpreter exits;
+        # os._exit too early would orphan the HWND as a frozen ghost frame.
+        import time as _time
+
+        _time.sleep(0.5)
         os._exit(0)
 
     def minimize_to_tray(self) -> None:

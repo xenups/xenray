@@ -22,6 +22,7 @@ from typing import Optional
 from src.core.constants import XRAY_LOCATION_ASSET, XRAY_LOG_FILE
 from src.core.event_bus import EVENT_CORE_PROCESS_STOPPED, event_bus
 from src.core.logger import logger
+from src.utils.connection_trace import Trace
 from src.services.connection.tun_dns_service import TunDnsService
 from src.services.core_engines.xray_process_manager import XrayProcessManager
 
@@ -162,10 +163,14 @@ class XrayService:
         except Exception as e:
             logger.warning(f"[XrayService] SNI spoof helper stop error: {e}")
 
-    def start(self, config_file_path: str) -> Optional[int]:
+    def start(self, config_file_path: str, trace: Trace = None) -> Optional[int]:
         """Start Xray with the given configuration."""
         # Ensure cleanup again just in case
+        if trace:
+            trace.mark("XRAY_ORPHAN_CLEANUP_START")
         self._cleanup_previous_instance()
+        if trace:
+            trace.mark("XRAY_ORPHAN_CLEANUP_END")
 
         logger.debug(f"[XrayService] Starting Xray with config: {config_file_path}")
 
@@ -181,17 +186,27 @@ class XrayService:
         time.sleep(PROCESS_START_DELAY)
 
         # Delegate process launch to the process manager.
+        if trace:
+            trace.mark("XRAY_SPAWN_START")
         pid = self._process_mgr.start(config_file_path, XRAY_LOG_FILE)
+        if trace:
+            trace.mark("XRAY_SPAWN_END")
         if pid is None:
             return None
 
         # SNI Spoof: start the helper alongside Xray when enabled.
         # Fail-soft: non-admin / missing pydivert -> SniSpoofService.start
         # returns False + logs, never raises or blocks Xray startup.
+        if trace:
+            trace.mark("XRAY_SNI_SPOOF_START")
         self._start_sni_spoof_helper()
+        if trace:
+            trace.mark("XRAY_SNI_SPOOF_END")
 
         # Windows virtual adapter DNS override — delegate to the DNS manager,
         # run in a daemon thread so we never block the UI thread.
+        if trace:
+            trace.mark("XRAY_DNS_SETUP_START")
         dns_thread = threading.Thread(
             target=self._dns_mgr.setup_tun_dns,
             args=(config_file_path,),
@@ -199,6 +214,8 @@ class XrayService:
             name="xenray-tun-dns",
         )
         dns_thread.start()
+        if trace:
+            trace.mark("XRAY_DNS_SETUP_END")
 
         return pid
 

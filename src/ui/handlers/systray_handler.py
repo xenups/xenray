@@ -166,7 +166,18 @@ class SystrayHandler:
             except Exception:
                 pass
 
-            ProcessUtils.kill_process_tree()
+            # Kill child cores only — never self — so the native window
+            # can be destroyed through the Flet loop before exit. Self-kill
+            # would orphan the HWND (frozen DWM ghost frame).
+            ProcessUtils.kill_children()
+            try:
+                icon.stop()
+            except Exception:
+                pass
+            # Beat for the native window teardown (see window_lifecycle_handler).
+            import time as _time
+
+            _time.sleep(0.5)
             os._exit(0)
         except Exception as e:
             logger.error(f"[TRAY_EVENT] Systray exit error: {e}")

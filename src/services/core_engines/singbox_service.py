@@ -26,6 +26,7 @@ from src.core.logger import logger
 from src.platform.factory import get_network_adapter, get_process_adapter, get_system_settings_adapter
 from src.services.connection.route_manager_service import RouteManagerService
 from src.services.core_engines.singbox_process_manager import SingboxProcessManager
+from src.utils.connection_trace import Trace
 
 XRAY_READY_RETRY_COUNT = 20
 XRAY_READY_RETRY_DELAY = 0.5
@@ -119,6 +120,7 @@ class SingboxService:
         mtu: int = 1420,
         allow_lan: bool = False,
         routing_toggles: dict = None,
+        trace: Trace = None,
     ) -> Optional[int]:
         try:
             adapter = get_network_adapter()
@@ -141,6 +143,8 @@ class SingboxService:
             except Exception:
                 pass
 
+            if trace:
+                trace.mark("SB_CONFIG_BUILD_START")
             config = self._config_builder.build(
                 socks_port=xray_socks_port,
                 proxy_server_ip=proxy_server_ip,
@@ -155,15 +159,31 @@ class SingboxService:
                 sni_connect_ip=sni_connect_ip,
                 toggles=routing_toggles,
             )
+            if trace:
+                trace.mark("SB_CONFIG_BUILD_END")
 
             self._pre_launch_cleanup()
 
-            if not self._wait_for_xray_ready(xray_socks_port) or not self._write_config_and_start(config):
+            if trace:
+                trace.mark("SB_WAIT_XRAY_START")
+            xray_ready = self._wait_for_xray_ready(xray_socks_port)
+            if trace:
+                trace.mark("SB_WAIT_XRAY_END")
+            if trace:
+                trace.mark("SB_WRITE_AND_SPAWN_START")
+            spawn_ok = self._write_config_and_start(config)
+            if trace:
+                trace.mark("SB_WRITE_AND_SPAWN_END")
+            if not xray_ready or not spawn_ok:
                 self._route_manager.cleanup_routes()
                 get_system_settings_adapter().restore_smhr(self._smhr_was_enabled)
                 return None
 
+            if trace:
+                trace.mark("SB_WAIT_TUN_START")
             self._wait_for_tun_ready()
+            if trace:
+                trace.mark("SB_WAIT_TUN_END")
             pid = self._proc.pid
             if pid:
                 self._proc.write_pid_file(pid)

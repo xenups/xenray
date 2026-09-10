@@ -13,6 +13,7 @@ from src.services.connection.connection_tester import ConnectionTester
 from src.utils.firewall_manager import FirewallManager
 from src.utils.log_utils import purge_all_logs_on_connect
 from src.utils.network_utils import NetworkUtils
+from src.utils.connection_trace import Trace
 
 TUN_WARMUP_SECONDS = 3.5
 HEALTH_RETRIES = 3
@@ -63,7 +64,9 @@ class ConnectionOrchestrator:
             return False
         return self.get_tun_engine() == CORE_SINGBOX
 
-    def establish_connection(self, file_path: str, mode: str, step_callback=None) -> tuple[bool, Optional[dict]]:
+    def establish_connection(
+        self, file_path: str, mode: str, step_callback=None, trace: Trace = None
+    ) -> tuple[bool, Optional[dict]]:
         try:
             purge_all_logs_on_connect()
 
@@ -73,8 +76,14 @@ class ConnectionOrchestrator:
 
             configs_to_try = self._resolve_candidate_configs(original_config)
 
+            if trace:
+                trace.mark("PRE_CHECKS_START")
             if not self._pre_connection_checks(step_callback):
+                if trace:
+                    trace.mark("PRE_CHECKS_END")
                 return False, None
+            if trace:
+                trace.mark("PRE_CHECKS_END")
 
             use_singbox = self._uses_singbox_tun(mode)
             if use_singbox:
@@ -82,9 +91,11 @@ class ConnectionOrchestrator:
 
             for label, config in configs_to_try:
                 status, payload = self._attempt_single_connection(
-                    label, config, mode, use_singbox, file_path, step_callback
+                    label, config, mode, use_singbox, file_path, step_callback, trace=trace
                 )
                 if status == self.ATTEMPT_SUCCESS:
+                    if trace:
+                        trace.mark("VERIFIED")
                     return True, payload
 
             logger.error("[ConnectionOrchestrator] All connection attempts failed")
@@ -102,6 +113,7 @@ class ConnectionOrchestrator:
         use_singbox: bool,
         file_path: str,
         step_callback,
+        trace: Trace = None,
     ) -> tuple[str, Optional[dict]]:
         if label == "original":
             logger.warning("[ConnectionOrchestrator] Falling back to original legacy configuration")
@@ -124,18 +136,26 @@ class ConnectionOrchestrator:
                 self._xray_processor.pin_outbound_server_ip(processed_config, use_tun=True)
                 self._xray_processor.save_config(processed_config, OUTPUT_CONFIG_PATH)
 
-            xray_pid = self._start_xray(step_callback)
+            if trace:
+                trace.mark("XRAY_START")
+            xray_pid = self._start_xray(step_callback, trace=trace)
+            if trace:
+                trace.mark("XRAY_READY")
             if not xray_pid:
                 return self.ATTEMPT_SKIPPED, None
 
             if use_singbox:
-                singbox_pid = self._start_singbox(processed_config, socks_port, step_callback)
+                if trace:
+                    trace.mark("SINGBOX_START")
+                singbox_pid = self._start_singbox(processed_config, socks_port, step_callback, trace=trace)
+                if trace:
+                    trace.mark("SINGBOX_STARTED")
                 if not singbox_pid:
                     self._xray_service.stop()
                     return self.ATTEMPT_ABORTED, None
 
             is_tun = mode == MODE_VPN or use_singbox
-            if self._verify_connection_health(processed_config, step_callback, socks_port, warm_up=is_tun):
+            if self._verify_connection_health(processed_config, step_callback, socks_port, warm_up=is_tun, trace=trace):
                 self._ensure_lan_firewall_rule(socks_port)
                 connection_info = self._finalize_connection(file_path, mode, xray_pid, singbox_pid, step_callback)
                 return self.ATTEMPT_SUCCESS, connection_info
@@ -200,13 +220,18 @@ class ConnectionOrchestrator:
         step_callback,
         health_socks_port: int = 0,
         warm_up: bool = False,
+        trace: Trace = None,
     ) -> bool:
         if step_callback:
             step_callback(t("connection.verifying_latency"))
 
         if warm_up:
+            if trace:
+                trace.mark("TUN_PROBE_START")
             logger.info(f"[ConnectionOrchestrator] TUN warm-up ({TUN_WARMUP_SECONDS}s)...")
             time.sleep(TUN_WARMUP_SECONDS)
+            if trace:
+                trace.mark("TUN_PROBE_END")
 
         socks_port = health_socks_port if health_socks_port > 0 else 0
         if socks_port:
@@ -214,11 +239,16 @@ class ConnectionOrchestrator:
                 f"[ConnectionOrchestrator] Routing health check through existing SOCKS proxy port {socks_port}"
             )
 
+        if trace:
+            trace.mark("HEALTH_CHECK_START")
         last_latency = None
         for attempt in range(1, HEALTH_RETRIES + 1):
             success, latency, _ = ConnectionTester.test_connection_sync(config, socks_port=socks_port)
             if success:
                 logger.info(f"[ConnectionOrchestrator] Connection verified (attempt {attempt}): {latency}")
+                if trace:
+                    trace.mark(f"HEALTH_CHECK_OK_attempt{attempt}")
+                    trace.mark("HEALTH_CHECK_END")
                 return True
             last_latency = latency
             logger.warning(
@@ -227,6 +257,9 @@ class ConnectionOrchestrator:
             if attempt < HEALTH_RETRIES:
                 time.sleep(HEALTH_RETRY_DELAY_SECONDS)
 
+        if trace:
+            trace.mark("HEALTH_CHECK_FAIL")
+            trace.mark("HEALTH_CHECK_END")
         logger.warning(
             f"[ConnectionOrchestrator] Connection verification failed after {HEALTH_RETRIES} attempts: {last_latency}"
         )
@@ -277,12 +310,12 @@ class ConnectionOrchestrator:
 
         return processed_config, socks_port
 
-    def _start_xray(self, step_callback) -> Optional[int]:
+    def _start_xray(self, step_callback, trace: Trace = None) -> Optional[int]:
         if step_callback:
             step_callback(t("connection.starting_xray"))
 
         logger.debug("Starting Xray service")
-        xray_pid = self._xray_service.start(OUTPUT_CONFIG_PATH)
+        xray_pid = self._xray_service.start(OUTPUT_CONFIG_PATH, trace=trace)
 
         if not xray_pid:
             logger.error("Failed to start Xray")
@@ -291,7 +324,10 @@ class ConnectionOrchestrator:
         logger.debug(f"Xray started with PID {xray_pid}")
         return xray_pid
 
-    def _start_singbox(self, processed_config: dict, socks_port: int, step_callback) -> Optional[int]:
+    def _start_singbox(
+        self, processed_config: dict, socks_port: int, step_callback,
+        trace: Trace = None,
+    ) -> Optional[int]:
         if step_callback:
             step_callback(t("connection.initializing_vpn"))
 
@@ -314,6 +350,7 @@ class ConnectionOrchestrator:
             mtu=optimal_mtu,
             allow_lan=allow_lan,
             routing_toggles=routing_toggles,
+            trace=trace,
         )
 
         if not singbox_pid:
