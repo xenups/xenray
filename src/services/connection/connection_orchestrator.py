@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import socket
 import time
 from typing import Optional
 
@@ -214,6 +215,72 @@ class ConnectionOrchestrator:
         except Exception as e:
             logger.error(f"[ConnectionOrchestrator] Teardown after failed attempt raised: {e}")
 
+    @staticmethod
+    def _wait_for_tunnel_ready(
+        socks_port: int,
+        timeout: float = 8.0,
+        poll_interval: float = 0.5,
+    ) -> bool:
+        """End-to-end tunnel readiness probe via SOCKS5 CONNECT.
+
+        Unlike a SOCKS5 greeting (which only tests the proxy daemon is
+        listening), a CONNECT command routes through the full tunnel path:
+        SOCKS proxy → sing-box TUN → remote egress.  When this succeeds,
+        the tunnel is genuinely operational.
+
+        Returns True if a CONNECT succeeds within *timeout*, False on
+        timeout.  The caller must still run the full health-check after
+        this (latency measurement, 204 verification) — this probe only
+        gates the waiting period.
+        """
+        if socks_port <= 0:
+            return False
+        # Probe target: Cloudflare DNS-over-TLS (TCP 853).  Fast, globally
+        # reachable, and the CONNECT is enough — we never send TLS.
+        probe_host = b"1.1.1.1"
+        probe_port = 853
+        deadline = time.monotonic() + timeout
+        attempt = 0
+        while time.monotonic() < deadline:
+            attempt += 1
+            try:
+                with socket.create_connection(
+                    ("127.0.0.1", socks_port), timeout=1.0
+                ) as sock:
+                    # SOCKS5 greeting
+                    sock.sendall(b"\x05\x01\x00")
+                    sock.settimeout(1.0)
+                    resp = sock.recv(2)
+                    if len(resp) < 2 or resp[0] != 0x05 or resp[1] != 0x00:
+                        time.sleep(poll_interval)
+                        continue
+                    # SOCKS5 CONNECT to 1.1.1.1:853  (CMD=1, ATYP=1=IPv4)
+                    connect_req = (
+                        b"\x05\x01\x00\x01"
+                        + probe_host
+                        + probe_port.to_bytes(2, "big")
+                    )
+                    sock.sendall(connect_req)
+                    sock.settimeout(1.0)
+                    resp = sock.recv(10)
+                    # Reply[1] == 0x00 means "succeeded"
+                    if len(resp) >= 2 and resp[1] == 0x00:
+                        elapsed = time.monotonic() - (deadline - timeout)
+                        logger.info(
+                            f"[ConnectionOrchestrator] Tunnel CONNECT "
+                            f"success via {socks_port} "
+                            f"(attempt {attempt}, {elapsed:.2f}s)"
+                        )
+                        return True
+            except (socket.timeout, TimeoutError, ConnectionRefusedError, OSError):
+                pass
+            time.sleep(poll_interval)
+        logger.warning(
+            f"[ConnectionOrchestrator] Tunnel not ready after {timeout}s "
+            f"via port {socks_port} ({attempt} attempts)"
+        )
+        return False
+
     def _verify_connection_health(
         self,
         config: dict,
@@ -228,8 +295,21 @@ class ConnectionOrchestrator:
         if warm_up:
             if trace:
                 trace.mark("TUN_PROBE_START")
-            logger.info(f"[ConnectionOrchestrator] TUN warm-up ({TUN_WARMUP_SECONDS}s)...")
-            time.sleep(TUN_WARMUP_SECONDS)
+            if health_socks_port > 0:
+                probe_ok = self._wait_for_tunnel_ready(health_socks_port)
+                if trace:
+                    trace.mark(
+                        "TUN_PROBE_SUCCESS" if probe_ok else "TUN_PROBE_TIMEOUT"
+                    )
+            else:
+                # Safety fallback: no SOCKS port known yet
+                logger.warning(
+                    "[ConnectionOrchestrator] No SOCKS port for readiness "
+                    "probe — falling back to blind warm-up"
+                )
+                time.sleep(1.0)
+                if trace:
+                    trace.mark("TUN_PROBE_FALLBACK")
             if trace:
                 trace.mark("TUN_PROBE_END")
 

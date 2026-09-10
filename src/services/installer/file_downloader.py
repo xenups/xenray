@@ -1,7 +1,7 @@
-"""Core download responsibility — HTTP streaming with retry and timeouts.
+"""Core download responsibility — HTTP streaming with retry, proxy fallback, and timeouts.
 
-Owns: Xray-core zip download and generic streamed file download (used by the
-wintun.dll bootstrap). No extraction, no version logic.
+Owns: Xray-core and sing-box core archive downloads with automatic fallback to
+direct system networking if proxy or local connection fails.
 """
 
 from __future__ import annotations
@@ -15,20 +15,16 @@ import requests
 from loguru import logger
 
 from src.platform.constants import (
-    XRAY_CORE_ASSET_EXTENSION,
-    XRAY_CORE_DOWNLOAD_BASE_URL,
-    XRAY_CORE_ZIP_FILENAME,
     XRAY_DOWNLOAD_CHUNK_SIZE,
     XRAY_DOWNLOAD_CONNECT_TIMEOUT,
     XRAY_DOWNLOAD_MAX_RETRIES,
     XRAY_DOWNLOAD_MIN_FILE_SIZE,
     XRAY_DOWNLOAD_READ_TIMEOUT,
 )
-from src.utils.platform_utils import PlatformUtils
 
 
 class FileDownloader:
-    """Stream downloads a file from a URL with retries and explicit timeouts."""
+    """Stream downloads a file from a URL with retries, direct fallback, and explicit timeouts."""
 
     def __init__(
         self,
@@ -44,6 +40,15 @@ class FileDownloader:
         self._min_file_size = min_file_size
         self._max_retries = max_retries
 
+    @staticmethod
+    def _create_session(direct: bool = False) -> requests.Session:
+        """Create a requests session; direct=True forces bypassing local/system proxy."""
+        session = requests.Session()
+        if direct:
+            session.trust_env = False
+            session.proxies = {"http": None, "https": None}
+        return session
+
     def download(
         self,
         url: str,
@@ -57,13 +62,20 @@ class FileDownloader:
         the UI reports what is actually being fetched.
         """
         name = label or os.path.basename(dest_path)
+        os.makedirs(os.path.dirname(os.path.abspath(dest_path)), exist_ok=True)
+
+        use_direct = False
+
         for attempt in range(1, self._max_retries + 1):
             try:
                 if progress_callback:
-                    progress_callback(f"Downloading {name} (attempt {attempt}/{self._max_retries})...")
+                    mode_info = " (direct)" if use_direct else ""
+                    progress_callback(f"Downloading {name}{mode_info} (attempt {attempt}/{self._max_retries})...")
 
-                logger.info(f"Downloading {url} (attempt {attempt})")
-                response = requests.get(
+                logger.info(f"Downloading {url} (attempt {attempt}, direct={use_direct})")
+                session = self._create_session(direct=use_direct)
+
+                response = session.get(
                     url,
                     stream=True,
                     timeout=(self._connect_timeout, self._read_timeout),
@@ -92,14 +104,27 @@ class FileDownloader:
                 logger.info(f"Download complete: {os.path.getsize(dest_path)} bytes")
                 return dest_path
 
+            except (requests.exceptions.ProxyError, requests.exceptions.SSLError) as e:
+                logger.warning(f"Proxy/SSL error on attempt {attempt}: {e}. Switching to direct connection...")
+                use_direct = True
+                if progress_callback:
+                    progress_callback("Proxy error, retrying with direct connection...")
+
             except requests.exceptions.Timeout:
                 logger.warning(f"Download timed out (attempt {attempt}/{self._max_retries})")
                 if progress_callback:
                     progress_callback(f"Timeout, retrying... ({attempt}/{self._max_retries})")
+                # On timeout, try direct if we were using a proxy
+                if not use_direct:
+                    use_direct = True
+
             except requests.exceptions.ConnectionError as e:
                 logger.warning(f"Connection error (attempt {attempt}): {e}")
                 if progress_callback:
                     progress_callback(f"Connection error, retrying... ({attempt}/{self._max_retries})")
+                if not use_direct:
+                    use_direct = True
+
             except requests.exceptions.HTTPError as e:
                 logger.error(f"HTTP error: {e}")
                 if progress_callback:
@@ -107,6 +132,7 @@ class FileDownloader:
                 # Don't retry on 4xx client errors
                 if e.response is not None and e.response.status_code < 500:
                     return None
+
             except (OSError, IOError) as e:
                 logger.error(f"File I/O error (attempt {attempt}): {e}")
 
@@ -122,11 +148,11 @@ class FileDownloader:
             progress_callback("Download failed after all retries.")
         return None
 
-    # ---- SHA-256 verification (Xray .dgst sidecar) -------------------------
+    # ---- SHA-256 verification (Xray / sing-box .dgst sidecar) --------------
 
     @staticmethod
     def _verify_sha256(file_path: str, download_url: str) -> bool:
-        """Verify file SHA-256 against the .dgst sidecar published by Xray-core.
+        """Verify file SHA-256 against the .dgst sidecar published on GitHub releases.
 
         The .dgst URL is derived from *download_url* by appending ``.dgst``.
         If the sidecar is missing (404), verification is **skipped** and the
@@ -146,7 +172,7 @@ class FileDownloader:
 
         if actual != expected:
             logger.error(
-                f"[FileDownloader] SHA-256 MISMATCH — expected {expected}, got {actual}. " "Discarding downloaded file."
+                f"[FileDownloader] SHA-256 MISMATCH — expected {expected}, got {actual}. Discarding downloaded file."
             )
             try:
                 os.remove(file_path)
@@ -181,47 +207,70 @@ class FileDownloader:
                 if line.startswith("SHA2-256="):
                     return line.split("=", 1)[1].strip().lower()
         except Exception as e:
-            logger.warning(f"[FileDownloader] Could not fetch .dgst: {e}")
+            logger.warning(f"[FileDownloader] Could not fetch .dgst via default route: {e}. Trying direct...")
+            try:
+                session = FileDownloader._create_session(direct=True)
+                resp = session.get(dgst_url, timeout=15)
+                if resp.status_code == 404:
+                    return None
+                resp.raise_for_status()
+                for line in resp.text.splitlines():
+                    if line.startswith("SHA2-256="):
+                        return line.split("=", 1)[1].strip().lower()
+            except Exception as e2:
+                logger.warning(f"[FileDownloader] Direct .dgst fetch also failed: {e2}")
         return None
 
+    @staticmethod
     def temp_dest(filename: str) -> str:
-        """Absolute temp path for a downloaded archive."""
-        return os.path.join(tempfile.gettempdir(), filename)
+        """Absolute temp path for a downloaded archive in staging directory."""
+        staging_root = os.path.join(tempfile.gettempdir(), "xenray_staging")
+        os.makedirs(staging_root, exist_ok=True)
+        return os.path.join(staging_root, filename)
 
     def download_xray_core(
         self,
         progress_callback: Optional[Callable[[str], None]] = None,
         target_version: Optional[str] = None,
     ) -> Optional[str]:
-        """Download the Xray-core release zip for the current platform.
-
-        Returns the temp zip path, or None if every attempt failed.
-        """
+        """Download the Xray-core release archive for the current platform."""
         from src.core.constants import XRAY_VERSION
+        from src.platform import get_core_asset_adapter
 
-        arch = PlatformUtils.get_architecture()
-        if arch == "x86_64":
-            arch_str = "64"
-        elif arch == "arm64":
-            arch_str = "arm64-v8a"
-        else:
-            arch_str = "32"
-
-        platform = PlatformUtils.get_platform()
-        if platform == "windows":
-            os_name = "windows"
-        elif platform == "macos":
-            os_name = "macos"
-        else:
-            os_name = "linux"
-
-        filename = f"Xray-{os_name}-{arch_str}{XRAY_CORE_ASSET_EXTENSION}"
         version = (target_version or XRAY_VERSION).lstrip("v")
-        url = f"{XRAY_CORE_DOWNLOAD_BASE_URL}/v{version}/{filename}"
+        asset = get_core_asset_adapter().get_xray_asset_info(version)
 
-        return self.download(
-            url,
-            self.temp_dest(XRAY_CORE_ZIP_FILENAME),
+        dest = self.download(
+            asset.download_url,
+            self.temp_dest(f"xray_update{asset.archive_extension}"),
             progress_callback=progress_callback,
-            label=filename,
+            label=asset.filename,
         )
+        if dest and not self._verify_sha256(dest, asset.download_url):
+            return None
+        return dest
+
+    def download_singbox_core(
+        self,
+        progress_callback: Optional[Callable[[str], None]] = None,
+        target_version: Optional[str] = None,
+    ) -> Optional[str]:
+        """Download the sing-box release archive for the current platform."""
+        from src.core.constants import SINGBOX_VERSION
+        from src.platform import get_core_asset_adapter
+
+        version = (target_version or SINGBOX_VERSION).lstrip("v")
+        asset = get_core_asset_adapter().get_singbox_asset_info(version)
+
+        dest = self.download(
+            asset.download_url,
+            self.temp_dest(f"singbox_update{asset.archive_extension}"),
+            progress_callback=progress_callback,
+            label=asset.filename,
+        )
+        if dest and not self._verify_sha256(dest, asset.download_url):
+            return None
+        return dest
+
+
+__all__ = ["FileDownloader"]

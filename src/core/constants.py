@@ -21,7 +21,7 @@ WINDOW_HEIGHT = 480
 GITHUB_REPO = os.getenv("GITHUB_REPO", "xenups/xenray")
 UPDATE_DOWNLOAD_TIMEOUT = float(os.getenv("UPDATE_DOWNLOAD_TIMEOUT", "60"))
 UPDATE_MIN_FILE_SIZE = int(os.getenv("UPDATE_MIN_FILE_SIZE", "1048576"))
-XRAY_VERSION = os.getenv("XRAY_VERSION", "26.7.28")
+XRAY_VERSION = os.getenv("XRAY_VERSION", "26.9.8")
 SINGBOX_VERSION = os.getenv("SINGBOX_VERSION", "1.14.0")
 # WINTUN_DLL — required for Xray native TUN on Windows
 WINTUN_DLL = os.path.join(os.path.join(os.path.join(Path(__file__).parent.parent.parent, "bin"), "wintun.dll"))
@@ -82,6 +82,8 @@ else:
 # Executable paths with platform-specific extensions
 XRAY_EXECUTABLE = os.path.join(BIN_DIR, f"xray{PlatformUtils.get_binary_suffix()}")
 SINGBOX_EXECUTABLE = os.path.join(BIN_DIR, f"sing-box{PlatformUtils.get_binary_suffix()}")
+XRAY_PARSER_EXECUTABLE = os.path.join(BIN_DIR, f"xray-parser{PlatformUtils.get_binary_suffix()}")
+USE_LIBXRAY_PARSER = os.getenv("USE_LIBXRAY_PARSER", "false").lower() in ("true", "1", "yes")
 
 # Xray geo files directory (geoip.dat, geosite.dat in assets/rules or bin/)
 RULES_DIR = os.path.join(ASSETS_DIR, "rules")

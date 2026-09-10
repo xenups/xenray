@@ -11,6 +11,7 @@ Structure:
 from __future__ import annotations
 
 from src.platform.factory import (
+    get_core_asset_adapter,
     get_network_adapter,
     get_process_adapter,
     get_system_settings_adapter,
@@ -22,4 +23,5 @@ __all__ = [
     "get_process_adapter",
     "get_system_settings_adapter",
     "get_tun_dns_configurator",
+    "get_core_asset_adapter",
 ]
