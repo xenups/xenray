@@ -204,41 +204,35 @@ class FileDownloader:
             return None
 
     @staticmethod
-    def _parse_dgst_content(text: str) -> Optional[str]:
-        """Parse .dgst content for SHA2-256 hex string, or return 'MALFORMED' if missing/corrupt."""
-        for line in text.splitlines():
-            if line.startswith("SHA2-256="):
-                val = line.split("=", 1)[1].strip().lower()
-                if val and all(c in "0123456789abcdef" for c in val) and len(val) >= 32:
-                    return val
-                return "MALFORMED"
-        return "MALFORMED"
-
-    @staticmethod
     def _fetch_expected_sha256(dgst_url: str) -> Optional[str]:
-        """Fetch the .dgst sidecar and extract the ``SHA2-256=`` value.
-
-        Returns None if sidecar returns 404 (not published).
-        Returns 'MALFORMED' if sidecar returned 200 but contained invalid or non-checksum content.
-        """
+        """Fetch the .dgst sidecar and extract the ``SHA2-256=`` value."""
+        saw_non_404_response = False
         try:
             resp = requests.get(dgst_url, timeout=15)
             if resp.status_code == 404:
                 return None
             resp.raise_for_status()
-            return FileDownloader._parse_dgst_content(resp.text)
+            saw_non_404_response = True
+            for line in resp.text.splitlines():
+                if line.startswith("SHA2-256="):
+                    return line.split("=", 1)[1].strip().lower()
+            logger.warning("[FileDownloader] Malformed .dgst content via default route. Trying direct...")
         except Exception as e:
             logger.warning(f"[FileDownloader] Could not fetch .dgst via default route: {e}. Trying direct...")
-            try:
-                session = FileDownloader._create_session(direct=True)
-                resp = session.get(dgst_url, timeout=15)
-                if resp.status_code == 404:
-                    return None
-                resp.raise_for_status()
-                return FileDownloader._parse_dgst_content(resp.text)
-            except Exception as e2:
-                logger.warning(f"[FileDownloader] Direct .dgst fetch also failed: {e2}")
-        return None
+        try:
+            session = FileDownloader._create_session(direct=True)
+            resp = session.get(dgst_url, timeout=15)
+            if resp.status_code == 404:
+                return "" if saw_non_404_response else None
+            resp.raise_for_status()
+            saw_non_404_response = True
+            for line in resp.text.splitlines():
+                if line.startswith("SHA2-256="):
+                    return line.split("=", 1)[1].strip().lower()
+            logger.warning("[FileDownloader] Malformed .dgst content via direct route")
+        except Exception as e2:
+            logger.warning(f"[FileDownloader] Direct .dgst fetch also failed: {e2}")
+        return "" if saw_non_404_response else None
 
     @staticmethod
     def temp_dest(filename: str) -> str:
