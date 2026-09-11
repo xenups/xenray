@@ -2,6 +2,12 @@
 
 All notable changes to XenRay will be documented in this file.
 
+## [0.3.5] - 2026-09-11
+
+### Changed
+- **Core Engine Upgrade**: Upgraded default bundled Xray-core binary to **v26.9.9**.
+- **Version Bump**: Bumped application version to **0.3.5**.
+
 ## [0.3.4] - 2026-09-10
 
 ### Added
