@@ -62,6 +62,32 @@ def test_extract_core_rolls_back_on_failure(tmp_path, monkeypatch):
     assert not (bin_dir / ("xray.exe" + OLD_SUFFIX)).exists(), ".old backup consumed by rollback"
 
 
+def test_extract_core_backup_rename_failure_aborts_without_replacing(tmp_path, monkeypatch):
+    """A failed backup rename must leave the original binary in place."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    monkeypatch.setattr(ArchiveExtractor, "_kill_active_core", lambda self: None)
+
+    original = bin_dir / "xray.exe"
+    original.write_bytes(b"OLD_BINARY")
+
+    zip_path = tmp_path / "xray_update.zip"
+    _make_zip(zip_path, {"xray.exe": b"NEW_BINARY"})
+
+    real_rename = os.rename
+
+    def _failing_rename(src, dst):
+        if src == str(original) and dst == str(original) + OLD_SUFFIX:
+            raise OSError("locked")
+        return real_rename(src, dst)
+
+    monkeypatch.setattr(os, "rename", _failing_rename)
+
+    assert ArchiveExtractor(str(bin_dir)).extract_core(str(zip_path)) is False
+    assert original.read_bytes() == b"OLD_BINARY"
+    assert not (bin_dir / ("xray.exe" + OLD_SUFFIX)).exists()
+
+
 def test_extract_core_calls_kill_before_replacing(tmp_path, monkeypatch):
     """Active xray processes must be killed before the binary is replaced."""
     bin_dir = tmp_path / "bin"

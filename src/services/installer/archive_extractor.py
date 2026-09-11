@@ -302,7 +302,7 @@ class ArchiveExtractor:
                     self.terminate_and_wait_for_lock_release(dest, timeout_seconds=3.0)
 
             # Step 5: Rename existing active binaries to .old / .bak
-            backups: dict[str, Optional[str]] = {}
+            backups: dict[str, str] = {}
             for dest in extracted_files:
                 if os.path.exists(dest):
                     old_path = dest + OLD_SUFFIX
@@ -312,8 +312,17 @@ class ArchiveExtractor:
                         os.rename(dest, old_path)
                         backups[dest] = old_path
                     except OSError as e:
-                        logger.warning(f"Could not rename {dest} to {old_path}: {e}")
-                        backups[dest] = None
+                        logger.error(f"Could not rename {dest} to {old_path}: {e}")
+                        for rollback_dest, rollback_old_path in backups.items():
+                            if os.path.exists(rollback_old_path):
+                                try:
+                                    os.replace(rollback_old_path, rollback_dest)
+                                except OSError as rollback_error:
+                                    logger.error(
+                                        f"[ArchiveExtractor] Failed to restore {rollback_dest} after backup rename failure: "
+                                        f"{rollback_error}"
+                                    )
+                        return False
 
             # Step 6: Move new binaries into place
             move_succeeded = False
