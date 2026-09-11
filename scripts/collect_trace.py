@@ -60,7 +60,7 @@ def collect_one() -> dict:
     os.makedirs(TMPDIR, exist_ok=True)
 
     # Try to load an existing config if available, otherwise skip engine start
-    config_path = os.path.join(TMPDIR, "current_config.json")
+    config_path = OUTPUT_CONFIG_PATH
     if not os.path.exists(config_path):
         trace.mark("NO_CONFIG_FILE")
         print("[TRACE] No config file found — skipping engine start.")
