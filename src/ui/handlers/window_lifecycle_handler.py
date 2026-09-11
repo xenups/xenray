@@ -48,16 +48,19 @@ class WindowLifecycleHandler:
         try:
             page.window.prevent_close = False
             page.update()
-            page.run_task(page.window.destroy)
-        except Exception:
-            pass
-        # Give the Flet event loop a beat to flush the native destroy
-        # (DestroyWindow + DWM shadow teardown) before the interpreter exits;
-        # os._exit too early would orphan the HWND as a frozen ghost frame.
-        import time as _time
 
-        _time.sleep(0.5)
-        os._exit(0)
+            async def _destroy_then_exit() -> None:
+                import asyncio
+
+                try:
+                    await page.window.destroy()
+                finally:
+                    await asyncio.sleep(0.5)
+                    os._exit(0)
+
+            page.run_task(_destroy_then_exit)
+        except Exception:
+            os._exit(0)
 
     def minimize_to_tray(self) -> None:
         """Hide window to tray."""
