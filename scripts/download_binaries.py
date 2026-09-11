@@ -48,7 +48,7 @@ WINTUN_URL = "https://www.wintun.net/builds/wintun-0.14.1.zip"
 
 def get_config(arch: int = 64):
     """Get configuration from environment."""
-    xray_version = os.getenv("XRAY_VERSION", "26.9.8")
+    xray_version = os.getenv("XRAY_VERSION", "26.9.9")
     singbox_version = os.getenv("SINGBOX_VERSION", "1.14.0")
     sb_arch = SINGBOX_ARCH_MAP.get(arch, "amd64")
     wintun_arch = WINTUN_ARCH_MAP.get(arch, "amd64")
