@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import socket
 
+from src.platform.interfaces.core_assets import CoreAssetInfo, ICoreAssetAdapter
 from src.platform.interfaces.firewall import IFirewallAdapter
 from src.platform.interfaces.network import INetworkAdapter
 from src.platform.interfaces.process import IProcessAdapter
@@ -28,5 +29,7 @@ __all__ = [
     "IProcessAdapter",
     "ITunDriverAdapter",
     "IRouteAdapter",
+    "ICoreAssetAdapter",
+    "CoreAssetInfo",
     "socket",
 ]

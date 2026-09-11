@@ -12,6 +12,7 @@ from src.core.constants import MODE_PROXY, MODE_VPN, OUTPUT_CONFIG_PATH, PROTOCO
 from src.core.i18n import t
 from src.services.core_engines.singbox_service import SingboxService
 from src.services.core_engines.xray_service import XrayService
+from src.utils.connection_trace import Trace
 
 
 class ConnectionManager:
@@ -423,7 +424,7 @@ class ConnectionManager:
             pass
         return MODE_PROXY
 
-    def connect(self, file_path: str, mode: str, step_callback=None) -> bool:
+    def connect(self, file_path: str, mode: str, step_callback=None, trace: Trace = None) -> bool:
         """
         Establish connection using specified configuration file.
 
@@ -431,6 +432,7 @@ class ConnectionManager:
             file_path: Path to configuration file
             mode: Connection mode ("vpn" or "proxy")
             step_callback: Optional callback for connection steps
+            trace: Optional connection-timing trace.
 
         Returns:
             True if connection successful, False otherwise
@@ -449,7 +451,7 @@ class ConnectionManager:
             self._session_id += 1
             current_session = self._session_id
 
-        success, connection_info = self._orchestrator.establish_connection(file_path, mode, step_callback)
+        success, connection_info = self._orchestrator.establish_connection(file_path, mode, step_callback, trace=trace)
 
         with self._state_lock:
             # Verify we're still in the same session (not cancelled)

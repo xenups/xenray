@@ -38,6 +38,20 @@ jobs:
     
     - name: Install project
       run: poetry install --no-interaction
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version-file: 'tools/xray-parser/go.mod'
+        cache-dependency-path: 'tools/xray-parser/go.sum'
+
+    - name: Build xray-parser binary for tests
+      run: |
+        mkdir -p bin
+        cd tools/xray-parser
+        go build -ldflags="-s -w" -o ../../bin/xray-parser .
+        chmod +x ../../bin/xray-parser
+        cd ../..
     
     - name: Run tests with coverage
       run: |

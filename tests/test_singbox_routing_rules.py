@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -357,3 +358,38 @@ class TestSingboxConfigValidity:
             timeout=10,
         )
         assert result.returncode == 0, f"sing-box check failed:\n{result.stderr}"
+
+
+class TestWaitForTunnelReady:
+    """Tests for ConnectionOrchestrator._wait_for_tunnel_ready."""
+
+    @patch("time.sleep")
+    @patch("time.monotonic", side_effect=[0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 10.0])
+    def test_returns_false_on_timeout(self, mock_monotonic, mock_sleep):
+        """When CONNECT never succeeds, returns False within timeout."""
+        from src.services.connection.connection_orchestrator import ConnectionOrchestrator
+
+        with patch("socket.create_connection", side_effect=ConnectionRefusedError):
+            result = ConnectionOrchestrator._wait_for_tunnel_ready(socks_port=10805, timeout=5.0, poll_interval=0.1)
+        assert result is False
+
+    @patch("socket.create_connection")
+    def test_returns_true_on_connect_success(self, mock_conn):
+        """When SOCKS5 CONNECT succeeds, returns True."""
+        from src.services.connection.connection_orchestrator import ConnectionOrchestrator
+
+        mock_sock = MagicMock()
+        # First recv: SOCKS5 greeting reply, second recv: CONNECT reply
+        mock_sock.recv.side_effect = [b"\x05\x00", b"\x05\x00\x00\x01\x00\x00\x00\x00\x00\x00"]
+        mock_conn.return_value.__enter__ = MagicMock(return_value=mock_sock)
+        mock_conn.return_value.__exit__ = MagicMock(return_value=False)
+
+        result = ConnectionOrchestrator._wait_for_tunnel_ready(socks_port=10805, timeout=5.0)
+        assert result is True
+
+    def test_returns_false_for_zero_port(self):
+        """Zero port returns False immediately without network calls."""
+        from src.services.connection.connection_orchestrator import ConnectionOrchestrator
+
+        result = ConnectionOrchestrator._wait_for_tunnel_ready(socks_port=0)
+        assert result is False

@@ -158,7 +158,16 @@ class SystrayHandler:
         """Final exit callback."""
         logger.debug("[TRAY_EVENT] _on_exit() called — user clicked Exit")
         try:
-            icon.stop()
+            try:
+                icon.stop()
+            except Exception:
+                pass
+
+            lifecycle = getattr(self._main, "_lifecycle_handler", None)
+            if lifecycle and hasattr(lifecycle, "_on_close_dialog_exit"):
+                lifecycle._on_close_dialog_exit()
+                return
+
             from src.utils.process_utils import ProcessUtils
 
             try:
@@ -166,7 +175,10 @@ class SystrayHandler:
             except Exception:
                 pass
 
-            ProcessUtils.kill_process_tree()
+            ProcessUtils.kill_children()
+            import time as _time
+
+            _time.sleep(0.5)
             os._exit(0)
         except Exception as e:
             logger.error(f"[TRAY_EVENT] Systray exit error: {e}")

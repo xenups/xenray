@@ -166,7 +166,7 @@ class ProcessUtils:
 
     @staticmethod
     def kill_process_tree(pid: Optional[int] = None) -> None:
-        """Kill a process and all its children."""
+        """Kill a process and all its children (self-kill included)."""
         try:
             if pid is None:
                 pid = os.getpid()
@@ -196,6 +196,36 @@ class ProcessUtils:
             logger.warning(f"Error killing process tree {pid}: {e}")
         except Exception as e:
             logger.error(f"Unexpected error killing process tree {pid}: {e}")
+
+    @staticmethod
+    def kill_children(pid: Optional[int] = None) -> None:
+        """Kill only the child processes of `pid` (default: self) — never self.
+
+        Safe for shutdown paths where the native window must be destroyed
+        (via `page.window.destroy()`) before the interpreter exits; killing
+        self first would orphan the HWND and leave a frozen DWM ghost frame.
+        """
+        try:
+            if pid is None:
+                pid = os.getpid()
+
+            children = psutil.Process(pid).children(recursive=True)
+
+            for child in children:
+                try:
+                    child.kill()
+                except psutil.NoSuchProcess:
+                    pass
+                except psutil.AccessDenied:
+                    logger.warning(f"Access denied killing child process {child.pid}")
+                except Exception as e:
+                    logger.debug(f"Error killing child {child.pid}: {e}")
+        except psutil.NoSuchProcess:
+            pass
+        except (psutil.AccessDenied, OSError) as e:
+            logger.warning(f"Error killing children of {pid}: {e}")
+        except Exception as e:
+            logger.error(f"Unexpected error killing children of {pid}: {e}")
 
     @staticmethod
     def cleanup_orphaned_core(executable_path: str, exclude_pid: Optional[int] = None) -> int:

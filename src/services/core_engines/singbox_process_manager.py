@@ -261,3 +261,50 @@ class SingboxProcessManager:
                 pass
         self.close_log()
         return pid_to_kill
+
+    @staticmethod
+    def kill_all_core_instances() -> None:
+        """Kill every running sing-box core binary and wait for handles to release.
+
+        Used by the installer before replacing the binary (Windows: taskkill /F /T;
+        Unix: pkill -9). Routes through the platform process layer and psutil so
+        no lingering or orphaned processes hold file locks on the binary.
+        """
+        try:
+            import psutil
+
+            from src.platform.constants import XRAY_KILL_GRACE_SECONDS
+
+            adapter = get_process_adapter()
+            flags = adapter.get_subprocess_flags()
+            startupinfo = adapter.get_startupinfo()
+
+            if os.name == "nt":
+                subprocess.run(
+                    ["taskkill", "/F", "/T", "/IM", "sing-box.exe"],
+                    capture_output=True,
+                    timeout=5,
+                    creationflags=flags,
+                    startupinfo=startupinfo,
+                )
+            else:
+                subprocess.run(
+                    ["pkill", "-9", "sing-box"],
+                    capture_output=True,
+                    timeout=5,
+                )
+
+            current_pid = os.getpid()
+            for proc in psutil.process_iter(["pid", "name"]):
+                try:
+                    pname = (proc.info.get("name") or "").lower()
+                    pid = proc.info.get("pid")
+                    if pid != current_pid and ("sing-box.exe" in pname or pname == "sing-box"):
+                        logger.info(f"[SingboxProcessManager] Killing lingering sing-box process {pid}")
+                        proc.kill()
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass
+
+            time.sleep(XRAY_KILL_GRACE_SECONDS)
+        except Exception as e:  # noqa: BLE001 - best-effort kill
+            logger.warning(f"[SingboxProcessManager] Failed to kill sing-box process: {e}")

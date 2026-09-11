@@ -138,12 +138,40 @@ def copy_resources_selective(src, dst, patterns_to_include=None):
     return True
 
 
+def ensure_xray_parser_built():
+    """Ensure xray-parser CLI binary is compiled in bin/ before packaging."""
+    system = platform.system()
+    binary_name = "xray-parser.exe" if system == "Windows" else "xray-parser"
+    bin_target = os.path.join(PROJECT_ROOT, "bin", binary_name)
+    tools_dir = os.path.join(PROJECT_ROOT, "tools", "xray-parser")
+
+    if os.path.exists(bin_target):
+        return
+
+    if shutil.which("go") and os.path.exists(tools_dir):
+        print(f"\nCompiling {binary_name} from {tools_dir}...")
+        os.makedirs(os.path.join(PROJECT_ROOT, "bin"), exist_ok=True)
+        res = subprocess.run(
+            ["go", "build", "-ldflags=-s -w", "-o", bin_target, "."],
+            cwd=tools_dir,
+        )
+        if res.returncode == 0:
+            print(f"Successfully compiled {binary_name}")
+        else:
+            print(f"WARNING: Failed to compile {binary_name}")
+    else:
+        print(f"NOTICE: Go toolchain not found; skipping automatic compilation of {binary_name}")
+
+
 def main():
     current_platform = get_platform()
 
     print("=" * 60)
     print(f"Building XenRay for {current_platform.upper()} with PyInstaller...")
     print("=" * 60)
+
+    # Ensure auxiliary CLI binaries are built before packaging
+    ensure_xray_parser_built()
 
     # Get icon
     icon_option = get_icon_path()

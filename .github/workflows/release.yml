@@ -48,6 +48,19 @@ jobs:
       
       - name: Download Xray, Sing-box, and Wintun binaries
         run: poetry run python scripts/download_binaries.py --arch 64
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'tools/xray-parser/go.mod'
+          cache-dependency-path: 'tools/xray-parser/go.sum'
+
+      - name: Build xray-parser binary
+        run: |
+          New-Item -ItemType Directory -Force -Path "bin"
+          cd tools/xray-parser
+          go build -ldflags="-s -w" -o ../../bin/xray-parser.exe .
+          cd ../..
       
       - name: Download Xray geo files
         run: poetry run python scripts/download_geo_files.py

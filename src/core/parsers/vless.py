@@ -95,6 +95,9 @@ class VlessParser:
         sni = get_param("sni")
         fp = _validate_fingerprint(get_param("fp") or "")
         flow = get_param("flow", "")
+        if flow in ("xtls-rprx-origin", "xtls-rprx-direct"):
+            logger.warning(f"Legacy flow '{flow}' is deprecated in modern Xray-core; converting to xtls-rprx-vision")
+            flow = "xtls-rprx-vision"
         allow_insecure = get_param("allowInsecure", get_param("insecure", "0")) == "1"
 
         outbound: Dict[str, Any] = {
@@ -114,6 +117,9 @@ class VlessParser:
                 "security": security,
             },
         }
+
+        if "vision" in flow:
+            outbound["mux"] = {"enabled": False}
 
         network = get_param("type", outbound["streamSettings"]["network"])
         if network not in VALID_NETWORKS:

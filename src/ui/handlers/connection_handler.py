@@ -15,6 +15,7 @@ from src.core.i18n import t
 from src.core.logger import logger
 from src.core.types import ConnectionMode
 from src.services.monitoring.network_stats import NetworkStatsService
+from src.utils.connection_trace import ConnectionTrace, Trace
 
 
 class ConnectionHandler:
@@ -120,7 +121,8 @@ class ConnectionHandler:
 
         self._set_connecting(True)
         self._show_connecting_ui()
-        threading.Thread(target=lambda: self._perform_connect_task(current_gen), daemon=True).start()
+        trace = ConnectionTrace.start()
+        threading.Thread(target=lambda: self._perform_connect_task(current_gen, trace=trace), daemon=True).start()
 
     def reconnect(self):
         """Fast reconnect for server switching while already connected."""
@@ -263,19 +265,20 @@ class ConnectionHandler:
     # Connection Task (broken into smaller methods)
     # -------------------------------------------------------------------------
 
-    def _perform_connect_task(self, gen=None):
+    def _perform_connect_task(self, gen=None, trace: Trace = None):
         """Core connection logic - runs in background thread.
 
         Args:
             gen: Operation generation captured at connect time. When a newer
                 disconnect/reconnect superseded this worker, the UI-reset paths
                 are skipped so stale frames never clobber the newer action.
+            trace: Optional connection-timing trace (None = no-op).
         """
         if gen is not None and gen != self._generation:
             logger.debug("[ConnectionHandler] Connect task superseded, aborting")
             return
         try:
-            if not self._check_internet(gen):
+            if not self._check_internet(gen, trace=trace):
                 return
 
             profile, mode_str = self._prepare_connection()
@@ -285,30 +288,39 @@ class ConnectionHandler:
             self._start_log_tailing(mode_str)
             config_path = self._write_temp_config(profile)
 
-            if not self._establish_connection(config_path, mode_str, gen):
+            if not self._establish_connection(config_path, mode_str, gen, trace=trace):
                 return
 
             self._set_running_state(True)
 
-            if not self._verify_post_connection():
+            if not self._verify_post_connection(trace=trace):
                 return
 
             self._finalize_connection(profile)
+            if trace:
+                trace.mark("CONNECTED")
+                trace.summary()
 
         except Exception as e:
             logger.error(f"[ConnectionHandler] Connection error: {e}")
             self._handle_connection_failure(gen)
 
-    def _check_internet(self, gen=None) -> bool:
+    def _check_internet(self, gen=None, trace: Trace = None) -> bool:
         """Check internet connectivity before connecting."""
         from src.utils.network_utils import NetworkUtils
 
+        if trace:
+            trace.mark("INTERNET_CHECK_START")
         if not NetworkUtils.check_internet_connection():
             self._set_connecting(False)
             if gen is None or gen == self._generation:
                 self._ui_call(self.reset_ui_disconnected)
             self._show_toast("connection.no_internet")
+            if trace:
+                trace.mark("INTERNET_CHECK_FAIL")
             return False
+        if trace:
+            trace.mark("INTERNET_CHECK_END")
         return True
 
     def _prepare_connection(self) -> tuple:
@@ -366,7 +378,7 @@ class ConnectionHandler:
 
         return config_path
 
-    def _establish_connection(self, config_path: str, mode_str: str, gen=None) -> bool:
+    def _establish_connection(self, config_path: str, mode_str: str, gen=None, trace: Trace = None) -> bool:
         """Establish connection via ConnectionManager."""
 
         def on_step(msg: str):
@@ -375,7 +387,11 @@ class ConnectionHandler:
             if self._connection_button:
                 self._ui_call(lambda: self._connection_button.set_step(msg))
 
-        success = self._connection_manager.connect(config_path, mode_str, step_callback=on_step)
+        if trace:
+            trace.mark("ESTABLISH_START")
+        success = self._connection_manager.connect(config_path, mode_str, step_callback=on_step, trace=trace)
+        if trace:
+            trace.mark("ESTABLISH_END")
 
         if not success:
             self._set_connecting(False)
@@ -385,7 +401,7 @@ class ConnectionHandler:
 
         return success
 
-    def _verify_post_connection(self) -> bool:
+    def _verify_post_connection(self, trace: Trace = None) -> bool:
         """Lightweight post-connection sanity check after fragment warmup (soft).
 
         The connection was already verified by the orchestrator's health check
@@ -396,6 +412,8 @@ class ConnectionHandler:
         """
         from src.utils.network_utils import NetworkUtils
 
+        if trace:
+            trace.mark("POST_VERIFIED_START")
         time.sleep(2.0)  # Allow the tunnel + fragmented/finalmask streams to stabilize
 
         mode = self._current_mode_getter() if self._current_mode_getter else ConnectionMode.PROXY
@@ -405,6 +423,8 @@ class ConnectionHandler:
         # is advisory — the connection stays connected regardless.
         for attempt in range(2):
             if self._post_connection_check(NetworkUtils, mode, proxy_port):
+                if trace:
+                    trace.mark("POST_VERIFIED_END")
                 return True
             if attempt < 1:
                 logger.debug("[ConnectionHandler] Post-connection check transient failure, retrying...")
@@ -416,6 +436,8 @@ class ConnectionHandler:
             "[ConnectionHandler] Post-connection re-check failed but connection kept "
             "(already verified by health check)"
         )
+        if trace:
+            trace.mark("POST_VERIFIED_END")
         return True
 
     @staticmethod

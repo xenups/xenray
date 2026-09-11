@@ -7,6 +7,7 @@ Windows vs POSIX wiring.
 from __future__ import annotations
 
 from src.platform.interfaces import (
+    ICoreAssetAdapter,
     IFirewallAdapter,
     INetworkAdapter,
     IRouteAdapter,
@@ -103,6 +104,21 @@ def get_route_adapter() -> IRouteAdapter:
         return LinuxRouteAdapter()
 
 
+def get_core_asset_adapter() -> ICoreAssetAdapter:
+    if _is_windows():
+        from src.platform.windows.core_assets import WindowsCoreAssetAdapter
+
+        return WindowsCoreAssetAdapter()
+    elif _is_macos():
+        from src.platform.macos.core_assets import MacosCoreAssetAdapter
+
+        return MacosCoreAssetAdapter()
+    else:
+        from src.platform.linux.core_assets import LinuxCoreAssetAdapter
+
+        return LinuxCoreAssetAdapter()
+
+
 __all__ = [
     "get_network_adapter",
     "get_tun_dns_configurator",
@@ -111,4 +127,5 @@ __all__ = [
     "get_process_adapter",
     "get_tun_driver_adapter",
     "get_route_adapter",
+    "get_core_asset_adapter",
 ]

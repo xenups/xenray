@@ -93,3 +93,19 @@ class TestProcessUtils:
         ProcessUtils.kill_process_tree(100)
         mock_child.kill.assert_called_once()
         mock_parent.kill.assert_called_once()
+
+    @patch("psutil.Process")
+    @patch("os.getpid")
+    def test_kill_children_kills_children_not_self(self, mock_getpid, mock_process_cls):
+        """kill_children must terminate child cores but never self —
+        self-kill would orphan the native HWND (frozen DWM ghost frame)."""
+        mock_getpid.return_value = 100
+        mock_parent = MagicMock()
+        mock_child = MagicMock()
+        mock_parent.children.return_value = [mock_child]
+        mock_process_cls.return_value = mock_parent
+
+        ProcessUtils.kill_children()
+
+        mock_child.kill.assert_called_once()
+        mock_parent.kill.assert_not_called()

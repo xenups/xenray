@@ -515,6 +515,37 @@ class SettingsController:
                             default="Failed to update Xray-Core",
                         )
                         self._show_toast(err_msg, "error", page=page)
+                except PermissionError as ex:
+                    logger.error(f"[SettingsController] Permission error updating Xray-Core: {ex}")
+                    self._show_toast(str(ex), "error", page=page)
+                    from src.utils.process_utils import ProcessUtils
+
+                    if not ProcessUtils.is_admin() and page and hasattr(page, "show_dialog"):
+
+                        def close_admin_dlg(e):
+                            try:
+                                page.pop_dialog()
+                            except Exception:
+                                pass
+
+                        def restart_admin(e):
+                            try:
+                                page.pop_dialog()
+                            except Exception:
+                                pass
+                            ProcessUtils.restart_as_admin()
+
+                        admin_dlg = ft.AlertDialog(
+                            modal=True,
+                            title=ft.Text(t("admin.title", default="Administrator Privileges Required")),
+                            content=ft.Text(str(ex)),
+                            actions=[
+                                ft.TextButton(t("admin.cancel", default="Cancel"), on_click=close_admin_dlg),
+                                ft.TextButton(t("admin.restart", default="Restart as Admin"), on_click=restart_admin),
+                            ],
+                            actions_alignment=ft.MainAxisAlignment.END,
+                        )
+                        page.show_dialog(admin_dlg)
                 except Exception as ex:
                     logger.error(f"[SettingsController] Xray-Core installation error: {ex}")
                     err_msg = t(

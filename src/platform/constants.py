@@ -26,6 +26,11 @@ XRAY_GITHUB_RELEASES_API_URL = "https://api.github.com/repos/XTLS/Xray-core/rele
 XRAY_CORE_DOWNLOAD_BASE_URL = "https://github.com/XTLS/Xray-core/releases/download"
 XRAY_CORE_ASSET_EXTENSION = ".zip"
 XRAY_CORE_ZIP_FILENAME = "xray_update.zip"
+
+# --- Sing-box install/update pipeline ---
+SINGBOX_GITHUB_RELEASES_API_URL = "https://api.github.com/repos/SagerNet/sing-box/releases"
+SINGBOX_CORE_DOWNLOAD_BASE_URL = "https://github.com/SagerNet/sing-box/releases/download"
+
 WINTUN_ZIP_FILENAME = "wintun.zip"
 XRAY_DOWNLOAD_CONNECT_TIMEOUT = 15.0  # seconds to establish connection
 XRAY_DOWNLOAD_READ_TIMEOUT = 60.0  # seconds between data chunks (prevents infinite stall)

@@ -62,6 +62,32 @@ def test_extract_core_rolls_back_on_failure(tmp_path, monkeypatch):
     assert not (bin_dir / ("xray.exe" + OLD_SUFFIX)).exists(), ".old backup consumed by rollback"
 
 
+def test_extract_core_backup_rename_failure_aborts_without_replacing(tmp_path, monkeypatch):
+    """A failed backup rename must leave the original binary in place."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    monkeypatch.setattr(ArchiveExtractor, "_kill_active_core", lambda self: None)
+
+    original = bin_dir / "xray.exe"
+    original.write_bytes(b"OLD_BINARY")
+
+    zip_path = tmp_path / "xray_update.zip"
+    _make_zip(zip_path, {"xray.exe": b"NEW_BINARY"})
+
+    real_rename = os.rename
+
+    def _failing_rename(src, dst):
+        if src == str(original) and dst == str(original) + OLD_SUFFIX:
+            raise OSError("locked")
+        return real_rename(src, dst)
+
+    monkeypatch.setattr(os, "rename", _failing_rename)
+
+    assert ArchiveExtractor(str(bin_dir)).extract_core(str(zip_path)) is False
+    assert original.read_bytes() == b"OLD_BINARY"
+    assert not (bin_dir / ("xray.exe" + OLD_SUFFIX)).exists()
+
+
 def test_extract_core_calls_kill_before_replacing(tmp_path, monkeypatch):
     """Active xray processes must be killed before the binary is replaced."""
     bin_dir = tmp_path / "bin"
@@ -174,6 +200,32 @@ class TestSha256Verification:
         with patch("requests.get", return_value=resp):
             assert FileDownloader._fetch_expected_sha256("https://example.com/missing.dgst") is None
 
+    def test_fetch_dgst_malformed_content_returns_non_none(self):
+        """Malformed non-404 sidecar content must not be treated as missing."""
+        from src.services.installer.file_downloader import FileDownloader
+
+        bad_resp = Mock(status_code=200, text="not-a-checksum", raise_for_status=Mock())
+        direct_resp = Mock(status_code=404)
+
+        with patch("requests.get", return_value=bad_resp), patch.object(
+            FileDownloader, "_create_session", return_value=Mock(get=Mock(return_value=direct_resp))
+        ):
+            assert FileDownloader._fetch_expected_sha256("https://example.com/bad.dgst") == ""
+
+    def test_malformed_dgst_rejected(self, tmp_path):
+        """200 OK with HTML/malformed content on .dgst → rejected and deleted."""
+        from src.services.installer.file_downloader import FileDownloader
+
+        zip_path = str(tmp_path / "portal.zip")
+        with open(zip_path, "wb") as f:
+            f.write(b"payload")
+
+        resp = Mock(status_code=200, text="<html><body>Login Required</body></html>", raise_for_status=Mock())
+        fd = FileDownloader.__new__(FileDownloader)
+        with patch("requests.get", return_value=resp):
+            assert not fd._verify_sha256(zip_path, "https://example.com/test.zip")
+        assert not os.path.exists(zip_path)
+
 
 class TestAppUpdateSha256:
     """AppUpdateService SHA-256 verification."""
@@ -225,3 +277,16 @@ class TestAppUpdateSha256:
 
         with patch("requests.get", side_effect=Exception("timeout")):
             assert AppUpdateService._verify_app_sha256(zip_path, "https://example.com/update.zip")
+
+    def test_malformed_dgst_rejected(self, tmp_path):
+        """200 OK with captive portal / malformed .dgst → rejected and deleted."""
+        from src.services.installer.app_update_service import AppUpdateService
+
+        zip_path = str(tmp_path / "portal.zip")
+        with open(zip_path, "wb") as f:
+            f.write(b"payload")
+
+        resp = Mock(status_code=200, text="<html>Proxy Login</html>", raise_for_status=Mock())
+        with patch("requests.get", return_value=resp):
+            assert not AppUpdateService._verify_app_sha256(zip_path, "https://example.com/update.zip")
+        assert not os.path.exists(zip_path)

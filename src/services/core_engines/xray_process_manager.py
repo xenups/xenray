@@ -100,11 +100,13 @@ class XrayProcessManager:
     def kill_all_core_instances() -> None:
         """Kill every running xray core binary and wait for handles to release.
 
-        Used by the installer before replacing the binary (Windows: taskkill /F;
-        Unix: pkill -9). Routes through the platform process layer so no raw
-        kill command strings leak into business logic.
+        Used by the installer before replacing the binary (Windows: taskkill /F /T;
+        Unix: pkill -9). Routes through the platform process layer and psutil so
+        no lingering or orphaned processes hold file locks on the binary.
         """
         try:
+            import psutil
+
             from src.platform.factory import get_process_adapter
 
             adapter = get_process_adapter()
@@ -113,7 +115,7 @@ class XrayProcessManager:
 
             if os.name == "nt":
                 subprocess.run(
-                    ["taskkill", "/F", "/IM", "xray.exe"],
+                    ["taskkill", "/F", "/T", "/IM", "xray.exe"],
                     capture_output=True,
                     timeout=5,
                     creationflags=flags,
@@ -125,6 +127,19 @@ class XrayProcessManager:
                     capture_output=True,
                     timeout=5,
                 )
+
+            # psutil sweep to ensure any matching processes are completely terminated
+            current_pid = os.getpid()
+            for proc in psutil.process_iter(["pid", "name"]):
+                try:
+                    pname = (proc.info.get("name") or "").lower()
+                    pid = proc.info.get("pid")
+                    if pid != current_pid and ("xray.exe" in pname or pname == "xray"):
+                        logger.info(f"[XrayProcessManager] Killing lingering xray process {pid}")
+                        proc.kill()
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    pass
+
             # Give Windows time to release the file handle on the old binary.
             time.sleep(XRAY_KILL_GRACE_SECONDS)
         except Exception as e:  # noqa: BLE001 - best-effort kill

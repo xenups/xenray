@@ -50,10 +50,31 @@ class ConfigPatcher:
 
             applied = self._apply_stream_fallbacks(outbound, domain, default_cipher_suites)
             sockopt_applied = self._apply_sockopt_hardening(outbound)
-            if applied or sockopt_applied:
+            mux_applied = self._apply_mux_hardening(outbound)
+            if applied or sockopt_applied or mux_applied:
                 fallback_count += 1
         if fallback_count > 0:
             logger.info(f"[ConfigPatcher] Applied safe fallbacks/hardening to {fallback_count} outbound(s)")
+
+    def _apply_mux_hardening(self, outbound: dict) -> bool:
+        """Ensure MUX is disabled when Vision flow is active in VLESS.
+
+        xtls-rprx-vision controls flow at the TLS record layer and is incompatible
+        with multiplexing. Setting mux.enabled = False prevents core runtime panics.
+        """
+        if outbound.get("protocol") != "vless":
+            return False
+        settings = outbound.get(CONFIG_SETTINGS, {})
+        for server in settings.get("vnext", []):
+            for user in server.get("users", []):
+                flow = user.get("flow", "")
+                if "vision" in flow:
+                    mux = outbound.setdefault("mux", {})
+                    if mux.get("enabled") is not False:
+                        mux["enabled"] = False
+                        logger.info("[ConfigPatcher] Disabled MUX for VLESS Reality/Vision outbound")
+                        return True
+        return False
 
     def _apply_sockopt_hardening(self, outbound: dict) -> bool:
         """Inject Windows-safe TCP keep-alive settings into streamSettings.sockopt.

@@ -2,6 +2,42 @@
 
 All notable changes to XenRay will be documented in this file.
 
+## [0.3.4] - 2026-09-10
+
+### Added
+- **LibXray Binary Parser CLI Engine** (`tools/xray-parser/` & `LibXrayParserAdapter`):
+  - High-performance Go CLI wrapper around official `libxray` and `xray-core` (v26.9.9) for ultra-fast link parsing and config validation.
+  - Native support for VLESS, VMess, Trojan, Hysteria2, and Shadowsocks share links via stdin/CLI.
+  - Batch parsing mode (`-batch`) for processing multi-line subscription links in a single invocation.
+  - Full Xray JSON config verification (`-test`) using embedded core builder.
+  - Automatic zero-dependency Python fallback adapter (`parse_with_fallback`) with runtime shadow differential testing.
+- **Core Update & Maintenance Architecture** (`src/services/installer/`):
+  - In-app automatic update and installation service for **sing-box** (`SingboxInstallerService`, `SingboxVersionChecker`) alongside **Xray-core**.
+  - `ICoreAssetsAdapter` cross-platform interface (`WindowsCoreAssetsAdapter`, `LinuxCoreAssetsAdapter`, `MacosCoreAssetsAdapter`) to preserve and restore auxiliary geo-assets (`geosite.dat`, `geoip.dat`) during binary upgrades.
+  - Safe atomic replacement with automated backup and rollback on update failure.
+  - Admin elevation prompt dialog in UI when file operations require elevated privileges.
+- **Connection Diagnostics & Tracing**:
+  - Structured connection trace recorder (`src/utils/connection_trace.py`) and trace extraction utility (`scripts/collect_trace.py`).
+
+### Changed
+- **Sing-Box Tunnel Architecture**:
+  - Upgraded default bundled sing-box binary to **v1.14.0**.
+  - Offline-first routing rules using bundled `geosite.dat` and `geoip.dat` databases.
+  - Refined DNS routing logic with sniff+resolve detour rules for private/local IPs.
+- **PyInstaller Build Pipeline**:
+  - Automated compilation of auxiliary Go CLI parser binary during packaging (`ensure_xray_parser_built`).
+  - Strict exclusion of unused heavy modules to minimize memory footprint and bundle size.
+
+### Fixed
+- **Premature Connected State**: Added SOCKS5 handshake verification loop (`_wait_for_tunnel_ready`) in `ConnectionOrchestrator` to ensure tunnel is genuinely ready before transitioning UI to connected.
+- **DNS Routing Loops**: Resolved recursive DNS self-loop in sing-box TUN mode through IP pinning and default interface selection.
+- **Process Cleanup on Exit**: Fixed edge-case dangling core processes during system tray quit and app window close lifecycle events.
+- **Auto-Reconnect State Flapping**: Debounced interface notifications, filtered virtual NIC echoes, and guarded against race conditions during rapid network state transitions.
+
+### Technical
+- Bumped application version to **0.3.4** across `pyproject.toml`, `src/__version__.py`, and all dependent modules.
+- Added comprehensive unit and integration test suites: `test_libxray_parser.py`, `test_core_update_lifecycle.py`, `test_core_update_ui.py`, and `test_xray_modernization.py`.
+
 ## [0.3.1] - 2026-08-19
 
 ### Added

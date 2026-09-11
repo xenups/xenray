@@ -56,7 +56,22 @@ class XrayInstallerService:
         try:
             os.makedirs(BIN_DIR, exist_ok=True)
 
-            # 1. Download Xray Core to temp location first
+            extractor = ArchiveExtractor(
+                bin_dir=BIN_DIR,
+                process_manager=XrayProcessManager(),
+            )
+
+            # 0. Check write permissions before starting download
+            writable, perm_msg = extractor.verify_write_permissions()
+            if not writable:
+                from src.services.installer.archive_extractor import CorePermissionError
+
+                err = perm_msg or "Write access to binary directory denied"
+                if progress_callback:
+                    progress_callback(err)
+                raise CorePermissionError(err)
+
+            # 1. Download Xray Core to staging temp location first
             if progress_callback:
                 progress_callback("Downloading Xray Core...")
             zip_path = FileDownloader().download_xray_core(
@@ -66,7 +81,7 @@ class XrayInstallerService:
             if not zip_path:
                 return False
 
-            # 2. STOP xray service AFTER download, BEFORE extraction
+            # 2. STOP xray service AFTER download, BEFORE file replacement
             if progress_callback:
                 progress_callback("Stopping Xray service...")
             if stop_service_callback:
@@ -75,13 +90,10 @@ class XrayInstallerService:
                 except Exception as e:
                     logger.warning(f"Error stopping service: {e}")
 
-            # 3. Extract (replace files)
+            # 3. Extract and atomically replace files
             if progress_callback:
                 progress_callback("Installing Xray Core...")
-            if not ArchiveExtractor(
-                bin_dir=BIN_DIR,
-                process_manager=XrayProcessManager(),
-            ).extract_core(zip_path):
+            if not extractor.extract_core(zip_path, target_binary_name=os.path.basename(XRAY_EXECUTABLE)):
                 return False
 
             # 4. Ensure platform TUN driver is present (required for VPN/TUN mode)
@@ -90,6 +102,8 @@ class XrayInstallerService:
             if progress_callback:
                 progress_callback("Installation complete!")
             return True
+        except PermissionError:
+            raise
         except Exception as e:
             logger.error(f"Xray install failed: {e}")
             if progress_callback:

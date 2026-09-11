@@ -53,16 +53,65 @@ class InstallerHandler:
 
         def install_task():
             try:
+                success = False
                 if component == "xray":
                     from src.services.installer.xray_installer import XrayInstallerService
 
-                    XrayInstallerService.install(
+                    success = XrayInstallerService.install(
+                        progress_callback=update_status,
+                        stop_service_callback=self._connection_manager.disconnect,
+                    )
+                elif component in ("singbox", "sing-box"):
+                    from src.services.installer.singbox_installer import SingboxInstallerService
+
+                    success = SingboxInstallerService.install(
                         progress_callback=update_status,
                         stop_service_callback=self._connection_manager.disconnect,
                     )
 
                 if self._toast:
-                    self._toast.show(t("status.update_complete", component=component), "success")
+                    if success:
+                        self._toast.show(t("status.update_complete", component=component), "success")
+                    else:
+                        self._toast.show(
+                            t("status.update_failed", default=f"Failed to update {component}"),
+                            "error",
+                        )
+            except PermissionError as pe:
+                err_msg = str(pe)
+                if self._toast:
+                    self._toast.show(err_msg, "error")
+                from src.utils.process_utils import ProcessUtils
+
+                if not ProcessUtils.is_admin() and self._page and self._ui_helper:
+
+                    def _show_admin_prompt():
+                        def close_d(e):
+                            try:
+                                self._page.pop_dialog()
+                            except Exception:
+                                pass
+
+                        def restart_d(e):
+                            try:
+                                self._page.pop_dialog()
+                            except Exception:
+                                pass
+                            ProcessUtils.restart_as_admin()
+
+                        d = ft.AlertDialog(
+                            modal=True,
+                            title=ft.Text(t("admin.title", default="Administrator Privileges Required")),
+                            content=ft.Text(err_msg),
+                            actions=[
+                                ft.TextButton(t("admin.cancel", default="Cancel"), on_click=close_d),
+                                ft.TextButton(t("admin.restart", default="Restart as Admin"), on_click=restart_d),
+                            ],
+                            actions_alignment=ft.MainAxisAlignment.END,
+                        )
+                        self._page.show_dialog(d)
+
+                    self._ui_helper.call(_show_admin_prompt)
             except Exception as e:
                 if self._toast:
                     self._toast.show(t("status.update_error", error=str(e)), "error")
