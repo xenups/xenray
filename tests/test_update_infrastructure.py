@@ -200,6 +200,18 @@ class TestSha256Verification:
         with patch("requests.get", return_value=resp):
             assert FileDownloader._fetch_expected_sha256("https://example.com/missing.dgst") is None
 
+    def test_fetch_dgst_malformed_content_returns_non_none(self):
+        """Malformed non-404 sidecar content must not be treated as missing."""
+        from src.services.installer.file_downloader import FileDownloader
+
+        bad_resp = Mock(status_code=200, text="not-a-checksum", raise_for_status=Mock())
+        direct_resp = Mock(status_code=404)
+
+        with patch("requests.get", return_value=bad_resp), patch.object(
+            FileDownloader, "_create_session", return_value=Mock(get=Mock(return_value=direct_resp))
+        ):
+            assert FileDownloader._fetch_expected_sha256("https://example.com/bad.dgst") == ""
+
 
 class TestAppUpdateSha256:
     """AppUpdateService SHA-256 verification."""
