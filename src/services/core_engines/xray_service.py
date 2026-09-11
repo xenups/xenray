@@ -221,30 +221,48 @@ class XrayService:
 
     def stop(self) -> bool:
         """Stop Xray process."""
-        # Perform guaranteed teardown (process, network DNS/NRPT/SMHR, SNI helper)
-        self._guaranteed_cleanup()
+        with self._cleanup_lock:
+            try:
+                self._stop_sni_spoof_helper()
+            except Exception as e:
+                logger.warning(f"[XrayService] SNI helper cleanup error in stop: {e}")
 
-        # Stop the SNI-spoof helper alongside Xray
-        self._stop_sni_spoof_helper()
+            # Kill the process (memory PID then PID file) and remove the PID file
+            pid_to_kill = self._process_mgr.kill_and_cleanup()
 
-        # Kill the process (memory PID then PID file) and remove the PID file
-        pid_to_kill = self._process_mgr.kill_and_cleanup()
+            try:
+                self._dns_mgr.cleanup()
+            except Exception as e:
+                logger.warning(f"[XrayService] DNS cleanup error in stop: {e}")
 
-        if pid_to_kill is None:
-            logger.debug("[XrayService] No process to stop")
-            return True
+            if pid_to_kill is None:
+                logger.debug("[XrayService] No process to stop")
+                return True
 
-        try:
-            event_bus.publish(EVENT_CORE_PROCESS_STOPPED, {"engine": "xray", "pid": pid_to_kill})
-            return True
-        except Exception as e:
-            logger.error(f"[XrayService] Failed to stop Xray: {e}")
-            return False
+            try:
+                event_bus.publish(EVENT_CORE_PROCESS_STOPPED, {"engine": "xray", "pid": pid_to_kill})
+                return True
+            except Exception as e:
+                logger.error(f"[XrayService] Failed to stop Xray: {e}")
+                return False
 
     @property
     def pid(self) -> Optional[int]:
         """Get process PID if running."""
         return self._process_mgr.pid
+
+    @pid.setter
+    def pid(self, value: Optional[int]) -> None:
+        self._process_mgr._pid = value
+
+    @property
+    def _pid(self) -> Optional[int]:
+        """Backward-compatible alias for self._process_mgr._pid."""
+        return self._process_mgr._pid
+
+    @_pid.setter
+    def _pid(self, value: Optional[int]) -> None:
+        self._process_mgr._pid = value
 
     @property
     def is_running(self) -> bool:
