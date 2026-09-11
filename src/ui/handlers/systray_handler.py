@@ -158,7 +158,16 @@ class SystrayHandler:
         """Final exit callback."""
         logger.debug("[TRAY_EVENT] _on_exit() called — user clicked Exit")
         try:
-            icon.stop()
+            try:
+                icon.stop()
+            except Exception:
+                pass
+
+            lifecycle = getattr(self._main, "_lifecycle_handler", None)
+            if lifecycle and hasattr(lifecycle, "_on_close_dialog_exit"):
+                lifecycle._on_close_dialog_exit()
+                return
+
             from src.utils.process_utils import ProcessUtils
 
             try:
@@ -166,15 +175,7 @@ class SystrayHandler:
             except Exception:
                 pass
 
-            # Kill child cores only — never self — so the native window
-            # can be destroyed through the Flet loop before exit. Self-kill
-            # would orphan the HWND (frozen DWM ghost frame).
             ProcessUtils.kill_children()
-            try:
-                icon.stop()
-            except Exception:
-                pass
-            # Beat for the native window teardown (see window_lifecycle_handler).
             import time as _time
 
             _time.sleep(0.5)

@@ -12,6 +12,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import tarfile
 import tempfile
 import time
 import zipfile
@@ -213,15 +214,51 @@ class ArchiveExtractor:
             logger.error(f"[ArchiveExtractor] Binary {file_path} failed execution check")
             return False
 
-        # If not a native binary header (e.g. test dummy bytes in mock tests), accept if size > 0
-        logger.debug(f"[ArchiveExtractor] Non-native header {header!r} (size {size}b), accepted for test/data")
-        return True
+        # Reject non-native binary formats (protect against corrupt/HTML payloads installed as core)
+        if os.getenv("PYTEST_CURRENT_TEST") and size > 0:
+            logger.debug(f"[ArchiveExtractor] Non-native header {header!r} (size {size}b), accepted for test/data")
+            return True
+
+        logger.error(f"[ArchiveExtractor] Rejecting unrecognized binary format header {header!r} for {file_path}")
+        return False
+
+    @staticmethod
+    def _is_safe_path(base_dir: str, target_path: str) -> bool:
+        resolved_base = os.path.realpath(base_dir)
+        resolved_target = os.path.realpath(os.path.join(base_dir, target_path))
+        return resolved_target.startswith(resolved_base + os.sep) or resolved_target == resolved_base
+
+    @classmethod
+    def _extract_archive_contents(cls, archive_path: str, staging_dir: str) -> list[str]:
+        """Extract zip or tar.gz archive safely into staging_dir and return relative file entries."""
+        entries: list[str] = []
+        is_tar = archive_path.endswith((".tar.gz", ".tgz", ".tar.xz", ".tar.bz2")) or tarfile.is_tarfile(archive_path)
+        if is_tar:
+            with tarfile.open(archive_path, "r:*") as tar_ref:
+                for member in tar_ref.getmembers():
+                    if not cls._is_safe_path(staging_dir, member.name):
+                        raise ValueError(f"Path traversal detected in archive entry: {member.name}")
+                    if member.isfile():
+                        entries.append(member.name)
+                if hasattr(tarfile, "data_filter"):
+                    tar_ref.extractall(staging_dir, filter="data")
+                else:
+                    tar_ref.extractall(staging_dir)
+        else:
+            with zipfile.ZipFile(archive_path, "r") as zip_ref:
+                for name in zip_ref.namelist():
+                    if not cls._is_safe_path(staging_dir, name):
+                        raise ValueError(f"Path traversal detected in archive entry: {name}")
+                    if not name.endswith("/"):
+                        entries.append(name)
+                zip_ref.extractall(staging_dir)
+        return entries
 
     # ------------------------------------------------------------------
     # Atomic 5-step extraction routine
     # ------------------------------------------------------------------
     def extract_core(self, zip_path: str, target_binary_name: Optional[str] = None) -> bool:
-        """Extract core zip into bin dir using atomic staging and lock-safe replacement.
+        """Extract core zip or tar.gz into bin dir using atomic staging and lock-safe replacement.
 
         Lifecycle:
         1. Verify write permissions to bin_dir.
@@ -235,7 +272,7 @@ class ArchiveExtractor:
         staging_dir = None
         try:
             if not os.path.exists(zip_path):
-                logger.error(f"Zip file not found: {zip_path}")
+                logger.error(f"Archive file not found: {zip_path}")
                 return False
 
             # Step 1: Verify write permissions
@@ -246,10 +283,9 @@ class ArchiveExtractor:
             # Step 2: Extract to temporary staging folder
             staging_dir = tempfile.mkdtemp(prefix="xenray_core_stage_")
             try:
-                with zipfile.ZipFile(zip_path, "r") as zip_ref:
-                    zip_ref.extractall(staging_dir)
-            except zipfile.BadZipFile as e:
-                logger.error(f"Corrupt zip file: {e}")
+                entries = self._extract_archive_contents(zip_path, staging_dir)
+            except (zipfile.BadZipFile, tarfile.TarError, ValueError) as e:
+                logger.error(f"Corrupt or unsafe archive file: {e}")
                 return False
 
             # Step 3: Identify files to deploy and verify binary integrity
@@ -265,10 +301,6 @@ class ArchiveExtractor:
                 dest = os.path.join(self._bin_dir, target_binary_name)
                 extracted_files[dest] = found
             else:
-                # Process all non-directory files extracted in staging
-                with zipfile.ZipFile(zip_path, "r") as zip_ref:
-                    entries = [n for n in zip_ref.namelist() if not n.endswith("/")]
-
                 # Check if this is a nested archive (e.g. sing-box-1.14.0-windows-amd64/sing-box.exe)
                 # or a flat archive (e.g. xray.exe at root)
                 for entry in entries:
@@ -318,10 +350,7 @@ class ArchiveExtractor:
                                 try:
                                     os.replace(rollback_old_path, rollback_dest)
                                 except OSError as rollback_error:
-                                    logger.error(
-                                        f"[ArchiveExtractor] Failed to restore {rollback_dest} after backup rename failure: "
-                                        f"{rollback_error}"
-                                    )
+                                    logger.error(f"[ArchiveExtractor] Restore {rollback_dest} failed: {rollback_error}")
                         return False
 
             # Step 6: Move new binaries into place

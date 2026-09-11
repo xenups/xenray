@@ -200,6 +200,20 @@ class TestSha256Verification:
         with patch("requests.get", return_value=resp):
             assert FileDownloader._fetch_expected_sha256("https://example.com/missing.dgst") is None
 
+    def test_malformed_dgst_rejected(self, tmp_path):
+        """200 OK with HTML/malformed content on .dgst → rejected and deleted."""
+        from src.services.installer.file_downloader import FileDownloader
+
+        zip_path = str(tmp_path / "portal.zip")
+        with open(zip_path, "wb") as f:
+            f.write(b"payload")
+
+        resp = Mock(status_code=200, text="<html><body>Login Required</body></html>", raise_for_status=Mock())
+        fd = FileDownloader.__new__(FileDownloader)
+        with patch("requests.get", return_value=resp):
+            assert not fd._verify_sha256(zip_path, "https://example.com/test.zip")
+        assert not os.path.exists(zip_path)
+
 
 class TestAppUpdateSha256:
     """AppUpdateService SHA-256 verification."""
@@ -251,3 +265,16 @@ class TestAppUpdateSha256:
 
         with patch("requests.get", side_effect=Exception("timeout")):
             assert AppUpdateService._verify_app_sha256(zip_path, "https://example.com/update.zip")
+
+    def test_malformed_dgst_rejected(self, tmp_path):
+        """200 OK with captive portal / malformed .dgst → rejected and deleted."""
+        from src.services.installer.app_update_service import AppUpdateService
+
+        zip_path = str(tmp_path / "portal.zip")
+        with open(zip_path, "wb") as f:
+            f.write(b"payload")
+
+        resp = Mock(status_code=200, text="<html>Proxy Login</html>", raise_for_status=Mock())
+        with patch("requests.get", return_value=resp):
+            assert not AppUpdateService._verify_app_sha256(zip_path, "https://example.com/update.zip")
+        assert not os.path.exists(zip_path)

@@ -171,7 +171,7 @@ class SingboxService:
                 trace.mark("SB_WAIT_XRAY_END")
             if trace:
                 trace.mark("SB_WRITE_AND_SPAWN_START")
-            spawn_ok = self._write_config_and_start(config)
+            spawn_ok = self._write_config_and_start(config) if xray_ready else False
             if trace:
                 trace.mark("SB_WRITE_AND_SPAWN_END")
             if not xray_ready or not spawn_ok:

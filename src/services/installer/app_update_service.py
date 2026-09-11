@@ -326,15 +326,25 @@ class AppUpdateService:
             resp.raise_for_status()
             for line in resp.text.splitlines():
                 if line.startswith("SHA2-256="):
-                    expected = line.split("=", 1)[1].strip().lower()
+                    val = line.split("=", 1)[1].strip().lower()
+                    if val and all(c in "0123456789abcdef" for c in val) and len(val) >= 32:
+                        expected = val
                     break
+            else:
+                expected = "MALFORMED"
         except Exception as e:
             logger.warning(f"[AppUpdate] Could not fetch .dgst sidecar: {e}")
             return True  # network hiccup on sidecar — don't block update
 
-        if not expected:
-            logger.info("[AppUpdate] .dgst has no SHA2-256 entry — skipping check")
-            return True
+        if expected == "MALFORMED":
+            logger.error(
+                f"[AppUpdate] Sidecar at {dgst_url} returned malformed content or no valid SHA2-256. Discarding update."
+            )
+            try:
+                os.remove(file_path)
+            except OSError:
+                pass
+            return False
 
         try:
             h = hashlib.sha256()

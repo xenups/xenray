@@ -161,6 +161,14 @@ class FileDownloader:
         """
         dgst_url = download_url + ".dgst"
         expected = FileDownloader._fetch_expected_sha256(dgst_url)
+        if expected == "MALFORMED":
+            logger.error(f"[FileDownloader] Sidecar {dgst_url} returned invalid content. Discarding downloaded file.")
+            try:
+                os.remove(file_path)
+            except OSError:
+                pass
+            return False
+
         if expected is None:
             logger.info(f"[FileDownloader] No .dgst sidecar at {dgst_url} — skipping SHA-256 check")
             return True
@@ -196,16 +204,29 @@ class FileDownloader:
             return None
 
     @staticmethod
+    def _parse_dgst_content(text: str) -> Optional[str]:
+        """Parse .dgst content for SHA2-256 hex string, or return 'MALFORMED' if missing/corrupt."""
+        for line in text.splitlines():
+            if line.startswith("SHA2-256="):
+                val = line.split("=", 1)[1].strip().lower()
+                if val and all(c in "0123456789abcdef" for c in val) and len(val) >= 32:
+                    return val
+                return "MALFORMED"
+        return "MALFORMED"
+
+    @staticmethod
     def _fetch_expected_sha256(dgst_url: str) -> Optional[str]:
-        """Fetch the .dgst sidecar and extract the ``SHA2-256=`` value."""
+        """Fetch the .dgst sidecar and extract the ``SHA2-256=`` value.
+
+        Returns None if sidecar returns 404 (not published).
+        Returns 'MALFORMED' if sidecar returned 200 but contained invalid or non-checksum content.
+        """
         try:
             resp = requests.get(dgst_url, timeout=15)
             if resp.status_code == 404:
                 return None
             resp.raise_for_status()
-            for line in resp.text.splitlines():
-                if line.startswith("SHA2-256="):
-                    return line.split("=", 1)[1].strip().lower()
+            return FileDownloader._parse_dgst_content(resp.text)
         except Exception as e:
             logger.warning(f"[FileDownloader] Could not fetch .dgst via default route: {e}. Trying direct...")
             try:
@@ -214,9 +235,7 @@ class FileDownloader:
                 if resp.status_code == 404:
                     return None
                 resp.raise_for_status()
-                for line in resp.text.splitlines():
-                    if line.startswith("SHA2-256="):
-                        return line.split("=", 1)[1].strip().lower()
+                return FileDownloader._parse_dgst_content(resp.text)
             except Exception as e2:
                 logger.warning(f"[FileDownloader] Direct .dgst fetch also failed: {e2}")
         return None

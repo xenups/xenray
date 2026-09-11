@@ -53,23 +53,30 @@ class InstallerHandler:
 
         def install_task():
             try:
+                success = False
                 if component == "xray":
                     from src.services.installer.xray_installer import XrayInstallerService
 
-                    XrayInstallerService.install(
+                    success = XrayInstallerService.install(
                         progress_callback=update_status,
                         stop_service_callback=self._connection_manager.disconnect,
                     )
                 elif component in ("singbox", "sing-box"):
                     from src.services.installer.singbox_installer import SingboxInstallerService
 
-                    SingboxInstallerService.install(
+                    success = SingboxInstallerService.install(
                         progress_callback=update_status,
                         stop_service_callback=self._connection_manager.disconnect,
                     )
 
                 if self._toast:
-                    self._toast.show(t("status.update_complete", component=component), "success")
+                    if success:
+                        self._toast.show(t("status.update_complete", component=component), "success")
+                    else:
+                        self._toast.show(
+                            t("status.update_failed", default=f"Failed to update {component}"),
+                            "error",
+                        )
             except PermissionError as pe:
                 err_msg = str(pe)
                 if self._toast:
