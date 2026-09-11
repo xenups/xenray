@@ -156,7 +156,7 @@ class LibXrayParserAdapter:
                 diffs.append(f"network: {b_stream.get('network')} != {p_stream.get('network')}")
 
             if diffs:
-                logger.info(f"[LibXrayParserAdapter] Shadow test diff for {link[:30]}...: {', '.join(diffs)}")
+logger.info(f"[LibXrayParserAdapter] Shadow test diff: {', '.join(diffs)}")
         except Exception as err:
             logger.debug(f"[LibXrayParserAdapter] Shadow test comparison error: {err}")
 
