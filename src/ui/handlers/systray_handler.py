@@ -113,6 +113,15 @@ class SystrayHandler:
         ]
         return pystray.Menu(*menu_items)
 
+    def notify(self, message: str) -> None:
+        """Show a desktop/tray notification balloon (fail-soft)."""
+        if not self._icon:
+            return
+        try:
+            self._icon.notify(message, "XenRay")
+        except Exception as e:
+            logger.warning(f"[SysTrayHandler] Tray notification failed: {e}")
+
     def update_state(self):
         """Update the menu and title when connection state changes."""
         if not self._icon:

@@ -18,4 +18,6 @@ def get_server_object(settings: dict) -> Optional[dict]:
         return settings["vnext"][0]
     elif "servers" in settings and settings["servers"]:
         return settings["servers"][0]
+    elif "address" in settings:
+        return settings
     return None

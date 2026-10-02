@@ -118,7 +118,7 @@ class ReconnectEventHandler:
             self._ui_call(lambda: self._status_display.set_step(t("connection.checking_network")))
 
     def _handle_connectivity_restored(self, data: dict):
-        """Handle connectivity_restored event from ActiveConnectivityMonitor."""
+        """Handle connectivity_restored event (core self-healed, no reconnect needed)."""
         logger.info("[ReconnectEventHandler] Handling connectivity_restored - updating UI to Connected")
 
         # Update state
@@ -139,7 +139,15 @@ class ReconnectEventHandler:
         if self._toast:
             self._ui_call(lambda: self._toast.success(t("connection.reconnected"), 3000))
         if self._systray:
-            self._systray.update_state()
+            try:
+                self._systray.update_state()
+                # Desktop/tray notification — never let a notification failure
+                # corrupt the state machine (defensive per contract).
+                notify = getattr(self._systray, "notify", None)
+                if notify is not None:
+                    notify(t("connection.reconnected"))
+            except Exception as e:
+                logger.warning(f"[ReconnectEventHandler] Tray notification failed: {e}")
 
     def _handle_reconnecting(self, data: dict):
         """Handle reconnecting event."""

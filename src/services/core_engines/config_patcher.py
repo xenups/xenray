@@ -105,6 +105,18 @@ class ConfigPatcher:
         if security in (SECURITY_TLS, SECURITY_REALITY) and security != SECURITY_NONE:
             field = TLS_SETTINGS if security == SECURITY_TLS else REALITY_SETTINGS
             sec_settings = stream_settings.setdefault(field, {})
+            # Sanitize legacy shortIds -> shortId for outbound client REALITY config
+            if field == REALITY_SETTINGS and "shortIds" in sec_settings:
+                legacy_sids = sec_settings.pop("shortIds")
+                if not sec_settings.get("shortId"):
+                    if isinstance(legacy_sids, list) and legacy_sids:
+                        sec_settings["shortId"] = str(legacy_sids[0]).strip()
+                    elif isinstance(legacy_sids, str) and legacy_sids:
+                        sec_settings["shortId"] = legacy_sids.split(",")[0].strip()
+                logger.info(
+                    f"[ConfigPatcher] Sanitized realitySettings.shortIds -> shortId: {sec_settings.get('shortId', '')}"
+                )
+                applied = True
             if not sec_settings.get(STREAM_SERVER_NAME):
                 if not is_ip(domain):
                     sec_settings[STREAM_SERVER_NAME] = domain

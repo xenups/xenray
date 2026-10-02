@@ -32,10 +32,11 @@ class UpdateCard(ft.Container):
     def __init__(self, on_check_update_click: Callable):
         self._on_check_update_click = on_check_update_click
 
-        ver_display = f"v{APP_VERSION}" if not str(APP_VERSION).startswith("v") else APP_VERSION
+        raw_ver = str(APP_VERSION).lstrip("v")
+        ver_display = f"v{raw_ver}"
 
         self._version_text = ft.Text(
-            t("settings.version", default=ver_display, version=ver_display),
+            t("settings.version", default=ver_display, version=raw_ver),
             size=12,
             color=AppColors.ON_SURFACE_VARIANT,
         )
@@ -177,8 +178,9 @@ class UpdateCard(ft.Container):
 
     def update_labels(self) -> None:
         """Update localized UI text labels dynamically."""
-        ver_display = f"v{APP_VERSION}" if not str(APP_VERSION).startswith("v") else APP_VERSION
-        self._version_text.value = t("settings.version", default=ver_display, version=ver_display)
+        raw_ver = str(APP_VERSION).lstrip("v")
+        ver_display = f"v{raw_ver}"
+        self._version_text.value = t("settings.version", default=ver_display, version=raw_ver)
         if not getattr(self._update_btn, "disabled", False):
             self._btn_text.value = t("settings.check_updates", default="Check for Updates")
         else:

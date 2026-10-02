@@ -7,6 +7,8 @@ from typing import Callable, Optional
 
 from loguru import logger
 
+from src.services.monitoring.signals import MonitorSignal
+
 
 class AutoReconnectService:
     """
@@ -49,6 +51,7 @@ class AutoReconnectService:
         connect_fn: Callable[[str, str, Optional[dict]], bool],
         event_emitter: Callable[[str, dict], None],
         internet_check: Optional[Callable[[Optional[dict]], bool]] = None,
+        signal_emitter: Optional[Callable[[MonitorSignal, Optional[dict]], None]] = None,
     ):
         """
         Initialize AutoReconnectService.
@@ -70,6 +73,7 @@ class AutoReconnectService:
         self._connect_fn = connect_fn
         self._event_emitter = event_emitter
         self._internet_check = internet_check
+        self._signal_emitter = signal_emitter
         self._lock = threading.RLock()
 
         # Session-scoped cancellation
@@ -334,8 +338,14 @@ class AutoReconnectService:
                     return False
                 if self._check_core_recovered(file_path):
                     logger.info("[AutoReconnectService] Core recovered, connection is healthy - no reconnect needed")
-                    # Connection is already working - no event needed
-                    # UI stays on current "connected" state
+                    # The core healed itself before a reconnect was needed.  The
+                    # UI was already told "failure detected" (transient state),
+                    # so it MUST be told the connection is live again — otherwise
+                    # it stays frozen in the checking/verifying state while the
+                    # tunnel actually works.  ACTIVE_RESTORED is the typed
+                    # recovery signal (ConnectionManager maps it to the
+                    # connectivity_restored user event).
+                    self._emit_signal_safe(MonitorSignal.ACTIVE_RESTORED, session_id)
                     return True
 
         # CHECKPOINT 6: Attempt reconnect
@@ -437,6 +447,23 @@ class AutoReconnectService:
             self._schedule_retry(current_connection, session_id)
 
         return success
+
+    def _emit_signal_safe(self, signal: MonitorSignal, session_id: int, data: dict = None) -> bool:
+        """Emit a typed monitor signal only if the session is still valid.
+
+        The signal flows through ConnectionManager._handle_signal (the single
+        signal→event conversion point), which maps it to the corresponding
+        user-visible event.  Emitting a typed enum here (instead of a raw
+        string event) keeps the signal/event contract enum-driven.
+        """
+        if not self._validate_session(session_id, f"emit_signal_{signal.name}"):
+            return False
+        if self._signal_emitter:
+            try:
+                self._signal_emitter(signal, data or {})
+            except Exception as e:
+                logger.error(f"[AutoReconnectService] Error emitting signal: {e}")
+        return True
 
     def _emit_safe(self, event_type: str, session_id: int, data: dict = None) -> bool:
         """

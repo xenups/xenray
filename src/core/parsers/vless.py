@@ -178,13 +178,21 @@ class VlessParser:
             if not sni:
                 raise ValueError("Reality configuration missing required 'sni' parameter")
 
+            # Outbound REALITY client requires single string "shortId".
+            # "shortIds" is an inbound-only field; passing it to outbound causes Xray-core to fail with:
+            # 'non-empty "shortIds", please use "shortId" instead'
+            sid = sid_raw.split(",")[0].strip() if sid_raw else ""
             reality_settings: Dict[str, Any] = {
                 "show": False,
                 "serverName": sni,
                 "publicKey": pbk,
-                "shortIds": _maybe_split("sid", sid_raw) if sid_raw else [""],
+                "shortId": sid,
                 "fingerprint": fp or DEFAULT_FINGERPRINT,
             }
+            pqv = get_param("pqv")
+            if pqv:
+                reality_settings["mldsa65Verify"] = pqv
+
             spx = get_param("spx")
             if spx:
                 reality_settings["spiderX"] = spx
@@ -365,15 +373,22 @@ class VlessParser:
         elif security == "reality":
             reality = stream.get("realitySettings", {})
             params.append(f"sni={reality.get('serverName', '')}")
-            params.append(f"pbk={reality.get('publicKey', '')}")
-            sid_list = reality.get("shortIds", [])
-            params.append(f"sid={','.join(sid_list) if isinstance(sid_list, list) else sid_list}")
+            params.append(f"pbk={reality.get('publicKey', '') or reality.get('password', '')}")
+            sid = reality.get("shortId")
+            if not sid:
+                sid_list = reality.get("shortIds", [])
+                sid = ",".join(sid_list) if isinstance(sid_list, list) else str(sid_list)
+            if sid:
+                params.append(f"sid={sid}")
             if reality.get("fingerprint"):
                 params.append(f"fp={reality.get('fingerprint')}")
             if reality.get("spiderX"):
                 params.append(f"spx={reality.get('spiderX')}")
             if reality.get("cipherSuites"):
                 params.append(f"cs={reality['cipherSuites']}")
+            pqv = reality.get("mldsa65Verify") or reality.get("pqv", "")
+            if pqv:
+                params.append(f"pqv={pqv}")
 
         finalmask = stream.get("finalmask", {})
         flat_fm = _expand_fm_to_params(finalmask)
