@@ -44,11 +44,12 @@ def test_header_branding_version_label():
 
 def test_ui_components_render_active_versions():
     """Verify WindowTitleBar, UpdateCard, and SettingsHandler render current versions in UI."""
-    from src.ui.components.common.window_title_bar import WindowTitleBar
-    from src.ui.components.settings.update_card import UpdateCard
-    from src.ui.components.settings.sections.updates_section import UpdatesSection
-    from src.ui.handlers.settings_handler import SettingsHandler
     from unittest.mock import MagicMock, patch
+
+    from src.ui.components.common.window_title_bar import WindowTitleBar
+    from src.ui.components.settings.sections.updates_section import UpdatesSection
+    from src.ui.components.settings.update_card import UpdateCard
+    from src.ui.handlers.settings_handler import SettingsHandler
 
     # 1. WindowTitleBar
     bar = WindowTitleBar(lambda: None, lambda: None)
@@ -79,4 +80,3 @@ def test_ui_components_render_active_versions():
     with patch("src.services.installer.xray_installer.XrayInstallerService.get_local_version", return_value="26.9.30"):
         handler = SettingsHandler.__new__(SettingsHandler)
         assert handler.get_xray_version() == "Xray: v26.9.30"
-
