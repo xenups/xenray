@@ -760,3 +760,55 @@ class TestPhase8NetworkResilienceEdgeCases:
         assert (
             watcher._last_physical_state == watcher._NETWORK_DOWN
         ), "When ALL adapters are gone, watcher state must be _NETWORK_DOWN"
+
+
+class TestEarlyRecoveryEmitsRestoredSignal:
+    """Route A: core heals itself before reconnect -> typed ACTIVE_RESTORED signal."""
+
+    def test_early_recovery_emits_typed_signal(self):
+        """When _check_core_recovered() returns True, emit MonitorSignal.ACTIVE_RESTORED."""
+        from src.services.monitoring.auto_reconnect_service import AutoReconnectService
+        from src.services.monitoring.signals import MonitorSignal
+
+        emitted_signals = []
+        service = AutoReconnectService(
+            network_validator=MagicMock(),
+            config_loader=MagicMock(return_value=({"outbounds": []}, None)),
+            connection_tester=MagicMock(),
+            connect_fn=MagicMock(return_value=False),
+            event_emitter=MagicMock(),
+            signal_emitter=lambda sig, data: emitted_signals.append((sig, data)),
+        )
+        service.start_session(7)
+        # Force the early-recovery path: internet ok + core recovered
+        service._internet_check = lambda conn: True
+        service._check_core_recovered = lambda file_path: True
+
+        result = service.handle_failure({"file": "test.json", "mode": "vpn"}, session_id=7)
+
+        assert result is True
+        assert len(emitted_signals) == 1
+        sig, _ = emitted_signals[0]
+        assert sig == MonitorSignal.ACTIVE_RESTORED
+
+    def test_early_recovery_no_reconnect_call(self):
+        """Early recovery must NOT invoke connect_fn (no redundant reconnect)."""
+        from src.services.monitoring.auto_reconnect_service import AutoReconnectService
+
+        connect_fn = MagicMock(return_value=False)
+        service = AutoReconnectService(
+            network_validator=MagicMock(),
+            config_loader=MagicMock(return_value=({"outbounds": []}, None)),
+            connection_tester=MagicMock(),
+            connect_fn=connect_fn,
+            event_emitter=MagicMock(),
+            signal_emitter=MagicMock(),
+        )
+        service.start_session(7)
+        service._internet_check = lambda conn: True
+        service._check_core_recovered = lambda file_path: True
+
+        result = service.handle_failure({"file": "test.json", "mode": "vpn"}, session_id=7)
+
+        assert result is True
+        connect_fn.assert_not_called()

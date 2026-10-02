@@ -357,10 +357,32 @@ class TestParseVLESS:
         result = LinkParser.parse_link(link)
         rs = result["config"]["outbounds"][0]["streamSettings"]["realitySettings"]
         assert rs["publicKey"] == "publickey"
-        assert rs["shortIds"] == ["s1", "s2"]
+        assert rs["shortId"] == "s1"
         assert rs["fingerprint"] == "chrome"
         assert rs["serverName"] == "target.com"
         assert rs["spiderX"] == "spider"
+
+    def test_reality_post_quantum(self):
+        link = (
+            "vless://a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d@mock-pq-node.example.org:443"
+            "?security=reality&pbk=mock_public_key_base64_reality_test_only&sid=abcdef0123456789&fp=chrome&sni=pq.example.com"
+            "&spx=/mockspider&type=xhttp&mode=auto&path=/mockstream"
+            "&pqv=mock_post_quantum_verify_token_dsa65"
+            "&encryption=mlkem768x25519plus.native.0rtt.mockpayload123#PQReality"
+        )
+        result = LinkParser.parse_link(link)
+        ob = result["config"]["outbounds"][0]
+        user = ob["settings"]["vnext"][0]["users"][0]
+        rs = ob["streamSettings"]["realitySettings"]
+        xs = ob["streamSettings"]["xhttpSettings"]
+
+        assert user["encryption"] == "mlkem768x25519plus.native.0rtt.mockpayload123"
+        assert rs["shortId"] == "abcdef0123456789"
+        assert rs["mldsa65Verify"] == "mock_post_quantum_verify_token_dsa65"
+        assert rs["publicKey"] == "mock_public_key_base64_reality_test_only"
+        assert rs["spiderX"] == "/mockspider"
+        assert xs["mode"] == "auto"
+        assert xs["path"] == "/mockstream"
 
     def test_reality_missing_pbk(self):
         with pytest.raises(ValueError, match="pbk"):
@@ -1118,7 +1140,7 @@ class TestRoundTrip:
         link = "vless://uuid@host:443?security=reality&pbk=pub&sid=s1,s2&fp=chrome&sni=target.com#RTReal"
         _, ob2, _ = self._rt(link)
         rs = ob2["streamSettings"]["realitySettings"]
-        assert rs["shortIds"] == ["s1", "s2"]
+        assert rs["shortId"] == "s1"
         assert rs["publicKey"] == "pub"
 
     def test_finalmask(self):

@@ -289,6 +289,8 @@ class XrayConfigProcessor:
                 entry = next((s for s in servers["vnext"] if s.get(CONFIG_ADDRESS)), None)
             elif "servers" in servers:
                 entry = next((s for s in servers["servers"] if s.get(CONFIG_ADDRESS)), None)
+            elif CONFIG_ADDRESS in servers:
+                entry = servers
             if entry is None:
                 continue
             entry[CONFIG_ADDRESS] = "127.0.0.1"
@@ -320,8 +322,12 @@ class XrayConfigProcessor:
             servers = outbound.get(CONFIG_SETTINGS, {})
             if "vnext" in servers:
                 servers_list = servers["vnext"]
-            else:
+            elif "servers" in servers:
                 servers_list = servers.get("servers", [])
+            elif CONFIG_ADDRESS in servers:
+                servers_list = [servers]
+            else:
+                servers_list = []
             entry = next((s for s in servers_list if s.get(CONFIG_ADDRESS)), None)
             if entry is None:
                 continue
@@ -359,6 +365,10 @@ class XrayConfigProcessor:
                         addr = server.get(CONFIG_ADDRESS, "")
                         if addr:
                             addresses.append(addr)
+                elif CONFIG_ADDRESS in settings:
+                    addr = settings.get(CONFIG_ADDRESS, "")
+                    if addr:
+                        addresses.append(addr)
         return list(set(addresses))
 
     def is_quic_transport(self, config: dict) -> bool:

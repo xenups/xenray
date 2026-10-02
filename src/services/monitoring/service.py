@@ -83,6 +83,7 @@ class ConnectionMonitoringService:
             connection_tester=ConnectionTester,
             connect_fn=on_reconnect,
             event_emitter=on_reconnect_event,
+            signal_emitter=on_signal,
             internet_check=self._mode_aware_internet_check,
         )
 

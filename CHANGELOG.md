@@ -2,6 +2,17 @@
 
 All notable changes to XenRay will be documented in this file.
 
+## [0.3.6] - 2026-10-02
+
+### Changed
+- **Core Engine Upgrade**: Upgraded default bundled Xray-core binary to **v26.9.30**.
+- **Version Bump**: Bumped application version to **0.3.6**.
+
+### Fixed
+- **REALITY Outbound Config Schema**: Fixed fatal crash on startup (`non-empty "shortIds", please use "shortId" instead`) by ensuring client outbound `realitySettings` strictly uses singular `"shortId"`.
+- **Post-Quantum REALITY & Verification Support**: Added parsing and mapping of `pqv` into `mldsa65Verify` (ML-DSA-65) and full support for Post-Quantum KEM cipher suites (`mlkem768x25519plus`).
+- **Defensive Outbound Sanitization**: Automatically sanitize legacy or third-party imported `shortIds` arrays into `shortId` before dispatching configs to Xray-core.
+
 ## [0.3.5] - 2026-09-11
 
 ### Changed
