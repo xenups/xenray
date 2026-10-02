@@ -365,7 +365,8 @@ class TestParseVLESS:
     def test_reality_post_quantum(self):
         link = (
             "vless://a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d@mock-pq-node.example.org:443"
-            "?security=reality&pbk=mock_public_key_base64_reality_test_only&sid=abcdef0123456789&fp=chrome&sni=pq.example.com"
+            "?security=reality&pbk=mock_public_key_base64_reality_test_only"
+            "&sid=abcdef0123456789&fp=chrome&sni=pq.example.com"
             "&spx=/mockspider&type=xhttp&mode=auto&path=/mockstream"
             "&pqv=mock_post_quantum_verify_token_dsa65"
             "&encryption=mlkem768x25519plus.native.0rtt.mockpayload123#PQReality"

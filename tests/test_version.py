@@ -44,7 +44,7 @@ def test_header_branding_version_label():
 
 def test_ui_components_render_active_versions():
     """Verify WindowTitleBar, UpdateCard, and SettingsHandler render current versions in UI."""
-    from unittest.mock import MagicMock, patch
+    from unittest.mock import patch
 
     from src.ui.components.common.window_title_bar import WindowTitleBar
     from src.ui.components.settings.sections.updates_section import UpdatesSection
