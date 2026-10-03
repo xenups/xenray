@@ -143,7 +143,7 @@ class LibXrayParserAdapter:
             fm_raw = get_p("fm")
             if fm_raw and not stream.get("finalmask"):
                 try:
-                    fm_obj = json.loads(urllib.parse.unquote(fm_raw))
+                    fm_obj = json.loads(fm_raw)
                     if isinstance(fm_obj, dict):
                         stream["finalmask"] = fm_obj
                 except Exception:
@@ -160,9 +160,9 @@ class LibXrayParserAdapter:
                 if host and not xhttp.get("host"):
                     xhttp["host"] = host
                 extra_raw = get_p("extra")
-                if extra_raw:
+                if extra_raw and not xhttp.get("extra"):
                     try:
-                        extra_obj = json.loads(urllib.parse.unquote(extra_raw))
+                        extra_obj = json.loads(extra_raw)
                         if isinstance(extra_obj, dict):
                             xhttp["extra"] = extra_obj
                     except Exception:

@@ -244,7 +244,10 @@ class VlessParser:
             extra_raw = get_param("extra")
             if extra_raw:
                 try:
-                    extra_json = json.loads(urllib.parse.unquote(extra_raw))
+                    try:
+                        extra_json = json.loads(extra_raw)
+                    except json.JSONDecodeError:
+                        extra_json = json.loads(urllib.parse.unquote(extra_raw))
                     if isinstance(extra_json, dict):
                         xhttp_settings["extra"] = extra_json
                         logger.info(f"[XHTTP] Applied extra JSON: {list(extra_json.keys())}")

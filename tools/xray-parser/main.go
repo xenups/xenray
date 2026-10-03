@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bufio"
+	"encoding/base64"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -130,14 +132,22 @@ func main() {
 	}
 
 	if batchMode {
+		rawLinks := extractBatchLinks(link)
+		candidateLinks := make([]parsedSourceLink, 0, len(rawLinks))
+		for _, l := range rawLinks {
+			candidateLinks = append(candidateLinks, extractLinkMeta(l))
+		}
+		usedLinks := make([]bool, len(candidateLinks))
+
 		items := make([]BatchItem, 0, len(doc.Outbounds))
 		for i, ob := range doc.Outbounds {
 			name := fmt.Sprintf("Node %d", i+1)
-			var probe OutboundTagProbe
-			if err := json.Unmarshal(ob, &probe); err == nil && probe.Tag != "" {
-				name = probe.Tag
+			meta := extractOutboundMeta(ob)
+			if meta.tag != "" {
+				name = meta.tag
 			}
-			processedOb := postProcessOutbound(ob, link)
+			matchedLink := findMatchingLink(meta, candidateLinks, usedLinks, i)
+			processedOb := postProcessOutbound(ob, matchedLink)
 			items = append(items, BatchItem{
 				Name:     name,
 				Outbound: processedOb,
@@ -153,7 +163,13 @@ func main() {
 		return
 	}
 
-	firstOutbound := postProcessOutbound(doc.Outbounds[0], link)
+	singleLink := link
+	if strings.Contains(link, "\n") || !strings.Contains(link, "://") {
+		if sLinks := extractBatchLinks(link); len(sLinks) > 0 {
+			singleLink = sLinks[0]
+		}
+	}
+	firstOutbound := postProcessOutbound(doc.Outbounds[0], singleLink)
 	name := "Proxy Server"
 	var tagProbe OutboundTagProbe
 	if err := json.Unmarshal(firstOutbound, &tagProbe); err == nil && tagProbe.Tag != "" {
@@ -171,6 +187,9 @@ func main() {
 }
 
 func postProcessOutbound(rawOb json.RawMessage, linkStr string) json.RawMessage {
+	if strings.TrimSpace(linkStr) == "" {
+		return rawOb
+	}
 	u, err := url.Parse(linkStr)
 	if err != nil {
 		return rawOb
@@ -285,3 +304,217 @@ func outputError(code, message string, exitCode int, batchMode bool) {
 	}
 	os.Exit(exitCode)
 }
+
+type parsedSourceLink struct {
+	raw     string
+	tag     string
+	address string
+	port    int
+}
+
+type outboundMeta struct {
+	tag     string
+	address string
+	port    int
+}
+
+func extractBatchLinks(raw string) []string {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return nil
+	}
+
+	// Handle base64 encoded batch or subscription payload
+	if !strings.Contains(trimmed, "://") {
+		b64Clean := strings.ReplaceAll(trimmed, "\r", "")
+		b64Clean = strings.ReplaceAll(b64Clean, "\n", "")
+		b64Clean = strings.ReplaceAll(b64Clean, " ", "")
+		for _, enc := range []*base64.Encoding{
+			base64.StdEncoding,
+			base64.RawStdEncoding,
+			base64.URLEncoding,
+			base64.RawURLEncoding,
+		} {
+			if dec, err := enc.DecodeString(b64Clean); err == nil && len(dec) > 0 {
+				decStr := string(dec)
+				if strings.Contains(decStr, "://") {
+					trimmed = decStr
+					break
+				}
+			}
+		}
+	}
+
+	var lines []string
+	scanner := bufio.NewScanner(strings.NewReader(trimmed))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line != "" && strings.Contains(line, "://") {
+			lines = append(lines, line)
+		}
+	}
+	return lines
+}
+
+func extractLinkMeta(linkStr string) parsedSourceLink {
+	lm := parsedSourceLink{raw: linkStr}
+	if strings.HasPrefix(linkStr, "vmess://") {
+		b64Payload := strings.TrimPrefix(linkStr, "vmess://")
+		b64Payload = strings.TrimSpace(b64Payload)
+		for _, enc := range []*base64.Encoding{
+			base64.StdEncoding,
+			base64.RawStdEncoding,
+			base64.URLEncoding,
+			base64.RawURLEncoding,
+		} {
+			if dec, err := enc.DecodeString(b64Payload); err == nil {
+				var vmessMap map[string]any
+				if err := json.Unmarshal(dec, &vmessMap); err == nil {
+					if ps, ok := vmessMap["ps"].(string); ok {
+						lm.tag = strings.TrimSpace(ps)
+					}
+					if add, ok := vmessMap["add"].(string); ok {
+						lm.address = strings.TrimSpace(add)
+					}
+					if pVal, ok := vmessMap["port"]; ok {
+						switch v := pVal.(type) {
+						case float64:
+							lm.port = int(v)
+						case string:
+							fmt.Sscanf(v, "%d", &lm.port)
+						}
+					}
+					return lm
+				}
+			}
+		}
+		return lm
+	}
+
+	u, err := url.Parse(linkStr)
+	if err != nil {
+		return lm
+	}
+
+	if u.Fragment != "" {
+		frag := u.Fragment
+		if unquoted, err := url.QueryUnescape(frag); err == nil && unquoted != "" {
+			frag = unquoted
+		}
+		lm.tag = strings.TrimSpace(frag)
+	}
+
+	lm.address = strings.TrimSpace(u.Hostname())
+	if pStr := u.Port(); pStr != "" {
+		fmt.Sscanf(pStr, "%d", &lm.port)
+	}
+
+	return lm
+}
+
+func extractOutboundMeta(raw json.RawMessage) outboundMeta {
+	var meta outboundMeta
+	var obj map[string]any
+	if err := json.Unmarshal(raw, &obj); err != nil {
+		return meta
+	}
+
+	if tag, ok := obj["tag"].(string); ok {
+		meta.tag = strings.TrimSpace(tag)
+	}
+
+	settings, _ := obj["settings"].(map[string]any)
+	if settings == nil {
+		return meta
+	}
+
+	if vnext, ok := settings["vnext"].([]any); ok && len(vnext) > 0 {
+		if first, ok := vnext[0].(map[string]any); ok {
+			if addr, ok := first["address"].(string); ok {
+				meta.address = strings.TrimSpace(addr)
+			}
+			if p, ok := first["port"].(float64); ok {
+				meta.port = int(p)
+			}
+		}
+	} else if servers, ok := settings["servers"].([]any); ok && len(servers) > 0 {
+		if first, ok := servers[0].(map[string]any); ok {
+			if addr, ok := first["address"].(string); ok {
+				meta.address = strings.TrimSpace(addr)
+			}
+			if p, ok := first["port"].(float64); ok {
+				meta.port = int(p)
+			}
+		}
+	}
+
+	return meta
+}
+
+func findMatchingLink(meta outboundMeta, candidateLinks []parsedSourceLink, used []bool, idx int) string {
+	if len(candidateLinks) == 0 {
+		return ""
+	}
+
+	// 1. Exact match on tag + address
+	if meta.tag != "" && meta.address != "" {
+		for i, cand := range candidateLinks {
+			if !used[i] && cand.tag != "" && strings.EqualFold(meta.tag, cand.tag) && strings.EqualFold(meta.address, cand.address) {
+				used[i] = true
+				return cand.raw
+			}
+		}
+	}
+
+	// 2. Match on tag
+	if meta.tag != "" {
+		for i, cand := range candidateLinks {
+			if !used[i] && cand.tag != "" && strings.EqualFold(meta.tag, cand.tag) {
+				used[i] = true
+				return cand.raw
+			}
+		}
+	}
+
+	// 3. Match on address and port
+	if meta.address != "" && meta.port != 0 {
+		for i, cand := range candidateLinks {
+			if !used[i] && strings.EqualFold(meta.address, cand.address) && meta.port == cand.port {
+				used[i] = true
+				return cand.raw
+			}
+		}
+	}
+
+	// 4. Match on address
+	if meta.address != "" {
+		for i, cand := range candidateLinks {
+			if !used[i] && strings.EqualFold(meta.address, cand.address) {
+				used[i] = true
+				return cand.raw
+			}
+		}
+	}
+
+	// 5. Index-based match if available and not used
+	if idx < len(candidateLinks) && !used[idx] {
+		used[idx] = true
+		return candidateLinks[idx].raw
+	}
+
+	// 6. First unused candidate
+	for i, cand := range candidateLinks {
+		if !used[i] {
+			used[i] = true
+			return cand.raw
+		}
+	}
+
+	// 7. Fallback to candidate by index
+	if idx < len(candidateLinks) {
+		return candidateLinks[idx].raw
+	}
+
+	return ""
+}
+

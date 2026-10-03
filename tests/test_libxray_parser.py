@@ -184,15 +184,78 @@ def test_adapter_parse_fp_unsafe_and_cipher_suites():
         "&cs=TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"
         "&type=xhttp&mode=auto&path=/test"
         "&extra=%7B%22noSSEHeader%22%3Atrue%2C%22downloadProxy%22%3Atrue%7D"
+        "&fm=%7B%22tcp%22%3A%5B%7B%22type%22%3A%22fragment%22%2C"
+        "%22settings%22%3A%7B%22packets%22%3A%22tlshello%22%2C%22lengths%22%3A%5B%22100-200%22%5D%2C"
+        "%22delays%22%3A%5B%2210-20%22%5D%7D%7D%5D%7D"
         "#UnsafeNode"
     )
     res = LibXrayParserAdapter.parse(mock_link)
     ob = res["config"]["outbounds"][0]
     tls = ob["streamSettings"]["tlsSettings"]
     xhttp = ob["streamSettings"]["xhttpSettings"]
+    finalmask = ob["streamSettings"]["finalmask"]
 
     assert tls["fingerprint"] == "unsafe"
     assert tls["cipherSuites"] == "TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"
     assert xhttp["mode"] == "auto"
     assert xhttp["extra"]["noSSEHeader"] is True
     assert xhttp["extra"]["downloadProxy"] is True
+    assert finalmask["tcp"][0]["type"] == "fragment"
+    assert finalmask["tcp"][0]["settings"]["packets"] == "tlshello"
+
+
+def test_adapter_parse_batch_distinct_parameters():
+    """Verify batch parsing isolates per-node advanced parameters without cross-contamination."""
+    if not LibXrayParserAdapter.is_available():
+        pytest.skip("xray-parser binary not built yet")
+
+    link_one = (
+        "vless://00000000-0000-0000-0000-000000000001@first.example.com:443"
+        "?security=tls&fp=unsafe&cs=TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"
+        "&type=xhttp&extra=%7B%22custom%22%3A%22one%22%7D"
+        "#NodeOne"
+    )
+    link_two = (
+        "vless://00000000-0000-0000-0000-000000000002@second.example.com:443" "?security=tls&fp=chrome" "#NodeTwo"
+    )
+
+    batch_payload = f"{link_one}\n{link_two}"
+    items = LibXrayParserAdapter.parse_batch(batch_payload)
+    assert len(items) == 2
+
+    # Verify NodeOne
+    ob1 = items[0]["outbound"]
+    tls1 = ob1.get("streamSettings", {}).get("tlsSettings", {})
+    xhttp1 = ob1.get("streamSettings", {}).get("xhttpSettings", {})
+    assert tls1.get("fingerprint") == "unsafe"
+    assert tls1.get("cipherSuites") == "TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"
+    assert xhttp1.get("extra", {}).get("custom") == "one"
+
+    # Verify NodeTwo does NOT inherit NodeOne settings
+    ob2 = items[1]["outbound"]
+    tls2 = ob2.get("streamSettings", {}).get("tlsSettings", {})
+    xhttp2 = ob2.get("streamSettings", {}).get("xhttpSettings", {})
+    assert tls2.get("fingerprint") == "chrome"
+    assert "cipherSuites" not in tls2 or not tls2.get("cipherSuites")
+    assert not xhttp2.get("extra")
+
+
+def test_adapter_augment_preserves_encoded_percent_in_json():
+    """Verify _augment_outbound_from_link does not double-decode percent escapes in extra JSON."""
+    raw_link = (
+        "vless://00000000-0000-0000-0000-000000000001@example.com:443"
+        "?security=tls&type=xhttp"
+        "&extra=%7B%22path%22%3A%22%252Fapi%22%7D"
+        "#TestPercent"
+    )
+    ob = {
+        "protocol": "vless",
+        "streamSettings": {
+            "security": "tls",
+            "network": "xhttp",
+        },
+    }
+    LibXrayParserAdapter._augment_outbound_from_link(ob, raw_link)
+    extra = ob.get("streamSettings", {}).get("xhttpSettings", {}).get("extra", {})
+    # Must preserve %2F literally without double-decoding into /
+    assert extra.get("path") == "%2Fapi"
