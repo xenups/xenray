@@ -458,6 +458,11 @@ func extractBatchLinks(raw string) []string {
 
 	var lines []string
 	scanner := bufio.NewScanner(strings.NewReader(trimmed))
+	maxBuf := len(trimmed) + 1024
+	if maxBuf < 64*1024 {
+		maxBuf = 64 * 1024
+	}
+	scanner.Buffer(make([]byte, 64*1024), maxBuf)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line != "" && strings.Contains(line, "://") {
@@ -508,11 +513,7 @@ func extractLinkMeta(linkStr string) parsedSourceLink {
 	}
 
 	if u.Fragment != "" {
-		frag := u.Fragment
-		if unquoted, err := url.QueryUnescape(frag); err == nil && unquoted != "" {
-			frag = unquoted
-		}
-		lm.tag = strings.TrimSpace(frag)
+		lm.tag = strings.TrimSpace(u.Fragment)
 	}
 
 	lm.address = strings.TrimSpace(u.Hostname())
