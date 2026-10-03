@@ -4,5 +4,5 @@ from __future__ import annotations
 
 import os
 
-__version__ = os.getenv("APP_VERSION", "0.3.6")
+__version__ = os.getenv("APP_VERSION", "0.3.7")
 APP_VERSION = __version__

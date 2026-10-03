@@ -57,11 +57,11 @@ def test_ui_components_render_active_versions():
     row = bar.content.content.controls[0]
     ver_text = row.controls[2].content.value
     assert ver_text == f"v{ROOT_APP_VERSION}"
-    assert ver_text == "v0.3.6"
+    assert ver_text == "v0.3.7"
 
     # 2. UpdateCard
     card = UpdateCard(lambda: None)
-    assert card._version_text.value == "v0.3.6"
+    assert card._version_text.value == "v0.3.7"
     assert not card._version_text.value.startswith("vv")
 
     # 3. UpdatesSection about row
@@ -74,7 +74,7 @@ def test_ui_components_render_active_versions():
     col = section.content.content
     about_row = col.controls[5]
     about_text = about_row.content.controls[2].value
-    assert "v0.3.6 by Xenups" in about_text
+    assert "v0.3.7 by Xenups" in about_text
 
     # 4. SettingsHandler Xray version footer
     with patch("src.services.installer.xray_installer.XrayInstallerService.get_local_version", return_value="26.9.30"):
