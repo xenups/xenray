@@ -11,7 +11,7 @@ from typing import Any, Callable, Dict, Optional, Tuple
 from loguru import logger
 
 from src.core.constants import USE_LIBXRAY_PARSER, XRAY_PARSER_EXECUTABLE
-from src.core.parsers.base import build_minimal_config
+from src.core.parsers.base import _nest_xhttp_extra, _route_fm_params, _route_xhttp_params, build_minimal_config
 
 
 class LibXrayParserAdapter:
@@ -91,8 +91,117 @@ class LibXrayParserAdapter:
         if not outbound:
             raise ValueError("No outbound configuration returned by xray-parser")
 
+        # Augment outbound with any advanced link parameters that libxray drops
+        cls._augment_outbound_from_link(outbound, link)
+
         config = build_minimal_config(outbound)
         return {"name": name, "config": config, "outbound": outbound}
+
+    @staticmethod
+    def _augment_outbound_from_link(outbound: Dict[str, Any], link: str) -> None:
+        """
+        Augment binary-parsed outbound with advanced link parameters that libxray
+        silently drops or corrupts (e.g. cipherSuites/cs, fp=unsafe, finalmask, xhttp extra, pqv).
+        """
+        try:
+            import urllib.parse
+
+            parsed_url = urllib.parse.urlparse(link)
+            query_params = urllib.parse.parse_qs(parsed_url.query)
+
+            def get_p(key: str, default: str = "") -> str:
+                vals = query_params.get(key, [])
+                return vals[0] if vals else default
+
+            stream = outbound.setdefault("streamSettings", {})
+            security = stream.get("security", "")
+
+            # 1. TLS / REALITY: cipherSuites & fingerprint & pqv
+            cs = get_p("cs") or get_p("cipherSuites")
+            fp = get_p("fp")
+            if security == "tls":
+                tls_settings = stream.setdefault("tlsSettings", {})
+                if cs and not tls_settings.get("cipherSuites"):
+                    tls_settings["cipherSuites"] = cs
+                if fp and not tls_settings.get("fingerprint"):
+                    tls_settings["fingerprint"] = fp
+            elif security == "reality":
+                reality_settings = stream.setdefault("realitySettings", {})
+                if cs and not reality_settings.get("cipherSuites"):
+                    reality_settings["cipherSuites"] = cs
+                if fp and not reality_settings.get("fingerprint"):
+                    reality_settings["fingerprint"] = fp
+                pqv = get_p("pqv")
+                if pqv and not reality_settings.get("mldsa65Verify"):
+                    reality_settings["mldsa65Verify"] = pqv
+                if "shortIds" in reality_settings:
+                    sids = reality_settings.pop("shortIds")
+                    if not reality_settings.get("shortId") and sids:
+                        reality_settings["shortId"] = sids[0] if isinstance(sids, list) else str(sids).split(",")[0]
+
+            flat_params = {k: v[0] for k, v in query_params.items() if v}
+
+            # 2. Finalmask (JSON fm= or flat fm_* params)
+            finalmask = stream.get("finalmask")
+            if not isinstance(finalmask, dict):
+                finalmask = {}
+            fm_raw = get_p("fm")
+            if fm_raw:
+                try:
+                    fm_obj = json.loads(fm_raw)
+                    if isinstance(fm_obj, dict):
+                        finalmask.update(fm_obj)
+                except Exception:
+                    pass
+            flat_fm = _route_fm_params(flat_params)
+            if flat_fm:
+                for k, v in flat_fm.items():
+                    if k not in finalmask:
+                        finalmask[k] = v
+            if finalmask:
+                stream["finalmask"] = finalmask
+
+            # 3. xHTTP extra, mode & direct parameters
+            network = stream.get("network", "")
+            if network in ("xhttp", "splithttp"):
+                xhttp = stream.setdefault("xhttpSettings", {})
+                mode = get_p("mode")
+                if mode and not xhttp.get("mode"):
+                    xhttp["mode"] = mode
+                host = get_p("host")
+                if host and not xhttp.get("host"):
+                    xhttp["host"] = host
+                path = get_p("path")
+                if path and not xhttp.get("path"):
+                    xhttp["path"] = path
+
+                # Collect direct xHTTP parameters (e.g. noSSEHeader, downloadProxy, xmux, etc.)
+                routed_xhttp = _route_xhttp_params(flat_params)
+                _nest_xhttp_extra(routed_xhttp)
+
+                xhttp_extra = xhttp.get("extra")
+                if not isinstance(xhttp_extra, dict):
+                    xhttp_extra = {}
+
+                if "extra" in routed_xhttp and isinstance(routed_xhttp["extra"], dict):
+                    for k, v in routed_xhttp["extra"].items():
+                        if k not in xhttp_extra:
+                            xhttp_extra[k] = v
+
+                extra_raw = get_p("extra")
+                if extra_raw:
+                    try:
+                        extra_obj = json.loads(extra_raw)
+                        if isinstance(extra_obj, dict):
+                            for k, v in extra_obj.items():
+                                xhttp_extra[k] = v
+                    except Exception:
+                        pass
+
+                if xhttp_extra:
+                    xhttp["extra"] = xhttp_extra
+        except Exception as e:
+            logger.warning(f"[LibXrayParserAdapter] Failed to augment outbound from link: {e}")
 
     @classmethod
     def parse_with_fallback(

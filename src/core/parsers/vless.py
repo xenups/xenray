@@ -209,7 +209,10 @@ class VlessParser:
         fm_json_raw = get_param("fm")
         if fm_json_raw:
             try:
-                fm_json = json.loads(urllib.parse.unquote(fm_json_raw))
+                try:
+                    fm_json = json.loads(fm_json_raw)
+                except json.JSONDecodeError:
+                    fm_json = json.loads(urllib.parse.unquote(fm_json_raw))
                 if isinstance(fm_json, dict):
                     for key in ("tcp", "udp", "quicParams"):
                         if key in fm_json:
@@ -244,7 +247,10 @@ class VlessParser:
             extra_raw = get_param("extra")
             if extra_raw:
                 try:
-                    extra_json = json.loads(urllib.parse.unquote(extra_raw))
+                    try:
+                        extra_json = json.loads(extra_raw)
+                    except json.JSONDecodeError:
+                        extra_json = json.loads(urllib.parse.unquote(extra_raw))
                     if isinstance(extra_json, dict):
                         xhttp_settings["extra"] = extra_json
                         logger.info(f"[XHTTP] Applied extra JSON: {list(extra_json.keys())}")

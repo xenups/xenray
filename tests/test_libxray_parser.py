@@ -171,3 +171,197 @@ def test_adapter_validate_config():
     is_valid_bad, err_bad = LibXrayParserAdapter.validate_config(invalid_cfg)
     assert is_valid_bad is False
     assert err_bad is not None
+
+
+def test_adapter_parse_fp_unsafe_and_cipher_suites():
+    """Verify libXray adapter preserves fp=unsafe, cipherSuites, finalmask, and xhttp extra."""
+    if not LibXrayParserAdapter.is_available():
+        pytest.skip("xray-parser binary not built yet")
+
+    mock_link = (
+        "vless://00000000-0000-0000-0000-000000000001@example.com:443"
+        "?security=tls&alpn=h2&fp=unsafe"
+        "&cs=TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"
+        "&type=xhttp&mode=auto&path=/test"
+        "&extra=%7B%22noSSEHeader%22%3Atrue%2C%22downloadProxy%22%3Atrue%7D"
+        "&fm=%7B%22tcp%22%3A%5B%7B%22type%22%3A%22fragment%22%2C"
+        "%22settings%22%3A%7B%22packets%22%3A%22tlshello%22%2C%22lengths%22%3A%5B%22100-200%22%5D%2C"
+        "%22delays%22%3A%5B%2210-20%22%5D%7D%7D%5D%7D"
+        "#UnsafeNode"
+    )
+    res = LibXrayParserAdapter.parse(mock_link)
+    ob = res["config"]["outbounds"][0]
+    tls = ob["streamSettings"]["tlsSettings"]
+    xhttp = ob["streamSettings"]["xhttpSettings"]
+    finalmask = ob["streamSettings"]["finalmask"]
+
+    assert tls["fingerprint"] == "unsafe"
+    assert tls["cipherSuites"] == "TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"
+    assert xhttp["mode"] == "auto"
+    assert xhttp["extra"]["noSSEHeader"] is True
+    assert xhttp["extra"]["downloadProxy"] is True
+    assert finalmask["tcp"][0]["type"] == "fragment"
+    assert finalmask["tcp"][0]["settings"]["packets"] == "tlshello"
+
+
+def test_adapter_parse_batch_distinct_parameters():
+    """Verify batch parsing isolates per-node advanced parameters without cross-contamination."""
+    if not LibXrayParserAdapter.is_available():
+        pytest.skip("xray-parser binary not built yet")
+
+    link_one = (
+        "vless://00000000-0000-0000-0000-000000000001@first.example.com:443"
+        "?security=tls&fp=unsafe&cs=TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"
+        "&type=xhttp&extra=%7B%22custom%22%3A%22one%22%7D"
+        "#NodeOne"
+    )
+    link_two = (
+        "vless://00000000-0000-0000-0000-000000000002@second.example.com:443" "?security=tls&fp=chrome" "#NodeTwo"
+    )
+
+    batch_payload = f"{link_one}\n{link_two}"
+    items = LibXrayParserAdapter.parse_batch(batch_payload)
+    assert len(items) == 2
+
+    # Verify NodeOne
+    ob1 = items[0]["outbound"]
+    tls1 = ob1.get("streamSettings", {}).get("tlsSettings", {})
+    xhttp1 = ob1.get("streamSettings", {}).get("xhttpSettings", {})
+    assert tls1.get("fingerprint") == "unsafe"
+    assert tls1.get("cipherSuites") == "TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"
+    assert xhttp1.get("extra", {}).get("custom") == "one"
+
+    # Verify NodeTwo does NOT inherit NodeOne settings
+    ob2 = items[1]["outbound"]
+    tls2 = ob2.get("streamSettings", {}).get("tlsSettings", {})
+    xhttp2 = ob2.get("streamSettings", {}).get("xhttpSettings", {})
+    assert tls2.get("fingerprint") == "chrome"
+    assert "cipherSuites" not in tls2 or not tls2.get("cipherSuites")
+    assert not xhttp2.get("extra")
+
+
+def test_adapter_augment_preserves_encoded_percent_in_json():
+    """Verify _augment_outbound_from_link does not double-decode percent escapes in extra JSON."""
+    raw_link = (
+        "vless://00000000-0000-0000-0000-000000000001@example.com:443"
+        "?security=tls&type=xhttp"
+        "&extra=%7B%22path%22%3A%22%252Fapi%22%7D"
+        "#TestPercent"
+    )
+    ob = {
+        "protocol": "vless",
+        "streamSettings": {
+            "security": "tls",
+            "network": "xhttp",
+        },
+    }
+    LibXrayParserAdapter._augment_outbound_from_link(ob, raw_link)
+    extra = ob.get("streamSettings", {}).get("xhttpSettings", {}).get("extra", {})
+    # Must preserve %2F literally without double-decoding into /
+    assert extra.get("path") == "%2Fapi"
+
+
+def test_adapter_parse_direct_xhttp_extra_parameters():
+    """Verify direct query parameters for xHTTP are collected and nested under extra with xmux."""
+    if not LibXrayParserAdapter.is_available():
+        pytest.skip("xray-parser binary not built yet")
+
+    link = (
+        "vless://00000000-0000-0000-0000-000000000001@example.com:443"
+        "?security=tls&type=xhttp&mode=auto"
+        "&noSSEHeader=true&downloadProxy=true&xPaddingBytes=100-200"
+        "&xmuxMaxConcurrency=16&xmuxMaxConnections=4"
+        "#DirectXHTTP"
+    )
+    res = LibXrayParserAdapter.parse(link)
+    xhttp = res["config"]["outbounds"][0]["streamSettings"]["xhttpSettings"]
+    extra = xhttp.get("extra", {})
+
+    assert extra.get("noSSEHeader") is True
+    assert extra.get("downloadProxy") is True
+    assert extra.get("xPaddingBytes") == "100-200"
+    xmux = extra.get("xmux", {})
+    assert xmux.get("maxConcurrency") == 16
+    assert xmux.get("maxConnections") == 4
+
+
+def test_adapter_parse_flat_finalmask_parameters():
+    """Verify flat fm_tcp_* parameters are routed and preserved in binary parser output."""
+    if not LibXrayParserAdapter.is_available():
+        pytest.skip("xray-parser binary not built yet")
+
+    link = (
+        "vless://00000000-0000-0000-0000-000000000001@example.com:443"
+        "?security=tls"
+        "&fm_tcp_type=fragment&fm_tcp_packets=tlshello&fm_tcp_lengths=100-200&fm_tcp_delays=10-20"
+        "#FlatFM"
+    )
+    res = LibXrayParserAdapter.parse(link)
+    stream = res["config"]["outbounds"][0]["streamSettings"]
+    finalmask = stream.get("finalmask", {})
+
+    assert "tcp" in finalmask
+    assert len(finalmask["tcp"]) == 1
+    tcp_mask = finalmask["tcp"][0]
+    assert tcp_mask["type"] == "fragment"
+    assert tcp_mask["settings"]["packets"] == "tlshello"
+
+
+def test_python_parser_validation_with_xray_core():
+    """Verify configs generated purely by Python parsers are 100% valid in Xray-core engine."""
+    if not LibXrayParserAdapter.is_available():
+        pytest.skip("xray-parser binary not built yet")
+
+    from src.core.parsers.vless import VlessParser
+
+    test_link = (
+        "vless://00000000-0000-0000-0000-000000000001@example.com:443"
+        "?security=tls&alpn=h2&fp=unsafe"
+        "&cs=TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"
+        "&type=xhttp&mode=auto&path=/test"
+        "&extra=%7B%22noSSEHeader%22%3Atrue%2C%22downloadProxy%22%3Atrue%7D"
+        "&fm=%7B%22tcp%22%3A%5B%7B%22type%22%3A%22fragment%22%2C"
+        "%22settings%22%3A%7B%22packets%22%3A%22tlshello%22%2C%22lengths%22%3A%5B%22100-200%22%5D%2C"
+        "%22delays%22%3A%5B%2210-20%22%5D%7D%7D%5D%7D"
+        "#PythonVerifiedNode"
+    )
+
+    py_res = VlessParser.parse(test_link)
+    cfg_to_validate = {
+        "log": {"loglevel": "warning"},
+        "inbounds": [],
+        "outbounds": py_res["config"]["outbounds"],
+    }
+    is_valid, err = LibXrayParserAdapter.validate_config(cfg_to_validate)
+    assert is_valid is True, f"Python parser output failed Xray validation: {err}"
+
+
+def test_xhttp_without_extra_params_does_not_inject_empty_extra():
+    """Verify xHTTP links without extra parameters do not have extra: {} injected."""
+    if not LibXrayParserAdapter.is_available():
+        pytest.skip("xray-parser binary not built yet")
+
+    link = "vless://00000000-0000-0000-0000-000000000001@example.com:443?security=tls&type=xhttp#NoExtra"
+    res = LibXrayParserAdapter.parse(link)
+    xhttp = res["config"]["outbounds"][0]["streamSettings"]["xhttpSettings"]
+    assert "extra" not in xhttp or not xhttp["extra"]
+
+
+def test_xmux_numeric_values_not_coerced_to_booleans():
+    """Verify numeric xmux and sc values like 1 and 0 remain integers, not coerced to booleans."""
+    if not LibXrayParserAdapter.is_available():
+        pytest.skip("xray-parser binary not built yet")
+
+    link = (
+        "vless://00000000-0000-0000-0000-000000000001@example.com:443"
+        "?security=tls&type=xhttp&xmuxMaxConnections=1&scMaxBufferedPosts=0#NumericTest"
+    )
+    res = LibXrayParserAdapter.parse(link)
+    xhttp = res["config"]["outbounds"][0]["streamSettings"]["xhttpSettings"]
+    extra = xhttp.get("extra", {})
+    xmux = extra.get("xmux", {})
+
+    assert xmux.get("maxConnections") == 1
+    assert type(xmux.get("maxConnections")) is int
+    assert extra.get("scMaxBufferedPosts") == 0
+    assert type(extra.get("scMaxBufferedPosts")) is int
