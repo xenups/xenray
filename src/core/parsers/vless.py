@@ -209,7 +209,10 @@ class VlessParser:
         fm_json_raw = get_param("fm")
         if fm_json_raw:
             try:
-                fm_json = json.loads(urllib.parse.unquote(fm_json_raw))
+                try:
+                    fm_json = json.loads(fm_json_raw)
+                except json.JSONDecodeError:
+                    fm_json = json.loads(urllib.parse.unquote(fm_json_raw))
                 if isinstance(fm_json, dict):
                     for key in ("tcp", "udp", "quicParams"):
                         if key in fm_json:

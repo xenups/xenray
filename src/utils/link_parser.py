@@ -33,7 +33,6 @@ from src.core.parsers.base import (
     _validate_fingerprint,
     build_minimal_config,
 )
-from src.core.parsers.binary_parser_adapter import LibXrayParserAdapter
 from src.core.parsers.hysteria2 import Hysteria2Parser
 from src.core.parsers.trojan import TrojanParser
 from src.core.parsers.vless import VlessParser
@@ -51,11 +50,11 @@ class LinkParser:
 
         link = link.strip()
         if link.startswith("vless://"):
-            return LibXrayParserAdapter.parse_with_fallback(link, fallback_func=VlessParser.parse, shadow_test=True)
+            return VlessParser.parse(link)
         elif link.startswith("hysteria2://"):
             return Hysteria2Parser.parse(link)
         elif link.startswith("vmess://"):
-            return LibXrayParserAdapter.parse_with_fallback(link, fallback_func=VmessParser.parse, shadow_test=True)
+            return VmessParser.parse(link)
         elif link.startswith("trojan://"):
             return TrojanParser.parse(link)
         else:
@@ -64,12 +63,12 @@ class LinkParser:
     @staticmethod
     def parse_vless(link: str) -> Dict[str, Any]:
         """Parse VLESS link into Xray configuration."""
-        return LibXrayParserAdapter.parse_with_fallback(link, fallback_func=VlessParser.parse)
+        return VlessParser.parse(link)
 
     @staticmethod
     def parse_vmess(link: str) -> Dict[str, Any]:
         """Parse VMess link into Xray configuration."""
-        return LibXrayParserAdapter.parse_with_fallback(link, fallback_func=VmessParser.parse)
+        return VmessParser.parse(link)
 
     @staticmethod
     def parse_trojan(link: str) -> Dict[str, Any]:

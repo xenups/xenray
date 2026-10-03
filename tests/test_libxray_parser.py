@@ -305,3 +305,27 @@ def test_adapter_parse_flat_finalmask_parameters():
     tcp_mask = finalmask["tcp"][0]
     assert tcp_mask["type"] == "fragment"
     assert tcp_mask["settings"]["packets"] == "tlshello"
+
+
+def test_python_parser_validation_with_xray_core():
+    """Verify configs generated purely by Python parsers are 100% valid in Xray-core engine."""
+    if not LibXrayParserAdapter.is_available():
+        pytest.skip("xray-parser binary not built yet")
+
+    from src.core.parsers.vless import VlessParser
+
+    test_link = (
+        "vless://00000000-0000-0000-0000-000000000001@example.com:443"
+        "?security=tls&alpn=h2&fp=unsafe"
+        "&cs=TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"
+        "&type=xhttp&mode=auto&path=/test"
+        "&extra=%7B%22noSSEHeader%22%3Atrue%2C%22downloadProxy%22%3Atrue%7D"
+        "&fm=%7B%22tcp%22%3A%5B%7B%22type%22%3A%22fragment%22%2C"
+        "%22settings%22%3A%7B%22packets%22%3A%22tlshello%22%2C%22lengths%22%3A%5B%22100-200%22%5D%2C"
+        "%22delays%22%3A%5B%2210-20%22%5D%7D%7D%5D%7D"
+        "#PythonVerifiedNode"
+    )
+
+    py_res = VlessParser.parse(test_link)
+    is_valid, err = LibXrayParserAdapter.validate_config(py_res["config"])
+    assert is_valid is True, f"Python parser output failed Xray validation: {err}"
