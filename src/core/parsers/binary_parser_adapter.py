@@ -11,7 +11,7 @@ from typing import Any, Callable, Dict, Optional, Tuple
 from loguru import logger
 
 from src.core.constants import USE_LIBXRAY_PARSER, XRAY_PARSER_EXECUTABLE
-from src.core.parsers.base import build_minimal_config
+from src.core.parsers.base import _nest_xhttp_extra, _route_fm_params, _route_xhttp_params, build_minimal_config
 
 
 class LibXrayParserAdapter:
@@ -139,17 +139,29 @@ class LibXrayParserAdapter:
                     if not reality_settings.get("shortId") and sids:
                         reality_settings["shortId"] = sids[0] if isinstance(sids, list) else str(sids).split(",")[0]
 
-            # 2. Finalmask
+            flat_params = {k: v[0] for k, v in query_params.items() if v}
+
+            # 2. Finalmask (JSON fm= or flat fm_* params)
+            finalmask = stream.get("finalmask")
+            if not isinstance(finalmask, dict):
+                finalmask = {}
             fm_raw = get_p("fm")
-            if fm_raw and not stream.get("finalmask"):
+            if fm_raw:
                 try:
                     fm_obj = json.loads(fm_raw)
                     if isinstance(fm_obj, dict):
-                        stream["finalmask"] = fm_obj
+                        finalmask.update(fm_obj)
                 except Exception:
                     pass
+            flat_fm = _route_fm_params(flat_params)
+            if flat_fm:
+                for k, v in flat_fm.items():
+                    if k not in finalmask:
+                        finalmask[k] = v
+            if finalmask:
+                stream["finalmask"] = finalmask
 
-            # 3. xHTTP extra & mode
+            # 3. xHTTP extra, mode & direct parameters
             network = stream.get("network", "")
             if network in ("xhttp", "splithttp"):
                 xhttp = stream.setdefault("xhttpSettings", {})
@@ -159,12 +171,27 @@ class LibXrayParserAdapter:
                 host = get_p("host")
                 if host and not xhttp.get("host"):
                     xhttp["host"] = host
+                path = get_p("path")
+                if path and not xhttp.get("path"):
+                    xhttp["path"] = path
+
+                # Collect direct xHTTP parameters (e.g. noSSEHeader, downloadProxy, xmux, etc.)
+                routed_xhttp = _route_xhttp_params(flat_params)
+                _nest_xhttp_extra(routed_xhttp)
+
+                xhttp_extra = xhttp.setdefault("extra", {})
+                if "extra" in routed_xhttp and isinstance(routed_xhttp["extra"], dict):
+                    for k, v in routed_xhttp["extra"].items():
+                        if k not in xhttp_extra:
+                            xhttp_extra[k] = v
+
                 extra_raw = get_p("extra")
-                if extra_raw and not xhttp.get("extra"):
+                if extra_raw:
                     try:
                         extra_obj = json.loads(extra_raw)
                         if isinstance(extra_obj, dict):
-                            xhttp["extra"] = extra_obj
+                            for k, v in extra_obj.items():
+                                xhttp_extra[k] = v
                     except Exception:
                         pass
         except Exception as e:

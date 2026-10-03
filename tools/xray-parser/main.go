@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 
 	xlog "github.com/xtls/xray-core/common/log"
@@ -263,19 +264,129 @@ func postProcessOutbound(rawOb json.RawMessage, linkStr string) json.RawMessage 
 		if host := q.Get("host"); host != "" {
 			xhttpSettings["host"] = host
 		}
-		if extraRaw := q.Get("extra"); extraRaw != "" {
-			var extraMap map[string]any
-			if err := json.Unmarshal([]byte(extraRaw), &extraMap); err == nil && len(extraMap) > 0 {
-				xhttpSettings["extra"] = extraMap
+		if path := q.Get("path"); path != "" && xhttpSettings["path"] == nil {
+			xhttpSettings["path"] = path
+		}
+
+		extraMap, _ := xhttpSettings["extra"].(map[string]any)
+		if extraMap == nil {
+			extraMap = make(map[string]any)
+		}
+
+		xmuxMap, _ := extraMap["xmux"].(map[string]any)
+		if xmuxMap == nil {
+			xmuxMap = make(map[string]any)
+		}
+
+		xmuxFieldMap := map[string]string{
+			"xmuxMaxConcurrency":  "maxConcurrency",
+			"xmuxMaxConnections":  "maxConnections",
+			"xmuxCMaxReuseTimes":  "cMaxReuseTimes",
+			"xmuxHMaxReusableSecs": "hMaxReusableSecs",
+			"xmuxHMaxRequestTimes": "hMaxRequestTimes",
+		}
+		for qKey, xmuxKey := range xmuxFieldMap {
+			if val := q.Get(qKey); val != "" {
+				xmuxMap[xmuxKey] = castValue(val)
 			}
+		}
+
+		directExtraKeys := []string{
+			"noSSEHeader",
+			"downloadProxy",
+			"uplinkHTTPMethod",
+			"downlinkHTTPMethod",
+			"xPaddingBytes",
+			"scMaxEachGetBytes",
+			"scMaxEachPostBytes",
+			"scMinPostsIntervalMs",
+			"scStreamUpServerSecs",
+			"scMaxBufferedPosts",
+			"scMaxConcurrentPosts",
+		}
+		for _, key := range directExtraKeys {
+			if val := q.Get(key); val != "" {
+				extraMap[key] = castValue(val)
+			}
+		}
+
+		suffixCamelMap := map[string]string{
+			"no_sse":                   "noSSEHeader",
+			"download_proxy":           "downloadProxy",
+			"uplink_http_method":       "uplinkHTTPMethod",
+			"downlink_http_method":     "downlinkHTTPMethod",
+			"x_padding_bytes":          "xPaddingBytes",
+			"sc_max_each_get_bytes":    "scMaxEachGetBytes",
+			"sc_max_each_post_bytes":   "scMaxEachPostBytes",
+			"sc_min_posts_interval_ms": "scMinPostsIntervalMs",
+			"sc_stream_up_server_secs": "scStreamUpServerSecs",
+			"sc_max_buffered_posts":    "scMaxBufferedPosts",
+			"sc_max_concurrent_posts":  "scMaxConcurrentPosts",
+			"xmux_max_concurrency":     "xmuxMaxConcurrency",
+			"xmux_max_connections":     "xmuxMaxConnections",
+			"xmux_c_max_reuse_times":   "xmuxCMaxReuseTimes",
+			"xmux_h_max_reusable_secs": "xmuxHMaxReusableSecs",
+			"xmux_h_max_request_times": "xmuxHMaxRequestTimes",
+		}
+		for snake, camel := range suffixCamelMap {
+			if val := q.Get(snake); val != "" {
+				if xmuxKey, ok := xmuxFieldMap[camel]; ok {
+					xmuxMap[xmuxKey] = castValue(val)
+				} else {
+					extraMap[camel] = castValue(val)
+				}
+			}
+		}
+
+		if len(xmuxMap) > 0 {
+			extraMap["xmux"] = xmuxMap
+		}
+
+		if extraRaw := q.Get("extra"); extraRaw != "" {
+			var jsonExtra map[string]any
+			if err := json.Unmarshal([]byte(extraRaw), &jsonExtra); err == nil && len(jsonExtra) > 0 {
+				for k, v := range jsonExtra {
+					extraMap[k] = v
+				}
+			}
+		}
+
+		if len(extraMap) > 0 {
+			xhttpSettings["extra"] = extraMap
 		}
 	}
 
+	var fmFinal map[string]any
 	if fmRaw := q.Get("fm"); fmRaw != "" {
 		var fmMap map[string]any
 		if err := json.Unmarshal([]byte(fmRaw), &fmMap); err == nil && len(fmMap) > 0 {
-			streamSettings["finalmask"] = fmMap
+			fmFinal = fmMap
 		}
+	}
+	if flatFM := routeFlatFinalmask(q); flatFM != nil {
+		if fmFinal == nil {
+			fmFinal = flatFM
+		} else {
+			for k, v := range flatFM {
+				if _, exists := fmFinal[k]; !exists {
+					fmFinal[k] = v
+				}
+			}
+		}
+	}
+	if existingFM, ok := streamSettings["finalmask"].(map[string]any); ok && len(existingFM) > 0 {
+		if fmFinal == nil {
+			fmFinal = existingFM
+		} else {
+			for k, v := range existingFM {
+				if _, exists := fmFinal[k]; !exists {
+					fmFinal[k] = v
+				}
+			}
+		}
+	}
+	if len(fmFinal) > 0 {
+		streamSettings["finalmask"] = fmFinal
 	}
 
 	res, err := json.Marshal(ob)
@@ -517,4 +628,130 @@ func findMatchingLink(meta outboundMeta, candidateLinks []parsedSourceLink, used
 
 	return ""
 }
+
+func castValue(raw string) any {
+	lower := strings.ToLower(raw)
+	if lower == "true" || lower == "1" || lower == "yes" {
+		return true
+	}
+	if lower == "false" || lower == "0" || lower == "no" {
+		return false
+	}
+	if i, err := strconv.ParseInt(raw, 10, 64); err == nil {
+		return i
+	}
+	if f, err := strconv.ParseFloat(raw, 64); err == nil {
+		return f
+	}
+	return raw
+}
+
+func toCamel(suffix string) string {
+	suffixCamelMap := map[string]string{
+		"brutal_up":                "brutalUp",
+		"brutal_down":              "brutalDown",
+		"max_split":                "maxSplit",
+		"packet_size":              "packetSize",
+		"salamander_pwd":           "password",
+		"sudoku_pwd":               "password",
+		"sudoku_ascii":             "ascii",
+		"no_sse":                   "noSSEHeader",
+		"sc_stream_up_server_secs": "scStreamUpServerSecs",
+		"sc_max_buffered_posts":    "scMaxBufferedPosts",
+		"sc_max_each_post_bytes":   "scMaxEachPostBytes",
+		"sc_max_concurrent_posts":  "scMaxConcurrentPosts",
+		"xmux_max_concurrency":     "xmuxMaxConcurrency",
+		"xmux_max_connections":     "xmuxMaxConnections",
+		"xmux_c_max_reuse_times":   "xmuxCMaxReuseTimes",
+		"xmux_h_max_reusable_secs": "xmuxHMaxReusableSecs",
+		"xmux_h_max_request_times": "xmuxHMaxRequestTimes",
+		"download_proxy":           "downloadProxy",
+		"uplink_http_method":       "uplinkHTTPMethod",
+		"downlink_http_method":     "downlinkHTTPMethod",
+		"sc_max_each_get_bytes":    "scMaxEachGetBytes",
+		"sc_min_posts_interval_ms": "scMinPostsIntervalMs",
+	}
+	if override, ok := suffixCamelMap[suffix]; ok {
+		return override
+	}
+	parts := strings.Split(suffix, "_")
+	if len(parts) <= 1 {
+		return suffix
+	}
+	res := parts[0]
+	for _, p := range parts[1:] {
+		if len(p) > 0 {
+			res += strings.ToUpper(p[:1]) + strings.ToLower(p[1:])
+		}
+	}
+	return res
+}
+
+func routeFlatFinalmask(q url.Values) map[string]any {
+	tcpSettings := make(map[string]any)
+	udpSettings := make(map[string]any)
+	quicGroup := make(map[string]any)
+	var tcpType, udpType string
+
+	parseVal := func(raw string) any {
+		parts := strings.Split(raw, ",")
+		var cleanParts []any
+		for _, p := range parts {
+			trimmed := strings.TrimSpace(p)
+			if trimmed != "" {
+				cleanParts = append(cleanParts, trimmed)
+			}
+		}
+		if len(cleanParts) > 1 {
+			return cleanParts
+		}
+		return raw
+	}
+
+	for k, vals := range q {
+		if len(vals) == 0 {
+			continue
+		}
+		raw := vals[0]
+		if k == "fm_tcp_type" {
+			tcpType = raw
+		} else if strings.HasPrefix(k, "fm_tcp_") {
+			suffix := toCamel(strings.TrimPrefix(k, "fm_tcp_"))
+			tcpSettings[suffix] = parseVal(raw)
+		} else if k == "fm_udp_type" {
+			udpType = raw
+		} else if strings.HasPrefix(k, "fm_udp_") {
+			suffix := toCamel(strings.TrimPrefix(k, "fm_udp_"))
+			udpSettings[suffix] = parseVal(raw)
+		} else if strings.HasPrefix(k, "fm_quic_") {
+			suffix := toCamel(strings.TrimPrefix(k, "fm_quic_"))
+			quicGroup[suffix] = parseVal(raw)
+		}
+	}
+
+	fm := make(map[string]any)
+	if tcpType != "" {
+		mask := map[string]any{"type": tcpType}
+		if len(tcpSettings) > 0 {
+			mask["settings"] = tcpSettings
+		}
+		fm["tcp"] = []any{mask}
+	}
+	if udpType != "" {
+		mask := map[string]any{"type": udpType}
+		if len(udpSettings) > 0 {
+			mask["settings"] = udpSettings
+		}
+		fm["udp"] = []any{mask}
+	}
+	if len(quicGroup) > 0 {
+		fm["quicParams"] = quicGroup
+	}
+
+	if len(fm) == 0 {
+		return nil
+	}
+	return fm
+}
+
 

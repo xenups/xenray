@@ -259,3 +259,49 @@ def test_adapter_augment_preserves_encoded_percent_in_json():
     extra = ob.get("streamSettings", {}).get("xhttpSettings", {}).get("extra", {})
     # Must preserve %2F literally without double-decoding into /
     assert extra.get("path") == "%2Fapi"
+
+
+def test_adapter_parse_direct_xhttp_extra_parameters():
+    """Verify direct query parameters for xHTTP are collected and nested under extra with xmux."""
+    if not LibXrayParserAdapter.is_available():
+        pytest.skip("xray-parser binary not built yet")
+
+    link = (
+        "vless://00000000-0000-0000-0000-000000000001@example.com:443"
+        "?security=tls&type=xhttp&mode=auto"
+        "&noSSEHeader=true&downloadProxy=true&xPaddingBytes=100-200"
+        "&xmuxMaxConcurrency=16&xmuxMaxConnections=4"
+        "#DirectXHTTP"
+    )
+    res = LibXrayParserAdapter.parse(link)
+    xhttp = res["config"]["outbounds"][0]["streamSettings"]["xhttpSettings"]
+    extra = xhttp.get("extra", {})
+
+    assert extra.get("noSSEHeader") is True
+    assert extra.get("downloadProxy") is True
+    assert extra.get("xPaddingBytes") == "100-200"
+    xmux = extra.get("xmux", {})
+    assert xmux.get("maxConcurrency") == 16
+    assert xmux.get("maxConnections") == 4
+
+
+def test_adapter_parse_flat_finalmask_parameters():
+    """Verify flat fm_tcp_* parameters are routed and preserved in binary parser output."""
+    if not LibXrayParserAdapter.is_available():
+        pytest.skip("xray-parser binary not built yet")
+
+    link = (
+        "vless://00000000-0000-0000-0000-000000000001@example.com:443"
+        "?security=tls"
+        "&fm_tcp_type=fragment&fm_tcp_packets=tlshello&fm_tcp_lengths=100-200&fm_tcp_delays=10-20"
+        "#FlatFM"
+    )
+    res = LibXrayParserAdapter.parse(link)
+    stream = res["config"]["outbounds"][0]["streamSettings"]
+    finalmask = stream.get("finalmask", {})
+
+    assert "tcp" in finalmask
+    assert len(finalmask["tcp"]) == 1
+    tcp_mask = finalmask["tcp"][0]
+    assert tcp_mask["type"] == "fragment"
+    assert tcp_mask["settings"]["packets"] == "tlshello"
