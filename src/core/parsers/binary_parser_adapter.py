@@ -179,7 +179,10 @@ class LibXrayParserAdapter:
                 routed_xhttp = _route_xhttp_params(flat_params)
                 _nest_xhttp_extra(routed_xhttp)
 
-                xhttp_extra = xhttp.setdefault("extra", {})
+                xhttp_extra = xhttp.get("extra")
+                if not isinstance(xhttp_extra, dict):
+                    xhttp_extra = {}
+
                 if "extra" in routed_xhttp and isinstance(routed_xhttp["extra"], dict):
                     for k, v in routed_xhttp["extra"].items():
                         if k not in xhttp_extra:
@@ -194,6 +197,9 @@ class LibXrayParserAdapter:
                                 xhttp_extra[k] = v
                     except Exception:
                         pass
+
+                if xhttp_extra:
+                    xhttp["extra"] = xhttp_extra
         except Exception as e:
             logger.warning(f"[LibXrayParserAdapter] Failed to augment outbound from link: {e}")
 

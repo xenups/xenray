@@ -266,8 +266,16 @@ def _route_xhttp_params(raw_params: Dict[str, str]) -> Dict[str, Any]:
         casted = _cast_value(raw)
 
         if key in XMUX_MAP:
-            xmux[XMUX_MAP[key]] = casted
-        elif key == "noSSEHeader":
+            try:
+                xmux[XMUX_MAP[key]] = int(raw)
+            except ValueError:
+                xmux[XMUX_MAP[key]] = casted
+        elif key.startswith("scMax") or key.startswith("scMin") or key.startswith("scStream"):
+            try:
+                xhttp[key] = int(raw)
+            except ValueError:
+                xhttp[key] = casted
+        elif key in ("noSSEHeader", "downloadProxy"):
             xhttp[key] = _cast_value(raw)
         else:
             xhttp[key] = casted

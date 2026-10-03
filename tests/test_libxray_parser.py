@@ -334,3 +334,34 @@ def test_python_parser_validation_with_xray_core():
     }
     is_valid, err = LibXrayParserAdapter.validate_config(cfg_to_validate)
     assert is_valid is True, f"Python parser output failed Xray validation: {err}"
+
+
+def test_xhttp_without_extra_params_does_not_inject_empty_extra():
+    """Verify xHTTP links without extra parameters do not have extra: {} injected."""
+    if not LibXrayParserAdapter.is_available():
+        pytest.skip("xray-parser binary not built yet")
+
+    link = "vless://00000000-0000-0000-0000-000000000001@example.com:443?security=tls&type=xhttp#NoExtra"
+    res = LibXrayParserAdapter.parse(link)
+    xhttp = res["config"]["outbounds"][0]["streamSettings"]["xhttpSettings"]
+    assert "extra" not in xhttp or not xhttp["extra"]
+
+
+def test_xmux_numeric_values_not_coerced_to_booleans():
+    """Verify numeric xmux and sc values like 1 and 0 remain integers, not coerced to booleans."""
+    if not LibXrayParserAdapter.is_available():
+        pytest.skip("xray-parser binary not built yet")
+
+    link = (
+        "vless://00000000-0000-0000-0000-000000000001@example.com:443"
+        "?security=tls&type=xhttp&xmuxMaxConnections=1&scMaxBufferedPosts=0#NumericTest"
+    )
+    res = LibXrayParserAdapter.parse(link)
+    xhttp = res["config"]["outbounds"][0]["streamSettings"]["xhttpSettings"]
+    extra = xhttp.get("extra", {})
+    xmux = extra.get("xmux", {})
+
+    assert xmux.get("maxConnections") == 1
+    assert type(xmux.get("maxConnections")) is int
+    assert extra.get("scMaxBufferedPosts") == 0
+    assert type(extra.get("scMaxBufferedPosts")) is int

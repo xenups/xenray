@@ -287,7 +287,7 @@ func postProcessOutbound(rawOb json.RawMessage, linkStr string) json.RawMessage 
 		}
 		for qKey, xmuxKey := range xmuxFieldMap {
 			if val := q.Get(qKey); val != "" {
-				xmuxMap[xmuxKey] = castValue(val)
+				xmuxMap[xmuxKey] = castValue(qKey, val)
 			}
 		}
 
@@ -306,7 +306,7 @@ func postProcessOutbound(rawOb json.RawMessage, linkStr string) json.RawMessage 
 		}
 		for _, key := range directExtraKeys {
 			if val := q.Get(key); val != "" {
-				extraMap[key] = castValue(val)
+				extraMap[key] = castValue(key, val)
 			}
 		}
 
@@ -331,9 +331,9 @@ func postProcessOutbound(rawOb json.RawMessage, linkStr string) json.RawMessage 
 		for snake, camel := range suffixCamelMap {
 			if val := q.Get(snake); val != "" {
 				if xmuxKey, ok := xmuxFieldMap[camel]; ok {
-					xmuxMap[xmuxKey] = castValue(val)
+					xmuxMap[xmuxKey] = castValue(camel, val)
 				} else {
-					extraMap[camel] = castValue(val)
+					extraMap[camel] = castValue(camel, val)
 				}
 			}
 		}
@@ -630,20 +630,38 @@ func findMatchingLink(meta outboundMeta, candidateLinks []parsedSourceLink, used
 	return ""
 }
 
-func castValue(raw string) any {
+func castValue(key, raw string) any {
+	boolKeys := map[string]bool{
+		"noSSEHeader":    true,
+		"no_sse":         true,
+		"downloadProxy":  true,
+		"download_proxy": true,
+	}
+
 	lower := strings.ToLower(raw)
-	if lower == "true" || lower == "1" || lower == "yes" {
-		return true
+	if boolKeys[key] {
+		if lower == "true" || lower == "1" || lower == "yes" {
+			return true
+		}
+		if lower == "false" || lower == "0" || lower == "no" {
+			return false
+		}
 	}
-	if lower == "false" || lower == "0" || lower == "no" {
-		return false
-	}
+
 	if i, err := strconv.ParseInt(raw, 10, 64); err == nil {
 		return i
 	}
 	if f, err := strconv.ParseFloat(raw, 64); err == nil {
 		return f
 	}
+
+	if lower == "true" || lower == "yes" {
+		return true
+	}
+	if lower == "false" || lower == "no" {
+		return false
+	}
+
 	return raw
 }
 
