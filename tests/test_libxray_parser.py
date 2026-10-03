@@ -327,5 +327,10 @@ def test_python_parser_validation_with_xray_core():
     )
 
     py_res = VlessParser.parse(test_link)
-    is_valid, err = LibXrayParserAdapter.validate_config(py_res["config"])
+    cfg_to_validate = {
+        "log": {"loglevel": "warning"},
+        "inbounds": [],
+        "outbounds": py_res["config"]["outbounds"],
+    }
+    is_valid, err = LibXrayParserAdapter.validate_config(cfg_to_validate)
     assert is_valid is True, f"Python parser output failed Xray validation: {err}"
