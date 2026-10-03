@@ -2,6 +2,12 @@
 
 All notable changes to XenRay will be documented in this file.
 
+## [0.3.7] - 2026-10-03
+
+### Changed
+- **Version Bump**: Bumped application version to **0.3.7**.
+- **Parser Robustness**: Enhanced Python link parser and binary adapter for xHTTP and Finalmask configurations; prevented empty `extra` parameter injection and ensured key-aware integer casting for xmux/sc settings.
+
 ## [0.3.6] - 2026-10-02
 
 ### Changed
