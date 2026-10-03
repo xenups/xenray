@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"strings"
 
@@ -136,9 +137,10 @@ func main() {
 			if err := json.Unmarshal(ob, &probe); err == nil && probe.Tag != "" {
 				name = probe.Tag
 			}
+			processedOb := postProcessOutbound(ob, link)
 			items = append(items, BatchItem{
 				Name:     name,
-				Outbound: ob,
+				Outbound: processedOb,
 			})
 		}
 		env := BatchEnvelope{
@@ -151,7 +153,7 @@ func main() {
 		return
 	}
 
-	firstOutbound := doc.Outbounds[0]
+	firstOutbound := postProcessOutbound(doc.Outbounds[0], link)
 	name := "Proxy Server"
 	var tagProbe OutboundTagProbe
 	if err := json.Unmarshal(firstOutbound, &tagProbe); err == nil && tagProbe.Tag != "" {
@@ -166,6 +168,102 @@ func main() {
 
 	out, _ := json.MarshalIndent(env, "", "  ")
 	fmt.Println(string(out))
+}
+
+func postProcessOutbound(rawOb json.RawMessage, linkStr string) json.RawMessage {
+	u, err := url.Parse(linkStr)
+	if err != nil {
+		return rawOb
+	}
+	q := u.Query()
+
+	var ob map[string]any
+	if err := json.Unmarshal(rawOb, &ob); err != nil {
+		return rawOb
+	}
+
+	streamSettings, _ := ob["streamSettings"].(map[string]any)
+	if streamSettings == nil {
+		streamSettings = make(map[string]any)
+		ob["streamSettings"] = streamSettings
+	}
+
+	cs := q.Get("cs")
+	if cs == "" {
+		cs = q.Get("cipherSuites")
+	}
+	fp := q.Get("fp")
+
+	security, _ := streamSettings["security"].(string)
+
+	if security == "tls" {
+		tlsSettings, _ := streamSettings["tlsSettings"].(map[string]any)
+		if tlsSettings == nil {
+			tlsSettings = make(map[string]any)
+			streamSettings["tlsSettings"] = tlsSettings
+		}
+		if cs != "" {
+			tlsSettings["cipherSuites"] = cs
+		}
+		if fp != "" {
+			tlsSettings["fingerprint"] = fp
+		}
+	} else if security == "reality" {
+		realitySettings, _ := streamSettings["realitySettings"].(map[string]any)
+		if realitySettings == nil {
+			realitySettings = make(map[string]any)
+			streamSettings["realitySettings"] = realitySettings
+		}
+		if cs != "" {
+			realitySettings["cipherSuites"] = cs
+		}
+		if fp != "" {
+			realitySettings["fingerprint"] = fp
+		}
+		if pqv := q.Get("pqv"); pqv != "" {
+			realitySettings["mldsa65Verify"] = pqv
+		}
+		if sids, ok := realitySettings["shortIds"].([]any); ok && len(sids) > 0 {
+			delete(realitySettings, "shortIds")
+			if _, hasSid := realitySettings["shortId"]; !hasSid {
+				realitySettings["shortId"] = fmt.Sprint(sids[0])
+			}
+		}
+	}
+
+	net, _ := streamSettings["network"].(string)
+	if net == "xhttp" || net == "splithttp" {
+		xhttpSettings, _ := streamSettings["xhttpSettings"].(map[string]any)
+		if xhttpSettings == nil {
+			xhttpSettings = make(map[string]any)
+			streamSettings["xhttpSettings"] = xhttpSettings
+		}
+		if mode := q.Get("mode"); mode != "" {
+			xhttpSettings["mode"] = mode
+		}
+		if host := q.Get("host"); host != "" {
+			xhttpSettings["host"] = host
+		}
+		if extraRaw := q.Get("extra"); extraRaw != "" {
+			var extraMap map[string]any
+			if err := json.Unmarshal([]byte(extraRaw), &extraMap); err == nil && len(extraMap) > 0 {
+				xhttpSettings["extra"] = extraMap
+			}
+		}
+	}
+
+	if fmRaw := q.Get("fm"); fmRaw != "" {
+		var fmMap map[string]any
+		if err := json.Unmarshal([]byte(fmRaw), &fmMap); err == nil && len(fmMap) > 0 {
+			streamSettings["finalmask"] = fmMap
+		}
+	}
+
+	res, err := json.Marshal(ob)
+	if err != nil {
+		return rawOb
+	}
+	return json.RawMessage(res)
 }
 
 func outputError(code, message string, exitCode int, batchMode bool) {

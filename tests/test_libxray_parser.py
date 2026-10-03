@@ -171,3 +171,28 @@ def test_adapter_validate_config():
     is_valid_bad, err_bad = LibXrayParserAdapter.validate_config(invalid_cfg)
     assert is_valid_bad is False
     assert err_bad is not None
+
+
+def test_adapter_parse_fp_unsafe_and_cipher_suites():
+    """Verify libXray adapter preserves fp=unsafe, cipherSuites, finalmask, and xhttp extra."""
+    if not LibXrayParserAdapter.is_available():
+        pytest.skip("xray-parser binary not built yet")
+
+    mock_link = (
+        "vless://00000000-0000-0000-0000-000000000001@example.com:443"
+        "?security=tls&alpn=h2&fp=unsafe"
+        "&cs=TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"
+        "&type=xhttp&mode=auto&path=/test"
+        "&extra=%7B%22noSSEHeader%22%3Atrue%2C%22downloadProxy%22%3Atrue%7D"
+        "#UnsafeNode"
+    )
+    res = LibXrayParserAdapter.parse(mock_link)
+    ob = res["config"]["outbounds"][0]
+    tls = ob["streamSettings"]["tlsSettings"]
+    xhttp = ob["streamSettings"]["xhttpSettings"]
+
+    assert tls["fingerprint"] == "unsafe"
+    assert tls["cipherSuites"] == "TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"
+    assert xhttp["mode"] == "auto"
+    assert xhttp["extra"]["noSSEHeader"] is True
+    assert xhttp["extra"]["downloadProxy"] is True
