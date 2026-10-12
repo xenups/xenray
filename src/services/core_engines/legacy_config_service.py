@@ -20,12 +20,16 @@ from src.core.constants import (
     NETWORK_GRPC,
     NETWORK_H3,
     NETWORK_HTTPUPGRADE,
+    NETWORK_MASQUE,
     NETWORK_QUIC,
     NETWORK_SPLITHTTP,
     NETWORK_TCP,
     NETWORK_WS,
     NETWORK_XHTTP,
     PROTOCOL_HTTP,
+    PROTOCOL_MASQUE,
+    PROTOCOL_WARP,
+    PROTOCOL_WIREGUARD,
     REALITY_SETTINGS,
     SECURITY_NONE,
     SECURITY_REALITY,
@@ -52,6 +56,7 @@ VALID_NETWORKS = {
     NETWORK_SPLITHTTP,
     NETWORK_QUIC,
     NETWORK_H3,
+    NETWORK_MASQUE,
 }
 VALID_SECURITY = {SECURITY_NONE, SECURITY_TLS, SECURITY_REALITY}
 DEFAULT_PATH = "/"
@@ -141,7 +146,23 @@ class LegacyConfigService:
             if CONFIG_TAG not in outbound:
                 outbound[CONFIG_TAG] = TAG_PROXY
 
+            # Handle WireGuard / WARP: strip redundant publicKey
+            if protocol in (PROTOCOL_WIREGUARD, PROTOCOL_WARP):
+                settings = outbound.setdefault(CONFIG_SETTINGS, {})
+                if "publicKey" in settings:
+                    settings.pop("publicKey", None)
+                    logger.info("[LegacyConfigService] Stripped redundant root publicKey in WireGuard/WARP outbound")
+                continue
+
             stream_settings = outbound.setdefault(CONFIG_STREAM_SETTINGS, {})
+
+            # Handle MASQUE outbound requirements
+            if protocol == PROTOCOL_MASQUE or stream_settings.get(CONFIG_NETWORK) == NETWORK_MASQUE:
+                stream_settings[CONFIG_NETWORK] = NETWORK_MASQUE
+                if stream_settings.get("security") != SECURITY_TLS:
+                    stream_settings["security"] = SECURITY_TLS
+                self._fill_transport_defaults(outbound)
+                continue
 
             # 1. Validate and Default Network
             network = stream_settings.get(CONFIG_NETWORK)

@@ -2,6 +2,20 @@
 
 All notable changes to XenRay will be documented in this file.
 
+## [0.3.8] - 2026-10-12
+
+### Changed
+- **Core Engine Upgrade**: Upgraded default bundled Xray-core binary to **v26.10.10** with fresh `geoip.dat` and `geosite.dat` release assets.
+- **Version Bump**: Bumped application version to **0.3.8**.
+- **Protocol & Outbound Schema Alignment**:
+  - Added support for **MASQUE** transport and protocol schemas (`network: "masque"`, `security: "tls"`).
+  - Added defensive sanitization for WARP / WireGuard outbound configurations to ignore redundant root `publicKey` fields under new parameter schemas.
+- **Windows TUN Improvements**:
+  - Added Windows Filtering Platform leak prevention (`autoSystemWfpBlockLeak: ["dns", "misconfigtun"]`) for Windows TUN inbound.
+  - Ensured reliable TUN startup and IPv4-safe routing when IPv6 is disabled system-wide.
+- **Validation Wrapper Enhancement**:
+  - Enhanced `LibXrayParserAdapter.validate_config` to fall back to bundled `xray.exe run -test` for verifying configurations with latest core features.
+
 ## [0.3.7] - 2026-10-03
 
 ### Changed

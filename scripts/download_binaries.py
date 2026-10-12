@@ -48,7 +48,7 @@ WINTUN_URL = "https://www.wintun.net/builds/wintun-0.14.1.zip"
 
 def get_config(arch: int = 64):
     """Get configuration from environment."""
-    xray_version = os.getenv("XRAY_VERSION", "26.9.30")
+    xray_version = os.getenv("XRAY_VERSION", "26.10.10")
     singbox_version = os.getenv("SINGBOX_VERSION", "1.14.0")
     sb_arch = SINGBOX_ARCH_MAP.get(arch, "amd64")
     wintun_arch = WINTUN_ARCH_MAP.get(arch, "amd64")
@@ -188,6 +188,8 @@ def main():
         xray_zip = TEMP_DIR / f"xray-{config['xray_version']}.zip"
         download_file(config["xray_url"], xray_zip)
         extract_zip(xray_zip, BIN_DIR, "xray.exe")
+        extract_zip(xray_zip, BIN_DIR, "geoip.dat")
+        extract_zip(xray_zip, BIN_DIR, "geosite.dat")
 
         # Step 2: Download Sing-box
         print("\n[STEP 2] Downloading Sing-box...")

@@ -9,8 +9,12 @@ from src.core.constants import (
     CONFIG_STREAM_SETTINGS,
     HEADER_HOST,
     NETWORK_HTTPUPGRADE,
+    NETWORK_MASQUE,
     NETWORK_WS,
     NETWORK_XHTTP,
+    PROTOCOL_MASQUE,
+    PROTOCOL_WARP,
+    PROTOCOL_WIREGUARD,
     REALITY_SETTINGS,
     SECURITY_NONE,
     SECURITY_REALITY,
@@ -18,6 +22,7 @@ from src.core.constants import (
     STREAM_HEADERS,
     STREAM_HOST,
     STREAM_HTTPUPGRADE_SETTINGS,
+    STREAM_MASQUE_SETTINGS,
     STREAM_MODE,
     STREAM_SERVER_NAME,
     STREAM_WS_SETTINGS,
@@ -31,7 +36,16 @@ from src.services.core_engines.config_utils import get_server_object, is_ip
 class ConfigPatcher:
     """Applies non-destructive stream setting fallbacks (SNI, Host, etc.)."""
 
-    SUPPORTED_PROTOCOLS = ["vless", "vmess", "trojan", "shadowsocks", "hysteria2"]
+    SUPPORTED_PROTOCOLS = [
+        "vless",
+        "vmess",
+        "trojan",
+        "shadowsocks",
+        "hysteria2",
+        "wireguard",
+        "warp",
+        "masque",
+    ]
 
     def safe_patch(self, config: dict, default_cipher_suites: str = ""):
         """Apply context-aware fallbacks only if fields are missing."""
@@ -41,20 +55,77 @@ class ConfigPatcher:
             if protocol not in self.SUPPORTED_PROTOCOLS:
                 continue
 
+            warp_applied = self._apply_wireguard_warp_hardening(outbound)
+            masque_applied = self._apply_masque_hardening(outbound)
+
             settings = outbound.get(CONFIG_SETTINGS, {})
             server_obj = get_server_object(settings)
-            if not server_obj or "address" not in server_obj:
-                continue
+            domain = ""
+            if server_obj and "address" in server_obj and isinstance(server_obj["address"], str):
+                domain = server_obj["address"]
 
-            domain = server_obj["address"]
-
-            applied = self._apply_stream_fallbacks(outbound, domain, default_cipher_suites)
+            applied = False
+            if domain:
+                applied = self._apply_stream_fallbacks(outbound, domain, default_cipher_suites)
             sockopt_applied = self._apply_sockopt_hardening(outbound)
             mux_applied = self._apply_mux_hardening(outbound)
-            if applied or sockopt_applied or mux_applied:
+            if applied or sockopt_applied or mux_applied or warp_applied or masque_applied:
                 fallback_count += 1
         if fallback_count > 0:
             logger.info(f"[ConfigPatcher] Applied safe fallbacks/hardening to {fallback_count} outbound(s)")
+
+    def _apply_wireguard_warp_hardening(self, outbound: dict) -> bool:
+        """Sanitize WARP / WireGuard outbound settings for Xray v26.10.10.
+
+        In v26.10.10, WARP configurations ignore redundant root-level publicKey
+        fields under new parameter schemas where peer public keys belong in the
+        peers list.
+        """
+        protocol = outbound.get("protocol")
+        if protocol not in (PROTOCOL_WIREGUARD, PROTOCOL_WARP):
+            return False
+
+        applied = False
+        settings = outbound.setdefault(CONFIG_SETTINGS, {})
+
+        if "publicKey" in settings:
+            settings.pop("publicKey", None)
+            logger.info("[ConfigPatcher] Stripped redundant root publicKey in WireGuard/WARP outbound")
+            applied = True
+
+        return applied
+
+    def _apply_masque_hardening(self, outbound: dict) -> bool:
+        """Configure MASQUE outbound transport & security requirements for Xray v26.10.10.
+
+        MASQUE outbound requires network 'masque' and security 'tls'.
+        """
+        if outbound.get("protocol") != PROTOCOL_MASQUE:
+            stream = outbound.get(CONFIG_STREAM_SETTINGS, {})
+            if stream.get(CONFIG_NETWORK) != NETWORK_MASQUE:
+                return False
+
+        applied = False
+        stream = outbound.setdefault(CONFIG_STREAM_SETTINGS, {})
+        if stream.get(CONFIG_NETWORK) != NETWORK_MASQUE:
+            stream[CONFIG_NETWORK] = NETWORK_MASQUE
+            applied = True
+        if stream.get("security") != SECURITY_TLS:
+            stream["security"] = SECURITY_TLS
+            applied = True
+
+        stream.setdefault(STREAM_MASQUE_SETTINGS, {})
+
+        settings = outbound.get(CONFIG_SETTINGS, {})
+        server_obj = get_server_object(settings)
+        if server_obj and "address" in server_obj and isinstance(server_obj["address"], str):
+            domain = server_obj["address"]
+            tls_settings = stream.setdefault(TLS_SETTINGS, {})
+            if not tls_settings.get(STREAM_SERVER_NAME) and not is_ip(domain):
+                tls_settings[STREAM_SERVER_NAME] = domain
+                applied = True
+
+        return applied
 
     def _apply_mux_hardening(self, outbound: dict) -> bool:
         """Ensure MUX is disabled when Vision flow is active in VLESS.
@@ -163,6 +234,11 @@ class ConfigPatcher:
             if not xhttp_settings.get(STREAM_MODE):
                 xhttp_settings[STREAM_MODE] = "packet-up"
                 logger.info("[ConfigPatcher] Set xhttpSettings.mode = packet-up for stability")
+                applied = True
+        elif network == NETWORK_MASQUE:
+            stream_settings.setdefault(STREAM_MASQUE_SETTINGS, {})
+            if stream_settings.get("security") != SECURITY_TLS:
+                stream_settings["security"] = SECURITY_TLS
                 applied = True
 
         return applied

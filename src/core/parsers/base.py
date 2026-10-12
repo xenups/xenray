@@ -27,6 +27,7 @@ VALID_NETWORKS = {
     "splithttp",
     "quic",
     "h3",
+    "masque",
 }
 VALID_SECURITY = {"none", "tls", "reality"}
 VALID_ENCRYPTION = {"none", "zero"}
