@@ -63,7 +63,10 @@ jobs:
           cd ../..
       
       - name: Download Xray geo files
-        run: poetry run python scripts/download_geo_files.py
+        run: poetry run python scripts/download_geo_files.py --force
+
+      - name: Download Sing-box rule sets
+        run: poetry run python scripts/download_rule_sets.py
       
       - name: Build city database
         run: poetry run python scripts/build_city_database.py
@@ -138,12 +141,13 @@ jobs:
             - Xray Core ${{ env.XRAY_VERSION }}
             - Sing-box Core ${{ env.SINGBOX_VERSION }}
             - geoip.dat & geosite.dat (Iran-optimized routing rules)
+            - Sing-box binary rule-sets (.srs for offline direct routing)
             - wintun.dll (TUN interface driver)
             - Multilingual support (EN, FA, RU, ZH)
             - Auto-updater script
 
             ### Notes
-            - geoip.dat and geosite.dat from Chocolate4U/Iran-v2ray-rules
+            - geoip.dat, geosite.dat, and Iran rule-sets (.srs) from Chocolate4U
             - wintun.dll is pre-bundled — no need to download on first start
           draft: false
           prerelease: false
