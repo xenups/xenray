@@ -7,13 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.core.constants import (
-    PROTOCOL_MASQUE,
-    PROTOCOL_WIREGUARD,
-    TUN_GATEWAY_IPV4,
-    TUN_ROUTE_IPV4,
-    XRAY_VERSION,
-)
+from src.core.constants import PROTOCOL_MASQUE, PROTOCOL_WIREGUARD, TUN_GATEWAY_IPV4, TUN_ROUTE_IPV4, XRAY_VERSION
 from src.core.parsers.binary_parser_adapter import LibXrayParserAdapter
 from src.core.parsers.vless import VlessParser
 from src.platform.linux.core_assets import LinuxCoreAssetAdapter
