@@ -271,5 +271,5 @@ def test_libxray_parser_masque_validation_fallback():
         ]
     }
     is_valid, err = LibXrayParserAdapter.validate_config(masque_cfg)
-    assert is_valid is True
+    assert is_valid is True, f"MASQUE validation failed: {err}"
     assert err is None

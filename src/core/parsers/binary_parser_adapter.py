@@ -399,6 +399,7 @@ class LibXrayParserAdapter:
         if sys.platform == "win32":
             creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
 
+        parser_error: Optional[str] = None
         try:
             proc = subprocess.run(
                 [binary_path, "-test"],
@@ -411,31 +412,38 @@ class LibXrayParserAdapter:
             data = json.loads(proc.stdout.decode("utf-8", errors="replace").strip() or "{}")
             if data.get("success"):
                 return True, None
-
-            # Fallback to validating via bundled xray.exe if binary parser returns an error
-            # (e.g. older wrapper parser build doesn't recognize newly added v26.10.10 MASQUE)
-            from src.core.constants import XRAY_EXECUTABLE
-
-            if XRAY_EXECUTABLE and os.path.isfile(XRAY_EXECUTABLE):
-                try:
-                    proc_xray = subprocess.run(
-                        [XRAY_EXECUTABLE, "run", "-test", "-c", "stdin:"],
-                        input=payload_str.encode("utf-8"),
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                        creationflags=creationflags,
-                        timeout=timeout,
-                    )
-                    if proc_xray.returncode == 0:
-                        return True, None
-                    xray_err = (
-                        proc_xray.stderr.decode("utf-8", errors="replace").strip()
-                        or proc_xray.stdout.decode("utf-8", errors="replace").strip()
-                    )
-                    return False, xray_err or data.get("error") or "Configuration validation failed"
-                except Exception as exc:
-                    logger.debug(f"[LibXrayParserAdapter] Fallback xray binary validation error: {exc}")
-
-            return False, data.get("error") or "Configuration validation failed"
+            parser_error = data.get("error")
         except Exception as exc:
-            return False, str(exc)
+            logger.debug(f"[LibXrayParserAdapter] Binary parser test failed or timed out: {exc}")
+            parser_error = str(exc)
+
+        # Fallback to validating via bundled xray.exe if binary parser returns an error or times out
+        # (e.g. older wrapper parser build doesn't recognize newly added v26.10.10 MASQUE)
+        from src.core.constants import XRAY_EXECUTABLE, XRAY_LOCATION_ASSET
+
+        if XRAY_EXECUTABLE and os.path.isfile(XRAY_EXECUTABLE):
+            env = os.environ.copy()
+            if XRAY_LOCATION_ASSET:
+                env["XRAY_LOCATION_ASSET"] = XRAY_LOCATION_ASSET
+            try:
+                proc_xray = subprocess.run(
+                    [XRAY_EXECUTABLE, "run", "-test", "-c", "stdin:"],
+                    input=payload_str.encode("utf-8"),
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    creationflags=creationflags,
+                    timeout=max(timeout, 5.0),
+                    env=env,
+                )
+                if proc_xray.returncode == 0:
+                    return True, None
+                xray_err = (
+                    proc_xray.stderr.decode("utf-8", errors="replace").strip()
+                    or proc_xray.stdout.decode("utf-8", errors="replace").strip()
+                )
+                return False, xray_err or parser_error or "Configuration validation failed"
+            except Exception as exc:
+                logger.debug(f"[LibXrayParserAdapter] Fallback xray binary validation error: {exc}")
+                return False, str(exc)
+
+        return False, parser_error or "Configuration validation failed"
