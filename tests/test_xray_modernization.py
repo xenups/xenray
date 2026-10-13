@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import os
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from src.core.constants import (
     PROTOCOL_MASQUE,
@@ -260,6 +263,11 @@ def test_tun_handles_ipv6_disabled():
 
 def test_libxray_parser_masque_validation_fallback():
     """Verify LibXrayParserAdapter validates MASQUE configuration with bundled core."""
+    from src.core.constants import XRAY_EXECUTABLE
+
+    if not (XRAY_EXECUTABLE and os.path.isfile(XRAY_EXECUTABLE)):
+        pytest.skip("Bundled Xray core binary not available for fallback validation")
+
     masque_cfg = {
         "outbounds": [
             {
@@ -273,3 +281,34 @@ def test_libxray_parser_masque_validation_fallback():
     is_valid, err = LibXrayParserAdapter.validate_config(masque_cfg)
     assert is_valid is True, f"MASQUE validation failed: {err}"
     assert err is None
+
+
+def test_libxray_parser_masque_validation_fallback_mocked():
+    """Verify LibXrayParserAdapter falls back to xray executable when parser rejects MASQUE."""
+    masque_cfg = {
+        "outbounds": [
+            {
+                "protocol": "masque",
+                "tag": "proxy",
+                "settings": {"address": "1.1.1.1", "port": 443},
+                "streamSettings": {"network": "masque", "security": "tls"},
+            }
+        ]
+    }
+
+    mock_parser_proc = MagicMock(
+        returncode=0,
+        stdout=b'{"success": false, "error": "unknown transport protocol: masque"}',
+        stderr=b"",
+    )
+    mock_xray_proc = MagicMock(
+        returncode=0,
+        stdout=b"Configuration OK.",
+        stderr=b"",
+    )
+
+    with patch("subprocess.run", side_effect=[mock_parser_proc, mock_xray_proc]):
+        with patch("os.path.isfile", return_value=True):
+            is_valid, err = LibXrayParserAdapter.validate_config(masque_cfg)
+            assert is_valid is True, f"MASQUE validation failed: {err}"
+            assert err is None
