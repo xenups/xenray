@@ -196,9 +196,18 @@ class TestPackagingInclusionAndIntegrity:
                 shutil.copy2(f, pkg_rules / f.name)
 
         # Copy bin as release.yml does: Copy-Item -Recurse "dist/bin" "package/"
-        for f in source_bin.iterdir():
-            if f.is_file():
-                shutil.copy2(f, pkg_bin / f.name)
+        bin_files = [f for f in source_bin.iterdir() if f.is_file()] if source_bin.exists() else []
+        if not any(f.name == "xray.exe" for f in bin_files):
+            # In clean CI test runners (where gitignored binaries are not present),
+            # simulate dist/bin files to verify packaging logic.
+            mock_bin = tmp_path / "mock_bin"
+            mock_bin.mkdir()
+            for name in ["xray.exe", "sing-box.exe", "wintun.dll", "geoip.dat", "geosite.dat"]:
+                (mock_bin / name).write_bytes(f"mock {name}".encode())
+            bin_files = [f for f in mock_bin.iterdir() if f.is_file()]
+
+        for f in bin_files:
+            shutil.copy2(f, pkg_bin / f.name)
 
         # 1. Verify all rules exist in package/assets/rules/
         required_rules = [
