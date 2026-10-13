@@ -1,6 +1,7 @@
 """TUN inbound injection for Xray VPN mode."""
 
 import ipaddress
+import sys
 from typing import Optional
 
 from loguru import logger
@@ -57,19 +58,27 @@ class TunInjector:
         if proxy_server_ips is None:
             proxy_server_ips = []
 
+        tun_settings = {
+            "name": "xenray-tun",
+            "mtu": mtu,
+            # IPv4-only subnet — IPv6 is disabled on the TUN to avoid
+            # system-stack prefix binding errors and IPv6 latency spikes.
+            # In v26.10.10, Xray starts properly on Windows when IPv6 is disabled.
+            "gateway": [TUN_GATEWAY_IPV4],
+            "dns": dns_servers,
+            # Capture the IPv4 default route only (IPv6 disabled).
+            "autoSystemRoutingTable": [TUN_ROUTE_IPV4],
+        }
+
+        # Windows TUN improvements (Xray v26.10.10): autoSystemWfpBlockLeak
+        # utilizes WFP filters to block DNS and misconfiguration leaks.
+        if sys.platform == "win32":
+            tun_settings["autoSystemWfpBlockLeak"] = ["dns", "misconfigtun"]
+
         tun_inbound = {
             "tag": PROTOCOL_TUN,
             "protocol": PROTOCOL_TUN,
-            "settings": {
-                "name": "xenray-tun",
-                "mtu": mtu,
-                # IPv4-only subnet — IPv6 is disabled on the TUN to avoid
-                # system-stack prefix binding errors and IPv6 latency spikes.
-                "gateway": [TUN_GATEWAY_IPV4],
-                "dns": dns_servers,
-                # Capture the IPv4 default route only (IPv6 disabled).
-                "autoSystemRoutingTable": [TUN_ROUTE_IPV4],
-            },
+            "settings": tun_settings,
             "sniffing": {
                 "enabled": True,
                 "destOverride": ["fakedns", "http", "tls", "quic"],

@@ -83,16 +83,17 @@ def test_settings_controller_permission_error_shows_admin_dialog():
 
     with patch("src.services.installer.xray_installer.XrayInstallerService.install", side_effect=perm_err):
         with patch("src.utils.process_utils.ProcessUtils.is_admin", return_value=False):
+            with patch("src.utils.process_utils.ProcessUtils.restart_as_admin"):
 
-            def capture_dialog(dlg):
-                # Trigger confirm click (Install & Update action button)
-                install_btn = dlg.actions[1]
-                install_btn.on_click(MagicMock())
+                def capture_dialog(dlg):
+                    # Trigger confirm click (Install & Update action button)
+                    install_btn = dlg.actions[1]
+                    install_btn.on_click(MagicMock())
 
-            mock_page.show_dialog.side_effect = capture_dialog
+                mock_page.show_dialog.side_effect = capture_dialog
 
-            ctrl._show_xray_core_update_dialog(mock_page, "25.1.1", "26.7.28")
-            time.sleep(0.1)
+                ctrl._show_xray_core_update_dialog(mock_page, "25.1.1", "26.7.28")
+                time.sleep(0.1)
 
-            # Assert dialog was shown again for admin restart
-            assert mock_page.show_dialog.call_count >= 2
+                # Assert dialog was shown again for admin restart
+                assert mock_page.show_dialog.call_count >= 2

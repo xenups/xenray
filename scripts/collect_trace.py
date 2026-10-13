@@ -73,8 +73,6 @@ def collect_one() -> dict:
     trace.mark("CONFIG_LOADED")
 
     # --- Step 4: Xray service start (if xray binary exists) ---
-    from src.core.constants import CORE_XRAY, CORE_SINGBOX
-
     try:
         from src.services.core_engines.xray_service import XrayService
         xray_svc = XrayService()
@@ -93,23 +91,6 @@ def collect_one() -> dict:
     singbox_pid = None
     try:
         from src.services.core_engines.singbox_service import SingboxService
-        from src.core.config_builders.singbox_config_builder import SingboxConfigBuilder
-        from src.platform.factory import get_network_adapter
-
-        adapter = get_network_adapter()
-        iface_name, _, _, gateway = adapter.get_primary_interface()
-        dns_servers = adapter.get_system_dns_servers()
-        local_dns = dns_servers[0] if dns_servers else None
-
-        sb_config = SingboxConfigBuilder().build(
-            socks_port=10805,
-            proxy_server_ip="188.114.98.180",
-            interface_name=iface_name,
-            routing_rules={},
-            routing_country="",
-            mtu=1420,
-            local_dns_server=local_dns,
-        )
 
         sb_svc = SingboxService()
         trace.mark("SINGBOX_START")

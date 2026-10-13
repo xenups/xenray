@@ -1,25 +1,30 @@
-"""Tests for Xray-core v26.9.30 integration and modernization."""
+"""Tests for Xray-core v26.10.10 integration and modernization."""
 
 from __future__ import annotations
 
+import os
 from unittest.mock import MagicMock, patch
 
-from src.core.constants import XRAY_VERSION
+import pytest
+
+from src.core.constants import PROTOCOL_MASQUE, PROTOCOL_WIREGUARD, TUN_GATEWAY_IPV4, TUN_ROUTE_IPV4, XRAY_VERSION
+from src.core.parsers.binary_parser_adapter import LibXrayParserAdapter
 from src.core.parsers.vless import VlessParser
 from src.platform.linux.core_assets import LinuxCoreAssetAdapter
 from src.platform.macos.core_assets import MacosCoreAssetAdapter
 from src.platform.windows.core_assets import WindowsCoreAssetAdapter
+from src.services.connection.tun_injector import TunInjector
 from src.services.core_engines.config_patcher import ConfigPatcher
 from src.services.core_engines.xray_config_processor import XrayConfigProcessor
 
 
-def test_xray_version_pinned_to_26_9_30():
-    """Verify XRAY_VERSION constant is pinned to 26.9.30."""
-    assert XRAY_VERSION == "26.9.30"
+def test_xray_version_pinned_to_26_10_10():
+    """Verify XRAY_VERSION constant is pinned to 26.10.10."""
+    assert XRAY_VERSION == "26.10.10"
 
 
-def test_platform_adapters_xray_26_9_30():
-    """Verify platform asset adapters resolve correct URLs and assets for v26.9.30."""
+def test_platform_adapters_xray_26_10_10():
+    """Verify platform asset adapters resolve correct URLs and assets for v26.10.10."""
     win_adapter = WindowsCoreAssetAdapter()
     with patch("src.utils.platform_utils.PlatformUtils.get_architecture", return_value="x86_64"):
         win_info = win_adapter.get_xray_asset_info(XRAY_VERSION)
@@ -162,3 +167,142 @@ def test_xray_config_processor_inbounds_and_outbounds():
     outbound_tags = {ob.get("tag") for ob in processed.get("outbounds", [])}
     assert "direct" in outbound_tags
     assert "block" in outbound_tags
+
+
+def test_config_patcher_warp_strips_redundant_public_key():
+    """Verify ConfigPatcher strips redundant root-level publicKey in WARP/WireGuard outbounds."""
+    patcher = ConfigPatcher()
+    outbound = {
+        "protocol": PROTOCOL_WIREGUARD,
+        "tag": "warp-out",
+        "settings": {
+            "secretKey": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+            "publicKey": "REDUNDANT_ROOT_PUBLIC_KEY_SHOULD_BE_REMOVED",
+            "address": ["172.16.0.2/32"],
+            "peers": [
+                {
+                    "publicKey": "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB=",
+                    "endpoint": "1.1.1.1:2408",
+                }
+            ],
+        },
+    }
+
+    config = {"outbounds": [outbound]}
+    patcher.safe_patch(config)
+
+    assert "publicKey" not in outbound["settings"]
+    assert outbound["settings"]["peers"][0]["publicKey"] == "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB="
+
+
+def test_config_patcher_masque_hardening():
+    """Verify ConfigPatcher configures network 'masque' and security 'tls' for MASQUE outbounds."""
+    patcher = ConfigPatcher()
+    outbound = {
+        "protocol": PROTOCOL_MASQUE,
+        "tag": "masque-proxy",
+        "settings": {
+            "address": "example.com",
+            "port": 443,
+        },
+        "streamSettings": {},
+    }
+
+    config = {"outbounds": [outbound]}
+    patcher.safe_patch(config)
+
+    stream = outbound["streamSettings"]
+    assert stream["network"] == "masque"
+    assert stream["security"] == "tls"
+    assert "masqueSettings" in stream
+    assert stream["tlsSettings"]["serverName"] == "example.com"
+
+
+def test_tun_windows_wfp_leak_prevention():
+    """Verify TunInjector injects autoSystemWfpBlockLeak on Windows."""
+    mock_ctx = MagicMock()
+    mock_ctx.routing.load_toggles.return_value = {}
+    mock_ctx.routing.load_rules.return_value = {}
+    mock_ctx.settings.get_sni_spoof_enabled.return_value = False
+
+    injector = TunInjector(mock_ctx)
+    config = {"inbounds": [], "routing": {"rules": []}}
+
+    with patch("sys.platform", "win32"):
+        injector.inject(config, dns_servers=["1.1.1.1"])
+
+    tun = next(ib for ib in config["inbounds"] if ib.get("protocol") == "tun")
+    assert "autoSystemWfpBlockLeak" in tun["settings"]
+    assert tun["settings"]["autoSystemWfpBlockLeak"] == ["dns", "misconfigtun"]
+
+
+def test_tun_handles_ipv6_disabled():
+    """Verify TunInjector maintains IPv4-only routes and gateways when IPv6 is disabled."""
+    mock_ctx = MagicMock()
+    mock_ctx.routing.load_toggles.return_value = {}
+    mock_ctx.routing.load_rules.return_value = {}
+    mock_ctx.settings.get_sni_spoof_enabled.return_value = False
+
+    injector = TunInjector(mock_ctx)
+    config = {"inbounds": [], "routing": {"rules": []}}
+    injector.inject(config, dns_servers=["1.1.1.1"])
+
+    tun = next(ib for ib in config["inbounds"] if ib.get("protocol") == "tun")
+    assert tun["settings"]["gateway"] == [TUN_GATEWAY_IPV4]
+    assert tun["settings"]["autoSystemRoutingTable"] == [TUN_ROUTE_IPV4]
+    # No IPv6 addresses present in gateway or routing table
+    assert not any(":" in addr for addr in tun["settings"]["gateway"])
+    assert not any(":" in route for route in tun["settings"]["autoSystemRoutingTable"])
+
+
+def test_libxray_parser_masque_validation_fallback():
+    """Verify LibXrayParserAdapter validates MASQUE configuration with bundled core."""
+    from src.core.constants import XRAY_EXECUTABLE
+
+    if not (XRAY_EXECUTABLE and os.path.isfile(XRAY_EXECUTABLE)):
+        pytest.skip("Bundled Xray core binary not available for fallback validation")
+
+    masque_cfg = {
+        "outbounds": [
+            {
+                "protocol": "masque",
+                "tag": "proxy",
+                "settings": {"address": "1.1.1.1", "port": 443},
+                "streamSettings": {"network": "masque", "security": "tls"},
+            }
+        ]
+    }
+    is_valid, err = LibXrayParserAdapter.validate_config(masque_cfg)
+    assert is_valid is True, f"MASQUE validation failed: {err}"
+    assert err is None
+
+
+def test_libxray_parser_masque_validation_fallback_mocked():
+    """Verify LibXrayParserAdapter falls back to xray executable when parser rejects MASQUE."""
+    masque_cfg = {
+        "outbounds": [
+            {
+                "protocol": "masque",
+                "tag": "proxy",
+                "settings": {"address": "1.1.1.1", "port": 443},
+                "streamSettings": {"network": "masque", "security": "tls"},
+            }
+        ]
+    }
+
+    mock_parser_proc = MagicMock(
+        returncode=0,
+        stdout=b'{"success": false, "error": "unknown transport protocol: masque"}',
+        stderr=b"",
+    )
+    mock_xray_proc = MagicMock(
+        returncode=0,
+        stdout=b"Configuration OK.",
+        stderr=b"",
+    )
+
+    with patch("subprocess.run", side_effect=[mock_parser_proc, mock_xray_proc]):
+        with patch("os.path.isfile", return_value=True):
+            is_valid, err = LibXrayParserAdapter.validate_config(masque_cfg)
+            assert is_valid is True, f"MASQUE validation failed: {err}"
+            assert err is None

@@ -43,11 +43,13 @@ from src.core.constants import (
     PROTOCOL_FREEDOM,
     PROTOCOL_HTTP,
     PROTOCOL_HYSTERIA2,
+    PROTOCOL_MASQUE,
     PROTOCOL_SHADOWSOCKS,
     PROTOCOL_SOCKS,
     PROTOCOL_TROJAN,
     PROTOCOL_VLESS,
     PROTOCOL_VMESS,
+    PROTOCOL_WIREGUARD,
     RULE_FIELD,
     SNIFF_DEST_OVERRIDE,
     TAG_BLOCK,
@@ -88,6 +90,8 @@ class XrayConfigProcessor:
         PROTOCOL_TROJAN,
         PROTOCOL_SHADOWSOCKS,
         PROTOCOL_HYSTERIA2,
+        PROTOCOL_WIREGUARD,
+        PROTOCOL_MASQUE,
     ]
     CHAINABLE_PROTOCOLS = {
         PROTOCOL_VLESS,
@@ -97,6 +101,7 @@ class XrayConfigProcessor:
         PROTOCOL_SOCKS,
         PROTOCOL_HTTP,
         PROTOCOL_HYSTERIA2,
+        PROTOCOL_MASQUE,
         "tuic",
         "wireguard",
     }
