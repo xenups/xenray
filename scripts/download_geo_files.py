@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
 """
-Download geo files (geoip.dat, geosite.dat) and wintun.dll to bin/ folder.
+Download geo files (geoip.dat, geosite.dat) from Chocolate4U/Iran-v2ray-rules
+for Iranian-optimized routing and wintun.dll driver.
 
-Geo files are from Chocolate4U/Iran-v2ray-rules for Iranian-optimized routing.
-wintun.dll is required by Xray for TUN interface on Windows.
-
-These files are bundled in CI releases so users don't need to download
-them on first start.
+By default, downloads geoip.dat and geosite.dat directly into assets/rules/
+where Xenray runtime and XRAY_LOCATION_ASSET expect them.
 
 Usage:
     python scripts/download_geo_files.py
+    python scripts/download_geo_files.py --force
+    python scripts/download_geo_files.py --dest assets/rules --force
 """
 
+import argparse
 import os
 import sys
 import urllib.request
@@ -22,7 +23,8 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-# Output directory - use bin/ folder where xray.exe is located
+# Default directories
+RULES_DIR = PROJECT_ROOT / "assets" / "rules"
 BIN_DIR = PROJECT_ROOT / "bin"
 
 # GitHub URLs — Chocolate4U/Iran-v2ray-rules provides geo files with
@@ -34,73 +36,95 @@ GEOSITE_URL = "https://github.com/Chocolate4U/Iran-v2ray-rules/releases/latest/d
 WINTUN_URL = "https://www.wintun.net/builds/wintun-0.14.1.zip"
 WINTUN_FILE = "wintun.dll"
 
+# Minimum sane file size for .dat files (~1MB; geoip ~16MB, geosite ~7MB)
+MIN_DAT_SIZE = 1024 * 1024
 
-def download_file(url: str, dest: Path) -> Path:
-    """Download a file with progress."""
-    if dest.exists():
-        print(f"  [SKIP] {dest.name} already exists")
+
+def download_file(
+    url: str,
+    dest: Path,
+    force: bool = False,
+    min_size: int = MIN_DAT_SIZE,
+) -> Path:
+    """Download a file atomically with progress and minimum size validation."""
+    if dest.exists() and not force:
+        print(f"  [SKIP] {dest.name} already exists (use --force to overwrite)")
         return dest
 
-    print(f"  [DOWNLOAD] {url}")
+    print(f"  [DOWNLOAD] {url} -> {dest}")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp_dest = dest.with_name(f"{dest.name}.tmp")
 
     def progress(block_num, block_size, total_size):
         downloaded = block_num * block_size
         percent = min(100, (downloaded / total_size) * 100) if total_size > 0 else 0
         print(f"\r  Progress: {percent:.1f}%", end="", flush=True)
 
-    urllib.request.urlretrieve(url, dest, reporthook=progress)
-    print()
-    print(f"  [OK] Downloaded to {dest}")
-    return dest
+    try:
+        urllib.request.urlretrieve(url, tmp_dest, reporthook=progress)
+        print()
+
+        actual_size = tmp_dest.stat().st_size
+        if actual_size < min_size:
+            tmp_dest.unlink(missing_ok=True)
+            raise RuntimeError(f"Downloaded file too small: {actual_size} bytes (min: {min_size})")
+
+        # Atomic replace
+        tmp_dest.replace(dest)
+        print(f"  [OK] Saved to {dest} ({actual_size / 1024 / 1024:.2f} MB)")
+        return dest
+    except Exception:
+        tmp_dest.unlink(missing_ok=True)
+        raise
 
 
-def download_geo_files():
-    """Download both geoip.dat and geosite.dat."""
+def download_geo_files(dest_dir: Path = RULES_DIR, force: bool = False):
+    """Download both geoip.dat and geosite.dat into the specified directory."""
+    dest_dir.mkdir(parents=True, exist_ok=True)
+
     print("\n[STEP 1] Downloading geoip.dat...")
-    download_file(GEOIP_URL, BIN_DIR / "geoip.dat")
+    download_file(GEOIP_URL, dest_dir / "geoip.dat", force=force, min_size=MIN_DAT_SIZE)
 
     print("\n[STEP 2] Downloading geosite.dat...")
-    download_file(GEOSITE_URL, BIN_DIR / "geosite.dat")
+    download_file(GEOSITE_URL, dest_dir / "geosite.dat", force=force, min_size=MIN_DAT_SIZE)
 
 
-def download_wintun():
+def download_wintun(dest_dir: Path = BIN_DIR, force: bool = False):
     """
-    Download wintun.dll and extract it to bin/.
-    wintun.dll is architecture-specific — we extract the amd64 variant.
+    Download wintun.dll and extract it to destination bin directory.
+    wintun.dll is architecture-specific — extracts the amd64 variant.
     """
-    print("\n[STEP 3] Downloading and extracting wintun.dll...")
-
-    zip_path = BIN_DIR / "wintun.zip"
-    download_file(WINTUN_URL, zip_path)
-
-    target = BIN_DIR / WINTUN_FILE
-    if target.exists():
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    target = dest_dir / WINTUN_FILE
+    if target.exists() and not force:
         print(f"  [SKIP] {WINTUN_FILE} already exists")
-        zip_path.unlink(missing_ok=True)
         return
+
+    print("\n[STEP 3] Downloading and extracting wintun.dll...")
+    zip_path = dest_dir / "wintun.zip"
+    download_file(WINTUN_URL, zip_path, force=True, min_size=1024)
 
     with zipfile.ZipFile(zip_path, "r") as z:
         # wintun zip contains: wintun/bin/amd64/wintun.dll
         arch = "arm64" if os.environ.get("PROCESSOR_ARCHITECTURE", "").startswith("ARM") else "amd64"
         member = f"wintun/bin/{arch}/wintun.dll"
         if member in z.namelist():
-            z.extract(member, BIN_DIR)
-            extracted = BIN_DIR / member
+            z.extract(member, dest_dir)
+            extracted = dest_dir / member
             extracted.replace(target)
             # Clean up nested dirs (deepest first)
-            for p in [BIN_DIR / f"wintun/bin/{arch}", BIN_DIR / "wintun/bin", BIN_DIR / "wintun"]:
+            for p in [dest_dir / f"wintun/bin/{arch}", dest_dir / "wintun/bin", dest_dir / "wintun"]:
                 p.rmdir() if p.exists() else None
             print(f"  [OK] Extracted {WINTUN_FILE} ({arch})")
         else:
             # Fallback: try any wintun.dll in the zip
             for name in z.namelist():
                 if name.endswith("wintun.dll"):
-                    z.extract(name, BIN_DIR)
-                    extracted = BIN_DIR / name
+                    z.extract(name, dest_dir)
+                    extracted = dest_dir / name
                     extracted.replace(target)
-                    # Clean up any extracted dirs
-                    parent = BIN_DIR / name.rsplit("/", 1)[0]
-                    while parent != BIN_DIR:
+                    parent = dest_dir / name.rsplit("/", 1)[0]
+                    while parent != dest_dir:
                         parent.rmdir()
                         parent = parent.parent
                     print(f"  [OK] Extracted {WINTUN_FILE} from {name}")
@@ -112,21 +136,42 @@ def download_wintun():
 
 
 def main():
-    print("=" * 60)
-    print("Downloading Geo Files and wintun.dll to bin/")
-    print("=" * 60)
+    parser = argparse.ArgumentParser(description="Download Xray Iran geo files (geoip.dat, geosite.dat) and wintun.dll")
+    parser.add_argument(
+        "--dest",
+        type=Path,
+        default=RULES_DIR,
+        help="Destination directory for geo files (default: assets/rules)",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        default=False,
+        help="Force download and overwrite existing files",
+    )
+    parser.add_argument(
+        "--with-wintun",
+        action="store_true",
+        default=False,
+        help="Also download wintun.dll to bin/ directory",
+    )
+    args = parser.parse_args()
 
-    BIN_DIR.mkdir(parents=True, exist_ok=True)
+    print("=" * 60)
+    print(f"Downloading Iran Geo Files to {args.dest}")
+    print("=" * 60)
 
     try:
-        download_geo_files()
-        download_wintun()
+        download_geo_files(dest_dir=args.dest, force=args.force)
+
+        if args.with_wintun or not (BIN_DIR / WINTUN_FILE).exists():
+            download_wintun(dest_dir=BIN_DIR, force=args.force)
 
         print("\n" + "=" * 60)
         print("DOWNLOAD COMPLETE!")
-        print(f"Files location: {BIN_DIR}")
-        for f in ["geoip.dat", "geosite.dat", "wintun.dll"]:
-            p = BIN_DIR / f
+        print(f"Geo files location: {args.dest}")
+        for f in ["geoip.dat", "geosite.dat"]:
+            p = args.dest / f
             size = p.stat().st_size / 1024 / 1024 if p.exists() else 0
             print(f"  {f}: {'[OK]' if p.exists() else '[FAIL]'} ({size:.1f} MB)")
         print("=" * 60)
