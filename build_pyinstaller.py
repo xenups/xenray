@@ -72,8 +72,9 @@ def get_windivert_args():
     if get_platform() != "windows":
         return []
     try:
-        import pydivert
         import os as _os
+
+        import pydivert
 
         pkg_dir = _os.path.dirname(pydivert.__file__)
         dll_dir = _os.path.join(pkg_dir, "windivert_dll")
@@ -158,7 +159,8 @@ def ensure_xray_parser_built():
         if res.returncode == 0:
             print(f"Successfully compiled {binary_name}")
         else:
-            print(f"WARNING: Failed to compile {binary_name}")
+            print(f"ERROR: Failed to compile {binary_name} (exit code: {res.returncode})")
+            sys.exit(res.returncode or 1)
     else:
         print(f"NOTICE: Go toolchain not found; skipping automatic compilation of {binary_name}")
 
@@ -246,11 +248,26 @@ def main():
     print(f"Command: {' '.join(cmd[:5])}...")
     result = subprocess.run(cmd, cwd=PROJECT_ROOT)
 
+    executable_name = get_executable_name()
+    if current_platform == "macos":
+        expected_output = os.path.join(PROJECT_ROOT, "dist", "XenRay.app")
+    else:
+        expected_output = os.path.join(PROJECT_ROOT, "dist", executable_name)
+
     if result.returncode == 0:
+        if not os.path.exists(expected_output):
+            print(f"\nERROR: PyInstaller returned 0, but expected output was not created at {expected_output}!")
+            sys.exit(1)
+
+        if current_platform != "macos":
+            output_size = os.path.getsize(expected_output)
+            if output_size == 0:
+                print(f"\nERROR: Generated binary {expected_output} is empty (0 bytes)!")
+                sys.exit(1)
+            print(f"\nVerified binary artifact: {expected_output} ({output_size:,} bytes)")
+
         print("\n" + "=" * 60)
         print("BUILD SUCCESSFUL!")
-
-        executable_name = get_executable_name()
 
         if current_platform == "macos":
             print(f"Application Bundle: dist/XenRay.app")  # noqa: F541
