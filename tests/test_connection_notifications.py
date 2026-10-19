@@ -282,6 +282,34 @@ class TestConnectionNotificationHandler:
         assert res_reconnect_fail is False
         assert mock_notify.call_count == 1
 
+    def test_connectivity_restored_silently_restores_tracking_for_subsequent_events(self, handler, mock_notify):
+        """Verify connectivity_restored silently restores connection tracking after reconnect failure."""
+        # 1. Connection established
+        handler.handle_connected(profile_name="US-Fast")
+        assert mock_notify.call_count == 1
+        mock_notify.reset_mock()
+
+        # 2. Connection drops and reconnect fails (reason="no_internet")
+        handler.handle_connecting()
+        handler.handle_connect_failed(reason="no_internet")
+        assert mock_notify.call_count == 1
+        mock_notify.reset_mock()
+
+        # 3. Active monitor detects core self-healed and emits connectivity_restored event
+        handler._on_connection_state_event({"event_name": "connectivity_restored", "data": {"profile_name": "US-Fast"}})
+
+        # Must NOT send another notification (silent restoration)
+        mock_notify.assert_not_called()
+        assert handler._state == NotificationConnectionState.CONNECTED
+        assert handler._was_connected is True
+
+        # 4. Subsequent manual disconnect notifies properly
+        res_dc = handler.handle_disconnected(is_manual=True)
+        assert res_dc is True
+        assert mock_notify.call_count == 1
+        msg, _ = mock_notify.call_args[0]
+        assert "Disconnected" in msg or "قطع شد" in msg or "Отключено" in msg or "已断开" in msg
+
     # -------------------------------------------------------------------------
     # 8. Application shutdown
     # -------------------------------------------------------------------------

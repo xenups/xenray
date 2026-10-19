@@ -272,6 +272,7 @@ function Invoke-XenrayRollback {
 
         Get-ChildItem -LiteralPath $ContentRoot | ForEach-Object {
             $destPath = Join-Path $AppDir $_.Name
+            $backupDestPath = Join-Path $BackupDir $_.Name
             if (Test-Path -LiteralPath $destPath) {
                 if (Test-Path -LiteralPath $destPath -PathType Container) {
                     Get-ChildItem -LiteralPath $destPath -Recurse -File | ForEach-Object {
@@ -284,13 +285,21 @@ function Invoke-XenrayRollback {
                             }
                         }
                     }
-                    # Prune newly introduced empty directories
+                    # Prune newly introduced empty directories (preserve pre-existing directories from backup)
                     Get-ChildItem -LiteralPath $destPath -Recurse -Directory | Sort-Object -Property FullName -Descending | ForEach-Object {
-                        if ((Get-ChildItem -LiteralPath $_.FullName -Force).Count -eq 0) {
+                        $normDirFull = [System.IO.Path]::GetFullPath($_.FullName)
+                        $existedInBackup = $false
+                        if ($normDirFull.StartsWith($normAppDirPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+                            $dirRel = $normDirFull.Substring($normAppDirPrefix.Length)
+                            $backupDirItemPath = Join-Path $BackupDir $dirRel
+                            $existedInBackup = (Test-Path -LiteralPath $backupDirItemPath)
+                        }
+                        if (-not $existedInBackup -and (Get-ChildItem -LiteralPath $_.FullName -Force).Count -eq 0) {
                             Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue
                         }
                     }
-                    if ((Get-ChildItem -LiteralPath $destPath -Force).Count -eq 0) {
+                    $topExistedInBackup = (Test-Path -LiteralPath $backupDestPath)
+                    if (-not $topExistedInBackup -and (Get-ChildItem -LiteralPath $destPath -Force).Count -eq 0) {
                         Remove-Item -LiteralPath $destPath -Force -Recurse -ErrorAction SilentlyContinue
                     }
                 } else {
@@ -804,8 +813,16 @@ class AppUpdateService:
                     f.write(AppUpdateService.get_embedded_updater_script())
 
             # Create wrapper script that calls the main script with parameters
-            safe_app_dir = app_dir.rstrip("\\/")
-            safe_exe_path = exe_path.rstrip("\\/")
+            # Strip trailing separators for standard paths, but preserve trailing separator
+            # on drive roots (e.g. D:\ -> D:\, not D: which Windows treats as drive-relative cwd).
+            def _normalize_script_path(p: str) -> str:
+                stripped = p.rstrip("\\/")
+                if len(stripped) == 2 and stripped[1] == ":" and stripped[0].isalpha():
+                    return stripped + "\\"
+                return stripped
+
+            safe_app_dir = _normalize_script_path(app_dir)
+            safe_exe_path = _normalize_script_path(exe_path)
             wrapper_path = os.path.join(tempfile.gettempdir(), "xenray_update_launcher.ps1")
             wrapper_content = f"""
 # XenRay Update Launcher

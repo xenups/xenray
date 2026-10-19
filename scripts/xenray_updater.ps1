@@ -249,6 +249,7 @@ function Invoke-XenrayRollback {
 
         Get-ChildItem -LiteralPath $ContentRoot | ForEach-Object {
             $destPath = Join-Path $AppDir $_.Name
+            $backupDestPath = Join-Path $BackupDir $_.Name
             if (Test-Path -LiteralPath $destPath) {
                 if (Test-Path -LiteralPath $destPath -PathType Container) {
                     Get-ChildItem -LiteralPath $destPath -Recurse -File | ForEach-Object {
@@ -261,13 +262,21 @@ function Invoke-XenrayRollback {
                             }
                         }
                     }
-                    # Prune newly introduced empty directories
+                    # Prune newly introduced empty directories (preserve pre-existing directories from backup)
                     Get-ChildItem -LiteralPath $destPath -Recurse -Directory | Sort-Object -Property FullName -Descending | ForEach-Object {
-                        if ((Get-ChildItem -LiteralPath $_.FullName -Force).Count -eq 0) {
+                        $normDirFull = [System.IO.Path]::GetFullPath($_.FullName)
+                        $existedInBackup = $false
+                        if ($normDirFull.StartsWith($normAppDirPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+                            $dirRel = $normDirFull.Substring($normAppDirPrefix.Length)
+                            $backupDirItemPath = Join-Path $BackupDir $dirRel
+                            $existedInBackup = (Test-Path -LiteralPath $backupDirItemPath)
+                        }
+                        if (-not $existedInBackup -and (Get-ChildItem -LiteralPath $_.FullName -Force).Count -eq 0) {
                             Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue
                         }
                     }
-                    if ((Get-ChildItem -LiteralPath $destPath -Force).Count -eq 0) {
+                    $topExistedInBackup = (Test-Path -LiteralPath $backupDestPath)
+                    if (-not $topExistedInBackup -and (Get-ChildItem -LiteralPath $destPath -Force).Count -eq 0) {
                         Remove-Item -LiteralPath $destPath -Force -Recurse -ErrorAction SilentlyContinue
                     }
                 } else {

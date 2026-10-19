@@ -275,6 +275,25 @@ def test_create_updater_script(tmp_path):
     assert fake_app_dir in launcher_content
 
 
+def test_create_updater_script_preserves_drive_root(tmp_path):
+    """Verify create_updater_script preserves trailing separator on drive roots and strips standard paths."""
+    fake_zip = str(tmp_path / "test_update.zip")
+    Path(fake_zip).write_text("dummy zip content")
+
+    # 1. Drive root installation path (D:\)
+    launcher_path_drive = AppUpdateService.create_updater_script(fake_zip, "D:\\")
+    assert launcher_path_drive is not None
+    content_drive = Path(launcher_path_drive).read_text(encoding="utf-8")
+    assert '-AppDir "D:\\"' in content_drive
+    assert '-AppDir "D:"' not in content_drive
+
+    # 2. Standard subdirectory path should still have trailing separator stripped
+    launcher_path_sub = AppUpdateService.create_updater_script(fake_zip, "C:\\Program Files\\XenRay\\")
+    assert launcher_path_sub is not None
+    content_sub = Path(launcher_path_sub).read_text(encoding="utf-8")
+    assert '-AppDir "C:\\Program Files\\XenRay"' in content_sub
+
+
 @patch("subprocess.Popen")
 @patch("threading.Thread")
 def test_apply_update_orchestration(mock_thread, mock_popen, tmp_path):
@@ -544,6 +563,7 @@ def test_powershell_actual_rollback_execution(tmp_path):
     (app_dir / "XenRay.exe").write_text("v1.0", encoding="utf-8")
     (app_dir / "core").mkdir()
     (app_dir / "core" / "sing-box.exe").write_text("sb-1.0", encoding="utf-8")
+    (app_dir / "core" / "pre_existing_empty").mkdir()
     (app_dir / "user_data").mkdir()
     (app_dir / "user_data" / "profiles.json").write_text("user-preserved-data", encoding="utf-8")
 
@@ -552,8 +572,10 @@ def test_powershell_actual_rollback_execution(tmp_path):
     (staging_dir / "core").mkdir()
     (staging_dir / "core" / "sing-box.exe").write_text("sb-2.0", encoding="utf-8")
     (staging_dir / "core" / "new_engine.exe").write_text("new-engine-bin", encoding="utf-8")
+    (staging_dir / "core" / "new_staged_empty").mkdir()
     (staging_dir / "new_plugin").mkdir()
     (staging_dir / "new_plugin" / "plugin.dll").write_text("plugin-binary", encoding="utf-8")
+    (staging_dir / "new_empty_folder").mkdir()
 
     ps_code = f"""
 param(
@@ -620,10 +642,15 @@ foreach ($m in $global:LogMessages) {{ Write-Output "LOG: $m" }}
     # Verify user data preserved
     assert (app_dir / "user_data" / "profiles.json").read_text(encoding="utf-8") == "user-preserved-data"
 
+    # Verify pre-existing empty directory is preserved (not pruned)
+    assert (app_dir / "core" / "pre_existing_empty").exists()
+
     # Verify newly introduced files and folders removed
     assert not (app_dir / "core" / "new_engine.exe").exists()
+    assert not (app_dir / "core" / "new_staged_empty").exists()
     assert not (app_dir / "new_plugin" / "plugin.dll").exists()
     assert not (app_dir / "new_plugin").exists()
+    assert not (app_dir / "new_empty_folder").exists()
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="PowerShell updater tests require Windows")

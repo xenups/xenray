@@ -161,6 +161,29 @@ class ConnectionNotificationHandler:
         self._send_notification(message, title="XenRay")
         return True
 
+    def handle_connectivity_restored(self, profile_name: Optional[str] = None) -> None:
+        """Silently restore connection tracking without dispatching a duplicate notification.
+
+        Called when AutoReconnectService detects connectivity recovery on an existing core.
+        ReconnectEventHandler._handle_connectivity_restored() already sends the recovery
+        notification; this method restores internal state (_state, _was_connected) so subsequent
+        manual disconnects or crashes trigger appropriate notifications.
+        """
+        with self._lock:
+            self._state = NotificationConnectionState.CONNECTED
+            self._was_connected = True
+            self._is_manual_disconnect = False
+
+            if profile_name:
+                self._active_profile_name = profile_name
+            elif not self._active_profile_name and self._selected_profile_getter:
+                try:
+                    profile = self._selected_profile_getter()
+                    if profile and isinstance(profile, dict):
+                        self._active_profile_name = profile.get("name")
+                except Exception as e:
+                    logger.debug(f"[ConnectionNotificationHandler] Could not resolve profile name: {e}")
+
     def handle_connect_failed(self, reason: Optional[str] = None) -> bool:
         """Handle failed connection attempt.
 
@@ -284,6 +307,9 @@ class ConnectionNotificationHandler:
         elif event_name in ("connected", "reconnected"):
             profile_name = data.get("profile_name")
             self.handle_connected(profile_name=profile_name)
+        elif event_name == "connectivity_restored":
+            profile_name = data.get("profile_name")
+            self.handle_connectivity_restored(profile_name=profile_name)
         elif event_name == "connect_failed":
             self.handle_connect_failed(reason=data.get("reason"))
         elif event_name == "disconnecting":
