@@ -135,6 +135,9 @@ class ConnectionNotificationHandler:
             True if a notification was dispatched, False if duplicate/skipped.
         """
         with self._lock:
+            if self._is_shutting_down:
+                return False
+
             if self._state == NotificationConnectionState.CONNECTED:
                 # Deduplication: already in connected state
                 return False
@@ -170,6 +173,9 @@ class ConnectionNotificationHandler:
         manual disconnects or crashes trigger appropriate notifications.
         """
         with self._lock:
+            if self._is_shutting_down:
+                return
+
             self._state = NotificationConnectionState.CONNECTED
             self._was_connected = True
             self._is_manual_disconnect = False
@@ -318,9 +324,9 @@ class ConnectionNotificationHandler:
             reason = data.get("reason")
             is_manual = False if reason == "core_crashed" else None
             self.handle_disconnected(is_manual=is_manual, reason=reason)
-        elif event_name == "reconnect_failed":
-            # Reconnect attempt after a drop failed completely
-            self.handle_unexpected_disconnect(reason=data.get("reason") or "reconnect_failed")
+        elif event_name in ("reconnect_failed", "connectivity_lost"):
+            # Reconnect attempt after a drop failed completely, or active monitor detected connection loss
+            self.handle_unexpected_disconnect(reason=data.get("reason") or event_name)
 
     def _on_core_crashed(self, payload=None) -> None:
         """Handle EVENT_CORE_CRASHED event from CoreHealthMonitor."""

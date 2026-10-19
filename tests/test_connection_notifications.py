@@ -325,6 +325,22 @@ class TestConnectionNotificationHandler:
         assert res is False
         mock_notify.assert_not_called()
 
+    def test_application_shutdown_suppresses_late_connected_notification(self, handler, mock_notify):
+        """Late connected event during application shutdown is ignored and dispatches no notification."""
+        handler.set_shutting_down(True)
+        res = handler.handle_connected(profile_name="US-Fast")
+
+        assert res is False
+        mock_notify.assert_not_called()
+
+    def test_application_shutdown_suppresses_late_connectivity_restored(self, handler, mock_notify):
+        """Late connectivity_restored event during application shutdown is ignored."""
+        handler.set_shutting_down(True)
+        handler.handle_connectivity_restored(profile_name="US-Fast")
+
+        assert handler._state != NotificationConnectionState.CONNECTED
+        mock_notify.assert_not_called()
+
     # -------------------------------------------------------------------------
     # 9. Fail-soft behavior
     # -------------------------------------------------------------------------
@@ -393,5 +409,42 @@ class TestConnectionNotificationHandler:
         test_bus.publish(EVENT_CORE_CRASHED, {"crashed_engine": "xray", "pid": 1234})
         assert mock_notify.call_count == 2
         assert "unexpectedly" in mock_notify.call_args[0][0]
+
+        h.cleanup()
+
+    def test_connectivity_lost_triggers_unexpected_disconnect_notification(self, test_bus, mock_notify):
+        """connectivity_lost event from ConnectionManager routes to unexpected disconnect notification."""
+        h = ConnectionNotificationHandler(
+            selected_profile_getter=lambda: {"name": "Frankfurt-01"},
+            notify_fn=mock_notify,
+            bus=test_bus,
+        )
+        h.start()
+
+        # Connect first
+        test_bus.publish(
+            TOPIC_CONNECTION_STATE_CHANGED,
+            EngineEvent(
+                event_name="connected",
+                source="connection_manager",
+                payload={"event": "connected", "data": {"profile_name": "Frankfurt-01"}},
+            ),
+        )
+        assert mock_notify.call_count == 1
+        mock_notify.reset_mock()
+
+        # Emit connectivity_lost
+        test_bus.publish(
+            TOPIC_CONNECTION_STATE_CHANGED,
+            EngineEvent(
+                event_name="connectivity_lost",
+                source="connection_manager",
+                payload={"event": "connectivity_lost", "data": {"reason": "ping_timeout"}},
+            ),
+        )
+        assert mock_notify.call_count == 1
+        msg, title = mock_notify.call_args[0]
+        assert "unexpectedly" in msg
+        assert h._state == NotificationConnectionState.DISCONNECTED
 
         h.cleanup()

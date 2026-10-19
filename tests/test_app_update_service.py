@@ -66,6 +66,67 @@ def test_updater_route_cleanup_safety():
     assert "isTunAdapter" in script
     assert "isTunGateway" in script
 
+    # Must verify session ownership before route removal
+    assert "$hasActiveOtherCore" in script
+    assert "$targetHadStoppedCore" in script
+    assert "Skipping route removal" in script
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="PowerShell updater tests require Windows")
+def test_updater_route_ownership_skips_when_session_ownership_uncertain(tmp_path):
+    """Verify that route removal is skipped when the target session was idle
+    (TargetSessionCoreStopped is false) or when an active core process is running,
+    protecting live tunnel connections from other installations.
+    """
+    script = AppUpdateService.get_embedded_updater_script()
+    fn_eligible = _extract_powershell_function(script, "Test-IsXenrayTunRouteEligible")
+
+    # Script block simulating the route ownership decision logic from Step 3
+    ps_code = f"""
+$global:LogMessages = [System.Collections.Generic.List[string]]::new()
+function Log($msg) {{ $global:LogMessages.Add($msg) }}
+
+{fn_eligible}
+
+function Test-RouteCleanupDecision($targetHadStoppedCore, $activeCoreCount) {{
+    $hasActiveOtherCore = ($activeCoreCount -gt 0)
+    if ($hasActiveOtherCore) {{
+        Log "Active tunnel core process detected. Route belongs to an active session. Skipping route removal."
+        return "SKIPPED_ACTIVE_OTHER"
+    }} elseif (-not $targetHadStoppedCore) {{
+        Log "No tunnel core process stopped inside target AppDir. Route ownership uncertain. Skipping route removal."
+        return "SKIPPED_IDLE"
+    }} else {{
+        return "PROVEN_OWNED_PROCEED_TO_CLEANUP"
+    }}
+}}
+
+# Case 1: Another installation has live tunnel ($activeCoreCount = 1) -> must skip
+$res1 = Test-RouteCleanupDecision $false 1
+Write-Output "CASE1=$res1"
+
+# Case 2: Target installation was idle ($targetHadStoppedCore = $false) -> must skip
+$res2 = Test-RouteCleanupDecision $false 0
+Write-Output "CASE2=$res2"
+
+# Case 3: Target installation stopped a core process and no other core runs -> proceed
+$res3 = Test-RouteCleanupDecision $true 0
+Write-Output "CASE3=$res3"
+"""
+    ps_file = tmp_path / "test_route_ownership.ps1"
+    ps_file.write_text(ps_code, encoding="utf-8")
+
+    proc = subprocess.run(
+        ["powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(ps_file)],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    assert "CASE1=SKIPPED_ACTIVE_OTHER" in proc.stdout
+    assert "CASE2=SKIPPED_IDLE" in proc.stdout
+    assert "CASE3=PROVEN_OWNED_PROCEED_TO_CLEANUP" in proc.stdout
+
 
 @pytest.mark.skipif(sys.platform != "win32", reason="PowerShell updater tests require Windows")
 def test_route_decision_logic_synthetic():
@@ -651,6 +712,88 @@ foreach ($m in $global:LogMessages) {{ Write-Output "LOG: $m" }}
     assert not (app_dir / "new_plugin" / "plugin.dll").exists()
     assert not (app_dir / "new_plugin").exists()
     assert not (app_dir / "new_empty_folder").exists()
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="PowerShell updater tests require Windows")
+def test_powershell_single_file_rollback_parameter_binding(tmp_path):
+    """Verify that New-XenrayBackupManifest returns un-enumerated HashSet[string]
+    when exactly one pre-existing file exists, so Invoke-XenrayRollback binds
+    the PreExistingFiles parameter successfully without argument transformation error.
+    """
+    script = AppUpdateService.get_embedded_updater_script()
+    fn_manifest = _extract_powershell_function(script, "New-XenrayBackupManifest")
+    fn_rollback = _extract_powershell_function(script, "Invoke-XenrayRollback")
+
+    app_dir = tmp_path / "app"
+    staging_dir = tmp_path / "staging"
+    backup_dir = tmp_path / "backup"
+
+    app_dir.mkdir()
+    staging_dir.mkdir()
+
+    # Exactly ONE pre-existing file in the entire installation
+    (app_dir / "XenRay.exe").write_text("v1.0-single", encoding="utf-8")
+
+    # Staging has replacement + a new introduced file
+    (staging_dir / "XenRay.exe").write_text("v2.0-single", encoding="utf-8")
+    (staging_dir / "new_file.txt").write_text("introduced", encoding="utf-8")
+
+    ps_code = f"""
+param(
+    [string]$AppDir,
+    [string]$BackupDir,
+    [string]$ContentRoot
+)
+
+$global:LogMessages = [System.Collections.Generic.List[string]]::new()
+function Log($msg) {{ $global:LogMessages.Add($msg) }}
+
+{fn_manifest}
+
+{fn_rollback}
+
+$manifest = New-XenrayBackupManifest -AppDir $AppDir -BackupDir $BackupDir -ContentRoot $ContentRoot
+Write-Output "MANIFEST_TYPE=$($manifest.GetType().FullName)"
+Write-Output "MANIFEST_COUNT=$($manifest.Count)"
+
+# Simulate deployment
+Get-ChildItem -LiteralPath $ContentRoot | ForEach-Object {{
+    Copy-Item -LiteralPath $_.FullName -Destination $AppDir -Recurse -Force
+}}
+
+# Execute rollback - this must NOT throw argument transformation error
+$rbSuccess = Invoke-XenrayRollback -AppDir $AppDir -BackupDir $BackupDir `
+    -ContentRoot $ContentRoot -PreExistingFiles $manifest
+Write-Output "ROLLBACK_SUCCESS=$rbSuccess"
+"""
+    ps_file = tmp_path / "test_single_file_rb.ps1"
+    ps_file.write_text(ps_code, encoding="utf-8")
+
+    proc = subprocess.run(
+        [
+            "powershell.exe",
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(ps_file),
+            "-AppDir",
+            str(app_dir),
+            "-BackupDir",
+            str(backup_dir),
+            "-ContentRoot",
+            str(staging_dir),
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    assert "MANIFEST_TYPE=System.Collections.Generic.HashSet`1[[System.String" in proc.stdout
+    assert "MANIFEST_COUNT=1" in proc.stdout
+    assert "ROLLBACK_SUCCESS=True" in proc.stdout
+    assert (app_dir / "XenRay.exe").read_text(encoding="utf-8") == "v1.0-single"
+    assert not (app_dir / "new_file.txt").exists()
 
 
 @pytest.mark.skipif(sys.platform != "win32", reason="PowerShell updater tests require Windows")

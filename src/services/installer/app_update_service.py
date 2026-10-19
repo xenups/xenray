@@ -136,6 +136,9 @@ function Stop-XenrayProcessesInsideAppDir {
 
         if ($normPPath.StartsWith($normAppDir, [System.StringComparison]::OrdinalIgnoreCase)) {
             Log "Terminating process inside AppDir: $pName (PID: $procId, Path: $normPPath)"
+            if ($pName -in @("sing-box", "xray")) {
+                $script:TargetSessionCoreStopped = $true
+            }
             $p | Stop-Process -Force -ErrorAction SilentlyContinue
         } else {
             Log "Preserving process $pName (PID: $procId) located outside AppDir: $normPPath"
@@ -229,7 +232,7 @@ function New-XenrayBackupManifest {
             }
         }
     }
-    return $manifest
+    return ,$manifest
 }
 
 # Helper: Rollback implementation restoring backed up files and pruning newly introduced files
@@ -385,34 +388,50 @@ Start-Sleep -Seconds 1
 # 3. Clean up any broken XenRay TUN routes if present (with strict ownership check)
 Log "Checking for orphaned XenRay TUN default routes..."
 try {
-    $defaultRoutes = Get-NetRoute -DestinationPrefix "0.0.0.0/0" -ErrorAction SilentlyContinue
-    if ($defaultRoutes) {
-        $tunCleaned = 0
-        $allAdapters = @(Get-NetAdapter -ErrorAction SilentlyContinue)
-        foreach ($r in $defaultRoutes) {
-            $adapter = $allAdapters | Where-Object { $_.ifIndex -eq $r.InterfaceIndex } | Select-Object -First 1
-            $alias = if ($adapter) { $adapter.Name } else { $r.InterfaceAlias }
-            $desc = if ($adapter) { $adapter.InterfaceDescription } else { "" }
+    # Session ownership verification:
+    # A XenRay adapter name (e.g. "xenray-tun", "SINGTUN") does not prove that its route is orphaned
+    # or belongs to this installation. If another installation has a live tunnel (active core process),
+    # or if this target installation was idle (no core process stopped inside AppDir), route ownership
+    # is uncertain. We must NOT remove the route to avoid interrupting another live connection.
+    $activeCoreProcs = @(Get-Process -Name @("sing-box", "xray") -ErrorAction SilentlyContinue)
+    $hasActiveOtherCore = ($activeCoreProcs.Count -gt 0)
+    $targetHadStoppedCore = ($script:TargetSessionCoreStopped -eq $true)
 
-            if (Test-IsXenrayTunRouteEligible -DestinationPrefix $r.DestinationPrefix -NextHop $r.NextHop -InterfaceAlias $alias -InterfaceDescription $desc) {
-                Log "Found orphan XenRay TUN default route: Interface='$alias' ($desc), Index=$($r.InterfaceIndex), NextHop='$($r.NextHop)'. Removing..."
-                try {
-                    Remove-NetRoute -DestinationPrefix "0.0.0.0/0" -InterfaceIndex $r.InterfaceIndex -NextHop $r.NextHop -Confirm:$false -ErrorAction Stop
-                    Log "SUCCESS: Removed orphan XenRay TUN default route on interface '$alias'."
-                    $tunCleaned++
-                } catch {
-                    Log "WARNING: Remove-NetRoute failed ($($_.Exception.Message)), attempting scoped route delete..."
-                    route delete 0.0.0.0 mask 0.0.0.0 $($r.NextHop) if $($r.InterfaceIndex) 2>&1 | Out-String | ForEach-Object { if ($_.Trim()) { Log "route delete: $_" } }
-                }
-            } elseif ($r.NextHop -in @("10.0.0.2", "10.0.0.1")) {
-                Log "WARNING: Default route with NextHop $($r.NextHop) found on interface '$alias' ($desc), but interface is NOT unambiguously a XenRay TUN adapter. Leaving route untouched."
-            }
-        }
-        if ($tunCleaned -eq 0) {
-            Log "No orphan XenRay TUN default routes required removal."
-        }
+    if ($hasActiveOtherCore) {
+        $liveCoreNames = ($activeCoreProcs | ForEach-Object { "$($_.ProcessName) (PID: $($_.Id))" }) -join ", "
+        Log "Active tunnel core process detected ($liveCoreNames). Route belongs to an active session or ownership is uncertain. Skipping route removal to protect live connection."
+    } elseif (-not $targetHadStoppedCore) {
+        Log "No tunnel core process (sing-box/xray) was stopped inside target AppDir (installation was idle). Route ownership is uncertain. Skipping route removal."
     } else {
-        Log "No default routes detected by Get-NetRoute."
+        $defaultRoutes = Get-NetRoute -DestinationPrefix "0.0.0.0/0" -ErrorAction SilentlyContinue
+        if ($defaultRoutes) {
+            $tunCleaned = 0
+            $allAdapters = @(Get-NetAdapter -ErrorAction SilentlyContinue)
+            foreach ($r in $defaultRoutes) {
+                $adapter = $allAdapters | Where-Object { $_.ifIndex -eq $r.InterfaceIndex } | Select-Object -First 1
+                $alias = if ($adapter) { $adapter.Name } else { $r.InterfaceAlias }
+                $desc = if ($adapter) { $adapter.InterfaceDescription } else { "" }
+
+                if (Test-IsXenrayTunRouteEligible -DestinationPrefix $r.DestinationPrefix -NextHop $r.NextHop -InterfaceAlias $alias -InterfaceDescription $desc) {
+                    Log "Found confirmed orphan XenRay TUN default route: Interface='$alias' ($desc), Index=$($r.InterfaceIndex), NextHop='$($r.NextHop)'. Removing..."
+                    try {
+                        Remove-NetRoute -DestinationPrefix "0.0.0.0/0" -InterfaceIndex $r.InterfaceIndex -NextHop $r.NextHop -Confirm:$false -ErrorAction Stop
+                        Log "SUCCESS: Removed orphan XenRay TUN default route on interface '$alias'."
+                        $tunCleaned++
+                    } catch {
+                        Log "WARNING: Remove-NetRoute failed ($($_.Exception.Message)), attempting scoped route delete..."
+                        route delete 0.0.0.0 mask 0.0.0.0 $($r.NextHop) if $($r.InterfaceIndex) 2>&1 | Out-String | ForEach-Object { if ($_.Trim()) { Log "route delete: $_" } }
+                    }
+                } elseif ($r.NextHop -in @("10.0.0.2", "10.0.0.1")) {
+                    Log "WARNING: Default route with NextHop $($r.NextHop) found on interface '$alias' ($desc), but interface is NOT unambiguously a XenRay TUN adapter. Leaving route untouched."
+                }
+            }
+            if ($tunCleaned -eq 0) {
+                Log "No orphan XenRay TUN default routes required removal."
+            }
+        } else {
+            Log "No default routes detected by Get-NetRoute."
+        }
     }
 } catch {
     Log "WARNING: Route check encountered an error: $_"
