@@ -27,6 +27,7 @@ class RoutingPage(ft.Container):
             expand=True,
             padding=0,
             bgcolor=GlassTokens.BG_PAGE,
+            clip_behavior=ft.ClipBehavior.HARD_EDGE,
         )
         self._setup_ui()
 
@@ -154,7 +155,11 @@ class RoutingPage(ft.Container):
                         label_color=ft.Colors.PRIMARY,
                         unselected_label_color=ft.Colors.ON_SURFACE_VARIANT,
                     ),
-                    ft.TabBarView(expand=True, controls=tab_contents),
+                    ft.TabBarView(
+                        expand=True,
+                        controls=tab_contents,
+                        clip_behavior=ft.ClipBehavior.HARD_EDGE,
+                    ),
                 ],
             ),
         )

@@ -77,3 +77,55 @@ def test_disconnect_resets_to_placeholders() -> None:
 
     assert page._has_data is False
     assert page._dl_speed_text.value == "—"
+
+
+def test_cached_telemetry_rendered_immediately_on_set_visible() -> None:
+    """Telemetry cached while hidden renders instantly when page becomes visible."""
+    page = _make_page()
+    page._is_connected = True
+    page._is_visible = False
+
+    # Telemetry arrives while on another tab
+    page.update_network_stats(
+        rate_str="3.5 MB/s",
+        download_bps=3_500_000,
+        upload_bps=500_000,
+        total_bps=4_000_000,
+        upload_total="10.0 MB",
+        download_total="50.0 MB",
+        _has_data=True,
+    )
+
+    # Values in controls are still placeholders because page is hidden
+    assert page._dl_speed_text.value == "—"
+    assert page._last_payload is not None
+
+    # User clicks on Statistics tab
+    page.set_visible(True)
+
+    # Values are now immediately populated with no delay or timer wait
+    assert page._dl_speed_text.value != "—"
+    assert page._rate_text_control.value == "3.5 MB/s"
+
+
+def test_telemetry_event_syncs_is_connected() -> None:
+    """EventBus telemetry payload with is_connected=True sets _is_connected and updates."""
+    page = _make_page()
+    page.set_visible(True)
+    assert page._is_connected is False
+
+    page._on_telemetry_event(
+        {
+            "is_connected": True,
+            "rate_str": "2.0 MB/s",
+            "download_bps": 2_000_000,
+            "upload_bps": 1_000_000,
+            "total_bps": 3_000_000,
+            "download_total": "20.0 MB",
+            "upload_total": "5.0 MB",
+        }
+    )
+
+    assert page._is_connected is True
+    assert page._has_data is True
+    assert page._dl_speed_text.value != "—"

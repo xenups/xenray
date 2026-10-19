@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import threading
+import time
 from typing import TYPE_CHECKING
 
 import psutil
@@ -17,8 +18,23 @@ if TYPE_CHECKING:
 class StatsForwardingService:
     """Service handling background stats forwarding loops and status display wrapping."""
 
-    def __init__(self, main_window: MainWindow) -> None:
+    def __init__(self, main_window: MainWindow, network_interval: float = 1.0) -> None:
         self._mw = main_window
+        self._network_interval = network_interval
+        self._session_dl_bytes: float = 0.0
+        self._session_ul_bytes: float = 0.0
+        self._was_running: bool = False
+        self._last_tick_time: float = 0.0
+
+    @staticmethod
+    def _fmt_bytes(b: float) -> str:
+        if b < 1024:
+            return f"{b:.0f} B"
+        if b < 1024 * 1024:
+            return f"{b / 1024:.1f} KB"
+        if b < 1024 * 1024 * 1024:
+            return f"{b / (1024 * 1024):.1f} MB"
+        return f"{b / (1024 * 1024 * 1024):.2f} GB"
 
     def start(self) -> None:
         """Start async background forwarding tasks."""
@@ -26,29 +42,64 @@ class StatsForwardingService:
         self._mw._page.run_task(self.forward_system_stats)
         self.wrap_status_display()
 
+    def publish_now(self) -> None:
+        """Immediately compute and publish network telemetry without waiting for the interval."""
+        try:
+            is_running = getattr(self._mw, "_is_running", False)
+            if not is_running or getattr(self._mw, "_nav_locked", False):
+                return
+            network_stats = getattr(self._mw, "_network_stats", None)
+            if not network_stats:
+                return
+
+            stats = network_stats.get_stats()
+            down_str = stats.get("download_speed", "0 B/s")
+            total_bps = float(stats.get("total_bps", 0))
+
+            dl_bps = total_bps * 0.6
+            ul_bps = total_bps * 0.4
+
+            dl_total_str = self._fmt_bytes(self._session_dl_bytes)
+            ul_total_str = self._fmt_bytes(self._session_ul_bytes)
+
+            event_bus.publish(
+                TOPIC_TELEMETRY_UPDATED,
+                {
+                    "rate_str": down_str,
+                    "upload_str": ul_total_str,
+                    "download_str": dl_total_str,
+                    "download_bps": dl_bps,
+                    "upload_bps": ul_bps,
+                    "total_bps": total_bps,
+                    "download_total": dl_total_str,
+                    "upload_total": ul_total_str,
+                    "is_connected": is_running,
+                },
+            )
+        except Exception:
+            pass
+
     async def forward_network_stats(self) -> None:
         """Periodically forward network stats to active views."""
-        _session_dl_bytes: float = 0.0
-        _session_ul_bytes: float = 0.0
-        _was_running: bool = False
-        _interval: float = 3.0
+        self._last_tick_time = time.monotonic()
 
         while True:
             try:
                 # Immediate first poll: update BEFORE sleeping so the first
                 # telemetry lands the moment the task starts (during splash),
-                # not after the first 3s tick.
-                is_running = self._mw._is_running
+                # not after the first tick.
+                is_running = getattr(self._mw, "_is_running", False)
 
-                if is_running and not _was_running:
-                    _session_dl_bytes = 0.0
-                    _session_ul_bytes = 0.0
-                elif (not is_running) and _was_running:
+                if is_running and not self._was_running:
+                    self._session_dl_bytes = 0.0
+                    self._session_ul_bytes = 0.0
+                    self._last_tick_time = time.monotonic()
+                elif (not is_running) and self._was_running:
                     # Connection just dropped — zero-reset the speed badges
                     # in-place so Download/Upload don't stay stuck on their last
                     # recorded values after the FSM reaches DISCONNECTED.
-                    _session_dl_bytes = 0.0
-                    _session_ul_bytes = 0.0
+                    self._session_dl_bytes = 0.0
+                    self._session_ul_bytes = 0.0
                     event_bus.publish(
                         TOPIC_TELEMETRY_UPDATED,
                         {
@@ -63,32 +114,31 @@ class StatsForwardingService:
                             "is_connected": False,
                         },
                     )
-                _was_running = is_running
+                self._was_running = is_running
 
-                if not is_running or self._mw._nav_locked:
+                if not is_running or getattr(self._mw, "_nav_locked", False):
                     continue
 
-                stats = self._mw._network_stats.get_stats()
+                network_stats = getattr(self._mw, "_network_stats", None)
+                if not network_stats:
+                    continue
+
+                stats = network_stats.get_stats()
                 down_str = stats.get("download_speed", "0 B/s")
                 total_bps = float(stats.get("total_bps", 0))
 
                 dl_bps = total_bps * 0.6
                 ul_bps = total_bps * 0.4
 
-                _session_dl_bytes += dl_bps * _interval
-                _session_ul_bytes += ul_bps * _interval
+                now = time.monotonic()
+                dt = max(0.0, now - self._last_tick_time) if self._last_tick_time > 0 else self._network_interval
+                self._last_tick_time = now
 
-                def _fmt_bytes(b: float) -> str:
-                    if b < 1024:
-                        return f"{b:.0f} B"
-                    if b < 1024 * 1024:
-                        return f"{b / 1024:.1f} KB"
-                    if b < 1024 * 1024 * 1024:
-                        return f"{b / (1024 * 1024):.1f} MB"
-                    return f"{b / (1024 * 1024 * 1024):.2f} GB"
+                self._session_dl_bytes += dl_bps * dt
+                self._session_ul_bytes += ul_bps * dt
 
-                dl_total_str = _fmt_bytes(_session_dl_bytes)
-                ul_total_str = _fmt_bytes(_session_ul_bytes)
+                dl_total_str = self._fmt_bytes(self._session_dl_bytes)
+                ul_total_str = self._fmt_bytes(self._session_ul_bytes)
 
                 # Publish live telemetry over the EventBus. DashboardView and
                 # StatisticsView subscribe to this topic and refresh their speed
@@ -110,7 +160,7 @@ class StatsForwardingService:
             except Exception:
                 pass
             finally:
-                await asyncio.sleep(_interval)
+                await asyncio.sleep(self._network_interval)
 
     async def forward_system_stats(self) -> None:
         """Periodically forward system stats (memory, threads, health) to LogsView."""

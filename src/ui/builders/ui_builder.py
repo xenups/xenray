@@ -160,7 +160,11 @@ class UIBuilder:
         right_content_column = ft.Column(
             [
                 title_bar,
-                ft.Container(content=self._main._view_switcher, expand=True),
+                ft.Container(
+                    content=self._main._view_switcher,
+                    expand=True,
+                    clip_behavior=ft.ClipBehavior.HARD_EDGE,
+                ),
             ],
             spacing=0,
             expand=True,

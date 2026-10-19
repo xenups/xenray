@@ -273,6 +273,8 @@ class MainWindow:
                     is_connecting=self._connecting,
                     is_disconnecting=is_disconnecting,
                 )
+            if self._is_running and hasattr(self, "_stats_forwarding") and self._stats_forwarding:
+                self._stats_forwarding.publish_now()
             if hasattr(self, "_nav_sidebar") and self._nav_sidebar:
                 server_name = self._selected_profile.get("name", "") if self._selected_profile else ""
                 self._nav_sidebar.update_connect_button_text(
