@@ -42,7 +42,7 @@ param(
     [switch]$SuppressDialog = $false
 )
 
-$ErrorActionPreference = "Continue"
+$ErrorActionPreference = "Stop"
 
 # Setup persistent logging in TEMP
 $logPath = Join-Path ([System.IO.Path]::GetTempPath()) "xenray_updater.log"
@@ -180,9 +180,11 @@ function Test-IsXenrayTunRouteEligible {
     }
 
     # 5. Positive unambiguous identification of XenRay TUN adapter
+    # XenRay explicitly names its TUN adapters "SINGTUN" or "xenray-tun".
+    # Shared driver descriptions (such as generic "Wintun Userspace Tunnel" or "sing-tun")
+    # alone do not establish ownership without a confirmed XenRay adapter identity.
     $isExplicitTunAlias = ($alias -in @("SINGTUN", "xenray-tun"))
-    $isExplicitTunDesc = ($desc -match "(?i)^sing-tun" -or $desc -match "(?i)sing-tun Tunnel" -or $desc -match "(?i)^wintun")
-    $isTunAdapter = ($isExplicitTunAlias -or $isExplicitTunDesc)
+    $isTunAdapter = ($isExplicitTunAlias -and ($desc -match "(?i)^sing-tun" -or $desc -match "(?i)sing-tun Tunnel" -or $desc -match "(?i)^wintun" -or [string]::IsNullOrWhiteSpace($desc)))
 
     return [bool]$isTunAdapter
 }
@@ -201,7 +203,7 @@ function New-XenrayBackupManifest {
     )
 
     $manifest = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-    New-Item -ItemType Directory -Force -Path $BackupDir | Out-Null
+    New-Item -ItemType Directory -Force -Path $BackupDir -ErrorAction Stop | Out-Null
 
     if (Test-Path -LiteralPath $AppDir) {
         $normAppDirPrefix = [System.IO.Path]::GetFullPath($AppDir)
@@ -209,12 +211,12 @@ function New-XenrayBackupManifest {
             $normAppDirPrefix += [System.IO.Path]::DirectorySeparatorChar
         }
 
-        Get-ChildItem -LiteralPath $ContentRoot | ForEach-Object {
+        Get-ChildItem -LiteralPath $ContentRoot -ErrorAction Stop | ForEach-Object {
             $destPath = Join-Path $AppDir $_.Name
             if (Test-Path -LiteralPath $destPath) {
-                Copy-Item -LiteralPath $destPath -Destination $BackupDir -Recurse -Force
+                Copy-Item -LiteralPath $destPath -Destination $BackupDir -Recurse -Force -ErrorAction Stop
                 if (Test-Path -LiteralPath $destPath -PathType Container) {
-                    Get-ChildItem -LiteralPath $destPath -Recurse -File | ForEach-Object {
+                    Get-ChildItem -LiteralPath $destPath -Recurse -File -ErrorAction Stop | ForEach-Object {
                         $normFull = [System.IO.Path]::GetFullPath($_.FullName)
                         if ($normFull.StartsWith($normAppDirPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
                             $rel = $normFull.Substring($normAppDirPrefix.Length)
@@ -377,8 +379,9 @@ try {
     $defaultRoutes = Get-NetRoute -DestinationPrefix "0.0.0.0/0" -ErrorAction SilentlyContinue
     if ($defaultRoutes) {
         $tunCleaned = 0
+        $allAdapters = @(Get-NetAdapter -ErrorAction SilentlyContinue)
         foreach ($r in $defaultRoutes) {
-            $adapter = Get-NetAdapter -InterfaceIndex $r.InterfaceIndex -ErrorAction SilentlyContinue
+            $adapter = $allAdapters | Where-Object { $_.ifIndex -eq $r.InterfaceIndex } | Select-Object -First 1
             $alias = if ($adapter) { $adapter.Name } else { $r.InterfaceAlias }
             $desc = if ($adapter) { $adapter.InterfaceDescription } else { "" }
 
@@ -446,8 +449,17 @@ try {
     $preExistingFiles = New-XenrayBackupManifest -AppDir $AppDir -BackupDir $backupDir -ContentRoot $contentRoot
     Log "Pre-update backup completed ($($preExistingFiles.Count) pre-existing files tracked in manifest)."
 } catch {
-    Log "WARNING: Failed to create full pre-update backup: $_"
-    $preExistingFiles = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    Log "ERROR: Failed to create full pre-update backup: $_. Aborting deployment to protect existing installation."
+    if (-not $SuppressDialog) {
+        try {
+            [System.Windows.Forms.MessageBox]::Show(
+                "Failed to create pre-update backup: $_`nDeployment has been aborted to protect your existing installation.",
+                "XenRay Update Error",
+                0, 16
+            )
+        } catch {}
+    }
+    exit 1
 }
 
 # 8. Copy extracted files over AppDir with retry
@@ -455,22 +467,27 @@ Log "Deploying updated files to $AppDir..."
 $maxRetries = 5
 $copySuccess = $false
 
-for ($attempt = 1; $attempt -le $maxRetries; $attempt++) {
-    try {
-        if (-not (Test-Path -LiteralPath $AppDir)) {
-            New-Item -ItemType Directory -Force -Path $AppDir | Out-Null
-        }
+$stagedItems = @(Get-ChildItem -LiteralPath $contentRoot -ErrorAction Stop)
+if ($stagedItems.Count -eq 0) {
+    Log "ERROR: Staging directory contains no files to deploy."
+} else {
+    for ($attempt = 1; $attempt -le $maxRetries; $attempt++) {
+        try {
+            if (-not (Test-Path -LiteralPath $AppDir)) {
+                New-Item -ItemType Directory -Force -Path $AppDir -ErrorAction Stop | Out-Null
+            }
 
-        Get-ChildItem -LiteralPath $contentRoot | ForEach-Object {
-            Copy-Item -LiteralPath $_.FullName -Destination $AppDir -Recurse -Force -ErrorAction Stop
+            $stagedItems | ForEach-Object {
+                Copy-Item -LiteralPath $_.FullName -Destination $AppDir -Recurse -Force -ErrorAction Stop
+            }
+            $copySuccess = $true
+            Log "Files deployed successfully on attempt $attempt."
+            break
+        } catch {
+            Log "Attempt $attempt failed to copy files: $_"
+            Stop-XenrayProcessesInsideAppDir -TargetAppDir $AppDir
+            Start-Sleep -Seconds 1
         }
-        $copySuccess = $true
-        Log "Files deployed successfully on attempt $attempt."
-        break
-    } catch {
-        Log "Attempt $attempt failed to copy files: $_"
-        Stop-XenrayProcessesInsideAppDir -TargetAppDir $AppDir
-        Start-Sleep -Seconds 1
     }
 }
 
@@ -911,26 +928,11 @@ class AppUpdateService:
                     from src.core.container import get_connection_manager
 
                     cm = get_connection_manager()
-                    if cm and getattr(cm, "is_connected", False):
-                        logger.info("[AppUpdate] Disconnecting active VPN session before updating...")
+                    if cm:
+                        logger.info("[AppUpdate] Disconnecting VPN connection manager before updating...")
                         cm.disconnect()
                 except Exception as e:
                     logger.warning(f"[AppUpdate] Error disconnecting VPN before update: {e}")
-
-            # 2. Terminate all core engine instances (xray, sing-box) to release file handles
-            try:
-                from src.services.core_engines.xray_process_manager import XrayProcessManager
-
-                XrayProcessManager.kill_all_core_instances()
-            except Exception as e:
-                logger.warning(f"[AppUpdate] Error stopping Xray instances: {e}")
-
-            try:
-                from src.services.core_engines.singbox_process_manager import SingboxProcessManager
-
-                SingboxProcessManager.kill_all_core_instances()
-            except Exception as e:
-                logger.warning(f"[AppUpdate] Error stopping Singbox instances: {e}")
 
             # Get app directory
             if getattr(sys, "frozen", False):
@@ -948,10 +950,12 @@ class AppUpdateService:
             # Launch updater script as detached process
             # Use START command for reliable detached launch on Windows
             cmd = f'start "" powershell.exe -ExecutionPolicy Bypass -File "{script_path}"'
+            popen_kwargs = {"shell": True}
+            if sys.platform == "win32":
+                popen_kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
             subprocess.Popen(
                 cmd,
-                shell=True,
-                creationflags=subprocess.CREATE_NO_WINDOW,
+                **popen_kwargs,
             )
 
             logger.info("Updater script launched successfully")

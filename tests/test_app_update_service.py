@@ -67,6 +67,7 @@ def test_updater_route_cleanup_safety():
     assert "isTunGateway" in script
 
 
+@pytest.mark.skipif(sys.platform != "win32", reason="PowerShell updater tests require Windows")
 def test_route_decision_logic_synthetic():
     """Verify route-classification/deletion decision logic using synthetic route and adapter data.
 
@@ -171,6 +172,22 @@ def test_route_decision_logic_synthetic():
             "desc": "Generic Virtual Network Adapter",
             "expected": False,
         },
+        {
+            "id": "unrelated_vpn_generic_wintun_desc_0_0_0_0",
+            "dest": "0.0.0.0/0",
+            "next_hop": "0.0.0.0",
+            "alias": "OtherVPN",
+            "desc": "Wintun Userspace Tunnel",
+            "expected": False,
+        },
+        {
+            "id": "unrelated_vpn_generic_wintun_desc_10_0_0_2",
+            "dest": "0.0.0.0/0",
+            "next_hop": "10.0.0.2",
+            "alias": "OtherVPN",
+            "desc": "Wintun Userspace Tunnel",
+            "expected": False,
+        },
         # 5. Non-default route
         {
             "id": "non_default_route_subnet",
@@ -261,32 +278,24 @@ def test_create_updater_script(tmp_path):
 @patch("subprocess.Popen")
 @patch("threading.Thread")
 def test_apply_update_orchestration(mock_thread, mock_popen, tmp_path):
-    """Verify apply_update disconnects VPN, stops cores, and launches updater."""
+    """Verify apply_update disconnects VPN and launches updater script."""
     fake_zip = str(tmp_path / "update.zip")
     Path(fake_zip).write_text("test")
 
-    mock_cm = MagicMock()
-    mock_cm.is_connected = True
+    from src.core.connection_manager import ConnectionManager
+
+    mock_cm = MagicMock(spec=ConnectionManager)
 
     with (
         patch("src.core.container.get_connection_manager", return_value=mock_cm),
-        patch(
-            "src.services.core_engines.xray_process_manager.XrayProcessManager.kill_all_core_instances"
-        ) as mock_xray_kill,
-        patch(
-            "src.services.core_engines.singbox_process_manager.SingboxProcessManager.kill_all_core_instances"
-        ) as mock_sb_kill,
         patch.object(AppUpdateService, "create_updater_script", return_value="C:\\fake\\launcher.ps1") as mock_create,
+        patch("subprocess.CREATE_NO_WINDOW", 0x08000000, create=True),
     ):
         success = AppUpdateService.apply_update(fake_zip)
         assert success is True
 
         # Verify VPN was disconnected cleanly
         mock_cm.disconnect.assert_called_once()
-
-        # Verify core engines were stopped to release file locks
-        mock_xray_kill.assert_called_once()
-        mock_sb_kill.assert_called_once()
 
         # Verify updater script was created and launched
         mock_create.assert_called_once()
@@ -308,9 +317,10 @@ def test_apply_update_with_callback(mock_thread, mock_popen, tmp_path):
 
     mock_cb = MagicMock()
 
-    with patch("src.services.core_engines.xray_process_manager.XrayProcessManager.kill_all_core_instances"), patch(
-        "src.services.core_engines.singbox_process_manager.SingboxProcessManager.kill_all_core_instances"
-    ), patch.object(AppUpdateService, "create_updater_script", return_value="C:\\fake\\launcher.ps1"):
+    with (
+        patch.object(AppUpdateService, "create_updater_script", return_value="C:\\fake\\launcher.ps1"),
+        patch("subprocess.CREATE_NO_WINDOW", 0x08000000, create=True),
+    ):
         success = AppUpdateService.apply_update(fake_zip, disconnect_callback=mock_cb)
         assert success is True
         mock_cb.assert_called_once()
@@ -409,6 +419,7 @@ Stop-XenrayProcessesInsideAppDir -TargetAppDir '{str(in_scope_app)}' -CallerProc
                     pass
 
 
+@pytest.mark.skipif(sys.platform != "win32", reason="PowerShell updater tests require Windows")
 def test_process_termination_safety_caller_pid_and_path_scoping(tmp_path):
     """Verify that Stop-XenrayProcessesInsideAppDir strictly enforces directory boundary
 
@@ -479,6 +490,7 @@ Stop-XenrayProcessesInsideAppDir -TargetAppDir "invalid::path::\0" -CallerProces
     assert "Could not normalize TargetAppDir" in res_3.stdout or "Preserving all processes" in res_3.stdout
 
 
+@pytest.mark.skipif(sys.platform != "win32", reason="PowerShell updater tests require Windows")
 def test_powershell_actual_rollback_execution(tmp_path):
     """Verify that the actual PowerShell rollback code restores pre-existing files,
 
@@ -582,6 +594,7 @@ foreach ($m in $global:LogMessages) {{ Write-Output "LOG: $m" }}
     assert not (app_dir / "new_plugin").exists()
 
 
+@pytest.mark.skipif(sys.platform != "win32", reason="PowerShell updater tests require Windows")
 def test_powershell_actual_rollback_missing_backup_dir(tmp_path):
     """Verify Invoke-XenrayRollback returns false when backup dir is missing."""
     script = AppUpdateService.get_embedded_updater_script()

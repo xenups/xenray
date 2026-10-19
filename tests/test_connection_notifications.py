@@ -259,6 +259,29 @@ class TestConnectionNotificationHandler:
         msg3, _ = mock_notify.call_args[0]
         assert "US-Fast" in msg3
 
+    def test_reconnect_failure_after_established_connection_reports_loss_without_duplicates(self, handler, mock_notify):
+        """Sequence: connected -> connecting -> connect_failed -> reconnect_failed emits single warning."""
+        # 1. Connection established
+        handler.handle_connected(profile_name="US-Fast")
+        assert mock_notify.call_count == 1
+        mock_notify.reset_mock()
+
+        # 2. Connection drops and auto-reconnect emits connecting
+        handler.handle_connecting()
+        assert mock_notify.call_count == 0
+
+        # 3. Connection attempt fails -> reports loss of established session
+        res_fail = handler.handle_connect_failed(reason="timeout")
+        assert res_fail is True
+        assert mock_notify.call_count == 1
+        msg, _ = mock_notify.call_args[0]
+        assert "unexpectedly" in msg or "غیرمنتظره" in msg or "неожиданно" in msg or "意外" in msg
+
+        # 4. Subsequent reconnect_failed event suppresses duplicate warning
+        res_reconnect_fail = handler.handle_unexpected_disconnect(reason="reconnect_failed")
+        assert res_reconnect_fail is False
+        assert mock_notify.call_count == 1
+
     # -------------------------------------------------------------------------
     # 8. Application shutdown
     # -------------------------------------------------------------------------

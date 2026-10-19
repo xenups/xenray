@@ -80,10 +80,10 @@ class UIThreadHelper:
         try:
             conn = getattr(getattr(self._page, "session", None), "connection", None)
             loop = getattr(conn, "loop", None)
-            if loop is None or loop.is_closed():
+            if loop is not None and loop.is_closed():
                 return
         except Exception:
-            return
+            pass
 
         try:
             import warnings

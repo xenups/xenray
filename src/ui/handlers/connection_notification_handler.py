@@ -162,13 +162,26 @@ class ConnectionNotificationHandler:
         return True
 
     def handle_connect_failed(self, reason: Optional[str] = None) -> bool:
-        """Handle failed connection attempt (no false success notification)."""
+        """Handle failed connection attempt.
+
+        If an established connection was active before the failure (e.g. auto-reconnect failed),
+        report the lost connection before resetting history. Initial connection failures remain silent.
+        """
         with self._lock:
+            should_notify = self._was_connected and not self._is_manual_disconnect and not self._is_shutting_down
+
             self._state = NotificationConnectionState.DISCONNECTED
-            # Do not notify about disconnection if VPN was never connected
             self._was_connected = False
             self._is_manual_disconnect = False
-            return False
+            self._active_profile_name = None
+
+            if not should_notify:
+                return False
+
+            message = t("notifications.unexpected_disconnect", default="VPN connection lost unexpectedly")
+
+        self._send_notification(message, title="XenRay")
+        return True
 
     def handle_disconnecting(self, is_manual: bool = True) -> bool:
         """Handle transition to disconnecting."""
