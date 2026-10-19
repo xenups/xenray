@@ -278,7 +278,7 @@ def test_create_updater_script(tmp_path):
 @patch("subprocess.Popen")
 @patch("threading.Thread")
 def test_apply_update_orchestration(mock_thread, mock_popen, tmp_path):
-    """Verify apply_update disconnects VPN and launches updater script."""
+    """Verify apply_update disconnects VPN and launches updater script on Windows."""
     fake_zip = str(tmp_path / "update.zip")
     Path(fake_zip).write_text("test")
 
@@ -287,6 +287,7 @@ def test_apply_update_orchestration(mock_thread, mock_popen, tmp_path):
     mock_cm = MagicMock(spec=ConnectionManager)
 
     with (
+        patch("sys.platform", "win32"),
         patch("src.core.container.get_connection_manager", return_value=mock_cm),
         patch.object(AppUpdateService, "create_updater_script", return_value="C:\\fake\\launcher.ps1") as mock_create,
         patch("subprocess.CREATE_NO_WINDOW", 0x08000000, create=True),
@@ -311,19 +312,50 @@ def test_apply_update_orchestration(mock_thread, mock_popen, tmp_path):
 @patch("subprocess.Popen")
 @patch("threading.Thread")
 def test_apply_update_with_callback(mock_thread, mock_popen, tmp_path):
-    """Verify apply_update invokes custom disconnect callback if provided."""
+    """Verify apply_update invokes custom disconnect callback if provided on Windows."""
     fake_zip = str(tmp_path / "update.zip")
     Path(fake_zip).write_text("test")
 
     mock_cb = MagicMock()
 
     with (
+        patch("sys.platform", "win32"),
         patch.object(AppUpdateService, "create_updater_script", return_value="C:\\fake\\launcher.ps1"),
         patch("subprocess.CREATE_NO_WINDOW", 0x08000000, create=True),
     ):
         success = AppUpdateService.apply_update(fake_zip, disconnect_callback=mock_cb)
         assert success is True
         mock_cb.assert_called_once()
+
+
+@patch("subprocess.Popen")
+@patch("threading.Thread")
+def test_apply_update_unsupported_platform_rejected(mock_thread, mock_popen, tmp_path):
+    """Verify apply_update returns False on non-Windows platforms without teardown or exit."""
+    fake_zip = str(tmp_path / "update.zip")
+    Path(fake_zip).write_text("test")
+
+    mock_cb = MagicMock()
+    from src.core.connection_manager import ConnectionManager
+
+    mock_cm = MagicMock(spec=ConnectionManager)
+
+    with (
+        patch("sys.platform", "linux"),
+        patch("src.core.container.get_connection_manager", return_value=mock_cm),
+        patch.object(AppUpdateService, "create_updater_script") as mock_create,
+    ):
+        success = AppUpdateService.apply_update(fake_zip, disconnect_callback=mock_cb)
+        assert success is False
+
+        # No disconnect callback or manager disconnect called
+        mock_cb.assert_not_called()
+        mock_cm.disconnect.assert_not_called()
+
+        # No updater script created or launched
+        mock_create.assert_not_called()
+        mock_popen.assert_not_called()
+        mock_thread.assert_not_called()
 
 
 def _extract_powershell_function(script: str, fn_name: str) -> str:

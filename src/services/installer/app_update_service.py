@@ -915,6 +915,10 @@ class AppUpdateService:
         Returns:
             True if updater was launched successfully
         """
+        if sys.platform != "win32":
+            logger.warning("[AppUpdate] Automatic update installation is only supported on Windows.")
+            return False
+
         try:
             # 1. Cleanly disconnect VPN to restore system network routing / DNS
             if disconnect_callback:
