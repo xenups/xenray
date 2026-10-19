@@ -113,12 +113,12 @@ class SystrayHandler:
         ]
         return pystray.Menu(*menu_items)
 
-    def notify(self, message: str) -> None:
+    def notify(self, message: str, title: str = "XenRay") -> None:
         """Show a desktop/tray notification balloon (fail-soft)."""
         if not self._icon:
             return
         try:
-            self._icon.notify(message, "XenRay")
+            self._icon.notify(message, title or "XenRay")
         except Exception as e:
             logger.warning(f"[SysTrayHandler] Tray notification failed: {e}")
 

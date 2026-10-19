@@ -76,6 +76,15 @@ class UIThreadHelper:
                 fn_name = fn.__name__ if hasattr(fn, "__name__") else "lambda"
                 logger.debug(f"[DEBUG] UI call error in {fn_name}: {e}")
 
+        # Pre-check: if the page event loop is closed or closing, drop the background update
+        try:
+            conn = getattr(getattr(self._page, "session", None), "connection", None)
+            loop = getattr(conn, "loop", None)
+            if loop is None or loop.is_closed():
+                return
+        except Exception:
+            return
+
         try:
             import warnings
 

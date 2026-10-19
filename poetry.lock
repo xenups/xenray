@@ -651,14 +651,14 @@ pyflakes = ">=3.4.0,<3.5.0"
 
 [[package]]
 name = "flet"
-version = "0.86.1"
+version = "1.0.4"
 description = "Flet for Python - easily build interactive multi-platform apps in Python"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "flet-0.86.1-py3-none-any.whl", hash = "sha256:3d866a2b565be99044b166c1e257d22434aedcdd32d40124cece81c4c80455b6"},
-    {file = "flet-0.86.1.tar.gz", hash = "sha256:7eb12d86bd7ea699800d185941171218adc01458c9e3f1f79a85d21df32e1592"},
+    {file = "flet-1.0.4-py3-none-any.whl", hash = "sha256:5e6ea0a75e10ff7143ca32dc2b84117fe7c964b4ec2270cb9910598acd9ffe67"},
+    {file = "flet-1.0.4.tar.gz", hash = "sha256:cab546db476e6c34abe3f97e2ebc88b8e6692656a94e7821af2d354012fcff2c"},
 ]
 
 [package.dependencies]
@@ -669,26 +669,26 @@ repath = ">=0.9.0"
 typing-extensions = {version = "*", markers = "python_version < \"3.11\""}
 
 [package.extras]
-all = ["flet-cli (==0.86.1)", "flet-desktop (==0.86.1)", "flet-web (==0.86.1)"]
-cli = ["flet-cli (==0.86.1)", "flet-cli (==0.86.1)"]
-desktop = ["flet-desktop (==0.86.1)"]
+all = ["flet-cli (==1.0.4)", "flet-desktop (==1.0.4)", "flet-web (==1.0.4)"]
+cli = ["flet-cli (==1.0.4)", "flet-cli (==1.0.4)"]
+desktop = ["flet-desktop (==1.0.4)"]
 test = ["numpy (>=2.2.0)", "pillow (>=10.3.0)", "pytest (>=7.2.0)", "pytest-asyncio (>=1.1.0)", "scikit-image (>=0.25.2)"]
-web = ["flet-web (==0.86.1)", "flet-web (==0.86.1)"]
+web = ["flet-web (==1.0.4)", "flet-web (==1.0.4)"]
 
 [[package]]
 name = "flet-desktop"
-version = "0.86.1"
+version = "1.0.4"
 description = "Flet Desktop client in Flutter"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "flet_desktop-0.86.1-py3-none-any.whl", hash = "sha256:e7f3c61ed56b1457298415d2f9698323805835bff7b57f9bb6c6090b13451779"},
-    {file = "flet_desktop-0.86.1.tar.gz", hash = "sha256:a37261ee9ce990f8b9cb68a77f68ccaa8e1faea2416e5a10a5e7dabfa3c416d2"},
+    {file = "flet_desktop-1.0.4-py3-none-any.whl", hash = "sha256:7fabd914b605f577b057366adf84e95087581fe85118ebcc62fb1e2e8f3f5aee"},
+    {file = "flet_desktop-1.0.4.tar.gz", hash = "sha256:deae439c3fae7d166326e8d65172ddd068bb9850f59c06559b0e95eb2bf67bcf"},
 ]
 
 [package.dependencies]
-flet = "0.86.1"
+flet = "1.0.4"
 rich = ">=13.0.0"
 
 [[package]]
@@ -2166,4 +2166,4 @@ cffi = ["cffi (>=1.17,<2.0) ; platform_python_implementation != \"PyPy\" and pyt
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<3.14"
-content-hash = "267fa6714d2b8b3ecae5f24a07fea6e74530674aada15267c691a93f846b5b1a"
+content-hash = "62431ee1b59c30aa5efd6c5e47878121a07ebead8024d1d0e50411035a4ec5c7"

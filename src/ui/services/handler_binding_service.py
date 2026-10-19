@@ -100,6 +100,13 @@ class HandlerBindingService:
         mw._systray.setup(mw)
         mw._background_task_handler.start()
 
+        if hasattr(mw, "_connection_notification_handler") and mw._connection_notification_handler:
+            mw._connection_notification_handler.setup(
+                systray=mw._systray,
+                selected_profile_getter=lambda: mw._selected_profile,
+            )
+            mw._connection_notification_handler.start()
+
         event_bus.subscribe("profile_selected", mw._update_selected_profile_ui)
         event_bus.subscribe(
             TOPIC_CONNECTION_STATE_CHANGED,

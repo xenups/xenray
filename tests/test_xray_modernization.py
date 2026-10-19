@@ -18,13 +18,13 @@ from src.services.core_engines.config_patcher import ConfigPatcher
 from src.services.core_engines.xray_config_processor import XrayConfigProcessor
 
 
-def test_xray_version_pinned_to_26_10_10():
-    """Verify XRAY_VERSION constant is pinned to 26.10.10."""
-    assert XRAY_VERSION == "26.10.10"
+def test_xray_version_pinned_to_26_10_17():
+    """Verify XRAY_VERSION constant is pinned to 26.10.17."""
+    assert XRAY_VERSION == "26.10.17"
 
 
-def test_platform_adapters_xray_26_10_10():
-    """Verify platform asset adapters resolve correct URLs and assets for v26.10.10."""
+def test_platform_adapters_xray_26_10_17():
+    """Verify platform asset adapters resolve correct URLs and assets for v26.10.17."""
     win_adapter = WindowsCoreAssetAdapter()
     with patch("src.utils.platform_utils.PlatformUtils.get_architecture", return_value="x86_64"):
         win_info = win_adapter.get_xray_asset_info(XRAY_VERSION)

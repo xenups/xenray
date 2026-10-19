@@ -76,7 +76,7 @@ class UpdateDialog(ft.AlertDialog):
             color=ft.Colors.ON_SURFACE_VARIANT,
         )
 
-        self._update_now_btn = ft.ElevatedButton(
+        self._update_now_btn = ft.Button(
             content=ft.Row(
                 [
                     ft.Icon(ft.Icons.SYSTEM_UPDATE_ALT, size=16, color=ft.Colors.WHITE),

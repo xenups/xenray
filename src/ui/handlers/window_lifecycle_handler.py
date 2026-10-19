@@ -97,6 +97,12 @@ class WindowLifecycleHandler:
             self._mw._network_stats.stop()
         except Exception:
             pass
+        if hasattr(self._mw, "_connection_notification_handler") and self._mw._connection_notification_handler:
+            try:
+                self._mw._connection_notification_handler.set_shutting_down(True)
+                self._mw._connection_notification_handler.cleanup()
+            except Exception:
+                pass
         try:
             self._mw._connection_manager.cleanup()
         except Exception:

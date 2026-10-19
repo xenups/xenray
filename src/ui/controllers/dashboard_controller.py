@@ -108,19 +108,28 @@ class DashboardController:
             elif target == DashboardState.CONNECTING:
                 self.stop_uptime_timer()
                 if self._on_uptime_updated:
-                    self._on_uptime_updated("00:00:00")
+                    try:
+                        self._on_uptime_updated("00:00:00")
+                    except Exception as e:
+                        logger.debug(f"[DashboardController] Uptime update callback error: {e}")
                 self._state = target
             else:
                 self.stop_uptime_timer()
                 if self._on_uptime_updated:
-                    self._on_uptime_updated("00:00:00")
+                    try:
+                        self._on_uptime_updated("00:00:00")
+                    except Exception as e:
+                        logger.debug(f"[DashboardController] Uptime update callback error: {e}")
                 self._state = target
 
             if target == old_state:
                 return
 
             if self._on_state_changed:
-                self._on_state_changed(self._state, label)
+                try:
+                    self._on_state_changed(self._state, label)
+                except Exception as e:
+                    logger.debug(f"[DashboardController] State changed callback error: {e}")
         except Exception as e:
             logger.error(f"[DashboardController] Error setting connection state: {e}")
 

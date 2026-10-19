@@ -25,6 +25,7 @@ from src.ui.components.settings import (
 )
 from src.ui.handlers.background_task_handler import BackgroundTaskHandler
 from src.ui.handlers.connection_handler import ConnectionHandler
+from src.ui.handlers.connection_notification_handler import ConnectionNotificationHandler
 from src.ui.handlers.installer_handler import InstallerHandler
 from src.ui.handlers.latency_monitor_handler import LatencyMonitorHandler
 from src.ui.handlers.network_stats_handler import NetworkStatsHandler
@@ -64,6 +65,7 @@ class MainWindow:
         systray_handler: SystrayHandler,
         profile_manager: ProfileManager,
         monitoring_service: MonitoringService,
+        connection_notification_handler: Optional[ConnectionNotificationHandler] = None,
     ) -> None:
         self._page = page
         self._app_context = app_context
@@ -79,6 +81,7 @@ class MainWindow:
         self._background_task_handler = background_task_handler
         self._systray = systray_handler
         self._reconnect_event_handler = reconnect_event_handler
+        self._connection_notification_handler = connection_notification_handler or ConnectionNotificationHandler()
 
         self._ui_helper = UIThreadHelper(page)
 

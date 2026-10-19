@@ -1,4 +1,6 @@
 """Dependency Injection Container for XenRay application."""
+from typing import Optional
+
 from dependency_injector import containers, providers
 
 from src.core.app_context import AppContext
@@ -8,6 +10,17 @@ from src.services.monitoring.network_stats import NetworkStatsService
 
 class ApplicationContainer(containers.DeclarativeContainer):
     """DI Container for application-wide dependencies."""
+
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        inst = super().__new__(cls)
+        cls._instance = inst
+        return inst
+
+    @classmethod
+    def get_instance(cls):
+        return cls._instance
 
     # Configuration
     wiring_config = containers.WiringConfiguration(
@@ -32,6 +45,11 @@ class ApplicationContainer(containers.DeclarativeContainer):
         "src.ui.handlers.systray_handler.SystrayHandler",
         connection_manager=connection_manager,
         app_context=app_context,
+    )
+
+    connection_notification_handler = providers.Singleton(
+        "src.ui.handlers.connection_notification_handler.ConnectionNotificationHandler",
+        systray=systray_handler,
     )
 
     # ═══════════════════════════════════════════════════════════
@@ -126,4 +144,16 @@ class ApplicationContainer(containers.DeclarativeContainer):
         systray_handler=systray_handler,
         profile_manager=profile_manager,
         monitoring_service=monitoring_service,
+        connection_notification_handler=connection_notification_handler,
     )
+
+
+def get_connection_manager() -> Optional[ConnectionManager]:
+    """Get active ConnectionManager instance from container if initialized."""
+    instance = ApplicationContainer.get_instance()
+    if instance:
+        try:
+            return instance.connection_manager()
+        except Exception:
+            pass
+    return None

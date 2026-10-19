@@ -345,6 +345,12 @@
     "disconnect": "قطع اتصال",
     "connected_to": "متصل: {server}"
   },
+  "notifications": {
+    "connected": "اتصال برقرار شد",
+    "connected_to": "متصل: {server}",
+    "disconnected": "اتصال قطع شد",
+    "unexpected_disconnect": "اتصال به طور غیرمنتظره قطع شد"
+  },
   "close_dialog": {
     "title": "خروج از برنامه",
     "message": "آیا می‌خواهید از زن‌ری خارج شوید یا آن را به منوی سیستم انتقال دهید؟",

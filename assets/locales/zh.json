@@ -335,6 +335,12 @@
     "disconnect": "断开连接",
     "connected_to": "已连接: {server}"
   },
+  "notifications": {
+    "connected": "已连接",
+    "connected_to": "已连接: {server}",
+    "disconnected": "已断开连接",
+    "unexpected_disconnect": "VPN 连接意外中断"
+  },
   "close_dialog": {
     "title": "退出应用",
     "message": "您要退出 XenRay 还是最小化到系统托盘？",

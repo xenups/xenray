@@ -98,7 +98,7 @@ class RoutingPage(ft.Container):
                 border_radius=8,
             )
             input_field.on_submit = lambda e, k=tab_key, inp=input_field: (self._add_rule(k, inp))
-            add_btn = ft.ElevatedButton(
+            add_btn = ft.Button(
                 t("routing.add"),
                 icon=ft.Icons.ADD,
                 style=ft.ButtonStyle(

@@ -223,6 +223,11 @@ class DashboardPage(ft.Container):
         event_bus.unsubscribe(TOPIC_CONNECTION_STATE_CHANGED, self._on_connection_state_event)
         event_bus.unsubscribe(TOPIC_ACTIVE_SERVER_PING_UPDATED, self._on_active_server_ping_updated)
         event_bus.unsubscribe(TOPIC_SERVER_INSPECTED, self._on_server_inspected)
+        if hasattr(self, "_controller") and self._controller:
+            try:
+                self._controller.stop_uptime_timer()
+            except Exception:
+                pass
         # WaveVisualizer has no owned resources; nothing to dispose.
 
     def _on_controller_state_changed(self, state: DashboardState, label: str) -> None:
@@ -231,21 +236,27 @@ class DashboardPage(ft.Container):
         self._is_connecting = state == DashboardState.CONNECTING
         self._is_disconnecting = state == DashboardState.DISCONNECTING
 
-        if state == DashboardState.CONNECTING:
-            self._toggle_button.set_connecting(label)
-        elif state == DashboardState.CONNECTED:
-            self._toggle_button.set_connected(label)
-        elif state == DashboardState.DISCONNECTING:
-            self._toggle_button.set_disconnecting(label)
-        else:
-            self._toggle_button.set_disconnected(label)
+        try:
+            if state == DashboardState.CONNECTING:
+                self._toggle_button.set_connecting(label)
+            elif state == DashboardState.CONNECTED:
+                self._toggle_button.set_connected(label)
+            elif state == DashboardState.DISCONNECTING:
+                self._toggle_button.set_disconnecting(label)
+            else:
+                self._toggle_button.set_disconnected(label)
+        except Exception:
+            pass
 
     def _on_controller_stats_updated(self, dl_text: str, ul_text: str, total_bps: float) -> None:
         """Handle stats update from DashboardController."""
-        self._traffic_cards.update_speeds(dl_text, ul_text)
-        self._toggle_button.update_network_activity(total_bps)
-        if self._wave_visualizer is not None:
-            self._wave_visualizer.update_traffic(total_bps)
+        try:
+            self._traffic_cards.update_speeds(dl_text, ul_text)
+            self._toggle_button.update_network_activity(total_bps)
+            if self._wave_visualizer is not None:
+                self._wave_visualizer.update_traffic(total_bps)
+        except Exception:
+            pass
 
     def _on_telemetry_event(self, data) -> None:
         """Handle telemetry_updated EventBus events (published on the UI event loop)."""
@@ -331,14 +342,31 @@ class DashboardPage(ft.Container):
                 return
             except Exception:
                 pass
+        elif self._has_page_attached():
+            # Page is mounted but connection loop is closed/closing — drop to avoid orphaned tasks
+            return
         self._apply_connection_event(data)
 
     def _safe_page(self):
         """Return the Flet page this control is mounted on, or None."""
         try:
-            return self.page
+            p = self.page
+            if p is None:
+                return None
+            conn = getattr(getattr(p, "session", None), "connection", None)
+            loop = getattr(conn, "loop", None)
+            if loop is None or loop.is_closed():
+                return None
+            return p
         except Exception:
             return None
+
+    def _has_page_attached(self) -> bool:
+        """Return True if this control is mounted to a Flet page."""
+        try:
+            return self.page is not None
+        except Exception:
+            return False
 
     async def _run_connection_event(self, data) -> None:
         """Async wrapper executed on the Flet event loop."""
@@ -444,6 +472,9 @@ class DashboardPage(ft.Container):
                 return
             except Exception:
                 pass
+        elif self._has_page_attached():
+            # Page is mounted but connection loop is closed/closing — drop to avoid orphaned tasks
+            return
         self._apply_uptime_update(elapsed)
 
     async def _run_uptime_update(self, elapsed: int | str) -> None:
@@ -451,7 +482,10 @@ class DashboardPage(ft.Container):
         self._apply_uptime_update(elapsed)
 
     def _apply_uptime_update(self, elapsed: int | str) -> None:
-        self._toggle_button.update_uptime(elapsed)
+        try:
+            self._toggle_button.update_uptime(elapsed)
+        except Exception:
+            pass
 
     def update_glow_intensity(self, total_bps: float = 0.0) -> None:
         """Update live throughput glow on the connection button."""

@@ -86,7 +86,7 @@ class ChainBuilderPage(ft.Container):
 
         self._error_text = ft.Text("", color=ft.Colors.ERROR, size=12, visible=False)
 
-        self._save_button = ft.ElevatedButton(
+        self._save_button = ft.Button(
             t("chain.save"),
             icon=ft.Icons.SAVE,
             on_click=self._handle_save,

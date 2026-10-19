@@ -54,6 +54,22 @@ class AppInitializer:
         page.padding = 0
         page.spacing = 0
         page.bgcolor = AppColors.GLASS_OVERLAY
+
+        # Ensure clipboard service is registered and page.clipboard / helpers exist
+        try:
+            if not hasattr(page, "clipboard") or page.clipboard is None:
+                cb = ft.Clipboard()
+                page.clipboard = cb
+                page.services.append(cb)
+            if not hasattr(page, "set_clipboard"):
+                page.set_clipboard = lambda val: page.run_task(page.clipboard.set, str(val))
+            if not hasattr(page, "get_clipboard"):
+                from src.utils.clipboard import get_clipboard_text
+
+                page.get_clipboard = get_clipboard_text
+        except Exception:
+            pass
+
         page.update()
 
     @staticmethod
