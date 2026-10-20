@@ -2,6 +2,18 @@
 
 All notable changes to XenRay will be documented in this file.
 
+## [0.4.1] - 2026-10-21
+
+### Changed
+- **Version Bump**: Bumped application version to **0.4.1**.
+
+### Fixed
+- **ECH Latency & Connection Inspection**:
+  - Preserved auxiliary detour outbounds (e.g. `tls-repack-dns`) in temporary Xray probe configurations, preventing `dialerProxy` resolution failures and enabling reliable ping and inspection for ECH-enabled profiles.
+- **Sing-box TUN Readiness Discovery**:
+  - Replaced legacy broken socket probe to CIDR subnet (`socket.create_connection(("10.0.0.1/16", 80))`) with clean platform-layer adapter check via `INetworkAdapter.is_interface_ready`.
+  - Eliminated false `TUN gateway unreachable after 4 attempts` warning and reduced TUN readiness wait time on startup from 2000ms to ~60ms.
+
 ## [0.4.0] - 2026-10-19
 
 ### Changed
