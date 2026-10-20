@@ -217,3 +217,40 @@ class PosixNetworkAdapter(INetworkAdapter):
             return result.returncode == 0
         except Exception:
             return False
+
+    def is_interface_ready(self, interface_name: str, expected_ip: Optional[str] = None) -> bool:
+        """Check if a network interface is created, up, and bound to the expected IP."""
+        import socket
+
+        import psutil
+
+        target_lower = interface_name.lower()
+        aliases = (target_lower, "singtun", "xenray-tun", "tun0", "utun9")
+
+        try:
+            addrs = psutil.net_if_addrs()
+            stats = psutil.net_if_stats()
+
+            found_iface = None
+            for iface in addrs:
+                ilow = iface.lower()
+                if ilow in aliases or any(a in ilow for a in ("tun", "utun")):
+                    found_iface = iface
+                    break
+
+            if not found_iface:
+                return False
+
+            if expected_ip:
+                clean_ip = expected_ip.split("/")[0] if "/" in expected_ip else expected_ip
+                iface_ips = [a.address for a in addrs[found_iface] if getattr(a, "family", None) == socket.AF_INET]
+                if clean_ip not in iface_ips:
+                    return False
+
+            if_stat = stats.get(found_iface)
+            if if_stat and not if_stat.isup:
+                return False
+
+            return True
+        except Exception:
+            return False
