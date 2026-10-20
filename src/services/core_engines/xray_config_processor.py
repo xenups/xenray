@@ -374,6 +374,28 @@ class XrayConfigProcessor:
                     addr = settings.get(CONFIG_ADDRESS, "")
                     if addr:
                         addresses.append(addr)
+
+            # Also extract destination redirect address if this is a repack outbound (e.g. tls-repack-dns)
+            elif outbound.get("settings", {}).get("redirect"):
+                redirect = outbound["settings"]["redirect"]
+                if ":" in redirect:
+                    addr = redirect.rsplit(":", 1)[0]
+                else:
+                    addr = redirect
+                if addr:
+                    addresses.append(addr)
+
+            # If outbound has ECH config with a resolver host/IP, extract it
+            tls_settings = outbound.get(CONFIG_STREAM_SETTINGS, {}).get("tlsSettings", {})
+            ech_cfg = tls_settings.get("echConfigList", "")
+            if isinstance(ech_cfg, str) and ("://" in ech_cfg or "+" in ech_cfg):
+                from src.services.connection.dns_configurator import DnsConfigurator
+
+                resolver_part = ech_cfg.split("+", 1)[1] if "+" in ech_cfg else ech_cfg
+                bare = DnsConfigurator._to_bare_address(resolver_part)
+                if bare:
+                    addresses.append(bare)
+
         return list(set(addresses))
 
     def is_quic_transport(self, config: dict) -> bool:
@@ -462,15 +484,15 @@ class XrayConfigProcessor:
         outbounds = config.setdefault(CONFIG_OUTBOUNDS, [])
         if not outbounds:
             return
-        existing_tags = {ob.get(CONFIG_TAG) for ob in outbounds}
-        if TAG_DIRECT not in existing_tags and not any(ob.get(CONFIG_PROTOCOL) == PROTOCOL_FREEDOM for ob in outbounds):
+        existing_tags = {ob.get(CONFIG_TAG) for ob in outbounds if ob.get(CONFIG_TAG)}
+        if TAG_DIRECT not in existing_tags:
             outbounds.append({"protocol": PROTOCOL_FREEDOM, "tag": TAG_DIRECT, "settings": {}})
             logger.debug("[XrayConfigProcessor] Injected direct (freedom) outbound")
-        if TAG_BLOCK not in existing_tags and not any(
-            ob.get(CONFIG_PROTOCOL) == PROTOCOL_BLACKHOLE for ob in outbounds
-        ):
+            existing_tags.add(TAG_DIRECT)
+        if TAG_BLOCK not in existing_tags:
             outbounds.append({"protocol": PROTOCOL_BLACKHOLE, "tag": TAG_BLOCK, "settings": {}})
             logger.debug("[XrayConfigProcessor] Injected block (blackhole) outbound")
+            existing_tags.add(TAG_BLOCK)
 
     def _inject_proxy_routing_rules(self, config: dict, routing_rules: Optional[dict], toggles: dict):
         """Inject user routing rules into Xray routing table for proxy mode."""

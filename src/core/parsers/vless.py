@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import urllib.parse
 from typing import Any, Dict, List, Optional
 
@@ -74,6 +75,10 @@ class VlessParser:
 
         if not address:
             raise ValueError("Invalid VLESS link: missing address")
+
+        # Reject malformed percent-encoding in query parameters (e.g. %ZZ, %2)
+        if re.search(r"%(?![0-9a-fA-F]{2})", parsed.query):
+            raise ValueError("Malformed percent-encoding in query parameters")
 
         try:
             raw_params = urllib.parse.parse_qs(parsed.query)
@@ -167,6 +172,48 @@ class VlessParser:
                     logger.warning(f"Failed to configure ECH: {e}")
 
             outbound["streamSettings"]["tlsSettings"] = tls_settings
+
+        # ECH Outbound (e.g. tls-repack-dns)
+        ech_outbound_obj: Optional[Dict[str, Any]] = None
+        ech_outbound_raw = get_param("echOutbound") or get_param("ech_outbound")
+        if ech_outbound_raw:
+            try:
+                try:
+                    parsed_json = json.loads(ech_outbound_raw)
+                except (json.JSONDecodeError, ValueError):
+                    parsed_json = json.loads(urllib.parse.unquote(ech_outbound_raw))
+            except Exception as e:
+                raise ValueError(f"Invalid echOutbound: malformed JSON: {e}") from e
+
+            if not isinstance(parsed_json, dict):
+                raise ValueError("Invalid echOutbound: must be a JSON object")
+
+            ob_tag = parsed_json.get("tag")
+            if not ob_tag or not isinstance(ob_tag, str) or not ob_tag.strip():
+                raise ValueError("Invalid echOutbound: missing or empty 'tag'")
+            ob_tag = ob_tag.strip()
+
+            ob_proto = parsed_json.get("protocol")
+            if not ob_proto or not isinstance(ob_proto, str) or not ob_proto.strip():
+                raise ValueError("Invalid echOutbound: missing or empty 'protocol'")
+
+            if ob_tag == outbound.get("tag"):
+                raise ValueError(f"Invalid echOutbound: tag '{ob_tag}' collides with primary outbound tag")
+
+            if "settings" in parsed_json and not isinstance(parsed_json["settings"], dict):
+                raise ValueError("Invalid echOutbound: 'settings' must be an object")
+
+            if "streamSettings" in parsed_json and not isinstance(parsed_json["streamSettings"], dict):
+                raise ValueError("Invalid echOutbound: 'streamSettings' must be an object")
+
+            ech_outbound_obj = parsed_json
+
+            # Link with primary outbound TLS settings if security == 'tls'
+            if security == "tls":
+                tls_settings = outbound["streamSettings"].setdefault("tlsSettings", {})
+                sockopt = tls_settings.setdefault("echSockopt", {})
+                if not sockopt.get("dialerProxy"):
+                    sockopt["dialerProxy"] = ob_tag
 
         # Reality settings
         if security == "reality":
@@ -307,14 +354,16 @@ class VlessParser:
                 quic_settings.pop("type", None)
             outbound["streamSettings"]["quicSettings"] = quic_settings
 
-        return {"name": name, "config": build_minimal_config(outbound)}
+        extra_outbounds = [ech_outbound_obj] if ech_outbound_obj else []
+        return {"name": name, "config": build_minimal_config(outbound, extra_outbounds=extra_outbounds)}
 
     @staticmethod
-    def generate(outbound: dict, name: str) -> str:
+    def generate(outbound: dict, name: str, ech_outbound: Optional[dict] = None) -> str:
         """Generate a VLESS share link from outbound config."""
         settings = outbound.get("settings", {})
         stream = outbound.get("streamSettings", {})
         vnext = settings.get("vnext", [{}])[0]
+
         user = vnext.get("users", [{}])[0]
 
         uuid = user.get("id", "")
@@ -404,6 +453,12 @@ class VlessParser:
                 params.extend(flat_fm)
             else:
                 params.append(f"fm={urllib.parse.quote(json.dumps(finalmask), safe='')}")
+
+        if not ech_outbound and "_ech_outbound" in outbound:
+            ech_outbound = outbound["_ech_outbound"]
+
+        if ech_outbound and isinstance(ech_outbound, dict):
+            params.append(f"echOutbound={urllib.parse.quote(json.dumps(ech_outbound), safe='')}")
 
         query = "&".join(params)
         fragment = urllib.parse.quote(name)

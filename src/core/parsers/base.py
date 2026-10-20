@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from loguru import logger
 
@@ -287,16 +287,34 @@ def _route_xhttp_params(raw_params: Dict[str, str]) -> Dict[str, Any]:
     return xhttp
 
 
-def build_minimal_config(outbound: Dict) -> Dict:
-    """Helper to wrap outbound in minimal config structure."""
+def build_minimal_config(outbound: Dict, extra_outbounds: Optional[List[Dict[str, Any]]] = None) -> Dict:
+    """Helper to wrap outbound and any extra outbounds in minimal config structure."""
+    outbounds: List[Dict[str, Any]] = [outbound]
+    existing_tags = {outbound.get("tag")} if outbound.get("tag") else set()
+
+    if extra_outbounds:
+        for extra in extra_outbounds:
+            if not isinstance(extra, dict):
+                continue
+            etag = extra.get("tag")
+            if etag and etag in existing_tags:
+                logger.warning(f"Skipping duplicate outbound tag: {etag}")
+                continue
+            if etag:
+                existing_tags.add(etag)
+            outbounds.append(extra)
+
+    if "direct" not in existing_tags:
+        outbounds.append({"tag": "direct", "protocol": "freedom", "settings": {}})
+        existing_tags.add("direct")
+    if "block" not in existing_tags:
+        outbounds.append({"tag": "block", "protocol": "blackhole", "settings": {}})
+        existing_tags.add("block")
+
     return {
         "log": {"loglevel": "warning"},
         "inbounds": [],
-        "outbounds": [
-            outbound,
-            {"tag": "direct", "protocol": "freedom", "settings": {}},
-            {"tag": "block", "protocol": "blackhole", "settings": {}},
-        ],
+        "outbounds": outbounds,
         "routing": {
             "domainStrategy": "AsIs",
             "rules": [

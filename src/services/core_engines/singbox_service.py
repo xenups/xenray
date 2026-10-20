@@ -184,6 +184,13 @@ class SingboxService:
             self._wait_for_tun_ready()
             if trace:
                 trace.mark("SB_WAIT_TUN_END")
+            if not self._proc.is_running():
+                logger.error("[SingboxService] sing-box process died during startup")
+                self._proc.close_log()
+                self._route_manager.cleanup_routes()
+                get_system_settings_adapter().restore_smhr(self._smhr_was_enabled)
+                return None
+
             pid = self._proc.pid
             if pid:
                 self._proc.write_pid_file(pid)
@@ -206,22 +213,36 @@ class SingboxService:
         except Exception as e:
             logger.warning(f"[SingboxService] Pre-launch cleanup warning: {e}")
 
-    def _wait_for_tun_ready(self) -> bool:
-        """Wait for the TUN interface to become reachable by pinging the gateway."""
-        import time as _time
-
+    def _wait_for_tun_ready(self, timeout: float = 2.0, poll_interval: float = 0.1) -> bool:
+        """Wait for the TUN interface to be created and become operational."""
         from src.core.constants import TUN_GATEWAY_IPV4
+        from src.utils.platform_utils import PlatformUtils
 
-        for attempt in range(1, 5):
-            try:
-                sock = __import__("socket").create_connection((TUN_GATEWAY_IPV4, 80), timeout=0.5)
-                sock.close()
-                logger.info(f"[SingboxService] TUN gateway {TUN_GATEWAY_IPV4} reachable (attempt {attempt})")
+        target_name = PlatformUtils.get_tun_interface_name()
+        expected_ip = TUN_GATEWAY_IPV4.split("/")[0] if "/" in TUN_GATEWAY_IPV4 else TUN_GATEWAY_IPV4
+        adapter = get_network_adapter()
+
+        deadline = time.monotonic() + timeout
+        attempt = 0
+
+        while time.monotonic() < deadline:
+            attempt += 1
+            if not self._proc.is_running():
+                logger.error("[SingboxService] sing-box process terminated while waiting for TUN interface")
+                return False
+
+            if adapter.is_interface_ready(target_name, expected_ip):
+                logger.info(
+                    f"[SingboxService] TUN interface '{target_name}' is ready ({expected_ip}) (attempt {attempt})"
+                )
                 return True
-            except (OSError, TimeoutError):
-                _time.sleep(0.5)
-        logger.warning("[SingboxService] TUN gateway unreachable after 4 attempts")
-        return True  # proceed anyway — some configs block ICMP/ping
+
+            time.sleep(poll_interval)
+
+        logger.warning(
+            f"[SingboxService] TUN interface '{target_name}' not ready after {attempt} attempts ({timeout:.1f}s)"
+        )
+        return False
 
     def _wait_for_xray_ready(self, port: int) -> bool:
         logger.info(f"[SingboxService] Waiting for Xray SOCKS5 engine on port {port}...")
