@@ -57,7 +57,7 @@ class Header(ft.Container):
 
     def update_theme(self, is_dark: bool):
         """Update icon colors based on theme."""
-        icon_color = ft.Colors.WHITE if is_dark else ft.Colors.BLACK87
+        icon_color = ft.Colors.WHITE if is_dark else ft.Colors.BLACK_87
         if (
             isinstance(self.content, ft.Row)
             and len(self.content.controls) > 1

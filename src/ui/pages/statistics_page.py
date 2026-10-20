@@ -10,7 +10,7 @@ from src.core.event_bus import TOPIC_TELEMETRY_UPDATED, event_bus
 from src.core.i18n import t
 from src.ui.components.dashboard.wave_visualizer import WaveVisualizer
 from src.ui.components.statistics import StatCard, StatsHeader, WaveCard
-from src.ui.controllers.statistics_controller import StatisticsController
+from src.ui.controllers.statistics_controller import StatisticsController, TrafficStatsPayload
 from src.ui.theme import AppColors, GlassTokens
 
 
@@ -25,6 +25,7 @@ class StatisticsPage(ft.Container):
         # (never when a synthetic all-zero payload arrives). Until then the page
         # shows the empty-state hint / "—" placeholders instead of fake zeros.
         self._has_data = False
+        self._last_payload: Optional[TrafficStatsPayload] = None
 
         WHITE = ft.Colors.WHITE
         PURPLE = AppColors.PRIMARY
@@ -122,12 +123,27 @@ class StatisticsPage(ft.Container):
     def set_visible(self, visible: bool) -> None:
         """Mark the page as shown/hidden so telemetry rendering can pause."""
         self._is_visible = visible
+        if visible and self._is_connected and self._last_payload is not None:
+            self._apply_payload(self._last_payload)
+            try:
+                self.update()
+            except Exception:
+                pass
 
     def _on_telemetry_event(self, data) -> None:
         """Handle telemetry_updated EventBus events (published on the UI event loop)."""
         if not isinstance(data, dict):
             return
         try:
+            is_connected = data.get("is_connected")
+            if is_connected is not None:
+                self._is_connected = bool(is_connected)
+                if not self._is_connected:
+                    self._last_payload = None
+                    self._has_data = False
+                    self._reset_placeholders()
+                    return
+
             # Synthetic zero-reset payloads (broadcast by the forwarding service
             # when the connection drops) must NOT count as real data — they
             # would hide the empty-state behind fake "0.0 MB/s" values.
@@ -159,7 +175,14 @@ class StatisticsPage(ft.Container):
             # Disconnected: drop the stale-data flag so values reset to
             # placeholders (no fake zeros behind).
             self._has_data = False
+            self._last_payload = None
             self._reset_placeholders()
+        elif is_connected and self._last_payload is not None and self._is_visible:
+            self._apply_payload(self._last_payload)
+            try:
+                self.update()
+            except Exception:
+                pass
 
     def update_server_info(self, *args, **kwargs) -> None:
         """No-op: server details are presented by ServerCard components."""
@@ -203,12 +226,18 @@ class StatisticsPage(ft.Container):
         if payload is None:
             return
 
+        self._last_payload = payload
+
         # Keep controller history flowing while hidden (so the wave resumes
         # smoothly on re-entry) but skip all rendering + bar animation when the
         # page isn't visible — zero CPU/GPU cycles are spent on hidden bars.
         if not self._is_visible:
             return
 
+        self._apply_payload(payload)
+
+    def _apply_payload(self, payload: TrafficStatsPayload) -> None:
+        """Apply traffic stats payload to UI subcomponents."""
         self._rate_header.update_rate(payload.rate_str)
         self._dl_card.update_telemetry(payload.dl_speed_str, payload.download_str)
         self._ul_card.update_telemetry(payload.ul_speed_str, payload.upload_str)
@@ -217,6 +246,7 @@ class StatisticsPage(ft.Container):
 
     def _reset_placeholders(self) -> None:
         """Restore the "—" placeholders (disconnect path)."""
+        self._last_payload = None
         self._rate_text_control.value = "—"
         self._dl_speed_text.value = "—"
         self._ul_speed_text.value = "—"

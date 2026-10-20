@@ -213,7 +213,12 @@ class LogViewer:
             logger.info(f"[LogViewer] Logs exported to {path}")
             if self._page:
                 try:
-                    self._page.set_clipboard(path)
+                    if hasattr(self._page, "clipboard") and self._page.clipboard:
+                        self._page.run_task(self._page.clipboard.set, path)
+                    elif hasattr(self._page, "set_clipboard"):
+                        self._page.set_clipboard(path)
+                    else:
+                        self._page.run_task(ft.Clipboard().set, path)
                 except Exception:
                     pass
         except Exception as e:
@@ -224,7 +229,13 @@ class LogViewer:
         if not self._page:
             return
         try:
-            self._page.set_clipboard(self._log_text.value or "")
+            val = self._log_text.value or ""
+            if hasattr(self._page, "clipboard") and self._page.clipboard:
+                self._page.run_task(self._page.clipboard.set, val)
+            elif hasattr(self._page, "set_clipboard"):
+                self._page.set_clipboard(val)
+            else:
+                self._page.run_task(ft.Clipboard().set, val)
         except Exception:
             pass
 

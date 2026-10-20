@@ -2,6 +2,26 @@
 
 All notable changes to XenRay will be documented in this file.
 
+## [0.4.0] - 2026-10-19
+
+### Changed
+- **Version Bump**: Bumped application version to **0.4.0**.
+- **Core Engine Upgrade**: Upgraded default bundled Xray-core binary to **v26.10.17** and Sing-box binary to **v1.14.0**.
+- **UI Framework Modernization**: Modernized UI framework to **Flet 1.0.4** across main window, pages, components, and controllers with unmounted page lifecycle protections.
+
+### Fixed
+- **Auto-Updater Safety & Process Boundary Hardening**:
+  - Replaced name-only process termination with strictly path-aware, fail-closed process termination (`Stop-XenrayProcessesInsideAppDir`). Candidate processes and caller PIDs are terminated only after normalizing their executable path and confirming it resides strictly within the target application directory boundary.
+  - Fail-closed on missing, unresolvable, or inaccessible executable paths; `CallerProcessID` cannot authorize termination outside TargetAppDir.
+- **Windows Default-Route Cleanup Safety**:
+  - Eliminated unconditional deletion of `0.0.0.0/0` via gateway `10.0.0.2`.
+  - Added pure decision helper `Test-IsXenrayTunRouteEligible` verifying TUN adapter identity (`SINGTUN`, `xenray-tun`, `wintun`), and guarding against deletion of physical adapter (e.g. Intel, Realtek) or third-party VPN routes (OpenVPN, WireGuard, Tailscale).
+- **Rollback Restoration & Mid-Operation Fault Handling**:
+  - Implemented pre-update backup manifest tracking (`New-XenrayBackupManifest`) recording pre-existing files prior to staging deployment.
+  - Implemented PowerShell rollback engine (`Invoke-XenrayRollback`) that restores backed-up files, deterministically prunes newly introduced files and empty directories, and preserves user data.
+  - Isolated production deployment failure handler (`Invoke-XenrayDeploymentFailure`) to retain backup directories intact on rollback failure and exit unsuccessfully with exit code 1.
+  - Embedded updater script (`_EMBEDDED_UPDATER_SCRIPT`) synchronized byte-for-byte with disk script `scripts/xenray_updater.ps1`.
+
 ## [0.3.8] - 2026-10-12
 
 ### Changed

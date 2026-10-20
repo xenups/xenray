@@ -335,6 +335,12 @@
     "disconnect": "Отключить",
     "connected_to": "Подключено: {server}"
   },
+  "notifications": {
+    "connected": "Подключено",
+    "connected_to": "Подключено: {server}",
+    "disconnected": "Отключено",
+    "unexpected_disconnect": "VPN-соединение неожиданно разорвано"
+  },
   "close_dialog": {
     "title": "Выход из приложения",
     "message": "Вы хотите выйти из XenRay или свернуть в трей?",

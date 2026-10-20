@@ -93,7 +93,7 @@ class WindowsProcessAdapter(IProcessAdapter):
             pass
 
         try:
-            app_id = "xenups.xenray.gui.v2"
+            app_id = "XenRay"
             ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(app_id)
         except Exception:
             pass

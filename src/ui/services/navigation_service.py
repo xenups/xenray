@@ -70,6 +70,16 @@ class NavigationService:
             pass
 
         self._set_stats_visible(tab_id == "statistics")
+        if tab_id == "statistics":
+            view = getattr(self._mw, "_stitch_statistics_view", None)
+            if view is not None and hasattr(view, "set_connection_state"):
+                view.set_connection_state(
+                    is_connected=getattr(self._mw, "_is_running", False),
+                    is_connecting=getattr(self._mw, "_connecting", False),
+                )
+            forwarding = getattr(self._mw, "_stats_forwarding", None)
+            if forwarding is not None and hasattr(forwarding, "publish_now"):
+                forwarding.publish_now()
 
         if hasattr(self._mw, "_nav_sidebar") and self._mw._nav_sidebar:
             try:

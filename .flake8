@@ -13,3 +13,4 @@ exclude =
     .mypy_cache
 per-file-ignores =
     __init__.py:F401
+    src/services/installer/app_update_service.py:E501

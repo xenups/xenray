@@ -24,9 +24,14 @@ def _stats_worker(stats_queue: queue.Queue, stop_event: threading.Event):
     except Exception:
         pass
 
+    first_sample = True
     while not stop_event.is_set():
         try:
-            time.sleep(1.5)  # Collection interval
+            if first_sample:
+                time.sleep(0.3)  # Fast initial sample for responsive first stats
+                first_sample = False
+            else:
+                time.sleep(1.0)  # Regular collection interval
 
             if stop_event.is_set():
                 break

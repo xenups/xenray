@@ -66,7 +66,7 @@ class DNSPage(ft.Container):
             on_submit=self._add_server,
         )
 
-        add_btn = ft.ElevatedButton(
+        add_btn = ft.Button(
             t("dns.add"),
             icon=ft.Icons.ADD,
             style=ft.ButtonStyle(

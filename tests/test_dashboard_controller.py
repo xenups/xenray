@@ -123,3 +123,46 @@ def test_dashboard_controller_dynamic_ping_when_disconnected():
     ctrl.set_connection_state(is_connected=False)
     assert state_history[-1][0] == DashboardState.DISCONNECTED
     assert "142 ms" in state_history[-1][1]
+
+
+def test_dashboard_controller_callback_exception_handling():
+    """Ensure exceptions raised in UI callbacks do not break controller state transitions."""
+
+    def broken_state_cb(state, label):
+        raise RuntimeError("Control must be added to the page first")
+
+    def broken_uptime_cb(uptime):
+        raise RuntimeError("Control must be added to the page first")
+
+    ctrl = DashboardController(
+        on_state_changed=broken_state_cb,
+        on_uptime_updated=broken_uptime_cb,
+    )
+
+    # Should not raise exception
+    ctrl.set_connection_state(is_connected=False, is_connecting=True)
+    assert ctrl.state == DashboardState.CONNECTING
+
+    ctrl.set_connection_state(is_connected=True)
+    assert ctrl.state == DashboardState.CONNECTED
+
+    ctrl.set_connection_state(is_connected=False)
+    assert ctrl.state == DashboardState.DISCONNECTED
+
+
+def test_unmounted_dashboard_page_lifecycle():
+    """Ensure unmounted DashboardPage can safely receive state changes and uptime updates."""
+    from src.ui.pages.dashboard_page import DashboardPage
+
+    page = DashboardPage(
+        on_toggle_click=lambda e: None,
+        on_change_server_click=lambda e: None,
+    )
+
+    # All of these must succeed gracefully without raising Control must be added to the page first
+    page.set_connection_state(is_connected=False, is_connecting=True)
+    page.update_uptime("00:01:23")
+    page.set_connection_state(is_connected=True)
+    page.set_connection_state(is_connected=False, is_disconnecting=True)
+    page.set_connection_state(is_connected=False)
+    page.dispose()

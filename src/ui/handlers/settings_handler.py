@@ -318,7 +318,7 @@ class SettingsHandler:
             content=ft.Text(msg),
             actions=[
                 ft.TextButton(t("rules_update.cancel"), on_click=close_dlg),
-                ft.ElevatedButton(t("rules_update.confirm"), on_click=start_update),
+                ft.Button(t("rules_update.confirm"), on_click=start_update),
             ],
         )
         page.show_dialog(dlg)

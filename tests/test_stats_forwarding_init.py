@@ -123,7 +123,7 @@ def test_network_stats_not_tab_gated_and_immediate_first_poll():
     """forward_network_stats has no active-tab gate and updates before sleeping."""
     mw, _ = _make_mw(active_tab="dashboard", nav_locked=False, is_running=True)
     with _run_one_tick(StatsForwardingService(mw).forward_network_stats) as tick:
-        assert tick["sleeps"] == [3.0]  # the first sleep is only reached AFTER the first push
+        assert tick["sleeps"] == [1.0]  # responsive 1.0s loop, first sleep reached AFTER first push
     assert mw._network_stats.get_stats.called  # the poll ran before the sleep
 
 
@@ -141,3 +141,20 @@ def test_network_stats_publishes_telemetry_on_first_tick():
         event_bus.clear()
     assert received, "first tick must publish telemetry immediately"
     assert received[0]["is_connected"] is True
+
+
+def test_network_stats_publish_now_emits_telemetry_immediately():
+    """publish_now() emits telemetry on the EventBus synchronously without sleeping."""
+    from src.core.event_bus import TOPIC_TELEMETRY_UPDATED, event_bus
+
+    mw, _ = _make_mw(active_tab="statistics", nav_locked=False, is_running=True)
+    svc = StatsForwardingService(mw)
+    received = []
+    event_bus.subscribe(TOPIC_TELEMETRY_UPDATED, lambda data: received.append(data))
+    try:
+        svc.publish_now()
+    finally:
+        event_bus.clear()
+    assert received
+    assert received[0]["is_connected"] is True
+    assert received[0]["rate_str"] == "1.2 MB/s"

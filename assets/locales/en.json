@@ -386,6 +386,12 @@
     "disconnect": "Disconnect",
     "connected_to": "Connected: {server}"
   },
+  "notifications": {
+    "connected": "Connected",
+    "connected_to": "Connected: {server}",
+    "disconnected": "Disconnected",
+    "unexpected_disconnect": "VPN connection lost unexpectedly"
+  },
   "close_dialog": {
     "title": "Exit Application",
     "message": "Do you want to exit XenRay or minimize to system tray?",
