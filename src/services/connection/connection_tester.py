@@ -1,5 +1,6 @@
 """Connection Tester Service."""
 
+import copy
 import json
 import os
 import socket
@@ -7,7 +8,7 @@ import subprocess
 import threading
 import time
 import uuid
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 
 import requests
 
@@ -90,12 +91,31 @@ class ConnectionTester:
         return port
 
     @staticmethod
-    def _create_temp_config(listen_port: int, outbound_config: dict) -> str:
+    def _create_temp_config(
+        listen_port: int,
+        outbound_config: dict,
+        extra_outbounds: Optional[List[dict]] = None,
+    ) -> str:
         """Create a temporary Xray config for testing.
 
         On Windows the SO_MARK socket option is silently ignored by the
         kernel, so we skip it entirely.
         """
+        outbounds = [copy.deepcopy(outbound_config)]
+        if extra_outbounds:
+            for ob in extra_outbounds:
+                if isinstance(ob, dict) and ob not in outbounds:
+                    outbounds.append(copy.deepcopy(ob))
+
+        existing_tags = {o.get("tag") for o in outbounds if o.get("tag")}
+        if "direct" not in existing_tags:
+            outbounds.append(
+                {
+                    "protocol": "freedom",
+                    "tag": "direct",
+                }
+            )
+
         config = {
             "log": {"loglevel": "none"},
             "inbounds": [
@@ -106,23 +126,18 @@ class ConnectionTester:
                     "sniffing": {"enabled": True, "destOverride": ["http", "tls"]},
                 }
             ],
-            "outbounds": [
-                outbound_config,
-                {
-                    "protocol": "freedom",
-                    "tag": "direct",
-                },
-            ],
+            "outbounds": outbounds,
         }
 
         # On Linux, mark=255 helps bypass VPN routing for the test Xray.
         # Omitted on Windows (no-op / may cause warnings).
         if not _IS_WINDOWS:
-            if "streamSettings" not in config["outbounds"][0]:
-                config["outbounds"][0]["streamSettings"] = {}
-            if "sockopt" not in config["outbounds"][0]["streamSettings"]:
-                config["outbounds"][0]["streamSettings"]["sockopt"] = {}
-            config["outbounds"][0]["streamSettings"]["sockopt"]["mark"] = 255
+            for ob in config["outbounds"]:
+                if ob.get("protocol") != "blackhole":
+                    stream = ob.setdefault("streamSettings", {})
+                    sockopt = stream.setdefault("sockopt", {})
+                    if "mark" not in sockopt:
+                        sockopt["mark"] = 255
 
         filename = f"test_{uuid.uuid4()}.json"
         path = os.path.join(TMPDIR, filename)
@@ -272,13 +287,19 @@ class ConnectionTester:
             return False, t("connection.conn_error"), None
 
         # ── Direct Xray instance mode (proxy mode / Linux) ──
-        # Find the first valid outbound (vmess/vless/etc)
+        # Find the primary proxy outbound (vmess/vless/etc) and any auxiliary outbounds
         target_outbound = None
+        extra_outbounds = []
         if "outbounds" in profile_config:
             for out in profile_config["outbounds"]:
-                if out.get("protocol") not in ["freedom", "blackhole", "dns"]:
+                if out.get("tag") == "proxy" or out.get("protocol") not in ["freedom", "direct", "blackhole", "dns"]:
                     target_outbound = out
                     break
+
+            if target_outbound:
+                for out in profile_config["outbounds"]:
+                    if out is not target_outbound and out.get("tag") not in ["direct", "block"]:
+                        extra_outbounds.append(out)
 
         if not target_outbound:
             if "protocol" in profile_config:
@@ -286,8 +307,14 @@ class ConnectionTester:
             else:
                 return False, t("connection.invalid_config"), None
 
+        # Check for attached _ech_outbound if not already collected
+        if target_outbound and "_ech_outbound" in target_outbound:
+            ech_ob = target_outbound["_ech_outbound"]
+            if isinstance(ech_ob, dict) and ech_ob not in extra_outbounds:
+                extra_outbounds.append(ech_ob)
+
         port = ConnectionTester._find_free_port()
-        config_path = ConnectionTester._create_temp_config(port, target_outbound)
+        config_path = ConnectionTester._create_temp_config(port, target_outbound, extra_outbounds=extra_outbounds)
 
         if not config_path:
             return False, t("connection.error"), None

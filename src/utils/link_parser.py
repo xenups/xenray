@@ -101,7 +101,19 @@ class LinkParser:
 
             protocol = proxy_out.get("protocol")
             if protocol == "vless":
-                return VlessParser.generate(proxy_out, name)
+                ech_outbound = None
+                tls = proxy_out.get("streamSettings", {}).get("tlsSettings", {})
+                ech_tag = tls.get("echSockopt", {}).get("dialerProxy")
+                for ob in outbounds:
+                    if ob is not proxy_out:
+                        if ech_tag and ob.get("tag") == ech_tag:
+                            ech_outbound = ob
+                            break
+                        elif ob.get("tag") == "tls-repack-dns":
+                            ech_outbound = ob
+                            break
+                return VlessParser.generate(proxy_out, name, ech_outbound=ech_outbound)
+
             elif protocol == "vmess":
                 return VmessParser.generate(proxy_out, name)
             elif protocol == "trojan":

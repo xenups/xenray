@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
+import urllib.parse
 from typing import Any, Callable, Dict, Optional, Tuple
 
 from loguru import logger
@@ -49,6 +51,11 @@ class LibXrayParserAdapter:
         if not link or not isinstance(link, str):
             raise ValueError("Link must be a non-empty string")
 
+        link = link.strip()
+        parsed_url = urllib.parse.urlparse(link)
+        if re.search(r"%(?![0-9a-fA-F]{2})", parsed_url.query):
+            raise ValueError("Malformed percent-encoding in query parameters")
+
         binary_path = cls.get_executable_path()
         if not cls.is_available():
             raise FileNotFoundError(f"xray-parser binary not found or not executable at {binary_path}")
@@ -60,7 +67,7 @@ class LibXrayParserAdapter:
         try:
             proc = subprocess.run(
                 [binary_path, "-stdin"],
-                input=link.strip().encode("utf-8"),
+                input=link.encode("utf-8"),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 creationflags=creationflags,
@@ -94,7 +101,8 @@ class LibXrayParserAdapter:
         # Augment outbound with any advanced link parameters that libxray drops
         cls._augment_outbound_from_link(outbound, link)
 
-        config = build_minimal_config(outbound)
+        extra_outbounds = outbound.pop("_extra_outbounds", [])
+        config = build_minimal_config(outbound, extra_outbounds=extra_outbounds)
         return {"name": name, "config": config, "outbound": outbound}
 
     @staticmethod
@@ -191,7 +199,19 @@ class LibXrayParserAdapter:
                 extra_raw = get_p("extra")
                 if extra_raw:
                     try:
-                        extra_obj = json.loads(extra_raw)
+                        try:
+                            extra_obj = json.loads(extra_raw)
+                        except json.JSONDecodeError:
+                            unquoted_extra = urllib.parse.unquote(extra_raw)
+                            try:
+                                extra_obj = json.loads(unquoted_extra)
+                            except json.JSONDecodeError:
+                                repaired = re.sub(
+                                    r'"([a-zA-Z0-9_]+):(\s*[\d\w\-]+)(\s*[,}])',
+                                    r'"\1": \2\3',
+                                    unquoted_extra,
+                                )
+                                extra_obj = json.loads(repaired)
                         if isinstance(extra_obj, dict):
                             for k, v in extra_obj.items():
                                 xhttp_extra[k] = v
@@ -214,6 +234,54 @@ class LibXrayParserAdapter:
                 if stream.get("security") != "tls":
                     stream["security"] = "tls"
                 stream.setdefault("masqueSettings", {})
+
+            # 6. ECH & echOutbound
+            ech_val = get_p("ech")
+            if ech_val and security == "tls":
+                tls_settings = stream.setdefault("tlsSettings", {})
+                if not tls_settings.get("echConfigList"):
+                    tls_settings["echConfigList"] = urllib.parse.unquote(ech_val)
+
+            ech_outbound_raw = get_p("echOutbound") or get_p("ech_outbound")
+            if ech_outbound_raw:
+                try:
+                    try:
+                        parsed_ob = json.loads(ech_outbound_raw)
+                    except (json.JSONDecodeError, ValueError):
+                        parsed_ob = json.loads(urllib.parse.unquote(ech_outbound_raw))
+                except Exception as e:
+                    raise ValueError(f"Invalid echOutbound: malformed JSON: {e}") from e
+
+                if not isinstance(parsed_ob, dict):
+                    raise ValueError("Invalid echOutbound: must be a JSON object")
+
+                ob_tag = parsed_ob.get("tag")
+                if not ob_tag or not isinstance(ob_tag, str) or not ob_tag.strip():
+                    raise ValueError("Invalid echOutbound: missing or empty 'tag'")
+                ob_tag = ob_tag.strip()
+
+                ob_proto = parsed_ob.get("protocol")
+                if not ob_proto or not isinstance(ob_proto, str) or not ob_proto.strip():
+                    raise ValueError("Invalid echOutbound: missing or empty 'protocol'")
+
+                if ob_tag == outbound.get("tag"):
+                    raise ValueError(f"Invalid echOutbound: tag '{ob_tag}' collides with primary outbound tag")
+
+                if "settings" in parsed_ob and not isinstance(parsed_ob["settings"], dict):
+                    raise ValueError("Invalid echOutbound: 'settings' must be an object")
+
+                if "streamSettings" in parsed_ob and not isinstance(parsed_ob["streamSettings"], dict):
+                    raise ValueError("Invalid echOutbound: 'streamSettings' must be an object")
+
+                outbound["_extra_outbounds"] = [parsed_ob]
+
+                if security == "tls":
+                    tls_settings = stream.setdefault("tlsSettings", {})
+                    sockopt = tls_settings.setdefault("echSockopt", {})
+                    if not sockopt.get("dialerProxy"):
+                        sockopt["dialerProxy"] = ob_tag
+        except ValueError:
+            raise
         except Exception as e:
             logger.warning(f"[LibXrayParserAdapter] Failed to augment outbound from link: {e}")
 
