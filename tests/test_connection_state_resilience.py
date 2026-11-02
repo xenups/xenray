@@ -9,19 +9,12 @@ Tests all 24 failure/recovery scenarios in an entirely offline, mocked environme
 from __future__ import annotations
 
 import threading
-import time
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, Mock
 
 import pytest
 
 from src.core.connection_manager import ConnectionManager
-from src.core.event_bus import (
-    EVENT_CORE_CRASHED,
-    EVENT_CORE_PROCESS_STOPPED,
-    TOPIC_CONNECTION_STATE_CHANGED,
-    EngineEvent,
-    EventBus,
-)
+from src.core.event_bus import TOPIC_CONNECTION_STATE_CHANGED, EngineEvent, EventBus
 from src.core.fsm.connection_fsm import ConnectionFSM, ConnectionState
 from src.services.monitoring.auto_reconnect_service import AutoReconnectService, MonitorSignal
 from src.ui.handlers.connection_notification_handler import (
@@ -31,10 +24,10 @@ from src.ui.handlers.connection_notification_handler import (
 from src.ui.handlers.reconnect_event_handler import ReconnectEventHandler
 from src.ui.pages.dashboard_page import DashboardPage
 
-
 # =============================================================================
 # Test Fixtures & Helpers
 # =============================================================================
+
 
 @pytest.fixture
 def isolated_fsm():
@@ -61,8 +54,10 @@ def mock_cm(isolated_fsm, isolated_bus, monkeypatch):
     cm._monitoring = MagicMock()
     cm._health_monitor = MagicMock()
     cm._app_context = MagicMock()
+    cm._MonitorSignal = MonitorSignal
 
     import importlib
+
     fsm_mod = importlib.import_module("src.core.fsm.connection_fsm")
     monkeypatch.setattr(fsm_mod, "connection_fsm", isolated_fsm)
 
@@ -79,6 +74,7 @@ def _set_fsm_state(fsm: ConnectionFSM, state: ConnectionState) -> None:
 # =============================================================================
 # 1-24 Regression Scenarios
 # =============================================================================
+
 
 def test_01_normal_vpn_connection(mock_cm, isolated_fsm):
     """Scenario 1: Normal VPN connection transitions STARTING -> PREPARING -> CONNECTED."""
@@ -464,6 +460,7 @@ def test_21_latency_monitoring_does_not_start_because_of_false_disconnected(isol
     lm.run_active_ping_sync = Mock()
 
     import importlib
+
     fsm_mod = importlib.import_module("src.core.fsm.connection_fsm")
     monkeypatch.setattr(fsm_mod, "connection_fsm", isolated_fsm)
 
@@ -510,3 +507,159 @@ def test_24_reconnection_failure_is_represented_accurately(mock_cm, isolated_fsm
     assert isolated_fsm.state == ConnectionState.ERROR
     assert not isolated_fsm.is_connected
 
+
+def test_25_prolonged_offline_outage_does_not_exhaust_reconnect_budget():
+    """Scenario 25: Physical network outage (10 checks) increments offline counter without burning reconnect budget."""
+    mock_net_val = Mock()
+    mock_net_val.check_internet_connection.return_value = False
+    mock_connect_fn = Mock(return_value=True)
+    events_emitted = []
+
+    service = AutoReconnectService(
+        network_validator=mock_net_val,
+        config_loader=Mock(return_value=({}, None)),
+        connection_tester=Mock(),
+        connect_fn=mock_connect_fn,
+        event_emitter=lambda evt, data: events_emitted.append((evt, data)),
+    )
+    service.start_session(session_id=1)
+    # Prevent background timer execution in unit test
+    service._schedule_retry = Mock()
+
+    # Simulate 10 failure checks while internet is offline
+    conn_info = {"file": "test.json", "mode": "tun"}
+    for i in range(10):
+        result = service.handle_failure(conn_info, session_id=1)
+        assert result is False
+
+    # Budget must remain untouched
+    assert service.consecutive_offline_checks == 10
+    assert service.consecutive_failures == 0
+    assert mock_connect_fn.call_count == 0
+
+    # Verify degraded events emitted
+    degraded_events = [e for e in events_emitted if e[0] == "connectivity_degraded"]
+    assert len(degraded_events) == 10
+    assert degraded_events[-1][1]["reason"] == "no_internet"
+
+    # Now simulate WAN recovery
+    mock_net_val.check_internet_connection.return_value = True
+    service._check_core_recovered = Mock(return_value=True)
+
+    result = service.handle_failure(conn_info, session_id=1)
+    assert result is True
+    # Offline checks counter must reset to 0
+    assert service.consecutive_offline_checks == 0
+    assert service.consecutive_failures == 0
+
+
+def test_26_error_state_does_not_recover_to_connected_on_restored_event(mock_cm, isolated_fsm):
+    """Scenario 26: In ERROR state, connectivity_restored must NOT force FSM back to CONNECTED."""
+    _set_fsm_state(isolated_fsm, ConnectionState.ERROR)
+    mock_cm._current_connection = {"file": "test.json", "mode": "tun"}
+    mock_cm._session_id = 5
+
+    mock_cm._emit_event("connectivity_restored", {"session_id": 5})
+
+    assert isolated_fsm.state == ConnectionState.ERROR
+    assert not isolated_fsm.is_connected
+
+
+def test_27_stale_recovery_event_with_mismatched_session_is_dropped(mock_cm, isolated_fsm):
+    """Scenario 27: connectivity_restored with an obsolete session ID is dropped and ignored."""
+    _set_fsm_state(isolated_fsm, ConnectionState.DEGRADED)
+    mock_cm._session_id = 10
+
+    # Mismatched session event (session 9 vs current 10)
+    mock_cm._emit_event("connectivity_restored", {"session_id": 9})
+    assert isolated_fsm.state == ConnectionState.DEGRADED
+
+    # Matching session event
+    mock_cm._emit_event("connectivity_restored", {"session_id": 10})
+    assert isolated_fsm.state == ConnectionState.CONNECTED
+
+
+def test_28_end_to_end_degradation_and_recovery_flow(mock_cm, isolated_fsm, isolated_bus):
+    """Scenario 28: End-to-end flow from ACTIVE_LOST through UI synchronization to ACTIVE_RESTORED."""
+    _set_fsm_state(isolated_fsm, ConnectionState.CONNECTED)
+    mock_cm._current_connection = {"file": "config.json", "mode": "tun"}
+    mock_cm._session_id = 1
+
+    mock_notify = Mock()
+    handler = ConnectionNotificationHandler(
+        selected_profile_getter=lambda: {"name": "TestProfile"},
+        notify_fn=mock_notify,
+        bus=isolated_bus,
+    )
+    handler.start()
+
+    # Pre-condition: notification handler sees connected
+    isolated_bus.publish(
+        TOPIC_CONNECTION_STATE_CHANGED,
+        EngineEvent(
+            event_name="connected",
+            source="connection_manager",
+            payload={"event": "connected", "data": {"profile_name": "TestProfile"}},
+        ),
+    )
+    assert handler._state == NotificationConnectionState.CONNECTED
+    mock_notify.reset_mock()
+
+    # 1. Active monitor detects packet loss -> ACTIVE_LOST
+    mock_cm._handle_signal(MonitorSignal.ACTIVE_LOST)
+
+    # FSM transitions to DEGRADED
+    assert isolated_fsm.state == ConnectionState.DEGRADED
+    assert isolated_fsm.is_connected is True
+
+    # Notification handler must NOT emit disconnect notification
+    assert mock_notify.call_count == 0
+    assert handler._state == NotificationConnectionState.CONNECTED
+
+    # 2. Active monitor detects recovery -> ACTIVE_RESTORED
+    mock_cm._handle_signal(MonitorSignal.ACTIVE_RESTORED)
+
+    # FSM transitions back to CONNECTED
+    assert isolated_fsm.state == ConnectionState.CONNECTED
+    assert isolated_fsm.is_connected is True
+    assert mock_notify.call_count == 0
+
+    handler.cleanup()
+
+
+def test_29_systray_and_notification_state_during_degradation(isolated_bus):
+    """Scenario 29: In DEGRADED state, notifications and connection state preserve connected baseline."""
+    mock_notify = Mock()
+    handler = ConnectionNotificationHandler(
+        selected_profile_getter=lambda: {"name": "TestProfile"},
+        notify_fn=mock_notify,
+        bus=isolated_bus,
+    )
+    handler.start()
+
+    # Verify initial CONNECTED
+    isolated_bus.publish(
+        TOPIC_CONNECTION_STATE_CHANGED,
+        EngineEvent(
+            event_name="connected",
+            source="connection_manager",
+            payload={"event": "connected", "data": {"profile_name": "TestProfile"}},
+        ),
+    )
+    assert handler._state == NotificationConnectionState.CONNECTED
+    mock_notify.reset_mock()
+
+    # Emit degradation
+    isolated_bus.publish(
+        TOPIC_CONNECTION_STATE_CHANGED,
+        EngineEvent(
+            event_name="connectivity_degraded",
+            source="connection_manager",
+            payload={"event": "connectivity_degraded", "data": {"reason": "active_degraded_probe"}},
+        ),
+    )
+    # State remains CONNECTED in notification handler, never dropped to DISCONNECTED
+    assert handler._state == NotificationConnectionState.CONNECTED
+    mock_notify.assert_not_called()
+
+    handler.cleanup()
