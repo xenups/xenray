@@ -122,7 +122,8 @@ class ReconnectEventHandler:
         if self._connection_button and hasattr(self._connection_button, "set_degraded"):
             self._ui_call(lambda: self._connection_button.set_degraded())
         if self._toast:
-            self._ui_call(lambda: self._toast.warning(t("connection.network_degraded", default="VPN Connected — Network Degraded"), 3000))
+            msg = t("connection.network_degraded", default="VPN Connected — Network Degraded")
+            self._ui_call(lambda: self._toast.warning(msg, 3000))
 
     def _handle_connectivity_restored(self, data: dict):
         """Handle connectivity_restored event (core self-healed, no reconnect needed)."""
@@ -215,7 +216,8 @@ class ReconnectEventHandler:
             # Temporary WAN outage: do NOT reset UI to disconnected!
             # The core and tunnel are still running; show a warning toast and update status to degraded.
             if self._toast:
-                self._ui_call(lambda: self._toast.warning(t("connection.no_internet", default="Network unreachable (retrying...)"), 3000))
+                msg = t("connection.no_internet", default="Network unreachable (retrying...)")
+                self._ui_call(lambda: self._toast.warning(msg, 3000))
             if self._status_display:
                 if hasattr(self._status_display, "set_degraded"):
                     self._ui_call(lambda: self._status_display.set_degraded())
