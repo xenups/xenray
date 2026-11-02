@@ -18,10 +18,7 @@ from src.core.connection_manager import ConnectionManager
 from src.core.event_bus import TOPIC_CONNECTION_STATE_CHANGED, EngineEvent, EventBus
 from src.core.fsm.connection_fsm import ConnectionFSM, ConnectionState
 from src.services.monitoring.auto_reconnect_service import AutoReconnectService, MonitorSignal
-from src.ui.handlers.connection_notification_handler import (
-    ConnectionNotificationHandler,
-    NotificationConnectionState,
-)
+from src.ui.handlers.connection_notification_handler import ConnectionNotificationHandler, NotificationConnectionState
 from src.ui.handlers.latency_monitor_handler import LatencyMonitorHandler
 from src.ui.handlers.reconnect_event_handler import ReconnectEventHandler
 from src.ui.pages.dashboard_page import DashboardPage
