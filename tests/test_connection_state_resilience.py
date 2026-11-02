@@ -8,6 +8,7 @@ Tests all 24 failure/recovery scenarios in an entirely offline, mocked environme
 
 from __future__ import annotations
 
+import importlib
 import threading
 from unittest.mock import MagicMock, Mock
 
@@ -21,6 +22,7 @@ from src.ui.handlers.connection_notification_handler import (
     ConnectionNotificationHandler,
     NotificationConnectionState,
 )
+from src.ui.handlers.latency_monitor_handler import LatencyMonitorHandler
 from src.ui.handlers.reconnect_event_handler import ReconnectEventHandler
 from src.ui.pages.dashboard_page import DashboardPage
 
@@ -55,8 +57,6 @@ def mock_cm(isolated_fsm, isolated_bus, monkeypatch):
     cm._health_monitor = MagicMock()
     cm._app_context = MagicMock()
     cm._MonitorSignal = MonitorSignal
-
-    import importlib
 
     fsm_mod = importlib.import_module("src.core.fsm.connection_fsm")
     monkeypatch.setattr(fsm_mod, "connection_fsm", isolated_fsm)
@@ -451,15 +451,11 @@ def test_20_tray_and_notification_agree_with_dashboard(isolated_bus):
 
 def test_21_latency_monitoring_does_not_start_because_of_false_disconnected(isolated_fsm, monkeypatch):
     """Scenario 21: Latency monitor trigger_single_check is blocked when FSM is CONNECTED or DEGRADED."""
-    from src.ui.handlers.latency_monitor_handler import LatencyMonitorHandler
-
     lm = LatencyMonitorHandler.__new__(LatencyMonitorHandler)
     lm._selected_profile_getter = Mock(return_value={"id": "prof1", "config": {}})
     lm._connection_button = Mock()
     lm._ui_helper = Mock()
     lm.run_active_ping_sync = Mock()
-
-    import importlib
 
     fsm_mod = importlib.import_module("src.core.fsm.connection_fsm")
     monkeypatch.setattr(fsm_mod, "connection_fsm", isolated_fsm)
