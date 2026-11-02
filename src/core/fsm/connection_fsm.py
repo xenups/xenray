@@ -89,7 +89,6 @@ class ConnectionFSM:
         ConnectionState.ERROR: {
             ConnectionState.DISCONNECTED,
             ConnectionState.STARTING,
-            ConnectionState.DEGRADED,
         },
     }
 

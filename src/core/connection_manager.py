@@ -138,18 +138,18 @@ class ConnectionManager:
         elif signal == self._MonitorSignal.ACTIVE_LOST:
             # Active monitor detected connectivity loss
             logger.warning("[ConnectionManager] Active monitor: connectivity lost")
-            self._emit_event("connectivity_lost")
+            self._emit_event("connectivity_lost", {"reason": "active_lost_probe"})
             self._monitoring.handle_failure(current_conn)
 
         elif signal == self._MonitorSignal.ACTIVE_DEGRADED:
             # Active monitor detected degradation (soft warning - no reconnect)
             logger.info("[ConnectionManager] Active monitor: connectivity degraded")
-            self._emit_event("connectivity_degraded")
+            self._emit_event("connectivity_degraded", {"reason": "active_degraded_probe"})
 
         elif signal == self._MonitorSignal.ACTIVE_RESTORED:
             # Active monitor detected recovery
             logger.info("[ConnectionManager] Active monitor: connectivity restored")
-            self._emit_event("connectivity_restored")
+            self._emit_event("connectivity_restored", {"reason": "active_restored_probe"})
 
     def _handle_core_crash(self, payload=None) -> None:
         """Hard-reset the connection session when a core process crashes.
@@ -628,12 +628,21 @@ class ConnectionManager:
                 fsm_transitioned = connection_fsm.transition_to(ConnectionState.CONNECTED, payload=data)
             elif event_type == "connectivity_restored":
                 # Active monitor or recovery worker detected network recovery on active session
-                current_state = connection_fsm.state
-                if current_state in {ConnectionState.CONNECTED, ConnectionState.DEGRADED}:
-                    fsm_transitioned = connection_fsm.transition_to(ConnectionState.CONNECTED, payload=data)
-                elif current_state == ConnectionState.ERROR and getattr(self, "_current_connection", None):
-                    # Defensively recover if session is still alive
-                    fsm_transitioned = connection_fsm.transition_to(ConnectionState.CONNECTED, payload=data, force=True)
+                event_session = (data or {}).get("session_id")
+                current_session = getattr(self, "_session_id", None)
+                if event_session is not None and current_session is not None and event_session != current_session:
+                    logger.debug(
+                        f"[ConnectionManager] Stale connectivity_restored (event session: {event_session}, "
+                        f"current session: {current_session}) — dropped"
+                    )
+                else:
+                    current_state = connection_fsm.state
+                    if current_state in {ConnectionState.CONNECTED, ConnectionState.DEGRADED}:
+                        fsm_transitioned = connection_fsm.transition_to(ConnectionState.CONNECTED, payload=data)
+                    else:
+                        logger.debug(
+                            f"[ConnectionManager] connectivity_restored ignored in state '{current_state.value}'"
+                        )
             elif event_type in ("connectivity_lost", "connectivity_degraded"):
                 if connection_fsm.state == ConnectionState.CONNECTED:
                     fsm_transitioned = connection_fsm.transition_to(ConnectionState.DEGRADED, payload=data)
