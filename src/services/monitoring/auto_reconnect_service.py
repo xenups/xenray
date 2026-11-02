@@ -83,8 +83,21 @@ class AutoReconnectService:
 
         # Reconnect backoff state
         self._consecutive_failures = 0
+        self._consecutive_offline_checks = 0
         self._last_attempt_time = 0.0
         self._is_reconnecting = False
+
+    @property
+    def consecutive_offline_checks(self) -> int:
+        """Number of consecutive offline checks during network degradation."""
+        with self._lock:
+            return self._consecutive_offline_checks
+
+    @property
+    def consecutive_failures(self) -> int:
+        """Number of consecutive failed reconnect attempts."""
+        with self._lock:
+            return self._consecutive_failures
 
     def start_session(self, session_id: int):
         """
@@ -98,6 +111,7 @@ class AutoReconnectService:
             self._cancelled = False
             self._cancel_event.clear()
             self._consecutive_failures = 0
+            self._consecutive_offline_checks = 0
             self._last_attempt_time = 0.0
             self._is_reconnecting = False
             logger.debug(f"[AutoReconnectService] Started session {self._session_id}")
@@ -146,6 +160,7 @@ class AutoReconnectService:
         with self._lock:
             logger.info(f"[AutoReconnectService] Resetting backoff counter (reason: {reason})")
             self._consecutive_failures = 0
+            self._consecutive_offline_checks = 0
 
     def _start_watchdog_timer(
         self,
@@ -210,12 +225,17 @@ class AutoReconnectService:
 
         threading.Thread(target=_watchdog_worker, daemon=True, name="AutoReconnectWatchdog").start()
 
-    def _schedule_retry(self, current_connection: Optional[dict], session_id: int):
+    def _schedule_retry(
+        self,
+        current_connection: Optional[dict],
+        session_id: int,
+        delay: Optional[float] = None,
+    ):
         """Schedule next reconnect attempt on a background daemon thread."""
         with self._lock:
             if self._consecutive_failures >= self.MAX_CONSECUTIVE_ATTEMPTS:
                 return
-            wait = self._backoff_seconds()
+            wait = delay if delay is not None else self._backoff_seconds()
 
         def _worker():
             logger.info(f"[AutoReconnectService] Scheduling next attempt in {wait:.1f}s")
@@ -312,10 +332,20 @@ class AutoReconnectService:
         if not internet_ok:
             logger.warning("[AutoReconnectService] Internet is offline (temporary WAN loss) - entering degraded state")
             with self._lock:
-                self._consecutive_failures += 1
-            self._emit_safe("connectivity_degraded", session_id, {"reason": "no_internet"})
-            self._schedule_retry(current_connection, session_id)
+                self._consecutive_offline_checks += 1
+                offline_count = self._consecutive_offline_checks
+            self._emit_safe(
+                "connectivity_degraded",
+                session_id,
+                {"reason": "no_internet"},
+            )
+            # Gentle backoff for offline checks (2s to 15s) without consuming the reconnect budget
+            offline_delay = min(self.BASE_COOLDOWN_SECONDS * (1.5 ** min(offline_count - 1, 5)), 15.0)
+            self._schedule_retry(current_connection, session_id, delay=offline_delay)
             return False
+
+        with self._lock:
+            self._consecutive_offline_checks = 0
 
         # CHECKPOINT 3: Stabilization buffer (interruptible)
         logger.info(f"[AutoReconnectService] Waiting {self.STABILIZATION_BUFFER}s for stabilization...")
