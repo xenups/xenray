@@ -165,6 +165,46 @@ def ensure_xray_parser_built():
         print(f"NOTICE: Go toolchain not found; skipping automatic compilation of {binary_name}")
 
 
+def ensure_core_binaries():
+    """Ensure required core binaries exist and match pinned versions before packaging.
+
+    Guarantees a clean checkout never silently packages without the core executable
+    or packages an obsolete/mismatched version.
+    """
+    system = platform.system()
+    if system != "Windows":
+        return
+
+    from src.core.constants import XRAY_VERSION
+
+    xray_exe = os.path.join(PROJECT_ROOT, "bin", "xray.exe")
+    if not os.path.exists(xray_exe):
+        print("\n[build] bin/xray.exe missing. Attempting to stage via download_binaries...")
+        try:
+            import scripts.download_binaries as downloader
+
+            ret = downloader.main(["--arch", "64"])
+            if ret != 0:
+                print("\nERROR: Failed to download and stage core binaries for packaging!")
+                sys.exit(1)
+        except Exception as e:
+            print(f"\nERROR: Could not automatically acquire core binaries: {e}")
+            print(f"Please run 'python scripts/download_binaries.py' to stage Xray v{XRAY_VERSION}")
+            sys.exit(1)
+
+    # Verify staged binary version
+    if os.path.exists(xray_exe):
+        try:
+            out = subprocess.check_output([xray_exe, "version"], text=True, stderr=subprocess.STDOUT)
+            if XRAY_VERSION not in out:
+                print(f"\nERROR: Staged xray binary version mismatch! Expected '{XRAY_VERSION}', got:\n{out.strip()}")
+                print("Packaging aborted to prevent bundling stale or incorrect core binary.")
+                sys.exit(1)
+            print(f"[build] Verified staged Xray version matches pinned constant: v{XRAY_VERSION}")
+        except Exception as e:
+            print(f"WARNING: Could not verify staged xray binary version: {e}")
+
+
 def main():
     current_platform = get_platform()
 
@@ -172,7 +212,8 @@ def main():
     print(f"Building XenRay for {current_platform.upper()} with PyInstaller...")
     print("=" * 60)
 
-    # Ensure auxiliary CLI binaries are built before packaging
+    # Ensure auxiliary CLI binaries and core engines are built/staged before packaging
+    ensure_core_binaries()
     ensure_xray_parser_built()
 
     # Get icon

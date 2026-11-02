@@ -46,10 +46,18 @@ SINGBOX_URL_TEMPLATE = (
 WINTUN_URL = "https://www.wintun.net/builds/wintun-0.14.1.zip"
 
 
+try:
+    from src.core.constants import SINGBOX_VERSION as DEFAULT_SINGBOX_VERSION
+    from src.core.constants import XRAY_VERSION as DEFAULT_XRAY_VERSION
+except ImportError:
+    DEFAULT_XRAY_VERSION = "26.10.31"
+    DEFAULT_SINGBOX_VERSION = "1.14.0"
+
+
 def get_config(arch: int = 64):
     """Get configuration from environment."""
-    xray_version = os.getenv("XRAY_VERSION", "26.10.17")
-    singbox_version = os.getenv("SINGBOX_VERSION", "1.14.0")
+    xray_version = os.getenv("XRAY_VERSION", DEFAULT_XRAY_VERSION)
+    singbox_version = os.getenv("SINGBOX_VERSION", DEFAULT_SINGBOX_VERSION)
     sb_arch = SINGBOX_ARCH_MAP.get(arch, "amd64")
     wintun_arch = WINTUN_ARCH_MAP.get(arch, "amd64")
 
@@ -157,7 +165,7 @@ def cleanup(temp_dir: Path):
         shutil.rmtree(temp_dir)
 
 
-def main():
+def main(args_list=None):
     parser = argparse.ArgumentParser(description="Download Xray, Sing-box and Wintun binaries")
     parser.add_argument(
         "--arch",
@@ -166,7 +174,7 @@ def main():
         default=64,
         help="Architecture: 32 or 64 (default: 64)",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(args_list)
 
     print("=" * 60)
     print("Downloading Core Binaries (Xray, Sing-box, Wintun)")
