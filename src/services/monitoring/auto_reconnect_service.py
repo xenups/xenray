@@ -310,10 +310,10 @@ class AutoReconnectService:
             internet_ok = self._network_validator.check_internet_connection()
 
         if not internet_ok:
-            logger.warning("[AutoReconnectService] Internet is offline")
+            logger.warning("[AutoReconnectService] Internet is offline (temporary WAN loss) - entering degraded state")
             with self._lock:
                 self._consecutive_failures += 1
-            self._emit_safe("reconnect_failed", session_id, {"reason": "no_internet"})
+            self._emit_safe("connectivity_degraded", session_id, {"reason": "no_internet"})
             self._schedule_retry(current_connection, session_id)
             return False
 

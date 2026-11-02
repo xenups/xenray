@@ -235,3 +235,46 @@ def test_reconnected_event_from_stopping_is_blocked(cm_and_fsm):
     cm._emit_event("reconnected")
 
     assert fsm.state == ConnectionState.STOPPING
+
+
+def test_connectivity_lost_from_connected_enters_degraded(cm_and_fsm):
+    """Temporary network loss: CONNECTED -> DEGRADED."""
+    cm, fsm = cm_and_fsm
+    _set_state(fsm, ConnectionState.CONNECTED)
+
+    cm._emit_event("connectivity_lost")
+
+    assert fsm.state == ConnectionState.DEGRADED
+    assert fsm.is_connected  # Logical connection remains
+
+
+def test_connectivity_restored_from_degraded_reaches_connected(cm_and_fsm):
+    """Network self-heals: DEGRADED -> CONNECTED."""
+    cm, fsm = cm_and_fsm
+    _set_state(fsm, ConnectionState.DEGRADED)
+
+    cm._emit_event("connectivity_restored")
+
+    assert fsm.state == ConnectionState.CONNECTED
+    assert fsm.is_connected
+
+
+def test_reconnect_failed_no_internet_enters_degraded(cm_and_fsm):
+    """reconnect_failed with reason='no_internet' must degrade rather than enter ERROR."""
+    cm, fsm = cm_and_fsm
+    _set_state(fsm, ConnectionState.CONNECTED)
+
+    cm._emit_event("reconnect_failed", {"reason": "no_internet"})
+
+    assert fsm.state == ConnectionState.DEGRADED
+    assert fsm.is_connected
+
+
+def test_disconnecting_from_degraded_enters_stopping(cm_and_fsm):
+    """User manually disconnects while degraded: DEGRADED -> STOPPING."""
+    cm, fsm = cm_and_fsm
+    _set_state(fsm, ConnectionState.DEGRADED)
+
+    cm._emit_event("disconnecting")
+
+    assert fsm.state == ConnectionState.STOPPING

@@ -167,6 +167,18 @@ class ConnectionButtonController:
 
             self._anim_task = self._schedule_animation(_connected_breath)
 
+    def set_degraded(self, status_label: Optional[str] = None) -> None:
+        """Set button to degraded state (connected but network degraded)."""
+        self._is_connected = True
+        self._is_connecting = False
+        self._state = "degraded"
+        label = get_short_status_label(status_label or t("app.degraded", default="DEGRADED"))
+        self._widget._status_text.value = label
+        try:
+            self._widget._button.update()
+        except Exception:
+            pass
+
     def set_disconnected(self, status_label: Optional[str] = None) -> None:
         """Set button to disconnected state."""
         self._cancel_anim_task()

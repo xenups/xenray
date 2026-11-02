@@ -620,12 +620,23 @@ class ConnectionManager:
                     ConnectionState.ERROR,
                 }:
                     connection_fsm.transition_to(ConnectionState.STARTING, payload=data)
-                elif current_state == ConnectionState.CONNECTED:
-                    # Hot reconnection: transition from CONNECTED -> STOPPING first, then PREPARING
+                elif current_state in {ConnectionState.CONNECTED, ConnectionState.DEGRADED}:
+                    # Hot reconnection: transition from CONNECTED/DEGRADED -> STOPPING first, then PREPARING
                     connection_fsm.transition_to(ConnectionState.STOPPING, payload=data)
                 fsm_transitioned = connection_fsm.transition_to(ConnectionState.PREPARING, payload=data)
             elif event_type in ("connected", "reconnected"):
                 fsm_transitioned = connection_fsm.transition_to(ConnectionState.CONNECTED, payload=data)
+            elif event_type == "connectivity_restored":
+                # Active monitor or recovery worker detected network recovery on active session
+                current_state = connection_fsm.state
+                if current_state in {ConnectionState.CONNECTED, ConnectionState.DEGRADED}:
+                    fsm_transitioned = connection_fsm.transition_to(ConnectionState.CONNECTED, payload=data)
+                elif current_state == ConnectionState.ERROR and getattr(self, "_current_connection", None):
+                    # Defensively recover if session is still alive
+                    fsm_transitioned = connection_fsm.transition_to(ConnectionState.CONNECTED, payload=data, force=True)
+            elif event_type in ("connectivity_lost", "connectivity_degraded"):
+                if connection_fsm.state == ConnectionState.CONNECTED:
+                    fsm_transitioned = connection_fsm.transition_to(ConnectionState.DEGRADED, payload=data)
             elif event_type == "disconnecting":
                 # User-requested stop. From ERROR there is no teardown to run,
                 # so treat the request as a defensive reset to DISCONNECTED
@@ -637,8 +648,15 @@ class ConnectionManager:
                     fsm_transitioned = connection_fsm.transition_to(ConnectionState.STOPPING, payload=data)
             elif event_type in ("disconnected",):
                 fsm_transitioned = connection_fsm.transition_to(ConnectionState.DISCONNECTED, payload=data)
-            elif event_type in ("connect_failed", "reconnect_failed"):
+            elif event_type in ("connect_failed",):
                 fsm_transitioned = connection_fsm.transition_to(ConnectionState.ERROR, payload=data)
+            elif event_type in ("reconnect_failed",):
+                reason = (data or {}).get("reason")
+                if reason == "no_internet":
+                    if connection_fsm.state == ConnectionState.CONNECTED:
+                        fsm_transitioned = connection_fsm.transition_to(ConnectionState.DEGRADED, payload=data)
+                else:
+                    fsm_transitioned = connection_fsm.transition_to(ConnectionState.ERROR, payload=data)
         except Exception as e:
             logger.error(f"[ConnectionManager] Error updating FSM state for '{event_type}': {e}")
 

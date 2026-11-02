@@ -256,7 +256,13 @@ class ConnectionHandler:
             if self._update_horizon_glow_callback:
                 self._update_horizon_glow_callback("disconnected")
             if self._latency_monitor_handler:
-                self._latency_monitor_handler.trigger_single_check()
+                try:
+                    from src.core.fsm.connection_fsm import connection_fsm
+
+                    if not connection_fsm.is_connected and not connection_fsm.is_busy:
+                        self._latency_monitor_handler.trigger_single_check()
+                except Exception:
+                    self._latency_monitor_handler.trigger_single_check()
         except Exception as e:
             logger.warning(f"[ConnectionHandler] Error resetting UI: {e}")
         self._update_lan_card(show=False)

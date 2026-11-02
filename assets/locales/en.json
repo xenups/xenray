@@ -277,6 +277,7 @@
     "reconnecting": "Attempting Reconnect",
     "reconnected": "Connection Restored! ✅",
     "reconnect_failed": "Reconnect Failed",
+    "network_degraded": "VPN Connected — Network Degraded",
     "adopted_connection": "Active Connection Adopted",
     "core_crashed": "Connection lost due to core crash"
   },
