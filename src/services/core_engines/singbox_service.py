@@ -122,12 +122,6 @@ class SingboxService:
         routing_toggles: dict = None,
         trace: Trace = None,
     ) -> Optional[int]:
-        if not os.path.exists(SINGBOX_EXECUTABLE):
-            logger.error(
-                f"[SingboxService] Cannot start VPN/TUN mode: sing-box binary missing at '{SINGBOX_EXECUTABLE}'. "
-                "Please run 'python scripts/download_binaries.py' to acquire core binaries."
-            )
-            return None
         try:
             adapter = get_network_adapter()
             iface_name, _, _, gateway = adapter.get_primary_interface()
