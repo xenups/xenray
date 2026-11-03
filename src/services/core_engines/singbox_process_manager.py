@@ -169,6 +169,11 @@ class SingboxProcessManager:
 
     # -- launch --------------------------------------------------------
     def validate_config(self, config_path: str) -> bool:
+        if not os.path.exists(SINGBOX_EXECUTABLE):
+            logger.error(
+                f"[SingboxProcessManager] Config validation aborted: sing-box binary missing at '{SINGBOX_EXECUTABLE}'"
+            )
+            return False
         try:
             rc, stdout, stderr = self.run_async(self._run_check(config_path), timeout=SINGBOX_CHECK_TIMEOUT)
             if rc != 0:
