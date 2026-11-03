@@ -490,7 +490,9 @@ class AutoReconnectService:
             return False
         if self._signal_emitter:
             try:
-                self._signal_emitter(signal, data or {})
+                payload = dict(data) if data else {}
+                payload["session_id"] = session_id
+                self._signal_emitter(signal, payload)
             except Exception as e:
                 logger.error(f"[AutoReconnectService] Error emitting signal: {e}")
         return True
