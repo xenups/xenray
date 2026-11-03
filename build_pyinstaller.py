@@ -192,17 +192,38 @@ def ensure_core_binaries():
             print(f"Please run 'python scripts/download_binaries.py' to stage Xray v{XRAY_VERSION}")
             sys.exit(1)
 
-    # Verify staged binary version
-    if os.path.exists(xray_exe):
-        try:
-            out = subprocess.check_output([xray_exe, "version"], text=True, stderr=subprocess.STDOUT)
-            if XRAY_VERSION not in out:
-                print(f"\nERROR: Staged xray binary version mismatch! Expected '{XRAY_VERSION}', got:\n{out.strip()}")
-                print("Packaging aborted to prevent bundling stale or incorrect core binary.")
-                sys.exit(1)
-            print(f"[build] Verified staged Xray version matches pinned constant: v{XRAY_VERSION}")
-        except Exception as e:
-            print(f"WARNING: Could not verify staged xray binary version: {e}")
+    # Require bin/xray.exe to exist
+    if not os.path.exists(xray_exe):
+        print("\nERROR: bin/xray.exe missing after staging attempt!")
+        print(f"Please run 'python scripts/download_binaries.py' to stage Xray v{XRAY_VERSION}")
+        sys.exit(1)
+
+    # Require essential Xray assets
+    for asset in ["geoip.dat", "geosite.dat"]:
+        asset_path = os.path.join(PROJECT_ROOT, "bin", asset)
+        if not os.path.exists(asset_path):
+            print(f"\nERROR: Required Xray asset '{asset}' missing from bin/ directory!")
+            sys.exit(1)
+
+    # Verify staged binary version strictly fail-closed
+    try:
+        out = subprocess.check_output([xray_exe, "version"], text=True, stderr=subprocess.STDOUT)
+        if not out or XRAY_VERSION not in out:
+            print(
+                f"\nERROR: Staged xray binary version mismatch! Expected '{XRAY_VERSION}', got:\n"
+                f"{out.strip() if out else '(empty output)'}"
+            )
+            print("Packaging aborted to prevent bundling stale or incorrect core binary.")
+            sys.exit(1)
+        print(f"[build] Verified staged Xray version matches pinned constant: v{XRAY_VERSION}")
+    except subprocess.CalledProcessError as e:
+        print(f"\nERROR: Staged xray.exe failed version verification command (exit code {e.returncode}):\n{e.output}")
+        print("Packaging aborted due to unexecutable or corrupted Xray binary.")
+        sys.exit(1)
+    except Exception as e:
+        print(f"\nERROR: Could not execute staged xray.exe for version verification: {e}")
+        print("Packaging aborted to prevent bundling unverified core binary.")
+        sys.exit(1)
 
 
 def main():
