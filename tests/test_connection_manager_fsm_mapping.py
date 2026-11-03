@@ -24,8 +24,8 @@ def cm_and_fsm(monkeypatch):
     """
     cm = ConnectionManager.__new__(ConnectionManager)
     cm._state_lock = threading.Lock()
-    cm._current_connection = None
-    cm._session_id = 0
+    cm._current_connection = {"file": "config.json", "mode": "tun"}
+    cm._session_id = 1
     cm._monitoring = None
     cm._health_monitor = None
     cm._reconnect_event_listener = None

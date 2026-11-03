@@ -46,8 +46,8 @@ def mock_cm(isolated_fsm, isolated_bus, monkeypatch):
     cm = ConnectionManager.__new__(ConnectionManager)
     cm._state_lock = threading.Lock()
     cm._reconnect_lock = threading.Lock()
-    cm._current_connection = None
-    cm._session_id = 0
+    cm._current_connection = {"file": "mock_active.json", "mode": "vpn"}
+    cm._session_id = 1
     cm._reconnect_event_listener = None
     cm._orchestrator = MagicMock()
     cm._monitoring = MagicMock()
@@ -211,7 +211,7 @@ def test_07_recovery_does_not_restart_xray_unnecessarily():
 
     assert res is True
     connect_fn.assert_not_called()
-    signal_emitter.assert_called_with(MonitorSignal.ACTIVE_RESTORED, {})
+    signal_emitter.assert_called_with(MonitorSignal.ACTIVE_RESTORED, {"session_id": 10})
 
 
 def test_08_recovery_does_not_spawn_duplicate_processes(mock_cm):
@@ -656,3 +656,112 @@ def test_29_systray_and_notification_state_during_degradation(isolated_bus):
     mock_notify.assert_not_called()
 
     handler.cleanup()
+
+
+def test_30_active_restored_with_matching_session_transitions_to_connected(mock_cm, isolated_fsm):
+    """Scenario 30: ACTIVE_RESTORED with matching session_id successfully transitions DEGRADED -> CONNECTED."""
+    _set_fsm_state(isolated_fsm, ConnectionState.DEGRADED)
+    mock_cm._current_connection = {"file": "config.json", "mode": "vpn"}
+    mock_cm._session_id = 42
+
+    mock_cm._handle_signal(MonitorSignal.ACTIVE_RESTORED, {"session_id": 42})
+
+    assert isolated_fsm.state == ConnectionState.CONNECTED
+    assert isolated_fsm.is_connected is True
+
+
+def test_31_active_restored_with_stale_session_is_dropped(mock_cm, isolated_fsm):
+    """Scenario 31: ACTIVE_RESTORED with stale/mismatched session_id is dropped (FSM remains in DEGRADED)."""
+    _set_fsm_state(isolated_fsm, ConnectionState.DEGRADED)
+    mock_cm._current_connection = {"file": "config.json", "mode": "vpn"}
+    mock_cm._session_id = 42
+
+    # Obsolete signal from previous session 41
+    mock_cm._handle_signal(MonitorSignal.ACTIVE_RESTORED, {"session_id": 41})
+
+    assert isolated_fsm.state == ConnectionState.DEGRADED
+    assert isolated_fsm.is_connected is True
+
+
+def test_32_signals_received_after_disconnect_dropped_at_boundary(mock_cm, isolated_fsm):
+    """Scenario 32: Signal with session_id received after disconnect() is dropped at ConnectionManager boundary."""
+    _set_fsm_state(isolated_fsm, ConnectionState.DISCONNECTED)
+    mock_cm._current_connection = None
+    mock_cm._session_id = 0
+
+    mock_cm._handle_signal(MonitorSignal.ACTIVE_RESTORED, {"session_id": 10})
+    mock_cm._handle_signal(MonitorSignal.ACTIVE_LOST, {"session_id": 10})
+    mock_cm._handle_signal(MonitorSignal.ACTIVE_DEGRADED, {"session_id": 10})
+    mock_cm._handle_signal(MonitorSignal.PASSIVE_FAILURE, {"session_id": 10})
+
+    assert isolated_fsm.state == ConnectionState.DISCONNECTED
+    mock_cm._monitoring.handle_failure.assert_not_called()
+
+
+def test_33_delayed_previous_session_recovery_signal_cannot_alter_new_session(mock_cm, isolated_fsm):
+    """Scenario 33: Delayed previous-session recovery signal cannot alter a newly established session."""
+    mock_cm._current_connection = {"file": "config.json", "mode": "vpn"}
+    mock_cm._session_id = 2
+    _set_fsm_state(isolated_fsm, ConnectionState.DEGRADED)
+
+    # Delayed signal from session 1 arrives while session 2 is DEGRADED
+    mock_cm._handle_signal(MonitorSignal.ACTIVE_RESTORED, {"session_id": 1})
+    assert isolated_fsm.state == ConnectionState.DEGRADED
+
+    # Matching signal for session 2 arrives and successfully recovers
+    mock_cm._handle_signal(MonitorSignal.ACTIVE_RESTORED, {"session_id": 2})
+    assert isolated_fsm.state == ConnectionState.CONNECTED
+
+
+def test_34_concurrent_session_invalidation_during_signal_dispatch(mock_cm, isolated_fsm):
+    """Scenario 34: Concurrent session change during signal dispatch is handled safely under _state_lock."""
+    _set_fsm_state(isolated_fsm, ConnectionState.DEGRADED)
+    mock_cm._current_connection = {"file": "config.json", "mode": "vpn"}
+    mock_cm._session_id = 5
+
+    # Simulate race: state invalidated just before or during signal processing
+    with mock_cm._state_lock:
+        mock_cm._current_connection = None
+        mock_cm._session_id = 0
+
+    mock_cm._handle_signal(MonitorSignal.ACTIVE_RESTORED, {"session_id": 5})
+
+    assert isolated_fsm.state == ConnectionState.DEGRADED
+
+
+def test_35_multithreaded_concurrent_signals_and_session_transitions(mock_cm, isolated_fsm):
+    """Scenario 35: High-concurrency race condition testing between signal dispatch and session invalidation."""
+    _set_fsm_state(isolated_fsm, ConnectionState.CONNECTED)
+    mock_cm._current_connection = {"file": "config.json", "mode": "vpn"}
+    mock_cm._session_id = 1
+    errors = []
+
+    def signal_worker(sess_id: int):
+        try:
+            for _ in range(20):
+                mock_cm._handle_signal(MonitorSignal.ACTIVE_LOST, {"session_id": sess_id})
+                mock_cm._handle_signal(MonitorSignal.ACTIVE_RESTORED, {"session_id": sess_id})
+        except Exception as e:
+            errors.append(e)
+
+    def session_worker():
+        try:
+            for i in range(2, 6):
+                with mock_cm._state_lock:
+                    mock_cm._session_id = i
+                    mock_cm._current_connection = {"file": f"config_{i}.json", "mode": "vpn"}
+        except Exception as e:
+            errors.append(e)
+
+    threads = [
+        threading.Thread(target=signal_worker, args=(1,)),
+        threading.Thread(target=signal_worker, args=(2,)),
+        threading.Thread(target=session_worker),
+    ]
+
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=2.0)
+
+    assert len(errors) == 0
