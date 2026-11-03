@@ -108,13 +108,15 @@ class ConnectionMonitoringService:
         the policy.
         """
         with self._lock:
-            if not self._is_running:
-                logger.debug(f"[MonitoringService] Signal {signal.name} ignored (not running)")
+            if not self._is_running or self._session_id <= 0:
+                logger.debug(f"[MonitoringService] Signal {signal.name} ignored (not running or invalid session)")
                 return
             session_id = self._session_id
 
+        signal_payload = dict(payload) if payload else {}
+        signal_payload["session_id"] = session_id
         logger.debug(f"[MonitoringService] Signal {signal.name} (session {session_id})")
-        self._on_signal(signal, payload)
+        self._on_signal(signal, signal_payload)
 
     def start(
         self,

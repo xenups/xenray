@@ -99,6 +99,12 @@ class StatusDisplay(ft.Container):
         self._is_connected = True
         self._update_label(t("app.connected"), "#7c3aed")  # Purple
 
+    def set_degraded(self, msg: str = None):
+        """Sets status to Network Degraded while keeping logical connection active."""
+        self._is_connected = True
+        label = msg or t("connection.network_degraded", default="VPN Connected — Network Degraded")
+        self._update_label(label, ft.Colors.AMBER_400)
+
     def set_disconnected(self):
         """Reset to disconnected state."""
         self._is_connected = False

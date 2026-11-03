@@ -64,6 +64,16 @@ class LatencyMonitorHandler:
         """Periodically test the active server's ping while disconnected."""
         while True:
             try:
+                try:
+                    from src.core.fsm.connection_fsm import connection_fsm
+
+                    if connection_fsm.is_connected or connection_fsm.is_busy:
+                        for _ in range(self.PING_INTERVAL_SECONDS):
+                            await asyncio.sleep(1)
+                        continue
+                except Exception:
+                    pass
+
                 is_running = self._is_running_getter() if self._is_running_getter else False
                 connecting = self._connecting_getter() if self._connecting_getter else False
                 selected_profile = self._selected_profile_getter() if self._selected_profile_getter else None
@@ -132,6 +142,15 @@ class LatencyMonitorHandler:
 
     def trigger_single_check(self):
         """Queue a single latency check for the current profile (PRIORITY_INTERVAL)."""
+        try:
+            from src.core.fsm.connection_fsm import connection_fsm
+
+            if connection_fsm.is_connected or connection_fsm.is_busy:
+                logger.debug("[LatencyMonitor] Skipping check: connection is active or transitioning")
+                return
+        except Exception:
+            pass
+
         profile = self._selected_profile_getter() if self._selected_profile_getter else None
         if not profile:
             return

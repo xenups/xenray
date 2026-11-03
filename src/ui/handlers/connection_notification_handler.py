@@ -324,9 +324,22 @@ class ConnectionNotificationHandler:
             reason = data.get("reason")
             is_manual = False if reason == "core_crashed" else None
             self.handle_disconnected(is_manual=is_manual, reason=reason)
-        elif event_name in ("reconnect_failed", "connectivity_lost"):
-            # Reconnect attempt after a drop failed completely, or active monitor detected connection loss
-            self.handle_unexpected_disconnect(reason=data.get("reason") or event_name)
+        elif event_name in ("connectivity_lost", "connectivity_degraded"):
+            # Transient external network probe loss or degradation is NOT a terminal disconnect!
+            # The VPN tunnel and core remain alive — do NOT dispatch unexpected disconnect notification.
+            logger.debug(
+                f"[ConnectionNotificationHandler] Suppressed disconnect notification for '{event_name}' (degradation)"
+            )
+            return
+        elif event_name == "reconnect_failed":
+            reason = data.get("reason")
+            if reason == "no_internet":
+                logger.info(
+                    "[ConnectionNotificationHandler] Suppressed disconnect notification for 'no_internet' degradation"
+                )
+                return
+            # Genuine reconnect failure (e.g. connect_failed, max_attempts_reached) -> notify!
+            self.handle_unexpected_disconnect(reason=reason or "reconnect_failed")
 
     def _on_core_crashed(self, payload=None) -> None:
         """Handle EVENT_CORE_CRASHED event from CoreHealthMonitor."""

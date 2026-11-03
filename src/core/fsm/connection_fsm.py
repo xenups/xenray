@@ -21,6 +21,7 @@ class ConnectionState(str, Enum):
     STARTING = "starting"
     PREPARING = "preparing"
     CONNECTED = "connected"
+    DEGRADED = "degraded"  # tunnel/core alive but physical internet/uplink degraded
     STOPPING = "stopping"
     ERROR = "error"
 
@@ -65,9 +66,18 @@ class ConnectionFSM:
             ConnectionState.DISCONNECTED,
         },
         ConnectionState.CONNECTED: {
+            ConnectionState.DEGRADED,
             ConnectionState.STOPPING,
             ConnectionState.PREPARING,  # hot reconnection transition
             ConnectionState.STARTING,  # hot restart transition
+            ConnectionState.ERROR,
+            ConnectionState.DISCONNECTED,
+        },
+        ConnectionState.DEGRADED: {
+            ConnectionState.CONNECTED,
+            ConnectionState.STOPPING,
+            ConnectionState.PREPARING,
+            ConnectionState.STARTING,
             ConnectionState.ERROR,
             ConnectionState.DISCONNECTED,
         },
@@ -101,8 +111,13 @@ class ConnectionFSM:
 
     @property
     def is_connected(self) -> bool:
-        """Check if currently in CONNECTED state."""
-        return self.state == ConnectionState.CONNECTED
+        """Check if currently in CONNECTED or DEGRADED state."""
+        return self.state in {ConnectionState.CONNECTED, ConnectionState.DEGRADED}
+
+    @property
+    def is_degraded(self) -> bool:
+        """Check if currently in DEGRADED state."""
+        return self.state == ConnectionState.DEGRADED
 
     @property
     def is_busy(self) -> bool:

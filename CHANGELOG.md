@@ -2,6 +2,25 @@
 
 All notable changes to XenRay will be documented in this file.
 
+## [0.4.2] - 2026-11-03
+
+### Changed
+- **Version Bump**: Bumped application version to **0.4.2**.
+- **Core Engine Upgrade**: Upgraded bundled Xray-core binary to **v26.10.31**.
+
+### Added
+- **Connection FSM Resilience**:
+  - Introduced `DEGRADED` state into `ConnectionFSM` to accurately represent temporary network interruptions without tearing down running VPN tunnel interfaces.
+  - Added session ID tracking and validation across `ConnectionMonitoringService`, `AutoReconnectService`, and `ConnectionManager`.
+  - Added comprehensive offline regression test suite covering network failure and degradation scenarios.
+
+### Fixed
+- **False Disconnection Defect**:
+  - Resolved UI falsely reporting disconnected during temporary uplink drops while core tunnel processes remain healthy.
+  - Synchronized `ReconnectEventHandler`, `DashboardPage`, `ConnectionNotificationHandler`, and `LatencyMonitorHandler` with authoritative FSM state.
+- **Fail-Closed Binary Integrity & Packaging**:
+  - Enforced strict SHA-256 sidecar and pinned checksum validation for core binaries in downloader and PyInstaller packaging scripts.
+
 ## [0.4.1] - 2026-10-21
 
 ### Changed
