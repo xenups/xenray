@@ -219,6 +219,9 @@ class ConnectionButton(ft.Container):
     def set_connected(self, status_label: Optional[str] = None) -> None:
         self._controller.set_connected(status_label)
 
+    def set_degraded(self, status_label: Optional[str] = None) -> None:
+        self._controller.set_degraded(status_label)
+
     def set_disconnected(self, status_label: Optional[str] = None) -> None:
         self._controller.set_disconnected(status_label)
 

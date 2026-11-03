@@ -179,8 +179,44 @@ def test_stopping_reaches_disconnected_from_every_entry(fsm):
         ConnectionState.STARTING,
         ConnectionState.PREPARING,
         ConnectionState.CONNECTED,
+        ConnectionState.DEGRADED,
     ):
         assert fsm.transition_to(source, force=True), f"setup to {source.value}"
         assert fsm.transition_to(ConnectionState.STOPPING), f"{source.value} -> STOPPING"
         assert fsm.transition_to(ConnectionState.DISCONNECTED), "STOPPING -> DISCONNECTED"
         assert fsm.state == ConnectionState.DISCONNECTED
+
+
+def test_degraded_state_lifecycle(fsm):
+    """Test transitions into and out of DEGRADED state.
+
+    CONNECTED -> DEGRADED -> CONNECTED (non-destructive temporary WAN glitch).
+    DEGRADED maintains is_connected=True and is_degraded=True.
+    """
+    assert fsm.transition_to(ConnectionState.STARTING)
+    assert fsm.transition_to(ConnectionState.PREPARING)
+    assert fsm.transition_to(ConnectionState.CONNECTED)
+    assert fsm.state == ConnectionState.CONNECTED
+    assert fsm.is_connected
+    assert not fsm.is_degraded
+
+    # Network glitch: CONNECTED -> DEGRADED
+    assert fsm.transition_to(ConnectionState.DEGRADED)
+    assert fsm.state == ConnectionState.DEGRADED
+    assert fsm.is_connected  # VPN tunnel is still alive!
+    assert fsm.is_degraded
+    assert not fsm.is_busy
+
+    # Recovery: DEGRADED -> CONNECTED
+    assert fsm.transition_to(ConnectionState.CONNECTED)
+    assert fsm.state == ConnectionState.CONNECTED
+    assert fsm.is_connected
+    assert not fsm.is_degraded
+
+    # User manual disconnect during degraded
+    assert fsm.transition_to(ConnectionState.DEGRADED)
+    assert fsm.transition_to(ConnectionState.STOPPING)
+    assert fsm.transition_to(ConnectionState.DISCONNECTED)
+    assert fsm.state == ConnectionState.DISCONNECTED
+    assert not fsm.is_connected
+    assert not fsm.is_degraded

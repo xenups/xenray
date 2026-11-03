@@ -115,7 +115,15 @@ class ReconnectEventHandler:
         """Handle connectivity_degraded event - soft warning, connection may be unstable."""
         logger.info("[ReconnectEventHandler] Handling connectivity_degraded event")
         if self._status_display:
-            self._ui_call(lambda: self._status_display.set_step(t("connection.checking_network")))
+            if hasattr(self._status_display, "set_degraded"):
+                self._ui_call(lambda: self._status_display.set_degraded())
+            else:
+                self._ui_call(lambda: self._status_display.set_step(t("connection.checking_network")))
+        if self._connection_button and hasattr(self._connection_button, "set_degraded"):
+            self._ui_call(lambda: self._connection_button.set_degraded())
+        if self._toast:
+            msg = t("connection.network_degraded", default="VPN Connected — Network Degraded")
+            self._ui_call(lambda: self._toast.warning(msg, 3000))
 
     def _handle_connectivity_restored(self, data: dict):
         """Handle connectivity_restored event (core self-healed, no reconnect needed)."""
@@ -204,9 +212,21 @@ class ReconnectEventHandler:
         # only a genuinely NEW connect flow may move it back to connected.
         self._is_reconnecting = False
 
+        if reason == "no_internet":
+            # Temporary WAN outage: do NOT reset UI to disconnected!
+            # The core and tunnel are still running; show a warning toast and update status to degraded.
+            if self._toast:
+                msg = t("connection.no_internet", default="Network unreachable (retrying...)")
+                self._ui_call(lambda: self._toast.warning(msg, 3000))
+            if self._status_display:
+                if hasattr(self._status_display, "set_degraded"):
+                    self._ui_call(lambda: self._status_display.set_degraded())
+                else:
+                    self._ui_call(lambda: self._status_display.set_step(t("connection.checking_network")))
+            return
+
         if self._toast:
-            msg_key = "connection.no_internet" if reason == "no_internet" else "connection.reconnect_failed"
-            self._ui_call(lambda: self._toast.error(t(msg_key), 3000))
+            self._ui_call(lambda: self._toast.error(t("connection.reconnect_failed"), 3000))
 
         if self._reset_ui_callback:
             self._ui_call(self._reset_ui_callback)

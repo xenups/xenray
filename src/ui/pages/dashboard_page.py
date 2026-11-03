@@ -389,8 +389,10 @@ class DashboardPage(ft.Container):
                 return
             payload = data.get("data") or {}
             connected_at = payload.get("connected_at")
-            if evt == "connected":
+            if evt in ("connected", "reconnected", "connectivity_restored"):
                 self.set_connection_state(is_connected=True, connected_at=connected_at)
+            elif evt in ("connectivity_degraded",):
+                self.set_connection_state(is_connected=True)
             elif evt == "connecting":
                 self.set_connection_state(is_connected=False, is_connecting=True)
             elif evt == "disconnecting":
@@ -398,6 +400,13 @@ class DashboardPage(ft.Container):
             elif evt in ("disconnected", "connect_failed"):
                 self.set_connection_state(is_connected=False)
                 self._reset_traffic_metrics()
+            elif evt == "reconnect_failed":
+                reason = payload.get("reason")
+                if reason == "no_internet":
+                    self.set_connection_state(is_connected=True)
+                else:
+                    self.set_connection_state(is_connected=False)
+                    self._reset_traffic_metrics()
         except Exception:
             pass
 
@@ -405,10 +414,10 @@ class DashboardPage(ft.Container):
         """React to raw ConnectionFSM transition payloads (no 'event' key)."""
         try:
             new_state = data.get("new_state") or data.get("state")
-            if new_state in ("error", "disconnected", "stopping"):
+            if new_state in ("error", "disconnected"):
                 self.set_connection_state(is_connected=False)
                 self._reset_traffic_metrics()
-            elif new_state == "connected":
+            elif new_state in ("connected", "degraded"):
                 self.set_connection_state(is_connected=True)
             elif new_state in ("starting", "preparing"):
                 self.set_connection_state(is_connected=False, is_connecting=True)

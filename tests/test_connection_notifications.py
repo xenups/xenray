@@ -412,8 +412,8 @@ class TestConnectionNotificationHandler:
 
         h.cleanup()
 
-    def test_connectivity_lost_triggers_unexpected_disconnect_notification(self, test_bus, mock_notify):
-        """connectivity_lost event from ConnectionManager routes to unexpected disconnect notification."""
+    def test_connectivity_lost_and_degraded_suppress_unexpected_disconnect_notification(self, test_bus, mock_notify):
+        """connectivity_lost and connectivity_degraded represent soft degradation and must NOT trigger disconnects."""
         h = ConnectionNotificationHandler(
             selected_profile_getter=lambda: {"name": "Frankfurt-01"},
             notify_fn=mock_notify,
@@ -433,13 +433,49 @@ class TestConnectionNotificationHandler:
         assert mock_notify.call_count == 1
         mock_notify.reset_mock()
 
-        # Emit connectivity_lost
+        # 1. Emit connectivity_lost (e.g. from active monitor probe timeout)
         test_bus.publish(
             TOPIC_CONNECTION_STATE_CHANGED,
             EngineEvent(
                 event_name="connectivity_lost",
                 source="connection_manager",
                 payload={"event": "connectivity_lost", "data": {"reason": "ping_timeout"}},
+            ),
+        )
+        # MUST NOT trigger unexpected disconnect alert; tunnel and core remain alive
+        assert mock_notify.call_count == 0
+        assert h._state == NotificationConnectionState.CONNECTED
+
+        # 2. Emit connectivity_degraded
+        test_bus.publish(
+            TOPIC_CONNECTION_STATE_CHANGED,
+            EngineEvent(
+                event_name="connectivity_degraded",
+                source="connection_manager",
+                payload={"event": "connectivity_degraded", "data": {"reason": "no_internet"}},
+            ),
+        )
+        assert mock_notify.call_count == 0
+        assert h._state == NotificationConnectionState.CONNECTED
+
+        # 3. Emit reconnect_failed with reason "no_internet" (still network degradation, not hard disconnect)
+        test_bus.publish(
+            TOPIC_CONNECTION_STATE_CHANGED,
+            EngineEvent(
+                event_name="reconnect_failed",
+                source="connection_manager",
+                payload={"event": "reconnect_failed", "data": {"reason": "no_internet"}},
+            ),
+        )
+        assert mock_notify.call_count == 0
+
+        # 4. Genuine reconnect failure (e.g. connect_failed / max_attempts_reached) -> DOES notify
+        test_bus.publish(
+            TOPIC_CONNECTION_STATE_CHANGED,
+            EngineEvent(
+                event_name="reconnect_failed",
+                source="connection_manager",
+                payload={"event": "reconnect_failed", "data": {"reason": "connect_failed"}},
             ),
         )
         assert mock_notify.call_count == 1

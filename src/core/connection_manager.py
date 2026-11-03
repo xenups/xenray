@@ -115,41 +115,61 @@ class ConnectionManager:
         Args:
             signal: MonitorSignal enum value
             payload: Optional fact container from the emitting monitor
-                (e.g. ``{"source": "xray", "line": "..."}``).
+                (e.g. ``{"source": "xray", "line": "...", "session_id": 42}``).
         """
         # Get current connection state (thread-safe)
         with self._state_lock:
             current_conn = self._current_connection
+            active_session = self._session_id
             session_valid = self._session_id > 0
 
-        # CRITICAL: Ignore all signals if no valid session
-        # This prevents late signals after disconnect
+        # CRITICAL: Reject all signals if no valid active session or disconnected
         if not session_valid or not current_conn:
-            logger.debug(f"[ConnectionManager] Signal {signal.name} ignored (no valid session)")
+            logger.debug(f"[ConnectionManager] Signal {signal.name} ignored (no active session)")
             return
+
+        payload_dict = dict(payload) if payload else {}
+        signal_session = payload_dict.get("session_id")
+
+        # Mandatory session validation: reject signals from obsolete or mismatched sessions
+        if signal_session is not None and signal_session != active_session:
+            logger.warning(
+                f"[ConnectionManager] Signal {signal.name} ignored: stale session "
+                f"(signal session: {signal_session}, active session: {active_session})"
+            )
+            return
+
+        # Propagate origin session
+        origin_session = signal_session if signal_session is not None else active_session
+        payload_dict["session_id"] = origin_session
 
         # SIGNAL -> EVENT MAPPING (single source of truth)
         if signal == self._MonitorSignal.PASSIVE_FAILURE:
             # Passive log detected failure (Xray-core or sing-box TUN) - trigger reconnect
-            source = (payload or {}).get("source", "core")
-            logger.warning(f"[ConnectionManager] Passive failure detected (source: {source})")
+            source = payload_dict.get("source", "core")
+            logger.warning(
+                f"[ConnectionManager] Passive failure detected (source: {source}, session: {origin_session})"
+            )
             self._monitoring.handle_failure(current_conn)
 
         elif signal == self._MonitorSignal.ACTIVE_LOST:
             # Active monitor detected connectivity loss
-            logger.warning("[ConnectionManager] Active monitor: connectivity lost")
-            self._emit_event("connectivity_lost")
+            logger.warning(f"[ConnectionManager] Active monitor: connectivity lost (session: {origin_session})")
+            event_payload = {"reason": "active_lost_probe", **payload_dict}
+            self._emit_event("connectivity_lost", event_payload)
             self._monitoring.handle_failure(current_conn)
 
         elif signal == self._MonitorSignal.ACTIVE_DEGRADED:
             # Active monitor detected degradation (soft warning - no reconnect)
-            logger.info("[ConnectionManager] Active monitor: connectivity degraded")
-            self._emit_event("connectivity_degraded")
+            logger.info(f"[ConnectionManager] Active monitor: connectivity degraded (session: {origin_session})")
+            event_payload = {"reason": "active_degraded_probe", **payload_dict}
+            self._emit_event("connectivity_degraded", event_payload)
 
         elif signal == self._MonitorSignal.ACTIVE_RESTORED:
             # Active monitor detected recovery
-            logger.info("[ConnectionManager] Active monitor: connectivity restored")
-            self._emit_event("connectivity_restored")
+            logger.info(f"[ConnectionManager] Active monitor: connectivity restored (session: {origin_session})")
+            event_payload = {"reason": "active_restored_probe", **payload_dict}
+            self._emit_event("connectivity_restored", event_payload)
 
     def _handle_core_crash(self, payload=None) -> None:
         """Hard-reset the connection session when a core process crashes.
@@ -620,12 +640,37 @@ class ConnectionManager:
                     ConnectionState.ERROR,
                 }:
                     connection_fsm.transition_to(ConnectionState.STARTING, payload=data)
-                elif current_state == ConnectionState.CONNECTED:
-                    # Hot reconnection: transition from CONNECTED -> STOPPING first, then PREPARING
+                elif current_state in {ConnectionState.CONNECTED, ConnectionState.DEGRADED}:
+                    # Hot reconnection: transition from CONNECTED/DEGRADED -> STOPPING first, then PREPARING
                     connection_fsm.transition_to(ConnectionState.STOPPING, payload=data)
                 fsm_transitioned = connection_fsm.transition_to(ConnectionState.PREPARING, payload=data)
             elif event_type in ("connected", "reconnected"):
                 fsm_transitioned = connection_fsm.transition_to(ConnectionState.CONNECTED, payload=data)
+            elif event_type == "connectivity_restored":
+                # Active monitor or recovery worker detected network recovery on active session
+                event_session = (data or {}).get("session_id")
+                with self._state_lock:
+                    current_session = getattr(self, "_session_id", None)
+                    current_conn = getattr(self, "_current_connection", None)
+
+                if event_session is not None and current_session is not None and event_session != current_session:
+                    logger.debug(
+                        f"[ConnectionManager] Stale connectivity_restored (event session: {event_session}, "
+                        f"current session: {current_session}) — dropped"
+                    )
+                elif not current_conn or (current_session is not None and current_session <= 0):
+                    logger.debug("[ConnectionManager] connectivity_restored ignored (no active session)")
+                else:
+                    current_state = connection_fsm.state
+                    if current_state in {ConnectionState.CONNECTED, ConnectionState.DEGRADED}:
+                        fsm_transitioned = connection_fsm.transition_to(ConnectionState.CONNECTED, payload=data)
+                    else:
+                        logger.debug(
+                            f"[ConnectionManager] connectivity_restored ignored in state '{current_state.value}'"
+                        )
+            elif event_type in ("connectivity_lost", "connectivity_degraded"):
+                if connection_fsm.state == ConnectionState.CONNECTED:
+                    fsm_transitioned = connection_fsm.transition_to(ConnectionState.DEGRADED, payload=data)
             elif event_type == "disconnecting":
                 # User-requested stop. From ERROR there is no teardown to run,
                 # so treat the request as a defensive reset to DISCONNECTED
@@ -637,8 +682,15 @@ class ConnectionManager:
                     fsm_transitioned = connection_fsm.transition_to(ConnectionState.STOPPING, payload=data)
             elif event_type in ("disconnected",):
                 fsm_transitioned = connection_fsm.transition_to(ConnectionState.DISCONNECTED, payload=data)
-            elif event_type in ("connect_failed", "reconnect_failed"):
+            elif event_type in ("connect_failed",):
                 fsm_transitioned = connection_fsm.transition_to(ConnectionState.ERROR, payload=data)
+            elif event_type in ("reconnect_failed",):
+                reason = (data or {}).get("reason")
+                if reason == "no_internet":
+                    if connection_fsm.state == ConnectionState.CONNECTED:
+                        fsm_transitioned = connection_fsm.transition_to(ConnectionState.DEGRADED, payload=data)
+                else:
+                    fsm_transitioned = connection_fsm.transition_to(ConnectionState.ERROR, payload=data)
         except Exception as e:
             logger.error(f"[ConnectionManager] Error updating FSM state for '{event_type}': {e}")
 
