@@ -21,7 +21,7 @@ WINDOW_HEIGHT = 480
 GITHUB_REPO = os.getenv("GITHUB_REPO", "xenups/xenray")
 UPDATE_DOWNLOAD_TIMEOUT = float(os.getenv("UPDATE_DOWNLOAD_TIMEOUT", "60"))
 UPDATE_MIN_FILE_SIZE = int(os.getenv("UPDATE_MIN_FILE_SIZE", "1048576"))
-XRAY_VERSION = os.getenv("XRAY_VERSION", "26.10.31")
+XRAY_VERSION = os.getenv("XRAY_VERSION", "26.11.9")
 SINGBOX_VERSION = os.getenv("SINGBOX_VERSION", "1.14.0")
 # WINTUN_DLL — required for Xray native TUN on Windows
 WINTUN_DLL = os.path.join(os.path.join(os.path.join(Path(__file__).parent.parent.parent, "bin"), "wintun.dll"))
@@ -273,6 +273,7 @@ NETWORK_SPLITHTTP = "splithttp"
 NETWORK_H3 = "h3"
 NETWORK_H2 = "h2"
 NETWORK_MASQUE = "masque"
+NETWORK_XDRIVE = "xdrive"
 
 # Security types
 SECURITY_TLS = "tls"
@@ -313,6 +314,7 @@ STREAM_WS_SETTINGS = "wsSettings"
 STREAM_HTTPUPGRADE_SETTINGS = "httpupgradeSettings"
 STREAM_XHTTP_SETTINGS = "xhttpSettings"
 STREAM_MASQUE_SETTINGS = "masqueSettings"
+STREAM_XDRIVE_SETTINGS = "xdriveSettings"
 STREAM_HEADERS = "headers"
 STREAM_HOST = "host"
 HEADER_HOST = "Host"  # HTTP header name (capital H)
@@ -352,6 +354,7 @@ VALID_FINGERPRINTS = {
     "random",
     "randomized",
     "unsafe",
+    "hellochrome_155",
 }
 STREAM_PATH = "path"
 
