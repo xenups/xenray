@@ -1,7 +1,7 @@
 """Offline unit and integration tests for core binary delivery and packaging validation.
 
 Verifies:
-1. scripts/download_binaries.py picks up pinned XRAY_VERSION constant (26.10.31).
+1. scripts/download_binaries.py picks up pinned XRAY_VERSION constant (26.11.9).
 2. URL generation matches upstream release structure.
 3. Strict fail-closed SHA-256 sidecar checksum validation (.dgst, HTTP 404/500, malformed, empty).
 4. Pinned checksum verification for assets without dedicated sidecars.
@@ -30,8 +30,8 @@ def test_download_binaries_config_reads_pinned_xray_version(monkeypatch):
     cfg = downloader.get_config(arch=64)
 
     assert cfg["xray_version"] == XRAY_VERSION
-    assert cfg["xray_version"] == "26.10.31"
-    assert "v26.10.31/Xray-windows-64.zip" in cfg["xray_url"]
+    assert cfg["xray_version"] == "26.11.9"
+    assert "v26.11.9/Xray-windows-64.zip" in cfg["xray_url"]
 
 
 def test_download_binaries_config_honors_env_override(monkeypatch):
@@ -309,7 +309,7 @@ def test_ensure_core_binaries_triggers_downloader_when_missing(monkeypatch, tmp_
 
     def fake_check_output(cmd, **kwargs):
         if cmd[1] == "version":
-            return "Xray 26.10.31 (Xray, Penetrates Everything.) a4a3dff\n"
+            return "Xray 26.11.9 (Xray, Penetrates Everything.) a4a3dff\n"
         return ""
 
     monkeypatch.setattr(build_pyinstaller.subprocess, "check_output", fake_check_output)
