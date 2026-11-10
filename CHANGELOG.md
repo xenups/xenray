@@ -2,6 +2,17 @@
 
 All notable changes to XenRay will be documented in this file.
 
+## [0.4.3] - 2026-11-10
+
+### Changed
+- **Version Bump**: Bumped application version to **0.4.3**.
+- **Core Engine Upgrade**: Upgraded bundled Xray-core binary to **v26.11.9**.
+
+### Added
+- **Modern Fingerprints & Transports**:
+  - Registered hellochrome_155 TLS fingerprint.
+  - Added XDRIVE transport constants (NETWORK_XDRIVE, STREAM_XDRIVE_SETTINGS).
+
 ## [0.4.2] - 2026-11-03
 
 ### Changed
