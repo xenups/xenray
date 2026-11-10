@@ -56,7 +56,7 @@ try:
     from src.core.constants import SINGBOX_VERSION as DEFAULT_SINGBOX_VERSION
     from src.core.constants import XRAY_VERSION as DEFAULT_XRAY_VERSION
 except ImportError:
-    DEFAULT_XRAY_VERSION = "26.10.31"
+    DEFAULT_XRAY_VERSION = "26.11.9"
     DEFAULT_SINGBOX_VERSION = "1.14.0"
 
 
