@@ -3,7 +3,6 @@
 from src.ui.components.settings.auto_reconnect_toggle_row import AutoReconnectToggleRow
 from src.ui.components.settings.base_rows import SectionHeader, SettingsListTile, SettingsRow, SettingsSection
 from src.ui.components.settings.bento_card import BentoCard
-from src.ui.components.settings.cipher_suites_input_row import CipherSuitesInputRow
 from src.ui.components.settings.country_dropdown_row import CountryDropdownRow
 from src.ui.components.settings.engine_rows import CoreDropdownRow, TunEngineDropdownRow, TunEngineRow
 from src.ui.components.settings.lan_share_toggle_row import LanShareToggleRow
@@ -39,7 +38,6 @@ __all__ = [
     "LanguageDropdownRow",
     "StartupToggleRow",
     "AutoReconnectToggleRow",
-    "CipherSuitesInputRow",
     "LanShareToggleRow",
     "SettingsDrawer",
     "ConnectivitySection",

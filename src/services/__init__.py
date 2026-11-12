@@ -47,7 +47,6 @@ from src.services.monitoring import (
     MonitorSignal,
     NetworkStatsService,
     PassiveLogMonitor,
-    XrayLogWatcher,
 )
 from src.services.system import (
     LanService,
@@ -100,7 +99,6 @@ __all__ = [
     "CoreHealthMonitor",
     "AutoReconnectService",
     "NetworkStatsService",
-    "XrayLogWatcher",
     "MonitorSignal",
     # System
     "LanService",

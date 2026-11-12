@@ -232,3 +232,4 @@ nul
 
 # Hermes plan files (local only)
 .hermes/
+/icon.ico
