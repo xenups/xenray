@@ -9,7 +9,6 @@ from src.services.monitoring.network_stats import NetworkStatsService
 from src.services.monitoring.passive_log_monitor import PassiveLogMonitor
 from src.services.monitoring.service import ConnectionMonitoringService
 from src.services.monitoring.signals import MonitorSignal
-from src.services.monitoring.xray_log_watcher import XrayLogWatcher
 
 __all__ = [
     "PassiveLogMonitor",
@@ -19,5 +18,4 @@ __all__ = [
     "ConnectionMonitoringService",
     "MonitorSignal",
     "NetworkStatsService",
-    "XrayLogWatcher",
 ]
